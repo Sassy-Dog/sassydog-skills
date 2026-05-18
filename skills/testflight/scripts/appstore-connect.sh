@@ -4,28 +4,38 @@
 # Generates an ES256 JWT and queries TestFlight-related endpoints.
 #
 # Requirements: python3 + PyJWT (preferred) OR openssl, curl, jq, base64
-# Env vars:
-#   APPLE_APP_STORE_CONNECT_API_KEY_ID
-#   APPLE_APP_STORE_CONNECT_ISSUER_ID
-#   APPLE_APP_STORE_CONNECT_API_KEY_BASE64
+# Env vars (canonical APPLE_ASC_* names; APPLE_APP_STORE_CONNECT_* still accepted):
+#   APPLE_ASC_API_KEY_ID
+#   APPLE_ASC_ISSUER_ID
+#   APPLE_ASC_API_KEY_BASE64
 
 set -euo pipefail
 
 BUNDLE_ID="${1:?Usage: $0 <bundle-id> [feedback|testers|builds|groups|raw <path>]}"
 COMMAND="${2:-feedback}"
 
-# --- Validate env vars ---
-for var in APPLE_APP_STORE_CONNECT_API_KEY_ID APPLE_APP_STORE_CONNECT_ISSUER_ID APPLE_APP_STORE_CONNECT_API_KEY_BASE64; do
-    if [[ -z "${!var:-}" ]]; then
-        echo "❌ Missing env var: $var" >&2
-        echo "   Add Apple App Store Connect credentials to Doppler, then: direnv allow" >&2
-        exit 1
-    fi
-done
+# --- Resolve & validate env vars ---
+# Canonical names are APPLE_ASC_*; APPLE_APP_STORE_CONNECT_* is accepted as a
+# legacy fallback so older Doppler configs keep working.
+KEY_ID="${APPLE_ASC_API_KEY_ID:-${APPLE_APP_STORE_CONNECT_API_KEY_ID:-}}"
+ISSUER_ID="${APPLE_ASC_ISSUER_ID:-${APPLE_APP_STORE_CONNECT_ISSUER_ID:-}}"
+API_KEY_BASE64="${APPLE_ASC_API_KEY_BASE64:-${APPLE_APP_STORE_CONNECT_API_KEY_BASE64:-}}"
 
-KEY_ID="$APPLE_APP_STORE_CONNECT_API_KEY_ID"
-ISSUER_ID="$APPLE_APP_STORE_CONNECT_ISSUER_ID"
-API_KEY_BASE64="$APPLE_APP_STORE_CONNECT_API_KEY_BASE64"
+missing=()
+[[ -z "$KEY_ID" ]] && missing+=("APPLE_ASC_API_KEY_ID")
+[[ -z "$ISSUER_ID" ]] && missing+=("APPLE_ASC_ISSUER_ID")
+[[ -z "$API_KEY_BASE64" ]] && missing+=("APPLE_ASC_API_KEY_BASE64")
+if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "❌ Missing Apple App Store Connect credentials: ${missing[*]}" >&2
+    echo "   Add them to Doppler, then: direnv allow" >&2
+    exit 1
+fi
+
+# Re-export under canonical names so the Python JWT signer reads one source
+# regardless of which name supplied the value.
+export APPLE_ASC_API_KEY_ID="$KEY_ID"
+export APPLE_ASC_ISSUER_ID="$ISSUER_ID"
+export APPLE_ASC_API_KEY_BASE64="$API_KEY_BASE64"
 
 # --- Decode key to temp file ---
 TEMP_DIR=$(mktemp -d)
@@ -41,14 +51,14 @@ echo "$API_KEY_BASE64" | base64 --decode > "$API_KEY_FILE"
 generate_jwt_python() {
     python3 -c "
 import jwt, time, os, base64, sys
-key_pem = base64.b64decode(os.environ['APPLE_APP_STORE_CONNECT_API_KEY_BASE64'])
+key_pem = base64.b64decode(os.environ['APPLE_ASC_API_KEY_BASE64'])
 print(jwt.encode(
-    {'iss': os.environ['APPLE_APP_STORE_CONNECT_ISSUER_ID'],
+    {'iss': os.environ['APPLE_ASC_ISSUER_ID'],
      'iat': int(time.time()),
      'exp': int(time.time()) + 1200,
      'aud': 'appstoreconnect-v1'},
     key_pem, algorithm='ES256',
-    headers={'kid': os.environ['APPLE_APP_STORE_CONNECT_API_KEY_ID']}))
+    headers={'kid': os.environ['APPLE_ASC_API_KEY_ID']}))
 " 2>/dev/null
 }
 

@@ -13,13 +13,15 @@ Query TestFlight feedback, beta testers, builds, and beta groups via the App Sto
 
 ## Prerequisites
 
-Three environment variables must be available (typically from Doppler via direnv):
+Three environment variables must be available (typically from Doppler via direnv).
+The canonical `APPLE_ASC_*` names are preferred; the legacy `APPLE_APP_STORE_CONNECT_*`
+names are still accepted as a fallback.
 
-| Variable | Source |
-|----------|--------|
-| `APPLE_APP_STORE_CONNECT_API_KEY_ID` | Apple Developer > Keys |
-| `APPLE_APP_STORE_CONNECT_ISSUER_ID` | Apple Developer > Keys |
-| `APPLE_APP_STORE_CONNECT_API_KEY_BASE64` | `.p8` file, base64-encoded |
+| Variable (canonical) | Legacy fallback | Source |
+|----------------------|-----------------|--------|
+| `APPLE_ASC_API_KEY_ID` | `APPLE_APP_STORE_CONNECT_API_KEY_ID` | Apple Developer > Keys |
+| `APPLE_ASC_ISSUER_ID` | `APPLE_APP_STORE_CONNECT_ISSUER_ID` | Apple Developer > Keys |
+| `APPLE_ASC_API_KEY_BASE64` | `APPLE_APP_STORE_CONNECT_API_KEY_BASE64` | `.p8` file, base64-encoded |
 
 If missing, prompt the user to add them to Doppler and run `direnv allow`.
 
