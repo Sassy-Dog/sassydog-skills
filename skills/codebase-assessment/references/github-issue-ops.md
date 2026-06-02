@@ -79,6 +79,8 @@ CHILD_URL=$(gh issue create --repo "$REPO" \
 CHILD_NUM=$(basename "$CHILD_URL")
 ```
 
+> **Do this once per cluster — one explicit `gh issue create` call each.** Do **not** collapse the children into a shell array + loop that splits a `"title|labels"` string with `IFS`. A temporary `IFS='|' read` assignment leaks into later word-splitting (`for l in $LABELS`), so the whole label list is passed to `gh` as a *single* label name (`'security sev:high tech-debt'`) — every `gh issue create` then fails with `not found` and creates nothing. Pass each `--label` as its own literal flag. The few extra lines are worth the determinism.
+
 ## 4. Epic issue
 
 Body = the executive report from `assessment-rubric.md` (scores, strengths, biggest risks, "if I inherited this repo", top-10 ROI, 30/90/180-day roadmap), followed by the child list. Create the Epic **after** the children so you can list/link them.
