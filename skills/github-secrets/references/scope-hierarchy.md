@@ -25,6 +25,7 @@ gh variable delete VAR_NAME --org ORG_NAME
 ```
 
 **Workflow reference:**
+
 ```yaml
 jobs:
   build:
@@ -55,6 +56,7 @@ gh variable delete VAR_NAME
 ```
 
 **Workflow reference:**
+
 ```yaml
 jobs:
   build:
@@ -81,6 +83,7 @@ gh variable delete VAR_NAME --env production
 ```
 
 **Workflow reference — MUST declare environment:**
+
 ```yaml
 jobs:
   deploy:
@@ -131,6 +134,7 @@ ${{ env.NAME }}              # Environment variables set in the workflow
 ```
 
 These are NOT interchangeable:
+
 - `secrets.X` — GitHub-managed encrypted secrets
 - `vars.X` — GitHub-managed plaintext variables
 - `env.X` — Workflow-defined environment variables (set with `env:` blocks)
@@ -148,6 +152,7 @@ gh secret list --app dependabot
 ## Common Patterns
 
 ### Setting from Doppler or another secret manager
+
 ```bash
 # Pipe value from Doppler into GH secret
 doppler secrets get SECRET_NAME --plain | gh secret set SECRET_NAME
@@ -159,6 +164,7 @@ done
 ```
 
 ### Setting for GitHub Actions vs GitHub Codespaces
+
 ```bash
 gh secret set SECRET_NAME --app actions       # default
 gh secret set SECRET_NAME --app codespaces

@@ -19,6 +19,7 @@ curl -sS -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
 ```
 
 Notes:
+
 - `!is:resolved` must be URL-encoded (`%21is%3Aresolved`).
 - Same no-OR/AND restriction as the UI/MCP — HTTP 400 on boolean operators.
 - Pagination via the `Link` header; the first page (25) is almost always enough for triage — say so if you truncate.

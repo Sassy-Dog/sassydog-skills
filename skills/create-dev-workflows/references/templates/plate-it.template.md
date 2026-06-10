@@ -58,10 +58,12 @@ Issue the independent pulls in a single message with multiple tool calls.
 <!-- ENDIF -->
 
 **GitHub bugs** —
+
 ```bash
 gh issue list --repo {{REPO_SLUG}} --state open --label bug \
   --limit 100 --json number,title,labels,createdAt,updatedAt,reactionGroups,comments,url
 ```
+
 Demand proxy = reactions + comments.
 
 <!-- IF:TESTFLIGHT -->
@@ -84,6 +86,7 @@ Open issues + labels — `gh issue list --repo {{REPO_SLUG}} --state open --limi
 ### C. Tech debt + dev experience
 
 Invoke `ai-agent-skills:repo-health`:
+
 - tech-debt scan with `SCAN_PATHS="{{SCAN_PATHS}}"`, `EXCLUDE_PATHSPECS="{{EXCLUDE_PATHSPECS}}"`
 - CI health with `WORKFLOW={{CI_WORKFLOW}}`
 <!-- IF:MOBILE -->

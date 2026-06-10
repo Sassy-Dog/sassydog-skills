@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A **Claude Code plugin marketplace** containing a single plugin (`ai-agent-skills`) that bundles reusable skills and review agents for Claude Code, Gemini CLI, and other AI coding tools. Repo visibility is `INTERNAL` (the Sassy Dog org default).
 
-There is **no build, test, or lint step** — the entire repo is Markdown (skills/agents) plus the Bash scripts bundled inside skills' `scripts/` directories. "Correctness" means: valid frontmatter, accurate trigger phrases, and skill instructions that actually work when invoked. Verify changes by installing the plugin locally (below) and exercising the skill, not by running a compiler.
+There is **no build step** — the entire repo is Markdown (skills/agents) plus the Bash scripts bundled inside skills' `scripts/` directories. CI (`.github/workflows/ci.yml`, required on `main`) runs shellcheck (`-S warning`), `scripts/check-frontmatter.sh` (frontmatter `---` on line 1, `name`/`description` present, name matches directory/filename), manifest JSON validation, actionlint, and markdownlint (`.markdownlint-cli2.jsonc`). Those gates are necessary but not sufficient: "correctness" still means accurate trigger phrases and skill instructions that actually work when invoked — verify changes by installing the plugin locally (below) and exercising the skill.
 
 ## Layout (flat — everything at root)
 

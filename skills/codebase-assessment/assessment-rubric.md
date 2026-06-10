@@ -16,6 +16,7 @@ Score each 1–10 (10 = excellent). Include a one-line justification per score.
 ## Severity × Likelihood (per finding)
 
 **Severity** = blast radius if it goes wrong:
+
 - **critical** — data loss, auth bypass, secret exposure, prod outage, supply-chain compromise
 - **high** — security weakness, broken core flow, release-blocking fragility
 - **medium** — maintainability/perf/test-gap risk that will bite under change

@@ -1,0 +1,16 @@
+{
+  // Skills/agents are LLM-facing prose with frontmatter, inline HTML fence
+  // markers, and deliberately long trigger-phrase lines — structural rules
+  // stay on, formatting rules that fight that style are off.
+  "config": {
+    "MD013": false, // line length — descriptions are intentionally dense
+    "MD033": false, // inline HTML — PROJECT-SPECIFIC fences, IF: markers
+    "MD041": false, // first line heading — files open with frontmatter
+    "MD024": { "siblings_only": true }, // repeated headings across sections are fine
+    "MD036": false, // emphasis-as-heading — used for callouts in skill prose
+    "MD040": false, // fenced code language — output-format examples omit it
+    "MD029": false, // ordered-list prefixes — template fences interrupt numbering by design
+    "MD003": false  // heading style — template render-rule comments before frontmatter confuse style inference
+  },
+  "ignores": ["node_modules", ".claude/worktrees"]
+}

@@ -39,7 +39,7 @@ export APPLE_ASC_API_KEY_BASE64="$API_KEY_BASE64"
 
 # --- Decode key to temp file ---
 TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 API_KEY_FILE="$TEMP_DIR/AuthKey_${KEY_ID}.p8"
 echo "$API_KEY_BASE64" | base64 --decode > "$API_KEY_FILE"
@@ -63,7 +63,6 @@ print(jwt.encode(
 }
 
 generate_jwt_openssl() {
-    local b64url_encode
     b64url_encode() { base64 | tr -d '=\n' | tr '/+' '_-'; }
 
     # DER-to-raw: extract R and S integers from ASN.1 DER, pad/trim to 32 bytes each
@@ -186,8 +185,8 @@ case "$COMMAND" in
 
     groups)
         echo "===> Beta Groups" >&2
-        GROUPS=$(asc_get "$API_BASE/v1/apps/$APP_ID/betaGroups")
-        echo "$GROUPS" | jq '.'
+        BETA_GROUPS=$(asc_get "$API_BASE/v1/apps/$APP_ID/betaGroups")
+        echo "$BETA_GROUPS" | jq '.'
         ;;
 
     raw)

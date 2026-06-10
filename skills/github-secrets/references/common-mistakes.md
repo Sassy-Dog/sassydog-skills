@@ -5,6 +5,7 @@
 **Symptom:** Secret is set at the environment level but the workflow step gets an empty string.
 
 **Wrong:**
+
 ```yaml
 jobs:
   deploy:
@@ -14,6 +15,7 @@ jobs:
 ```
 
 **Correct:**
+
 ```yaml
 jobs:
   deploy:
@@ -33,6 +35,7 @@ gh variable set API_URL --body "https://..."   # → vars.API_URL
 ```
 
 In the workflow:
+
 ```yaml
 - run: curl "${{ vars.API_URL }}"              # variable — plaintext, not masked
 - run: psql "${{ secrets.DB_PASSWORD }}"       # secret — encrypted, masked
@@ -45,6 +48,7 @@ Mixing these up causes empty values with no error.
 Secrets are write-only after creation. There is no way to retrieve the value.
 
 **Wrong:**
+
 ```bash
 gh secret get SECRET_NAME        # command does not exist
 gh secret list                   # shows names only, never values
@@ -58,11 +62,13 @@ gh api repos/{owner}/{repo}/actions/secrets/SECRET_NAME  # returns name + dates,
 Before setting a secret or variable, check if it already exists.
 
 **Wrong:**
+
 ```bash
 gh secret set NEW_SECRET --body "value"   # might already exist — overwrites silently
 ```
 
 **Correct:**
+
 ```bash
 # Check first
 if gh secret list | grep -q "^NEW_SECRET"; then
