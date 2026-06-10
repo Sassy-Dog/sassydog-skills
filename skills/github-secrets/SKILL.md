@@ -40,6 +40,7 @@ These are different namespaces. `secrets.X` and `vars.X` are not interchangeable
 ## Critical Rules
 
 ### Always check before setting
+
 ```bash
 # Secrets — can only check existence, not value
 gh secret list [--org ORG] [--env ENV] | grep -q "^NAME"
@@ -49,9 +50,11 @@ gh variable list [--org ORG] [--env ENV] --json name,value
 ```
 
 ### Never try to read secret values
+
 There is no `gh secret get`. Secrets are write-only. `gh secret list` shows names only. To update, re-set from the source of truth.
 
 ### Environment secrets require `environment:` in the job
+
 ```yaml
 jobs:
   deploy:
@@ -63,6 +66,7 @@ jobs:
 This is the single most common mistake. Missing `environment:` produces empty values with zero warnings.
 
 ### Scope flags are required and specific
+
 ```bash
 gh secret set X --body "v"                    # repo (default)
 gh secret set X --org my-org --body "v"       # org
@@ -99,5 +103,6 @@ When a secret/variable appears missing in CI:
 ### Reference Files
 
 For full CLI examples, API details, and extended patterns:
+
 - **`references/scope-hierarchy.md`** — Complete CLI syntax for all scopes, Dependabot/Codespaces secrets, Doppler sync patterns, shadowing rules
 - **`references/common-mistakes.md`** — Detailed mistake catalog with wrong/correct examples, diagnostic checklist

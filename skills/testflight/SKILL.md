@@ -51,6 +51,7 @@ bash ${SKILL_DIR}/scripts/appstore-connect.sh <bundle-id> raw /v1/apps/{appId}/b
 ### Bundle IDs
 
 Look up the bundle ID from the project's iOS config. Common locations:
+
 - Flutter: `ios/Runner.xcodeproj/project.pbxproj` or `ios/Runner/Info.plist`
 - Xcode: target > General > Bundle Identifier
 - If unknown, run with any bundle ID — the script lists available apps on auth errors

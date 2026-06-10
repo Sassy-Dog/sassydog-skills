@@ -7,8 +7,9 @@ name: send-it
 description: >
   Ship a PR end-to-end in the {{PROJECT_NAME}} repo — worktree audit, pre-flight CI guardrails,
   <!-- IF:MIGRATIONS -->migration-freshness gate, <!-- ENDIF --><!-- IF:CODEGEN -->codegen-freshness gate, <!-- ENDIF -->template-compliant PR body, commit, push,
-  watch CI, merge, clean up. Use when the user says "send it", "ship it", "open the PR",
-  "create a PR", or asks to merge a branch. {{PROJECT_NAME}}-specific.
+
+watch CI, merge, clean up. Use when the user says "send it", "ship it", "open the PR",
+  "create a PR", or asks to merge a branch. {{PROJECT_NAME}}-specific
 ---
 
 <!-- generated-by: ai-agent-skills:create-dev-workflows | template: send-it | template-version: 1 -->

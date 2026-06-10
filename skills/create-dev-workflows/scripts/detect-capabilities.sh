@@ -46,7 +46,7 @@ pr_sections="[]"
 # --- workflows ------------------------------------------------------------------
 workflows="[]"; ci_guess=""
 if [[ -d .github/workflows ]]; then
-  workflows=$(ls .github/workflows/*.{yml,yaml} 2>/dev/null | xargs -n1 basename 2>/dev/null | jq -R . | jq -s .)
+  workflows=$(find .github/workflows -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) -exec basename {} \; 2>/dev/null | jq -R . | jq -s .)
   for c in ci.yml ci.yaml main.yml build.yml; do
     [[ -f ".github/workflows/$c" ]] && { ci_guess="$c"; break; }
   done
