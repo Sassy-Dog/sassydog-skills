@@ -4,15 +4,25 @@
 
 Every generated SKILL.md carries, in order:
 
-1. **Generated-by header** (first line after any HTML comment block):
+1. **YAML frontmatter starting on line 1.** The opening `---` MUST be the first line of the file —
+   Claude Code's skill loader only parses frontmatter that starts on line 1. Nothing (not even an
+   HTML comment) may precede it.
+2. **Generated-by marker** on the first non-blank line after the closing `---` of the frontmatter,
+   with a blank line on each side:
    `<!-- generated-by: ai-agent-skills:create-dev-workflows | template: <plate-it|take-it|send-it> | template-version: N -->`
-2. **Project-specific fences** at the slots the template defines:
+3. **Project-specific fences** at the slots the template defines:
    `<!-- BEGIN PROJECT-SPECIFIC: <slot> --> ... <!-- END PROJECT-SPECIFIC -->`
    Slots: `extra-surfaces`, `scoring-overrides`, `subagent-rules`, `extra-gates`, `extra-guardrails`. Fence markers stay in the generated file forever — they're the splice anchors.
 
 Everything outside the fences is **template-owned**: hand-edits there are legal but will be flagged (and may be replaced) on the next update. Durable project customization belongs inside a fence.
 
-## Update mode (header present)
+When detecting update-mode candidates or splicing, match the generated-by marker **anywhere in the
+file** — not just at a fixed line. Files rendered before this contract placed the marker on line 1
+(a broken layout the loader can't parse), and hand-fixed files may have moved it; both must still
+be recognized as generated. On update, normalize the output to this contract (frontmatter on line 1,
+marker right after it).
+
+## Update mode (generated-by marker present)
 
 1. Re-run Phase 1 detection; re-confirm only facts that changed (don't re-interview settled policy — read current policy from the existing file's rendered conditionals, e.g. presence of the §6 write gate).
 2. Render fresh output from the **current** template with those facts/policies.
@@ -22,11 +32,11 @@ Everything outside the fences is **template-owned**: hand-edits there are legal 
 
 `template-version` bumps when a template changes incompatibly (renamed slots, restructured sections); on a version jump, walk the diff section-by-section rather than assuming a clean splice.
 
-## Adopt mode (no header — hand-written skills, e.g. the legacy `<prefix>-plate-it` trios)
+## Adopt mode (no marker — hand-written skills, e.g. the legacy `<prefix>-plate-it` trios)
 
 Never silently overwrite or delete a hand-written skill.
 
-1. Identify legacy skills: `.claude/skills/*plate-it*`, `*get-it*`, `*take-it*`, `*send-it*` without the generated-by header.
+1. Identify legacy skills: `.claude/skills/*plate-it*`, `*get-it*`, `*take-it*`, `*send-it*` without the generated-by marker (anywhere in the file).
 2. Run create mode (detect + interview) — but pre-answer the interview from the legacy files where possible (write gates, merge policy, preflight commands are usually stated in them).
 3. Render the new plain-named skills (`plate-it`, `take-it`, `send-it`).
 4. **Side-by-side review per skill**: list every hand-written section that has no equivalent in the render (repo-specific traps, war stories, special recipes). For each, the user picks: move into a PROJECT-SPECIFIC fence / promote upstream (note it as plugin-improvement feedback) / drop.

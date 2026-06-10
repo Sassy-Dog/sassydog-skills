@@ -2,7 +2,6 @@
 TEMPLATE: send-it · version 1
 Render rules: see plate-it.template.md header. Same conventions.
 -->
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: send-it | template-version: 1 -->
 ---
 name: send-it
 description: >
@@ -11,6 +10,8 @@ description: >
   watch CI, merge, clean up. Use when the user says "send it", "ship it", "open the PR",
   "create a PR", or asks to merge a branch. {{PROJECT_NAME}}-specific.
 ---
+
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: send-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Send-It
 

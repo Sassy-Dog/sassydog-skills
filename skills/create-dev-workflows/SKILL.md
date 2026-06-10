@@ -24,8 +24,8 @@ The plugin deliberately ships **no generic runtime versions** of these — only 
 
 1. Confirm cwd is a git repo with a GitHub remote: `gh repo view --json nameWithOwner,defaultBranchRef`.
 2. Pick the mode:
-   - `.claude/skills/{plate-it,take-it,send-it}/SKILL.md` with a `generated-by` header → **update mode**
-   - legacy hand-written skills matching `*plate-it*`/`*get-it*`/`*send-it*` without the header → **adopt mode**
+   - `.claude/skills/{plate-it,take-it,send-it}/SKILL.md` containing a `generated-by` marker (match it anywhere in the file — older renders placed it on line 1, fixed ones right after the frontmatter) → **update mode**
+   - legacy hand-written skills matching `*plate-it*`/`*get-it*`/`*send-it*` without the marker → **adopt mode**
    - neither → **create mode**
 
 ## Phase 1 — detect
@@ -38,7 +38,7 @@ Read `references/interview.md`. Ask only policy questions and unconfirmable fact
 
 ## Phase 3 — generate or update
 
-Templates live in `references/templates/` (`plate-it`, `take-it`, `send-it`). Render rules are in each template's header: fill `{{FACTS}}`, resolve `IF:` conditionals from policy answers, keep the `generated-by` header and PROJECT-SPECIFIC fence markers, drop template-comment blocks.
+Templates live in `references/templates/` (`plate-it`, `take-it`, `send-it`). Render rules are in each template's header: fill `{{FACTS}}`, resolve `IF:` conditionals from policy answers, keep the `generated-by` marker (it sits immediately after the closing `---` — the rendered file's frontmatter `---` must be line 1 or Claude Code won't parse it) and PROJECT-SPECIFIC fence markers, drop template-comment blocks.
 
 - **Create mode**: render all selected skills, then **print every rendered file in full and write only after the user approves** — writing into a product repo is an outward-facing action; never write silently.
 - **Update / adopt mode**: read `references/update-mode.md` first. Update = re-render + splice fences + per-file diff + approval. Adopt = side-by-side review of hand-written content, then replace the legacy prefixed skills (deleting their directories and superseded scripts on approval).
@@ -46,7 +46,7 @@ Templates live in `references/templates/` (`plate-it`, `take-it`, `send-it`). Re
 
 ## Phase 4 — verify
 
-1. Frontmatter sanity: name matches directory, description present, valid YAML.
+1. Frontmatter sanity: opening `---` is line 1 of each written file (nothing before it — Claude Code won't parse the frontmatter otherwise), name matches directory, description present, valid YAML.
 2. Remind: skills load on the next session in that repo.
 3. Suggest first runs: `plate it` (with `DRY_RUN=1` if a write gate was enabled), `send it` on a trivial branch, and `take #<small-issue>` once comfortable.
 

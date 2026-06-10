@@ -2,7 +2,6 @@
 TEMPLATE: take-it · version 1
 Render rules: see plate-it.template.md header. Same conventions.
 -->
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 1 -->
 ---
 name: take-it
 description: >
@@ -13,6 +12,8 @@ description: >
   "knock out #N", or any variant handing over a list of GitHub issue numbers to ship in parallel.
   {{PROJECT_NAME}}-specific.
 ---
+
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Take-It
 
