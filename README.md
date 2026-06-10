@@ -9,6 +9,20 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
 | `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `ai-agent-skills` | `codebase-assessment` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
+| `ai-agent-skills` | `create-dev-workflows` | Generator: creates/updates a repo's project-specific `plate-it` / `take-it` / `send-it` workflow skills |
+| `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
+| `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
+| `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
+| `ai-agent-skills` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag |
+
+### Generator + capability skills
+
+`create-dev-workflows` generates **project-level** `plate-it` (prioritized work plate), `take-it`
+(parallel issue-shipping: "take #341, #432"), and `send-it` (single-PR end-to-end) skills into a
+product repo's `.claude/skills/`. The plugin deliberately ships no generic runtime versions of the
+trio — only project skills exist at runtime, so trigger phrases always resolve to the repo's own
+skill. Generated skills stay thin by delegating shared mechanics to the capability skills
+(`github-issues`, `sentry-triage`, `pr-shepherd`, `repo-health`, `testflight`).
 
 ### Review agents
 
