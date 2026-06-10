@@ -52,6 +52,16 @@ Confirm `isInMergeQueue:true` within ~30s of enqueuing. If it stays `false` whil
 
 Terminal states: `MERGED` (success), or the entry leaves the queue with the PR still `OPEN` and a failing `merge_group` run — **the queue ejected it**.
 
+### Watch the queue with the bundled poller
+
+Once the enqueue is confirmed, **the canonical queue watch is `scripts/poll-queue.sh`** — it loops the query above every `POLL_INTERVAL` (default 60s; queue cycles are slow) and covers the full terminal matrix per PR: `MERGED` (success), `OPEN` + `isInMergeQueue:false` (**ejected** — reported loudly), `CLOSED` without merge. Transient GraphQL failures log and retry; they never kill the watch. Exits 124 on `POLL_MAX_TICKS` timeout and emits final JSON (`{pr, result, queueEntryState}` per PR) for the caller's decision:
+
+```bash
+REPO="$REPO" bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/poll-queue.sh "$PR1" "$PR2"
+```
+
+Don't hand-roll the loop — improvised versions tend to poll only for `MERGED` and sit silent through an eject. Keep the raw query above for one-off checks (e.g. the ~30s enqueue confirmation). The script is read-only: it never merges, re-enqueues, or recovers — that stays with the coordinating session (single-writer guardrail). On `ejected`, go to Eject recovery below.
+
 ### Eject recovery
 
 The queue rebuilds each queued PR onto the real tip (main + earlier-queued entries) and re-runs required checks there. A PR that was green standalone can fail on the rebased ref (stale codegen, migration ordering — see `serialization.md`). Recovery: rebase the PR onto the new main, re-run the repo's regeneration step so generated artifacts reflect the *union* state, `git push --force-with-lease`, re-enqueue. If a sub-agent still holds the PR's worktree and context, delegate the recovery to it.
