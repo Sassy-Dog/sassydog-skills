@@ -48,6 +48,8 @@ gh api graphql -f query='{repository(owner:"OWNER",name:"NAME"){
 
 Confirm `isInMergeQueue:true` within ~30s of enqueuing. If it stays `false` while the PR is `CLEAN`, you hit the method-flag trap above.
 
+**This query is the only way to read the field.** `isInMergeQueue` and `mergeQueueEntry` are GraphQL-only — `gh pr view --json isInMergeQueue` fails with `Unknown JSON field` (it is not in `gh pr view`'s field set). Don't substitute a `gh pr view` call here.
+
 Terminal states: `MERGED` (success), or the entry leaves the queue with the PR still `OPEN` and a failing `merge_group` run — **the queue ejected it**.
 
 ### Eject recovery

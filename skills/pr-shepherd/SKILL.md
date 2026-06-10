@@ -54,7 +54,7 @@ Run it synchronously — backgrounding the watcher orphans PRs at "checks pendin
 
 Merge only PRs with **all checks green AND `mergeable=MERGEABLE` AND `mergeStateStatus=CLEAN`**. The command differs by regime — read `references/merge-queue.md` before this step; the queue's `--auto` method-flag trap silently never-merges:
 
-- **Merge queue**: `gh pr merge "$PR" --auto` (NO method flag, NO `--delete-branch`), then confirm `isInMergeQueue:true` within ~30s and poll the queue entry until `MERGED` or ejected.
+- **Merge queue**: `gh pr merge "$PR" --auto` (NO method flag, NO `--delete-branch`), then confirm `isInMergeQueue:true` within ~30s and poll the queue entry until `MERGED` or ejected. `isInMergeQueue` is GraphQL-only — `gh pr view --json isInMergeQueue` fails with `Unknown JSON field`; use the ready-made query in `references/merge-queue.md`, don't improvise.
 - **Direct**: `gh pr merge "$PR" --squash --delete-branch`.
 
 Wrap every mutating `gh` call in the retry helper (502s, stuck "Merge already in progress" locks, transient GraphQL):
