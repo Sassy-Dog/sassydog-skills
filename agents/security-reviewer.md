@@ -1,6 +1,6 @@
 ---
 name: security-reviewer
-description: Audit-mode reviewer for application, supply-chain, pipeline, and operational security — auth, secrets, injection, and credential exposure. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for application, supply-chain, pipeline, and operational security — auth, secrets, injection, and credential exposure. Dispatched by the assess-it skill.
 color: red
 ---
 

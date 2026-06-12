@@ -1,6 +1,6 @@
 ---
 name: cicd-release-reviewer
-description: Audit-mode reviewer for CI/CD pipelines and release engineering — deploy safety, rollback, reproducibility, and pipeline reliability. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for CI/CD pipelines and release engineering — deploy safety, rollback, reproducibility, and pipeline reliability. Dispatched by the assess-it skill.
 color: purple
 ---
 

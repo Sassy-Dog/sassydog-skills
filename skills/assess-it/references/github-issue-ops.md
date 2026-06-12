@@ -28,7 +28,7 @@ gh issue comment <N> --repo "$REPO" \
 ```bash
 ensure_label() { gh label create "$1" --repo "$REPO" --color "$2" --description "$3" 2>/dev/null || true; }
 
-ensure_label assessment    5319e7 "Filed by codebase-assessment"
+ensure_label assessment    5319e7 "Filed by assess-it"
 ensure_label epic          0e8a16 "Tracking epic"
 ensure_label architecture  1d76db "Architecture & structure"
 ensure_label security      b60205 "Security / supply chain"
@@ -66,7 +66,7 @@ ensure_label sev:low       0e8a16 "Low severity"
 
 ---
 Severity: **<critical|high|medium|low>** · Likelihood: **<high|medium|low>** · Size: **<xs|s|m|l>**
-Filed by `codebase-assessment` on <date>. Part of Epic #<EPIC>.
+Filed by `assess-it` on <date>. Part of Epic #<EPIC>.
 ```
 
 Create it (capture the number):

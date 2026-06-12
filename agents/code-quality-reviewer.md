@@ -1,6 +1,6 @@
 ---
 name: code-quality-reviewer
-description: Audit-mode reviewer for code quality, maintainability, complexity, error handling, and technical debt. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for code quality, maintainability, complexity, error handling, and technical debt. Dispatched by the assess-it skill.
 color: yellow
 ---
 

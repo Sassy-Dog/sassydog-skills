@@ -1,6 +1,6 @@
 ---
 name: dx-docs-reviewer
-description: Audit-mode reviewer for developer experience and documentation — onboarding, local dev loop, tooling friction, README/ADR/runbook quality. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for developer experience and documentation — onboarding, local dev loop, tooling friction, README/ADR/runbook quality. Dispatched by the assess-it skill.
 color: pink
 ---
 

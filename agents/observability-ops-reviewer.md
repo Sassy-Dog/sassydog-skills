@@ -1,6 +1,6 @@
 ---
 name: observability-ops-reviewer
-description: Audit-mode reviewer for observability and operations — logging, metrics, tracing, alerting, health checks, and incident readiness. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for observability and operations — logging, metrics, tracing, alerting, health checks, and incident readiness. Dispatched by the assess-it skill.
 color: orange
 ---
 
