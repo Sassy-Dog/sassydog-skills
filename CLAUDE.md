@@ -36,11 +36,11 @@ Two non-obvious architectures live in this repo.
 - **Generated files carry a `generated-by` header and `PROJECT-SPECIFIC` fences.** Update mode re-renders from current templates and splices the fences; adopt mode migrates legacy hand-written trios. The contract lives in `create-dev-workflows/references/update-mode.md` — keep it in sync with the template headers.
 - **Write paths are concentrated.** `github-issues/scripts/file-or-link-issue.sh` is the single issue-creation path (marker-keyed idempotency, `--dry-run`, preview-then-confirm, burst rail). `sentry-triage` never mutates Sentry. Keep it that way.
 
-### Orchestrator + reviewer agents (`codebase-assessment`)
+### Orchestrator + reviewer agents (`assess-it`)
 
-The relationship between the `codebase-assessment` skill and the nine `*-reviewer` agents requires reading `skills/codebase-assessment/SKILL.md` + `orchestration.md` together:
+The relationship between the `assess-it` skill and the nine `*-reviewer` agents requires reading `skills/assess-it/SKILL.md` + `orchestration.md` together:
 
-- **`codebase-assessment` is an orchestrator.** It runs a 5-phase audit: detect stack → fan out reviewer agents concurrently (one message, multiple Agent calls) → adversarially verify each finding → cluster into PR-sized work → preview and file GitHub Issues under a tracking Epic.
+- **`assess-it` is an orchestrator.** It runs a 5-phase audit: detect stack → fan out reviewer agents concurrently (one message, multiple Agent calls) → adversarially verify each finding → cluster into PR-sized work → preview and file GitHub Issues under a tracking Epic.
 - **The `*-reviewer` agents are the fan-out workers.** Each owns a domain (architecture, code-quality, security, testing, cicd-release, infra-platform, observability-ops, dx-docs, dependency-supply-chain) and runs in **audit mode**: it FINDS problems and cites `file:line` evidence, it does NOT write code. The agent→domain dispatch map lives in `orchestration.md`.
 - **All agents return the same finding schema** (title, area, severity, likelihood, evidence, why_it_matters, proposed_fix, acceptance, pr_size, labels, confidence). When editing one reviewer's output contract, keep it consistent with the schema in `orchestration.md` and the other agents.
 - `github-secrets` and `testflight` are standalone capability skills — no agent orchestration.
@@ -50,7 +50,7 @@ The relationship between the `codebase-assessment` skill and the nine `*-reviewe
 - **Skill `description` is a trigger spec, not a summary.** It is dense with quoted user phrases ("set a GitHub secret", "check TestFlight feedback") because matching those phrases is what activates the skill. When adding/editing a skill, write the description as the list of utterances that should trigger it.
 - **Progressive disclosure.** SKILL.md stays thin and actionable; depth goes in `references/*.md` that the skill says to read "when you reach that phase." Don't inline reference-doc detail into SKILL.md.
 - **Reviewer agents carry a "Sassy Dog calibration" section** applied only when the relevant stack is present (e.g. Doppler is the secrets source of truth, all-secrets/zero-`vars.*`, managed identity + Key Vault `kv-sassydog`, pin Actions to SHAs). New org-wide policies belong in the matching reviewer's calibration block.
-- **Outward-facing actions require preview-then-confirm.** `codebase-assessment` never files GitHub Issues silently — it prints the full Epic + child-issue preview and files only on approval. Preserve this guard in any change.
+- **Outward-facing actions require preview-then-confirm.** `assess-it` never files GitHub Issues silently — it prints the full Epic + child-issue preview and files only on approval. Preserve this guard in any change.
 - Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`). Recent history uses PRs to `main`.
 
 ## Local development

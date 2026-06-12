@@ -1,6 +1,6 @@
 ---
 name: dependency-supply-chain-reviewer
-description: Audit-mode reviewer for dependencies and supply chain — outdated/vulnerable packages, lockfile hygiene, pinning, and provenance. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for dependencies and supply chain — outdated/vulnerable packages, lockfile hygiene, pinning, and provenance. Dispatched by the assess-it skill.
 color: blue
 ---
 

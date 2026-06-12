@@ -8,8 +8,8 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 |--------|--------|-------------|
 | `ai-agent-skills` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
 | `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
-| `ai-agent-skills` | `codebase-assessment` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
-| `ai-agent-skills` | `create-dev-workflows` | Generator: creates/updates a repo's project-specific `plate-it` / `take-it` / `send-it` workflow skills |
+| `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
+| `ai-agent-skills` | `create-dev-workflows` | Generator: creates/updates a repo's project-specific `plate-it` / `fill-it` / `take-it` / `drain-it` / `send-it` workflow skills |
 | `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
@@ -17,7 +17,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 
 ### Generator + capability skills
 
-`create-dev-workflows` generates **project-level** `plate-it` (prioritized work plate), `take-it`
+`create-dev-workflows` generates **project-level** `plate-it` (prioritized work plate), `fill-it` (backlog grooming to Ready), `drain-it` (loop-driven Ready-column dispatcher), `take-it`
 (parallel issue-shipping: "take #341, #432"), and `send-it` (single-PR end-to-end) skills into a
 product repo's `.claude/skills/`. The plugin deliberately ships no generic runtime versions of the
 trio — only project skills exist at runtime, so trigger phrases always resolve to the repo's own
@@ -26,7 +26,7 @@ skill. Generated skills stay thin by delegating shared mechanics to the capabili
 
 ### Review agents
 
-`codebase-assessment` ships dedicated audit-mode agents (namespaced `ai-agent-skills:<name>`):
+`assess-it` ships dedicated audit-mode agents (namespaced `ai-agent-skills:<name>`):
 `architecture-reviewer`, `code-quality-reviewer`, `security-reviewer`, `testing-reviewer`,
 `cicd-release-reviewer`, `infra-platform-reviewer`, `observability-ops-reviewer`,
 `dx-docs-reviewer`, `dependency-supply-chain-reviewer`.

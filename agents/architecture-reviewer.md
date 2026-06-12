@@ -1,6 +1,6 @@
 ---
 name: architecture-reviewer
-description: Audit-mode reviewer for system architecture, repository/solution structure, module boundaries, coupling, and scaling risk. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for system architecture, repository/solution structure, module boundaries, coupling, and scaling risk. Dispatched by the assess-it skill.
 color: blue
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: testing-reviewer
-description: Audit-mode reviewer for testing strategy — pyramid balance, coverage quality vs theater, flakiness, and critical-path gaps. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for testing strategy — pyramid balance, coverage quality vs theater, flakiness, and critical-path gaps. Dispatched by the assess-it skill.
 color: green
 ---
 

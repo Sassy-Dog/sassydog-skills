@@ -7,7 +7,7 @@ description: >
   quick scripted signals scan of code-debt markers, CI workflow health (median/p90 duration, flake
   hints), and release lag — the fast inputs a prioritization pass consumes. Also triggers when a
   project workflow skill (a generated plate-it) invokes ai-agent-skills:repo-health by name.
-  For a full multi-agent engineering audit filed as GitHub Issues, use codebase-assessment instead.
+  For a full multi-agent engineering audit filed as GitHub Issues, use assess-it instead.
 ---
 
 # Repo Health

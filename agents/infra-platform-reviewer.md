@@ -1,6 +1,6 @@
 ---
 name: infra-platform-reviewer
-description: Audit-mode reviewer for infrastructure-as-code and platform — Terraform/Bicep quality, state, containers, drift, and blast radius. Dispatched by the codebase-assessment skill.
+description: Audit-mode reviewer for infrastructure-as-code and platform — Terraform/Bicep quality, state, containers, drift, and blast radius. Dispatched by the assess-it skill.
 color: cyan
 ---
 

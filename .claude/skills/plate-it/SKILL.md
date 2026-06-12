@@ -82,7 +82,7 @@ Score each category independently; surface a cross-category top-5 by relative ra
 **Tech debt + dev experience**: `ai-agent-skills:repo-health` scoring defaults.
 
 <!-- BEGIN PROJECT-SPECIFIC: scoring-overrides -->
-Marker-scan false positives: this repo's skills *document* TODO/FIXME/HACK scanning (e.g. `repo-health`, `codebase-assessment`), so the tech-debt scan will match prose that talks about markers rather than real debt. Discount hits inside `references/` docs and quoted examples; count only markers annotating this repo's own scripts or genuinely unfinished sections.
+Marker-scan false positives: this repo's skills *document* TODO/FIXME/HACK scanning (e.g. `repo-health`, `assess-it`), so the tech-debt scan will match prose that talks about markers rather than real debt. Discount hits inside `references/` docs and quoted examples; count only markers annotating this repo's own scripts or genuinely unfinished sections.
 <!-- END PROJECT-SPECIFIC -->
 
 ## 5. Output format

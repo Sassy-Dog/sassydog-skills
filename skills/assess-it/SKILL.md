@@ -1,7 +1,7 @@
 ---
-name: codebase-assessment
+name: assess-it
 description: >
-  This skill should be used when the user asks to "assess this repo", "audit the codebase",
+  This skill should be used when the user asks to "assess this repo", "assess it", "audit the codebase",
   "run a project assessment", "do a full repository health check", "review the whole repo and
   file issues", "what tech debt do we have", "find risks across the codebase", or wants a
   comprehensive, evidence-based engineering audit (architecture, security, testing, CI/CD,
@@ -9,7 +9,7 @@ description: >
   triggers for periodic re-assessment, e.g. "a new frontier model dropped, re-assess the repo".
 ---
 
-# Codebase Assessment
+# Assess-It
 
 Turn a whole repository into a deduped, evidence-backed, PR-sized GitHub Issue backlog under one tracking **Epic** — by fanning out specialized review agents, adversarially verifying their findings, and filing only what survives.
 
