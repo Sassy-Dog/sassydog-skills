@@ -91,7 +91,9 @@ if [[ "$dry_run" == "1" ]]; then
 fi
 
 # 3. Ensure requested labels exist (idempotent; ignore "already exists").
-for spec in "${ensure_labels[@]:-}"; do
+# ${arr[@]+...} (not [@]:-) — on bash 3.2 (macOS) the :- form expands an empty
+# array to one '' element instead of zero elements.
+for spec in ${ensure_labels[@]+"${ensure_labels[@]}"}; do
   [[ -z "$spec" ]] && continue
   name="${spec%%:*}"; rest="${spec#*:}"
   color="${rest%%:*}"; desc="${rest#*:}"
@@ -113,7 +115,7 @@ created_url=$(gh issue create \
   --repo "$REPO" \
   --title "$title" \
   --body-file "$body_with_marker" \
-  "${label_args[@]:-}" 2>&1 | tail -n1)
+  ${label_args[@]+"${label_args[@]}"} 2>&1 | tail -n1)
 
 if [[ ! "$created_url" =~ ^https://github\.com/[^/]+/[^/]+/issues/[0-9]+$ ]]; then
   echo "gh issue create did not return a URL; got: $created_url" >&2
