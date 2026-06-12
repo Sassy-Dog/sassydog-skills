@@ -4,14 +4,16 @@ Render rules: see plate-it.template.md header. Same conventions.
 REQUIRES: a ProjectV2 board with Backlog + Ready status columns (IF:BOARD must be true).
 -->
 ---
+
 name: fill-it
 description: >
   Backlog grooming for {{PROJECT_NAME}}: refine open issues until they are fully dispatchable
   by a cold worktree sub-agent, then move them to Ready on the board. The counterpart that
   feeds drain-it. Use when the user says "fill it", "groom the backlog", "refine the backlog",
   "scope these issues", "make these dispatchable", "get the backlog ready", or asks to move
-  issues to Ready. {{PROJECT_NAME}}-specific. Writes: issue-body edits, board moves, and
-  epic-split sub-issues only — never deletes, never closes, never dispatches work.
+  issues to Ready. Writes: issue-body edits, board moves, and
+  epic-split sub-issues only — never deletes, never closes, never dispatches work —
+  {{PROJECT_NAME}}-specific
 ---
 
 <!-- generated-by: ai-agent-skills:create-dev-workflows | template: fill-it | template-version: 1 -->

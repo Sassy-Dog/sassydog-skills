@@ -5,6 +5,7 @@ REQUIRES: a ProjectV2 board with a Ready column (IF:BOARD must be true) AND take
 in the same repo (drain-it reuses take-it's dispatch mechanics verbatim).
 -->
 ---
+
 name: drain-it
 description: >
   Loop-driven dispatcher for {{PROJECT_NAME}}: each invocation is one idempotent tick that
@@ -13,7 +14,7 @@ description: >
   migration/codegen sequencing, until Ready is empty. Designed to run under
   "/loop 5m /drain-it" but a single manual invocation is also valid. Use when the user says
   "drain it", "drain the backlog", "work through Ready", "keep shipping until Ready is empty",
-  or invokes it via /loop. {{PROJECT_NAME}}-specific.
+  or invokes it via /loop. {{PROJECT_NAME}}-specific
 ---
 
 <!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 1 -->
@@ -44,8 +45,13 @@ Snapshot board {{BOARD_NUMBER}} via `ai-agent-skills:github-issues`; take the **
 | Blocked | Skip `blocked` label |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges |
 | Smell test | Run take-it's pre-flight smell test (research-shaped titles, open-question sections, stub bodies). Failures: comment why + move the card back to Backlog for fill-it. Never "fix it up" inline — that hides the grooming gap. |
-<!-- IF:MIGRATIONS -->| Migration serialization | At most ONE issue touching {{MIGRATION_DIRS}} in flight at a time (in-flight included). Hold the rest in Ready. |<!-- ENDIF -->
-<!-- IF:CODEGEN -->| Codegen coupling | Codegen-coupled issues may run in parallel but flag them to pr-shepherd so their merges serialize. |<!-- ENDIF -->
+
+<!-- IF:MIGRATIONS -->
+Additional filter — **migration serialization**: at most ONE issue touching {{MIGRATION_DIRS}} in flight at a time (in-flight included); hold the rest in Ready.
+<!-- ENDIF -->
+<!-- IF:CODEGEN -->
+Additional filter — **codegen coupling**: codegen-coupled issues may run in parallel, but flag them to pr-shepherd so their merges serialize.
+<!-- ENDIF -->
 
 Take the first `capacity` survivors.
 
