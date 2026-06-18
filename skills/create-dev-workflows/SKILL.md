@@ -19,15 +19,18 @@ Generator for the project dev-workflow family:
 - **take-it** — parallel issue-shipping ("take #341, #432"): one sub-agent per issue in isolated worktrees
 - **drain-it** — loop-driven dispatcher: one idempotent tick per invocation, tops up to N in-flight from Ready until empty (requires a board + take-it; designed for "/loop 5m /drain-it")
 - **send-it** — single-PR end-to-end flow with repo-specific gates
+- **clean-it** — post-shipping git reconciliation: sync+prune, stale branch/worktree teardown, stash triage, untracked-noise sweep
 
-The plugin deliberately ships **no generic runtime versions** of these — only project-level skills generated here, so "plate it" in a repo always resolves to that repo's own skill. Generated skills are thin: project facts + policy gates, delegating shared mechanics to the capability skills (`ai-agent-skills:github-issues`, `sentry-triage`, `pr-shepherd`, `repo-health`, `testflight`).
+The plugin deliberately ships **no generic runtime versions** of these — only project-level skills generated here, so "plate it" (or "clean it") in a repo always resolves to that repo's own skill. Generated skills are thin: project facts + policy gates, delegating shared mechanics to the capability skills (`ai-agent-skills:github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
+
+**Core vs opt-in:** `plate-it`, `send-it`, and `clean-it` are **core** — always generated, and update mode adds them if missing. `take-it`, `fill-it`, and `drain-it` are **opt-in** (a trio-minus-take-it is a valid steady state).
 
 ## Phase 0 — locate & mode
 
 1. Confirm cwd is a git repo with a GitHub remote: `gh repo view --json nameWithOwner,defaultBranchRef`.
 2. Pick the mode:
-   - `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it}/SKILL.md` containing a `generated-by` marker (match it anywhere in the file — older renders placed it on line 1, fixed ones right after the frontmatter) → **update mode**
-   - legacy hand-written skills matching `*plate-it*`/`*get-it*`/`*send-it*` without the marker → **adopt mode**
+   - `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it,clean-it}/SKILL.md` containing a `generated-by` marker (match it anywhere in the file — older renders placed it on line 1, fixed ones right after the frontmatter) → **update mode**
+   - legacy hand-written skills matching `*plate-it*`/`*get-it*`/`*send-it*`/`*clean-it*` without the marker → **adopt mode**
    - neither → **create mode**
 
 ## Phase 1 — detect
@@ -40,11 +43,11 @@ Read `references/interview.md`. Ask only policy questions and unconfirmable fact
 
 ## Phase 3 — generate or update
 
-Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`). Render rules are in each template's header: fill `{{FACTS}}`, resolve `IF:` conditionals from policy answers, keep the `generated-by` marker (it sits immediately after the closing `---` — the rendered file's frontmatter `---` must be line 1 or Claude Code won't parse it) and PROJECT-SPECIFIC fence markers, drop template-comment blocks.
+Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`, `clean-it`). Render rules are in each template's header: fill `{{FACTS}}`, resolve `IF:` conditionals from policy answers, keep the `generated-by` marker (it sits immediately after the closing `---` — the rendered file's frontmatter `---` must be line 1 or Claude Code won't parse it) and PROJECT-SPECIFIC fence markers, drop template-comment blocks.
 
 - **Create mode**: render all selected skills, then **print every rendered file in full and write only after the user approves** — writing into a product repo is an outward-facing action; never write silently.
 - **Update / adopt mode**: read `references/update-mode.md` first. Update = re-render + splice fences + per-file diff + approval. Adopt = side-by-side review of hand-written content, then replace the legacy prefixed skills (deleting their directories and superseded scripts on approval).
-- **Naming guard**: generated names are plain (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`); check no personal skill (`~/.claude/skills/<name>`) shadows them — personal beats project for same-name skills. If one exists, stop and surface it.
+- **Naming guard**: generated names are plain (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`, `clean-it`); check no personal skill (`~/.claude/skills/<name>`) shadows them — personal beats project for same-name skills. If one exists, stop and surface it. Note `clean-it` delegates to the capability skill `ai-agent-skills:repo-cleanup` (deliberately a *different* name, so the user's "clean it" phrase resolves to the project skill, not the capability).
 
 ## Phase 4 — verify
 
@@ -56,5 +59,5 @@ Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `dr
 
 - Never write or overwrite files in the target repo without showing the full content/diff and getting approval.
 - Never delete hand-written skills except through adopt mode's reviewed replacement.
-- Update mode never adds take-it to a repo that doesn't have it unless the user asks (a trio-minus-take-it is a valid steady state). Same for fill-it/drain-it — both are opt-in, and drain-it is invalid without take-it and a board Ready column.
+- Update mode never adds take-it to a repo that doesn't have it unless the user asks (a trio-minus-take-it is a valid steady state). Same for fill-it/drain-it — both are opt-in, and drain-it is invalid without take-it and a board Ready column. `clean-it` is core, not opt-in: update mode adds it if missing (like plate-it/send-it), with the usual preview + approval.
 - Project-specific knowledge goes inside fences; if the user asks to hand-edit a template-owned section, offer the fence instead and explain why (updates will clobber template-owned text).
