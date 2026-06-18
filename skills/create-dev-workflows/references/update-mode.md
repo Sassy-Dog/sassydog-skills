@@ -9,10 +9,10 @@ Every generated SKILL.md carries, in order:
    HTML comment) may precede it.
 2. **Generated-by marker** on the first non-blank line after the closing `---` of the frontmatter,
    with a blank line on each side:
-   `<!-- generated-by: ai-agent-skills:create-dev-workflows | template: <plate-it|fill-it|take-it|drain-it|send-it> | template-version: N -->`
+   `<!-- generated-by: ai-agent-skills:create-dev-workflows | template: <plate-it|fill-it|take-it|drain-it|send-it|clean-it> | template-version: N -->`
 3. **Project-specific fences** at the slots the template defines:
    `<!-- BEGIN PROJECT-SPECIFIC: <slot> --> ... <!-- END PROJECT-SPECIFIC -->`
-   Slots: `extra-surfaces`, `scoring-overrides`, `subagent-rules`, `extra-gates`, `extra-guardrails`. Fence markers stay in the generated file forever — they're the splice anchors.
+   Slots: `extra-surfaces`, `scoring-overrides`, `subagent-rules`, `extra-gates`, `extra-cleanup`, `extra-guardrails`. Fence markers stay in the generated file forever — they're the splice anchors.
 
 Everything outside the fences is **template-owned**: hand-edits there are legal but will be flagged (and may be replaced) on the next update. Durable project customization belongs inside a fence.
 
@@ -36,13 +36,13 @@ marker right after it).
 
 Never silently overwrite or delete a hand-written skill.
 
-1. Identify legacy skills: `.claude/skills/*plate-it*`, `*get-it*`, `*take-it*`, `*send-it*` without the generated-by marker (anywhere in the file).
+1. Identify legacy skills: `.claude/skills/*plate-it*`, `*get-it*`, `*take-it*`, `*send-it*`, `*clean-it*` without the generated-by marker (anywhere in the file) — the prefixed `<repo>-clean-it` skills are the most common straggler.
 2. Run create mode (detect + interview) — but pre-answer the interview from the legacy files where possible (write gates, merge policy, preflight commands are usually stated in them).
-3. Render the new plain-named skills (`plate-it`, `take-it`, `send-it`; fill-it/drain-it only if asked).
+3. Render the new plain-named skills (`plate-it`, `send-it`, `clean-it` are core; `take-it`/fill-it/drain-it only if asked).
 4. **Side-by-side review per skill**: list every hand-written section that has no equivalent in the render (repo-specific traps, war stories, special recipes). For each, the user picks: move into a PROJECT-SPECIFIC fence / promote upstream (note it as plugin-improvement feedback) / drop.
 5. On approval: write the new skills, then **delete the legacy prefixed directories** (they'd otherwise compete for the same trigger phrases). Remind the user the rename also frees the old names: anything else referencing `<prefix>-send-it` (hooks, docs, other skills) needs updating — grep the repo for the old names before finishing.
 6. The legacy skills' `scripts/` are superseded by the plugin capability skills' scripts; delete with the directory unless a script is project-unique (then it moves to a path the fenced content references).
 
 ## Naming guard
 
-Generated skills use plain names (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`). Before writing, check for shadowing collisions: a **personal** skill (`~/.claude/skills/<same-name>`) hard-shadows a project skill of the same name. If one exists, STOP and tell the user to remove/rename it — the generated skill would be invisible.
+Generated skills use plain names (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`, `clean-it`). Before writing, check for shadowing collisions: a **personal** skill (`~/.claude/skills/<same-name>`) hard-shadows a project skill of the same name. If one exists, STOP and tell the user to remove/rename it — the generated skill would be invisible. The `clean-it` mechanics live in the capability skill `ai-agent-skills:repo-cleanup` (a deliberately different name): the generated `clean-it` owns the "clean it" trigger, the capability is invoked only by name — never name the capability `clean-it` or it would compete for the trigger.

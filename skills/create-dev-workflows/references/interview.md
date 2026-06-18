@@ -36,10 +36,18 @@ Both require `IF:BOARD` with a **Ready** status column; drain-it additionally re
 - Migration regen command (`{{MIGRATION_REGEN_COMMAND}}`) if `IF:MIGRATIONS`.
 - Codegen command + output dirs if `IF:CODEGEN`.
 
+### 4b. clean-it never-discard files (fact confirmation; clean-it is core, so always asked)
+
+clean-it auto-discards untracked noise against an allowlist — confirm the **never-discard** list of
+gitignored-but-precious files it must leave alone (`{{NEVER_DISCARD}}`). Propose `.env.local` for web
+apps (Vercel Blob token / Neon branch URL / OIDC); add any repo-specific local secret/state files.
+The dep-globs, noise allowlist, and `delete_branch_on_merge` are derived from detection (no question);
+the claim-label step renders only if take-it is on and a `status:in-progress`-style label exists.
+
 ### 5. Project-specific surfaces & rules (free text, optional)
 
-Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfaces with PRD targets, infra-drift checks, tenant-scoping invariants for sub-agents, deprecation scans. Each answer lands inside the matching `PROJECT-SPECIFIC` fence (`extra-surfaces`, `scoring-overrides`, `subagent-rules`, `extra-gates`, `extra-guardrails`) — never woven into template-owned sections, or the next update loses it.
+Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfaces with PRD targets, infra-drift checks, tenant-scoping invariants for sub-agents, deprecation scans, repo-unique cleanup steps. Each answer lands inside the matching `PROJECT-SPECIFIC` fence (`extra-surfaces`, `scoring-overrides`, `subagent-rules`, `extra-gates`, `extra-cleanup`, `extra-guardrails`) — never woven into template-owned sections, or the next update loses it.
 
 ## Defaults summary (when the user says "just use defaults")
 
-take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · no project-specific extras.
+take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · no project-specific extras.
