@@ -28,6 +28,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- \
   pr merge "$PR" --repo "$REPO" --auto
 ```
 
+(`scripts/merge-shepherd.sh` scripts this whole regime — gate, enqueue, confirm, teardown — as one stateless, re-runnable step; the commands below are the underlying mechanics and the one-off/manual path.)
+
 ### The method-flag trap (cost a stuck canary in production use)
 
 **Use `--auto` with NO merge-method flag and NO `--delete-branch`.**
