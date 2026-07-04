@@ -52,7 +52,19 @@ Run it synchronously — backgrounding the watcher orphans PRs at "checks pendin
 
 ### 3. Merge or enqueue greens
 
-Merge only PRs with **all checks green AND `mergeable=MERGEABLE` AND `mergeStateStatus=CLEAN`**. The command differs by regime — read `references/merge-queue.md` before this step; the queue's `--auto` method-flag trap silently never-merges:
+Merge only PRs with **all checks green AND `mergeable=MERGEABLE` AND `mergeStateStatus=CLEAN`**. The command differs by regime — read `references/merge-queue.md` before this step; the queue's `--auto` method-flag trap silently never-merges.
+
+**Preferred write path — the bundled step script.** `scripts/merge-shepherd.sh` drives one PR through the whole write step as a stateless, idempotent "advance one step" against live GitHub state: mergeable check → red/pending gate → enqueue `--auto` (or `--direct` squash-merge) → GraphQL `isInMergeQueue` confirmation → teardown + ff-only default-branch reconcile. Every invocation is short, so a session killed mid-merge (memory-pressured hosts reap idle long-lived loops) costs one re-run instead of an orphaned merge:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/merge-shepherd.sh "$PR" --repo "$REPO" [--direct] [--worktree "$WT"] [--watch 240]
+```
+
+Distinct exit codes let the caller loop "re-run until terminal" without parsing output: `0` merged (+teardown) · `10` enqueued · `11` waiting/in-flight (re-run) · `20` red checks · `22` conflicting. Queue mode is the default (`--auto`, NO method flag, NO `--delete-branch`, GraphQL-only enqueue confirm); pass `--direct` for repos without a merge queue (`--squash --delete-branch`). It already encodes the guardrails — never merges past red (advisory failures also stop it), never auto-rebases `CONFLICTING`, wraps the merge call in `gh-retry.sh`.
+
+**Stateless-eject caveat**: a stateless pass cannot distinguish "the queue ejected it" from "never enqueued" (head-commit checks stay green either way), so an ejected-but-`CLEAN` PR is simply re-enqueued on the next pass — the right recovery for transient ejects. A PR that keeps failing `merge_group` checks on the rebased ref will ping-pong enqueued→waiting; if repeated runs alternate like that, stop re-running, watch with `poll-queue.sh` (eject-aware), and follow "Eject recovery" in `references/merge-queue.md`.
+
+Or drive the steps by hand:
 
 - **Merge queue**: `gh pr merge "$PR" --auto` (NO method flag, NO `--delete-branch`), then confirm `isInMergeQueue:true` within ~30s (`isInMergeQueue` is GraphQL-only — `gh pr view --json isInMergeQueue` fails with `Unknown JSON field`; use the ready-made query in `references/merge-queue.md`, don't improvise). Then watch the queue with the bundled poller — read-only, terminal on `MERGED`, ejected, or closed-without-merge — instead of hand-rolling a loop (improvised loops miss the eject state):
 
@@ -87,13 +99,14 @@ Then reconcile the session (cwd back to repo root, switch to default branch, `gi
 | Script | Purpose |
 |--------|---------|
 | `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on timeout. |
+| `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` env (same contract as `teardown.sh`). |
 | `scripts/poll-queue.sh` | Queue-phase companion to `poll-prs.sh`: polls 1+ enqueued PRs' merge-queue state (GraphQL) until each is `MERGED`, ejected (`OPEN` + `isInMergeQueue:false`, reported loudly), or closed without merge. Read-only — never re-enqueues or recovers. Same env/contract: `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS`, exit 124 on timeout, final JSON on stdout. |
 | `scripts/gh-retry.sh` | Exponential-backoff retry for mutating `gh` calls on transient failures (502/503/504, "Merge already in progress", transient GraphQL). Exit 124 on exhaustion so the caller decides best-effort vs escalate. |
 | `scripts/teardown.sh` | Batch worktree cleanup: force-removes locked agent worktrees, deletes local branches, prunes, clears origin-identical stragglers, ff-reconciles the default branch. `--sweep` reclaims orphans whose remote branch is gone. Never drops stashes. `DEFAULT_BRANCH` env override. |
 
 ## Guardrails
 
-- **Single-writer**: only the coordinating session merges/enqueues; sub-agents never do.
+- **Single-writer**: only the coordinating session merges/enqueues; sub-agents never do. One owner per PR — never point `merge-shepherd.sh` and a watcher session (or two writers) at the same PR from different sessions.
 - **Never merge past a red check**; never auto-rebase `CONFLICTING`.
 - **Never force-push the default branch.**
 - Draft PRs: watch only; the author flips to ready.

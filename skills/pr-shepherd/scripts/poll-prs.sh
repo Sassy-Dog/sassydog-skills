@@ -29,6 +29,18 @@ elif ! gh repo view --json name --jq .name >/dev/null 2>&1; then
     exit 64
 fi
 
+# statusCheckRollup mixes two node types (issue #17): CheckRun has .status
+# (COMPLETED/IN_PROGRESS/QUEUED) and .conclusion; legacy StatusContext (Vercel,
+# classic Jenkins/Travis/Circle, Netlify) has ONLY .state (SUCCESS/PENDING/
+# FAILURE/ERROR/EXPECTED) — no .status/.conclusion, so a bare
+# `.conclusion==null` counts every StatusContext as forever-pending and the
+# poller never terminates. Predicate must be type-aware; `__typename` is
+# already in the gh JSON. EXPECTED counts as pending (a required status that
+# has not reported yet), matching merge-shepherd.sh's checks() predicate.
+PENDING_FILTER='.status=="IN_PROGRESS" or .status=="QUEUED"
+    or (.__typename=="CheckRun" and .conclusion==null)
+    or (.__typename=="StatusContext" and (.state=="PENDING" or .state=="EXPECTED"))'
+
 is_terminal() {
     local pr="$1"
     local view
@@ -43,8 +55,7 @@ is_terminal() {
 
     # OPEN — terminal only if no checks are PENDING / IN_PROGRESS / QUEUED
     local in_flight
-    in_flight=$(jq '[.statusCheckRollup[]?
-        | select(.status=="IN_PROGRESS" or .status=="QUEUED" or .conclusion==null)] | length' <<<"$view")
+    in_flight=$(jq "[.statusCheckRollup[]? | select($PENDING_FILTER)] | length" <<<"$view")
     [[ "$in_flight" == "0" ]]
 }
 
@@ -63,9 +74,10 @@ snapshot_line() {
 
     local total green failed pending
     total=$(jq '.statusCheckRollup | length' <<<"$view")
-    green=$(jq '[.statusCheckRollup[]? | select(.conclusion=="SUCCESS")] | length' <<<"$view")
-    failed=$(jq '[.statusCheckRollup[]? | select(.conclusion=="FAILURE" or .conclusion=="CANCELLED" or .conclusion=="TIMED_OUT")] | length' <<<"$view")
-    pending=$(jq '[.statusCheckRollup[]? | select(.status=="IN_PROGRESS" or .status=="QUEUED" or .conclusion==null)] | length' <<<"$view")
+    green=$(jq '[.statusCheckRollup[]? | select(.conclusion=="SUCCESS" or .state=="SUCCESS")] | length' <<<"$view")
+    failed=$(jq '[.statusCheckRollup[]? | select(.conclusion=="FAILURE" or .conclusion=="CANCELLED" or .conclusion=="TIMED_OUT"
+        or .state=="FAILURE" or .state=="ERROR")] | length' <<<"$view")
+    pending=$(jq "[.statusCheckRollup[]? | select($PENDING_FILTER)] | length" <<<"$view")
 
     printf "PR #%-5s  %-8s  %-10s  checks: %d✅ %d❌ %d⏳ /%d  (%s)  %s\n" \
         "$pr" "$state" "$mergeStateStatus" "$green" "$failed" "$pending" "$total" "$mergeable" "$title"
