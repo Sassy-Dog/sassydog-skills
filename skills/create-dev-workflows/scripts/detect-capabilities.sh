@@ -103,6 +103,17 @@ if git ls-files | grep -qE '(^|/)(ios/|app\.json)'; then
     | head -1 | grep -oE '[a-z]+\.[a-z0-9-]+\.[a-zA-Z0-9.-]+' | head -1) || true
 fi
 
+# --- secret manager / env bootstrap hint --------------------------------------------------
+# A direnv/secret-manager config means the process env is loaded lazily — non-interactive
+# agent shells never fire direnv, so plate-it's §1 presence probes need a bootstrap command
+# first (IF:SECRET_BOOTSTRAP; the exact command is interview-confirmed).
+secret_files=$(ls .envrc doppler.yaml doppler.yml 2>/dev/null | jq -R . | jq -s .)
+secret_hint=""
+if [[ -f doppler.yaml || -f doppler.yml ]]; then secret_hint="doppler"
+elif [[ -f .envrc ]] && grep -qi doppler .envrc 2>/dev/null; then secret_hint="doppler"
+elif [[ -f .envrc ]]; then secret_hint="direnv"
+fi
+
 # --- assemble ---------------------------------------------------------------------------
 jq -n \
   --arg repo "$REPO" --arg branch "$DEFAULT_BRANCH" \
@@ -115,6 +126,7 @@ jq -n \
   --argjson codegen "$codegen" --arg codegen_hint "$codegen_hint" \
   --argjson layout "$layout" --arg runner "$runner" --arg dev "$dev_script" \
   --argjson sentry "$sentry" --argjson posthog "$posthog" --arg bundle "$bundle_id" \
+  --argjson secret_files "$secret_files" --arg secret_hint "$secret_hint" \
   --argjson failures "$(printf '%s\n' "${fail_list[@]:-}" | grep -v '^$' | jq -R . | jq -s .)" \
   '{
     repo: ($repo | select(. != "") // null),
@@ -132,5 +144,6 @@ jq -n \
     sentry: $sentry,
     posthog: $posthog,
     testflight_bundle_id: ($bundle | select(. != "") // null),
+    secret_manager: { hint: ($secret_hint | select(. != "") // null), files: $secret_files },
     detect_failures: $failures
   }'
