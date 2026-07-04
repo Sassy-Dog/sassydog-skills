@@ -39,6 +39,13 @@ Run these probes. For each failure, label that surface "skipped — <reason>" in
 
 ```bash
 gh auth status && cd "$(git rev-parse --show-toplevel)"
+<!-- IF:SECRET_BOOTSTRAP -->
+# Secret bootstrap — MUST stay before the presence probes below. Non-interactive agent
+# shells never fire direnv, so probing a bare env false-negatives ("missing") on
+# credentials the secret manager holds. On bootstrap error, continue — the probes
+# then report their surfaces per the skip rule above.
+{{SECRET_BOOTSTRAP_CMD}}
+<!-- ENDIF -->
 <!-- IF:SENTRY -->
 # Sentry MCP — probe by listing projects for org {{SENTRY_ORG}}; on error, skip Sentry.
 <!-- ENDIF -->
@@ -46,6 +53,10 @@ gh auth status && cd "$(git rev-parse --show-toplevel)"
 [[ -n "${APPLE_ASC_API_KEY_ID:-}" ]] && echo "asc:ok" || echo "asc:missing"
 <!-- ENDIF -->
 ```
+<!-- IF:SECRET_BOOTSTRAP -->
+
+Each tool shell starts bare — the bootstrap only loads the shell it runs in. Prefix any later env-dependent command (e.g. the §2 TestFlight pull) with the same bootstrap line; never presence-check an env this skill hasn't loaded yet.
+<!-- ENDIF -->
 
 ## 2. Pull all surfaces in parallel
 

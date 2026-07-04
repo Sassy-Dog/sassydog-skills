@@ -24,6 +24,7 @@ It emits one JSON object; every probe degrades to `null`/`[]` plus an entry in `
 | `monorepo` | `{{STACK_SUMMARY}}`, `{{PREFLIGHT_COMMANDS}}`, clean-it `{{DEP_VERSION_GLOBS}}`/`{{NOISE_ALLOWLIST}}` | Preflight derives from runner + scripts: e.g. bun → `bun run lint && bun run type-check && bun run --filter <pkg> test`; confirm in interview. **clean-it facts derive from `runner` + `migrations.dirs`** (no extra probe) — see the derivation table below |
 | `repo_settings.deleteBranchOnMerge` | clean-it `{{DELETE_BRANCH_ON_MERGE}}` | Drives whether clean-it's stale-remote-branch step is a no-op |
 | `sentry`, `posthog`, `testflight_bundle_id` | `IF:SENTRY`/`IF:POSTHOG`/`IF:TESTFLIGHT`, `{{BUNDLE_ID}}` | `sentry: true` means the SDK is initialized — org/project slugs (`{{SENTRY_ORG}}`, `{{SENTRY_PROJECTS}}`) come from the interview or a Sentry MCP project listing |
+| `secret_manager` | `IF:SECRET_BOOTSTRAP`, `{{SECRET_BOOTSTRAP_CMD}}` | Hint only (`.envrc`/`doppler.yaml` presence). Non-interactive agent shells never fire direnv, so plate-it §1 must run the bootstrap itself, BEFORE its env presence probes — otherwise the ASC probe false-negatives `asc:missing` on loaded-lazily credentials. The exact command is interview-confirmed (detection can't know `eval "$(doppler secrets download --no-file --format env)"` vs a repo wrapper). |
 
 ## clean-it fact derivation (from existing fields — no extra probe)
 

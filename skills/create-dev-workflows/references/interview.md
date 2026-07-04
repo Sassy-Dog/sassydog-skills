@@ -35,6 +35,7 @@ Both require `IF:BOARD` with a **Ready** status column; drain-it additionally re
 - Pre-flight commands (`{{PREFLIGHT_COMMANDS}}`) — propose from the runner; user edits.
 - Migration regen command (`{{MIGRATION_REGEN_COMMAND}}`) if `IF:MIGRATIONS`.
 - Codegen command + output dirs if `IF:CODEGEN`.
+- Secret bootstrap command (`{{SECRET_BOOTSTRAP_CMD}}`) if detection reports a `secret_manager` (`.envrc`/`doppler.yaml`) — the one-liner plate-it §1 runs to load managed secrets BEFORE its env presence probes (propose `eval "$(doppler secrets download --no-file --format env 2>/dev/null)"` for Doppler repos). Confirming it sets `IF:SECRET_BOOTSTRAP`. In update/adopt mode, an "environment bootstrap" note sitting in a PROJECT-SPECIFIC fence (typically under §2.C — too late, the §1 probes already ran) is the tell: offer to promote that command into this placeholder.
 
 ### 4b. clean-it never-discard files (fact confirmation; clean-it is core, so always asked)
 
@@ -50,4 +51,4 @@ Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfac
 
 ## Defaults summary (when the user says "just use defaults")
 
-take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · no project-specific extras.
+take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · no project-specific extras.
