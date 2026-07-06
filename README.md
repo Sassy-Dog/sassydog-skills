@@ -53,6 +53,33 @@ claude plugin install ai-agent-skills
 claude --plugin-dir ~/Repos/sassy-dog/ai-agent-skills
 ```
 
+## Updating / Troubleshooting
+
+Plugin updates are **manual** — the cache does not follow releases. After every release (a `version` bump in `.claude-plugin/plugin.json`), each consumer machine must run:
+
+```bash
+claude plugin update ai-agent-skills@sassy-dog-skills
+```
+
+### The bare plugin name fails
+
+`claude plugin update ai-agent-skills` returns "not found" — the error doesn't hint at the fix. The marketplace-qualified name is required: `ai-agent-skills@sassy-dog-skills`.
+
+### `claude plugin marketplace update` is not a plugin update
+
+`claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale. Diagnose with:
+
+```bash
+ls ~/.claude/plugins/cache/sassy-dog-skills/ai-agent-skills/
+# 0.5.0    <- installed version (stale)
+```
+
+Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `0.6.1`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
+
+### Updates freeze at the cached version (SAML error)
+
+Plugin install/update does a fresh **SSH** clone of this INTERNAL repo. The SSH key must be SSO-authorized for the `Sassy-Dog` org — on <https://github.com/settings/keys>, use **Configure SSO** on the key. Without it, updates fail with a SAML error or freeze silently at the cached version.
+
 ## Repository layout
 
 This repo is a single plugin: skills, agents, and the manifest live at the root.
