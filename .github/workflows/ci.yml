@@ -24,6 +24,18 @@ jobs:
       - name: Frontmatter sanity
         run: bash scripts/check-frontmatter.sh
 
+      - name: No bare positional tokens in Skill-args substitution surfaces
+        # SKILL.md bodies (and templates that render into consumer-repo SKILL.md bodies) get
+        # $1-$9/$ARGUMENTS substituted when the skill is invoked with args — a literal $1 in a
+        # snippet is corrupted at render time. references/ docs and scripts/ are not substituted.
+        run: |
+          # shellcheck disable=SC2016  # the regex is a literal, not a missed expansion
+          if git ls-files 'skills/*/SKILL.md' '.claude/skills/*/SKILL.md' 'skills/create-dev-workflows/references/templates/*.md' \
+            | xargs --no-run-if-empty grep -nE '\$([0-9]|@|\*)'; then
+            echo "::error::bare positional token (\$1-\$9/\$@/\$*) in a Skill-args substitution surface — use cut -f1/%(format) idioms or move the snippet to references/ or scripts/ (see issue #39)"
+            exit 1
+          fi
+
       - name: Plugin manifests are valid JSON
         run: jq -e . .claude-plugin/plugin.json .claude-plugin/marketplace.json > /dev/null
 
