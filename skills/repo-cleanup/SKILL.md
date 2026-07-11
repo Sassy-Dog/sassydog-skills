@@ -58,14 +58,19 @@ git switch "$DEFAULT_BRANCH" 2>/dev/null && git pull --ff-only || true
 After this, `git branch -vv` marks stale locals `[gone]` for every remote branch that was deleted
 (the common case once a PR merges with auto-delete).
 
-**Pattern trap:** the literal text is `[origin/<branch>: gone]` — the `gone` token sits *inside* the
-upstream-tracking annotation. `grep '\[gone\]'` matches **zero** lines. Use the inner pattern:
+**Pattern trap:** in `git branch -vv` output the literal text is `[origin/<branch>: gone]` — the
+`gone` token sits *inside* the upstream-tracking annotation, so grepping that output for `\[gone\]`
+matches **zero** lines (the inner pattern `: gone\]` is what hits). Sidestep the trap entirely by
+asking git for the tracking state directly:
 
 ```bash
-git branch --no-color -vv | grep ': gone\]' | awk '{print $1}'
+git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads \
+  | grep -F '[gone]' | cut -f1
 ```
 
-`--no-color` keeps the grep stable regardless of color config (git already strips ANSI to a pipe).
+`%(upstream:track)` renders a bare `[gone]` for a deleted upstream — no annotation nesting, no
+color/format caveats — and `cut -f1` (tab-delimited by default) extracts the branch name without
+awk positional tokens, which Skill-args substitution corrupts when this skill is invoked with args.
 
 ## 2. Inventory what's stale
 
@@ -239,7 +244,8 @@ sweep here:
 
 ```bash
 # [gone] branches with no worktree — remote already deleted:
-git branch --no-color -vv | grep ': gone\]' | awk '{print $1}' | xargs -r git branch -D
+git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads \
+  | grep -F '[gone]' | cut -f1 | xargs -r git branch -D
 
 # squash-merged but remote still exists — verify MERGED first, then -D (not -d):
 git branch -D <branch>
