@@ -84,6 +84,15 @@ If the batch contains coupled PRs (same migrations/codegen directories), follow 
 
 For red PRs: do not merge; pull the failing job log (`gh run view <id> --log-failed | tail -50`) so the report names the failure.
 
+**Stale pre-fix check trap — verify the head SHA before counting a redispatch failure.** After a fix has been *requested* (a redispatch or resume message to a fix agent) but before it has been *pushed*, the PR's head is still the failed commit, so `mergeStateStatus`/`statusCheckRollup` keep reporting the old failing run — the PR reads red even though the fix is in flight. A naive "PR is red → attempt N failed" read parks shippable work. Before treating a red read as a failed fix attempt:
+
+1. Record the PR's `headRefOid` whenever a failure is observed (`poll-prs.sh` prints it per tick and includes it in the final JSON — no extra API call needed).
+2. On a later red read, compare the current `headRefOid` (or the failing run's `headSha`) to the recorded failed SHA.
+3. **Same SHA → the fix has not landed yet.** Report "fix pending / in flight" and keep waiting — do NOT increment the attempt count, escalate, or park the PR.
+4. **New SHA and still red → the fix pushed and failed.** Only now count the attempt and apply the caller's escalation policy.
+
+Callers doing redispatch bookkeeping (e.g. a generated drain-it's "ONE redispatch with the failure context") must key attempt counts to head SHAs, never to bare "PR is red" reads.
+
 ### 4. Teardown and reconcile
 
 After a batch with worktree-isolated sub-agents, read `references/worktree-teardown.md`, then:
@@ -98,7 +107,7 @@ Then reconcile the session (cwd back to repo root, switch to default branch, `gi
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on timeout. |
+| `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. Surfaces `headRefOid` per tick and in the final JSON so callers can spot stale pre-fix runs before counting a redispatch failure. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on timeout. |
 | `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` env (same contract as `teardown.sh`). |
 | `scripts/poll-queue.sh` | Queue-phase companion to `poll-prs.sh`: polls 1+ enqueued PRs' merge-queue state (GraphQL) until each is `MERGED`, ejected (`OPEN` + `isInMergeQueue:false`, reported loudly), or closed without merge. Read-only — never re-enqueues or recovers. Same env/contract: `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS`, exit 124 on timeout, final JSON on stdout. |
 | `scripts/gh-retry.sh` | Exponential-backoff retry for mutating `gh` calls on transient failures (502/503/504, "Merge already in progress", transient GraphQL). Exit 124 on exhaustion so the caller decides best-effort vs escalate. |
@@ -108,6 +117,7 @@ Then reconcile the session (cwd back to repo root, switch to default branch, `gi
 
 - **Single-writer**: only the coordinating session merges/enqueues; sub-agents never do. One owner per PR — never point `merge-shepherd.sh` and a watcher session (or two writers) at the same PR from different sessions.
 - **Never merge past a red check**; never auto-rebase `CONFLICTING`.
+- **Never count a red PR as a failed fix attempt on a stale head** — confirm the failing run's head SHA is newer than the previously-failed one first (see the stale pre-fix check trap in §3).
 - **Never force-push the default branch.**
 - Draft PRs: watch only; the author flips to ready.
 - Board claims and issue edits via `gh-retry.sh` are best-effort — exit 124 means log and continue, not abort.
