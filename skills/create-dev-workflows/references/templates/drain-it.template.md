@@ -1,5 +1,5 @@
 <!--
-TEMPLATE: drain-it · version 4
+TEMPLATE: drain-it · version 5
 Render rules: see plate-it.template.md header. Same conventions.
 REQUIRES: take-it generated in the same repo (drain-it reuses take-it's dispatch mechanics
 verbatim). Board-optional: IF:BOARD true renders board-backed state (Ready column, In
@@ -20,7 +20,7 @@ description: >
   or invokes it via /loop. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 4 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 5 -->
 
 # {{PROJECT_NAME}} Drain-It
 
@@ -51,6 +51,7 @@ Query the queue: `gh issue list --repo {{REPO_SLUG}} --state open --label ready 
 | Claimed | Skip if assignee set or <!-- IF:BOARD -->status ≠ Ready<!-- ELSE -->`in-progress` label present<!-- ENDIF --> (another session got it) |
 | Blocked | Skip `blocked` label |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges |
+| Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's `touches:` set. Read each in-flight issue's `touches:` line (the in-flight set is known from §1) and intersect: same repo-relative path, or a glob on one side matching a path on the other. Defer to a later tick — re-eligible automatically once the overlapping issue merges (its slot frees, its files unlock). An issue with **no** `touches:` line is treated as intersecting nothing (fill-it left it unannotated), but is flagged `unannotated` in the tick report so the coupling gap is visible, not silently risky. |
 | Smell test | Run take-it's pre-flight smell test (research-shaped titles, open-question sections, stub bodies). Failures: comment why + <!-- IF:BOARD -->move the card back to Backlog<!-- ELSE -->remove the `ready` label<!-- ENDIF --> for fill-it. Never "fix it up" inline — that hides the grooming gap. |
 
 <!-- IF:MIGRATIONS -->
@@ -60,7 +61,7 @@ Additional filter — **migration serialization**: at most ONE issue touching {{
 Additional filter — **codegen coupling**: codegen-coupled issues may run in parallel, but flag them to pr-shepherd so their merges serialize.
 <!-- ENDIF -->
 
-Take the first `capacity` survivors.
+Take the first `capacity` survivors. The Collision filter is the primary defense against concurrent file-overlapping dispatch; `ai-agent-skills:pr-shepherd`'s coupled-PR serialization (`references/serialization.md`) stays the **fallback** for overlaps this filter can't see — chiefly `unannotated` issues that turn out to collide at merge time.
 
 ## 4. Dispatch
 
@@ -74,10 +75,11 @@ Sub-agents NEVER merge (single-writer: merges happen in §1 of a tick).
 
 ```
 DRAIN TICK — in-flight 3/{{MAX_IN_FLIGHT}} | merged this tick: #1712 | dispatched: #1707 #1711 | Ready remaining: 4
-holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy)
+holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (touches overlaps in-flight #1707)
+unannotated (dispatched without a touches set — coupling unchecked): #1711
 ```
 
-Plus one line per failure with its next action.
+Plus one line per failure with its next action. Drop the `unannotated` line on ticks that dispatch nothing unannotated.
 
 ## 6. Drain complete
 

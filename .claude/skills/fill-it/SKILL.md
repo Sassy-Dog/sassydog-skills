@@ -10,7 +10,7 @@ description: >
   ai-agent-skills-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: fill-it | template-version: 2 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: fill-it | template-version: 3 -->
 
 # ai-agent-skills Fill-It
 
@@ -37,6 +37,7 @@ An issue is **Ready** only if ALL of these hold:
 | 5 | No open product decisions: no `(decision)` markers, no `## Open questions`, no "TBD" | Surface the decision to the user with a recommended default; issue stays unpromoted until resolved |
 | 6 | Right-sized: one coherent PR per issue | Epic → split (§4) |
 | 7 | Dependencies recorded as literal `Depends on #N` lines (one per line) | Add them — drain-it enforces ordering from these lines |
+| 8 | Touch-set annotated: a single machine-readable `touches:` line names the repo-relative paths/globs the issue's PR will edit | Add it (§3) — drain-it reads it to avoid dispatching two file-overlapping issues concurrently |
 
 A dependency being open does NOT block Ready (drain-it sequences at dispatch time) — only *unrecorded* dependencies block, because invisible ordering is how parallel agents collide.
 
@@ -46,8 +47,9 @@ Per failing candidate:
 
 1. Ground the scope in the codebase — dispatch `Explore` agent(s) for recon when touchpoints are unknown; never write a scope you haven't verified against real files.
 2. Rewrite the body: preserve the original ask as a `> quote`, then problem/scope/touchpoints/acceptance/dispatch-notes sections.
-3. Record repo gotchas the sub-agent needs (frontmatter `---` must be line 1 with `name:`/`description:` and name matching the directory; skill descriptions are trigger specs — capability skills never claim a generated skill's trigger phrases; template edits bump `template-version` and stay in sync with `references/update-mode.md`; skill/agent adds/removals update `README.md`'s tables and bump `.claude-plugin/plugin.json`; CI gates: shellcheck, frontmatter check, actionlint, markdownlint).
-4. `gh issue edit N --repo Sassy-Dog/ai-agent-skills --body-file ...` — edit, don't comment-and-hope.
+3. Write the **touch-set**: a single `touches:` line on its own line in the body, listing the repo-relative paths/globs the issue's PR will edit — distilled from the scope/touchpoints you just grounded and the evidence `file:line` citations (no new work; you already read them). Space-separated, globs allowed; keep it to the files that will actually change, not every file mentioned. This is the coupling signal drain-it parses to avoid running two file-overlapping issues concurrently, so under-scoping it re-introduces the conflict churn it exists to prevent. Example: `touches: skills/create-dev-workflows/references/templates/drain-it.template.md skills/create-dev-workflows/references/templates/fill-it.template.md`.
+4. Record repo gotchas the sub-agent needs (frontmatter `---` must be line 1 with `name:`/`description:` and name matching the directory; skill descriptions are trigger specs — capability skills never claim a generated skill's trigger phrases; template edits bump `template-version` and stay in sync with `references/update-mode.md`; skill/agent adds/removals update `README.md`'s tables and bump `.claude-plugin/plugin.json`; CI gates: shellcheck, frontmatter check, actionlint, markdownlint).
+5. `gh issue edit N --repo Sassy-Dog/ai-agent-skills --body-file ...` — edit, don't comment-and-hope.
 
 Decisions are NEVER guessed: present each to the user as a recommendation with trade-offs; fold the answer into the body marked **Decision (date)** so it supersedes any `(decision)` marker.
 
@@ -67,6 +69,8 @@ gh issue edit N --repo Sassy-Dog/ai-agent-skills --add-label ready
 ```
 
 Demotion is the reverse: `gh issue edit N --repo Sassy-Dog/ai-agent-skills --remove-label ready` plus a comment naming why — never a silent strip.
+
+Every promoted issue carries its `touches:` line (rubric #8) — that's the coupling signal drain-it reads to avoid dispatching two file-overlapping issues at once.
 
 Final table: issue · verdict (**Ready** / needs-decision / split → children / parked: awaiting-user / parked: reason) · what changed. End with the decisions awaiting the user, if any.
 
