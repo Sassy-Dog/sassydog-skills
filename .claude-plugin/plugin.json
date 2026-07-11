@@ -1,6 +1,6 @@
 {
   "name": "ai-agent-skills",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Reusable AI agent skills for Claude Code, Gemini CLI, and other AI coding tools",
   "author": {
     "name": "Sassy Dog",
