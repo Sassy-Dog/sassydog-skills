@@ -18,7 +18,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 
 ### Generator + capability skills
 
-`create-dev-workflows` generates **project-level** `plate-it` (prioritized work plate), `fill-it` (backlog grooming to Ready), `drain-it` (loop-driven Ready-column dispatcher), `take-it`
+`create-dev-workflows` generates **project-level** `plate-it` (prioritized work plate), `fill-it` (backlog grooming to Ready), `drain-it` (loop-driven Ready dispatcher — board column or `ready` label), `take-it`
 (parallel issue-shipping: "take #341, #432"), `send-it` (single-PR end-to-end), and `clean-it`
 (post-shipping git reconciliation) skills into a product repo's `.claude/skills/`. The plugin
 deliberately ships no generic runtime versions of these — only project skills exist at runtime, so
@@ -74,7 +74,7 @@ ls ~/.claude/plugins/cache/sassy-dog-skills/ai-agent-skills/
 # 0.5.0    <- installed version (stale)
 ```
 
-Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `0.6.1`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
+Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `0.7.0`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
 
 ### Updates freeze at the cached version (SAML error)
 

@@ -6,10 +6,10 @@ description: >
   with Closes #N, and a coordinator loop polls to auto-merge greens and surface failures. Use when
   the user says "take #341, #432", "take #N", "take it #N", "go take #N and #M", "pick up #N",
   "knock out #N", or any variant handing over a list of GitHub issue numbers to ship in parallel.
-  ai-agent-skills-specific.
+  ai-agent-skills-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 3 -->
 
 # ai-agent-skills Take-It
 
@@ -33,9 +33,21 @@ Parallel issue-shipping: the user hands you GitHub issue numbers; this skill shi
 gh issue view N --repo Sassy-Dog/ai-agent-skills --json number,title,state,labels,body,assignees
 ```
 
-Skip + announce if: not OPEN; `blocked` label; assignee already set; or stub body (< 80 chars) — but **check `gh issue view N --comments` before calling it a stub**; scope may live in a follow-up comment. For survivors capture title, body, labels (label → conventional-commit prefix: `bug`→`fix`, `enhancement`→`feat`, `documentation`→`docs`, else `chore`).
+Skip + announce if: not OPEN; `blocked` label; assignee already set or `in-progress` label already present (another loop's claim); or stub body (< 80 chars) — but **check `gh issue view N --comments` before calling it a stub**; scope may live in a follow-up comment. For survivors capture title, body, labels (label → conventional-commit prefix: `bug`→`fix`, `enhancement`→`feat`, `documentation`→`docs`, else `chore`).
 
-## 3. Dispatch sub-agents in parallel
+## 3. Claim each issue
+
+Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo Sassy-Dog/ai-agent-skills --add-assignee @me`, and set the `in-progress` claim label, ensuring it exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing):
+
+```bash
+gh label create in-progress --repo Sassy-Dog/ai-agent-skills --color 1D76DB \
+  --description "Claimed by a take-it/drain-it loop" 2>/dev/null || true
+gh issue edit N --repo Sassy-Dog/ai-agent-skills --add-label in-progress --remove-label ready
+```
+
+(`--remove-label ready` is a no-op when the label isn't set — dispatch always moves an issue out of Ready). Claim failures are logged, never fatal — the PR's `Closes #N` closes the issue regardless.
+
+## 4. Dispatch sub-agents in parallel
 
 **First, fast-forward local main** — worktrees branch from local HEAD, not origin; a stale base lands the PR `CONFLICTING`:
 
@@ -59,7 +71,7 @@ git switch main >/dev/null 2>&1 && git pull --ff-only origin main
 >
 > **Your job:**
 >
-> 1. **Stay inside your assigned worktree.** cwd resets between Bash calls — prefix every call with `cd <your worktree path> &&`, and verify `pwd && git rev-parse --show-toplevel && git branch --show-current` before your first edit. **Never `git stash`** (worktrees share one `.git`; a stash collides with the other parallel agents). Commit WIP to your branch or discard explicitly.
+> 1. **Stay inside your assigned worktree.** cwd resets between Bash calls — prefix every call with `cd <your worktree path> &&`, and verify `pwd && git rev-parse --show-toplevel && git branch --show-current` before your first edit. **Never `git stash`** (worktrees share one `.git`; a stash collides with the other parallel agents). Commit WIP to your branch or discard explicitly. **Never run an editable/dev install into a shared interpreter or global store** — under parallel worktree agents, whoever installs last repoints imports for everyone, so a green test run may silently be testing another agent's source (Python: `pip install -e` writes the editable link into the shared interpreter's `site-packages`; Node: `npm link`/global installs are the same trap). Work isolated: create a throwaway venv/env *inside your worktree* (and never commit it), or run against your tree without installing (`PYTHONPATH=src …` for pure-Python). Verify the import resolves inside YOUR worktree before trusting a green run.
 > 2. Read the issue carefully. If scope is genuinely unclear after the body and linked issues/PRs, STOP and report back — do not guess.
 > 3. Implement the change following the repo's `CLAUDE.md`.
 <!-- BEGIN PROJECT-SPECIFIC: subagent-rules -->
@@ -70,7 +82,7 @@ git switch main >/dev/null 2>&1 && git pull --ff-only origin main
 > 7. Push and open a PR per the send-it template — the body MUST contain `Closes #{N}` on its own line (sections: Summary · Changes · Verification).
 > 8. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name> status=<opened|skipped|failed> note=<one-line>`
 
-## 4. Coordinator: watch + merge (delegated)
+## 5. Coordinator: watch + merge (delegated)
 
 Use the plugin capability skill for ALL polling/merge/teardown mechanics — do NOT reimplement them inline:
 
@@ -81,7 +93,7 @@ If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell 
 
 Run the coordinator synchronously; backgrounding it orphans PRs at "checks pending".
 
-## 5. Final report
+## 6. Final report
 
 | Issue | PR | Status | Notes |
 |-------|----|--------|-------|
@@ -89,7 +101,9 @@ Run the coordinator synchronously; backgrounding it orphans PRs at "checks pendi
 | #240 | #261 | ⚠️ FAILED | named failing check + log excerpt |
 | #216 | — | ⏭ SKIPPED | reason |
 
-Always end with: claims to unwind by hand (assignments for unshipped issues) and a next-action one-liner per failure.
+For every MERGED row, clear the claim label: `gh issue edit N --repo Sassy-Dog/ai-agent-skills --remove-label in-progress` — `Closes #N` closed the issue but does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
+
+Always end with: claims to unwind by hand (assignments, `in-progress` labels for unshipped issues) and a next-action one-liner per failure.
 
 ## Guardrails
 
