@@ -3,14 +3,16 @@ name: repo-cleanup
 description: >
   Post-shipping git working-state reconciliation mechanics: fast-forward + prune the default
   branch, sweep `[gone]` and squash-merged local branches (the `: gone\]` inner-grep trap, `-D`
-  not `-d`), remove stale/detached agent worktrees, triage orphan stashes by
+  not `-d`), remove stale/detached agent worktrees, sweep orphan `worktree-agent-*` isolation
+  branches (worktree gone, never had an upstream so never `[gone]`), triage orphan stashes by
   closedByPullRequestsReferences (not bare issue state), sweep untracked-file noise against an
   allowlist, mop up stale remote branches, and clear orphan claim labels. Use when the user asks
   "delete the [gone] branches", "why won't this squash-merged branch delete", "triage these orphan
-  stashes", "remove stale agent worktrees", "is this stash safe to drop", or any low-level
-  branch/worktree/stash reconciliation mechanic. Also triggers when a project workflow skill (a
-  generated clean-it) invokes ai-agent-skills:repo-cleanup by name. The repo's own generated clean-it
-  owns the top-level post-shipping cleanup request and delegates the mechanics here.
+  stashes", "remove stale agent worktrees", "why are there worktree-agent branches left over",
+  "is this stash safe to drop", or any low-level branch/worktree/stash reconciliation mechanic.
+  Also triggers when a project workflow skill (a generated clean-it) invokes
+  ai-agent-skills:repo-cleanup by name. The repo's own generated clean-it owns the top-level
+  post-shipping cleanup request and delegates the mechanics here.
 ---
 
 # Repo Cleanup
@@ -78,6 +80,7 @@ For each non-default branch and each non-root worktree:
 | Signal | Verdict |
 |---|---|
 | Local branch marked `[gone]` | Stale — remote deleted, safe to delete locally |
+| Local `worktree-agent-*` isolation branch whose worktree is gone (no upstream, so never `[gone]`) | Orphan — a per-merge teardown removed only the worktree. `-D` if its tip is an ancestor of `origin/$DEFAULT_BRANCH` **or** a MERGED PR contains the tip (`gh api "repos/$REPO/commits/<tip>/pulls"`); neither → STOP and ask (possibly unmerged work) |
 | Local branch tracks a remote that still exists | `gh pr list --repo "$REPO" --state all --search "head:<branch>"` → MERGED / CLOSED-not-merged = stale; OPEN = leave |
 | Worktree SHA where `git merge-base --is-ancestor <sha> origin/$DEFAULT_BRANCH` is true | Stale — work is in the default branch |
 | Worktree SHA NOT in the default branch | Investigate — possibly in-flight; do not remove without confirmation |
@@ -93,6 +96,18 @@ default branch — `git merge-base` reports it unmerged (false negative). Verify
 `.claude/worktrees/agent-*`) and Warp's agent worktrees are detached-HEAD (no branch) — they never
 appear in `git branch -v` and never get `[gone]`. Remove them by path from `git worktree list`. (A
 take-it run normally tears down its own; this catches crashed-coordinator orphans.)
+
+**Orphan isolation branches:** newer Agent runtimes check each agent worktree out on a
+`worktree-agent-<id>` **isolation branch** instead of detached HEAD. The agent's PR merges from its
+feature branch, so the isolation branch never gets an upstream — when a per-merge teardown removes
+the worktree directory, the leftover branch is neither sweepable by path (no worktree entry) nor
+marked `[gone]` (no upstream to lose), and one orphan accumulates per merge (a 35-issue drain left
+36 of them). Enumerate them explicitly — `git for-each-ref --format='%(refname:short)'
+'refs/heads/worktree-agent-*'` — and classify each per the table row above. The ancestry check
+alone is NOT enough: a tip at the pre-squash feature commit, or an orphan salvage commit superseded
+by the PR that actually merged, is shipped yet not an ancestor — confirm via the MERGED-PR lookup
+before `-D`, exactly like the squash-merge gotcha. Never touch one whose worktree is still present:
+that is a live agent, and "no upstream" is its normal state, not a merged signal.
 
 ## 3. Triage stashes
 
@@ -214,7 +229,10 @@ DEFAULT_BRANCH="$DEFAULT_BRANCH" \
 ```
 
 `--sweep` removes every detached or remote-branch-gone agent worktree under `.claude/worktrees/`,
-deletes their local branches, prunes, and ff-reconciles the default branch. It reports stashes but
+deletes their local branches **and** their `worktree-agent-*` isolation branches, then sweeps orphan
+isolation branches whose worktree is already gone (ancestor-of-default OR merged-PR classification;
+genuinely unmerged ones are surfaced, never auto-deleted — and live ones, worktree still present,
+are never touched). It prunes, ff-reconciles the default branch, and reports stashes but
 **never** drops them (step 3 owns that). For **non-worktree** stale local branches (regular
 `[gone]` branches with no checkout, and squash-merged branches whose remote still exists), finish the
 sweep here:
@@ -278,6 +296,7 @@ Anything else is either in-flight (intentional) or got missed — re-run from st
 ## Guardrails
 
 - **Never delete a branch with an OPEN PR.** Check `gh pr list --repo "$REPO" --state all --search "head:<branch>"` when in doubt.
+- **Never delete a `worktree-agent-*` isolation branch whose worktree is still present** — that's a live agent checkout, not debris. Only isolation branches whose worktree is gone are sweep candidates, and unclassifiable ones (not an ancestor, no merged PR) are surfaced, not deleted.
 - **Never `git worktree remove --force` a worktree at a SHA that isn't in the default branch** without confirming — potentially in-flight work.
 - **Never auto-drop a stash referencing an OPEN issue.** Auto-drop is for confidently-shipped or confidently-abandoned work only.
 - **Never auto-discard untracked files outside the allowlist, and never anything in the never-discard list.** Untracked files have no git history; asking too often costs a few prompts, auto-discarding wrong is unrecoverable.
