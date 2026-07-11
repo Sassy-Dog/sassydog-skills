@@ -1,5 +1,5 @@
 <!--
-TEMPLATE: drain-it · version 1
+TEMPLATE: drain-it · version 2
 Render rules: see plate-it.template.md header. Same conventions.
 REQUIRES: a ProjectV2 board with a Ready column (IF:BOARD must be true) AND take-it generated
 in the same repo (drain-it reuses take-it's dispatch mechanics verbatim).
@@ -17,7 +17,7 @@ description: >
   or invokes it via /loop. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 2 -->
 
 # {{PROJECT_NAME}} Drain-It
 
@@ -57,7 +57,7 @@ Take the first `capacity` survivors.
 
 ## 4. Dispatch
 
-Use take-it's mechanics verbatim (claim → fast-forward local {{DEFAULT_BRANCH}} → one sub-agent per issue, `isolation: "worktree"`, single message, batch manifest in `.git/drain-it-batch.json`, take-it's self-contained sub-agent prompt).
+Use take-it's mechanics verbatim (claim → fast-forward local {{DEFAULT_BRANCH}} → one sub-agent per issue, `isolation: "worktree"`, single message, batch manifest in `.git/drain-it-batch.json`, take-it's self-contained sub-agent prompt). The reused prompt carries take-it's shared-state isolation rules — worktree confinement, never `git stash`, never an editable/dev install into a shared interpreter or global store (Python: `pip install -e` repoints imports for every parallel agent; in-worktree venv or `PYTHONPATH` instead) — keep them intact when appending failure context for a §1 redispatch.
 
 **Model policy: pass `model: "opus"` on every dispatched Agent call.** The alias resolves to the latest Opus (4.8 today). Implementation work runs on Opus because it is the cheaper tier relative to the coordinator's session model — only this coordinator tick stays on the session model. Do not silently change the sub-agent model in either direction.
 
