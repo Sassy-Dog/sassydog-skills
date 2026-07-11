@@ -1,12 +1,21 @@
 # Worktree teardown & session reconcile
 
-After a batch of parallel sub-agents merges (or fails), the coordinating session must clean its own trace inline — not defer to a future cleanup pass. End state to assert: `git worktree list` shows only the main checkout (plus any genuinely-open PR's worktree), local default branch == origin, no leftover feature branches.
+After a batch of parallel sub-agents merges (or fails), the coordinating session must clean its own trace inline — not defer to a future cleanup pass. End state to assert: `git worktree list` shows only the main checkout (plus any genuinely-open PR's worktree), local default branch == origin, no leftover feature branches, no leftover `worktree-agent-*` isolation branches.
 
 ## The squash-ancestry trap
 
 **`git branch --merged` is useless when the repo squash-merges.** A squash-merged branch's tip is NOT an ancestor of the default branch, so `--merged` reports it UNMERGED — a false negative that makes naive cleanup keep everything forever.
 
 The reliable merged signal is **"remote branch gone"**: merges delete the remote branch (via `--delete-branch`, `delete_branch_on_merge`, or the merge queue's own deletion), so a local worktree branch with no `origin/<branch>` counterpart has been merged (or deliberately closed). `teardown.sh --sweep` keys off exactly this. Corollary: never disable remote-branch deletion on merge — the whole cleanup signal depends on it.
+
+## The isolation-branch leak
+
+The Agent runtime checks each agent worktree out on a `worktree-agent-<id>` **isolation branch**. The PR merges from the agent's *feature* branch, so the isolation branch never gets an upstream: after a per-merge teardown removes the worktree directory, the leftover branch is neither a `.claude/worktrees/` path to sweep nor `[gone]` — it just lingers, one per merge (a 35-issue drain left 36 of them). Two rules follow:
+
+- **Prevention** — per-merge teardown (`merge-shepherd.sh`'s teardown step, and `teardown.sh`'s explicit mode) deletes the isolation branch at the same time it removes the worktree. Never the PR's own head branch (`--delete-branch` / the `[gone]` sweep owns that); never a branch another live worktree has checked out.
+- **Sweep** — `teardown.sh --sweep` classifies leftover orphans (isolation-prefix branch, worktree gone): tip is an ancestor of the default branch OR a MERGED PR contains the tip (squash-merge false-negative safe, same gotcha as feature branches) → `-D`; neither → surfaced for a human, never auto-deleted. Isolation branches whose worktree is still present are **live agents** — `--sweep` never touches them, and never removes their worktrees by the "no remote" inference either ("no upstream" is an isolation branch's normal state, not a merged signal).
+
+Prefix override: `ISOLATION_BRANCH_PREFIX` env (default `worktree-agent-`), honored by both scripts.
 
 ## Batch manifest
 

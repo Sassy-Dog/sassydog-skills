@@ -101,17 +101,17 @@ After a batch with worktree-isolated sub-agents, read `references/worktree-teard
 bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh <wt_path...>   # or --sweep
 ```
 
-Then reconcile the session (cwd back to repo root, switch to default branch, `git pull --ff-only`, delete local feature branches). Squash-merge repos: "remote branch gone" is the merged signal, never `git branch --merged`.
+Then reconcile the session (cwd back to repo root, switch to default branch, `git pull --ff-only`, delete local feature branches). Squash-merge repos: "remote branch gone" is the merged signal, never `git branch --merged`. Teardown also deletes each worktree's `worktree-agent-*` **isolation branch** — it never had an upstream, so it is never `[gone]` and would otherwise accumulate one orphan per merge (see the isolation-branch leak in `references/worktree-teardown.md`).
 
 ## Bundled scripts
 
 | Script | Purpose |
 |--------|---------|
 | `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. Surfaces `headRefOid` per tick and in the final JSON so callers can spot stale pre-fix runs before counting a redispatch failure. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on timeout. |
-| `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` env (same contract as `teardown.sh`). |
+| `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Teardown also deletes the worktree's `worktree-agent-*` isolation branch (never the PR's own head branch — `--delete-branch`/`[gone]` owns that). Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env (same contract as `teardown.sh`). |
 | `scripts/poll-queue.sh` | Queue-phase companion to `poll-prs.sh`: polls 1+ enqueued PRs' merge-queue state (GraphQL) until each is `MERGED`, ejected (`OPEN` + `isInMergeQueue:false`, reported loudly), or closed without merge. Read-only — never re-enqueues or recovers. Same env/contract: `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS`, exit 124 on timeout, final JSON on stdout. |
 | `scripts/gh-retry.sh` | Exponential-backoff retry for mutating `gh` calls on transient failures (502/503/504, "Merge already in progress", transient GraphQL). Exit 124 on exhaustion so the caller decides best-effort vs escalate. |
-| `scripts/teardown.sh` | Batch worktree cleanup: force-removes locked agent worktrees, deletes local branches, prunes, clears origin-identical stragglers, ff-reconciles the default branch. `--sweep` reclaims orphans whose remote branch is gone. Never drops stashes. `DEFAULT_BRANCH` env override. |
+| `scripts/teardown.sh` | Batch worktree cleanup: force-removes locked agent worktrees, deletes local branches + their `worktree-agent-*` isolation branches, prunes, clears origin-identical stragglers, ff-reconciles the default branch. `--sweep` reclaims orphans whose remote branch is gone AND sweeps orphan isolation branches whose worktree is gone (ancestry OR merged-PR classification; unmerged ones surfaced, live ones untouched). Never drops stashes. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env override. |
 
 ## Guardrails
 

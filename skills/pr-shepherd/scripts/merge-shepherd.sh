@@ -27,6 +27,8 @@
 # Env:
 #   DEFAULT_BRANCH   reconcile target (default: origin/HEAD, fallback "main")
 #                    — same contract as teardown.sh
+#   ISOLATION_BRANCH_PREFIX   prefix of the Agent runtime's isolation branches
+#                    (default "worktree-agent-") — same contract as teardown.sh
 #
 # Exit codes: 0 merged(+teardown) · 10 enqueued · 11 waiting/in-flight (re-run)
 #             · 20 red checks · 22 conflicting · 1 usage/error/closed
@@ -80,6 +82,8 @@ MAIN_WT="$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p'
 BRANCH="${DEFAULT_BRANCH:-$(git -C "${MAIN_WT:-.}" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')}"
 [ -z "$BRANCH" ] && BRANCH=main
 
+ISO_PREFIX="${ISOLATION_BRANCH_PREFIX:-worktree-agent-}"
+
 # Retry transient git network failures (the pressure-induced gh-credential
 # subprocess 401, plus 5xx and ref-lock contention). Backs off, then gives up.
 git_retry() {
@@ -111,13 +115,49 @@ checks() { # -> "FAILS PENDING"
     '"\([.statusCheckRollup[]?|select((.conclusion=="FAILURE"or .conclusion=="CANCELLED"or .conclusion=="TIMED_OUT") or (.state=="FAILURE"or .state=="ERROR"))]|length) \([.statusCheckRollup[]?|select((.status!=null and .status!="COMPLETED") or .state=="PENDING" or .state=="EXPECTED")]|length)"' 2>/dev/null
 }
 
+# Prevention (issue #26): the Agent runtime checks each worktree out on a
+# worktree-agent-<id> isolation branch. The PR merges from the agent's FEATURE
+# branch, so the isolation branch never gets an upstream — never [gone], never
+# swept — and one orphan accumulates per merge. Delete it here, at the same time
+# the worktree is removed. Guards: isolation prefix only; never the default
+# branch; never the PR's own head branch (--delete-branch / the [gone] sweep owns
+# that); never a branch some live worktree has checked out.
+drop_isolation_branch() { # $1 = candidate branch name (may be empty / non-isolation)
+  local br="$1" head_ref
+  [ -n "$br" ] || return 0
+  case "$br" in "$ISO_PREFIX"*) : ;; *) return 0 ;; esac
+  [ "$br" = "$BRANCH" ] && return 0
+  git -C "$MAIN_WT" show-ref --verify --quiet "refs/heads/$br" || return 0
+  head_ref="$(gh pr view "$PR" --repo "$REPO" --json headRefName --jq .headRefName 2>/dev/null || true)"
+  if [ -z "$head_ref" ]; then
+    echo "  (PR head ref unavailable — leaving $br for teardown.sh --sweep)"; return 0
+  fi
+  [ "$br" = "$head_ref" ] && return 0
+  if git -C "$MAIN_WT" worktree list --porcelain | grep -qxF "branch refs/heads/$br"; then
+    echo "  KEEP isolation branch $br (checked out by a live worktree)"; return 0
+  fi
+  git -C "$MAIN_WT" branch -D "$br" >/dev/null 2>&1 && echo "  deleted isolation branch $br" \
+    || echo "  ⚠ could not delete isolation branch $br"
+}
+
 teardown() { # idempotent: safe whether or not the worktree/branch still exist
   [ -z "$MAIN_WT" ] && { echo "  (no local checkout — skipping teardown)"; return 0; }
-  if [ -n "$WT" ] && [ -e "$WT" ]; then
-    git -C "$MAIN_WT" worktree remove --force "$WT" 2>/dev/null && echo "  worktree removed" \
-      || echo "  ⚠ worktree not removed (locked/dirty?) — teardown.sh --sweep mops up later"
+  local wt_br="" wt_iso=""
+  if [ -n "$WT" ]; then
+    # Isolation branch the runtime created the worktree on (worktree-<dirname>) —
+    # derived from the PATH so idempotent re-runs still delete it after the
+    # directory is already gone.
+    wt_iso="worktree-$(basename "$WT")"
+    if [ -e "$WT" ]; then
+      # Capture the checked-out branch BEFORE removal (gone after).
+      wt_br="$(git -C "$WT" branch --show-current 2>/dev/null || true)"
+      git -C "$MAIN_WT" worktree remove --force "$WT" 2>/dev/null && echo "  worktree removed" \
+        || echo "  ⚠ worktree not removed (locked/dirty?) — teardown.sh --sweep mops up later"
+    fi
   fi
   git -C "$MAIN_WT" worktree prune 2>/dev/null || true
+  drop_isolation_branch "$wt_br"
+  if [ "$wt_iso" != "$wt_br" ]; then drop_isolation_branch "$wt_iso"; fi
   git -C "$MAIN_WT" switch "$BRANCH" >/dev/null 2>&1 || true
   git_retry -C "$MAIN_WT" fetch origin "$BRANCH" --quiet || true
   git -C "$MAIN_WT" merge --ff-only "origin/$BRANCH" >/dev/null 2>&1 \
