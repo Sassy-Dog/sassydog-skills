@@ -1,5 +1,5 @@
 <!--
-TEMPLATE: take-it · version 1
+TEMPLATE: take-it · version 2
 Render rules: see plate-it.template.md header. Same conventions.
 -->
 ---
@@ -14,7 +14,7 @@ description: >
   {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 2 -->
 
 # {{PROJECT_NAME}} Take-It
 
@@ -70,11 +70,11 @@ git switch {{DEFAULT_BRANCH}} >/dev/null 2>&1 && git pull --ff-only origin {{DEF
 >
 > **Your job:**
 >
-> 1. **Stay inside your assigned worktree.** cwd resets between Bash calls — prefix every call with `cd <your worktree path> &&`, and verify `pwd && git rev-parse --show-toplevel && git branch --show-current` before your first edit. **Never `git stash`** (worktrees share one `.git`; a stash collides with the other parallel agents). Commit WIP to your branch or discard explicitly.
+> 1. **Stay inside your assigned worktree.** cwd resets between Bash calls — prefix every call with `cd <your worktree path> &&`, and verify `pwd && git rev-parse --show-toplevel && git branch --show-current` before your first edit. **Never `git stash`** (worktrees share one `.git`; a stash collides with the other parallel agents). Commit WIP to your branch or discard explicitly. **Never run an editable/dev install into a shared interpreter or global store** — under parallel worktree agents, whoever installs last repoints imports for everyone, so a green test run may silently be testing another agent's source (Python: `pip install -e` writes the editable link into the shared interpreter's `site-packages`; Node: `npm link`/global installs are the same trap). Work isolated: create a throwaway venv/env *inside your worktree* (and never commit it), or run against your tree without installing (`PYTHONPATH=src …` for pure-Python). Verify the import resolves inside YOUR worktree before trusting a green run.
 > 2. Read the issue carefully. If scope is genuinely unclear after the body and linked issues/PRs, STOP and report back — do not guess.
 > 3. Implement the change following the repo's `CLAUDE.md`.
 <!-- BEGIN PROJECT-SPECIFIC: subagent-rules -->
-> 4. (project-specific implementation rules — e.g. tenant-scoping invariants, schema/codegen steps — go here)
+> 4. (project-specific implementation rules — e.g. tenant-scoping invariants, schema/codegen steps, this repo's exact worktree-isolated dev-install recipe specializing rule 1 — go here)
 <!-- END PROJECT-SPECIFIC -->
 > 5. Run the send-it pre-flight locally and fix anything red: {{PREFLIGHT_COMMANDS}}
 > 6. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a literal `Closes #{N}` line.
