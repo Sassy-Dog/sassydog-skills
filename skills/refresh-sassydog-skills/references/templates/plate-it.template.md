@@ -1,6 +1,6 @@
 <!--
 TEMPLATE: plate-it · version 1
-Render rules (applied by create-dev-workflows at generation time):
+Render rules (applied by refresh-sassydog-skills at generation time):
   {{FACT}}                    → replace with the detected/confirmed value
   IF:FLAG ... ELSE ... ENDIF  → keep one arm based on interview answers, drop the markers
   BEGIN/END PROJECT-SPECIFIC  → KEEP the fence markers in the generated file (update mode splices these)
@@ -21,7 +21,7 @@ description: >
   <!-- IF:WRITE_GATE_SENTRY -->Files GitHub issues only under the tight Sentry→GH gate in §6; every other surface is read-only.<!-- ELSE -->Read-only — never files issues, never mutates state.<!-- ENDIF -->
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: plate-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: plate-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Plate-It
 

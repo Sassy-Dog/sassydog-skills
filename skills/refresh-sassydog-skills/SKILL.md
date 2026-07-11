@@ -1,16 +1,19 @@
 ---
-name: create-dev-workflows
+name: refresh-sassydog-skills
 description: >
-  This skill should be used when the user asks to "set up dev workflow skills", "create
+  This skill should be used when the user asks to "refresh the sassydog skills", "refresh the
+  project workflow skills", "refresh the dev workflow skills", "re-sync the vendored skills",
+  "set this repo up independently", "make this repo independent", "switch back to plugin mode",
+  "set up dev workflow skills", "create
   plate/take/send skills for this repo", "generate the plate-it/take-it/send-it trio", "add fill-it and drain-it here", "add a
   plate-it skill here", "bootstrap project workflow skills", "update the project workflow skills",
   "regenerate the dev workflow skills from the latest templates", "re-sync this repo's workflow
-  skills with the plugin templates", or "adopt the legacy plate/get/send skills". Creates or
-  updates the project-specific plate-it / fill-it / take-it / drain-it / send-it skills under a product repo's
-  .claude/skills/. Run from inside the target repository.
+  skills with the plugin templates", or "adopt the legacy plate/get/send skills". Creates, updates,
+  and re-syncs the project-specific plate-it / fill-it / take-it / drain-it / send-it skills under a product repo's
+  .claude/skills/ (plugin-backed or independent/vendored). Run from inside the target repository.
 ---
 
-# Create Dev Workflows
+# Refresh Sassydog Skills
 
 Generator for the project dev-workflow family:
 
@@ -29,7 +32,7 @@ The plugin deliberately ships **no generic runtime versions** of these — only 
 
 1. Confirm cwd is a git repo with a GitHub remote: `gh repo view --json nameWithOwner,defaultBranchRef`.
 2. Pick the mode:
-   - `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it,clean-it}/SKILL.md` containing a `generated-by` marker (match it anywhere in the file — older renders placed it on line 1, fixed ones right after the frontmatter) → **update mode**
+   - `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it,clean-it}/SKILL.md` containing a `generated-by: ai-agent-skills:` marker — either producer name: `refresh-sassydog-skills` (current) or the legacy `create-dev-workflows` (renders from plugin ≤ 0.8.1). Match it anywhere in the file — older renders placed it on line 1, fixed ones right after the frontmatter → **update mode**
    - legacy hand-written skills matching `*plate-it*`/`*get-it*`/`*send-it*`/`*clean-it*` without the marker → **adopt mode**
    - neither → **create mode**
 

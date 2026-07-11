@@ -18,7 +18,7 @@ description: >
   {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: fill-it | template-version: 3 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: fill-it | template-version: 3 -->
 
 # {{PROJECT_NAME}} Fill-It
 
@@ -62,7 +62,7 @@ Per failing candidate:
 
 1. Ground the scope in the codebase — dispatch `Explore` agent(s) for recon when touchpoints are unknown; never write a scope you haven't verified against real files.
 2. Rewrite the body: preserve the original ask as a `> quote`, then problem/scope/touchpoints/acceptance/dispatch-notes sections.
-3. Write the **touch-set**: a single `touches:` line on its own line in the body, listing the repo-relative paths/globs the issue's PR will edit — distilled from the scope/touchpoints you just grounded and the evidence `file:line` citations (no new work; you already read them). Space-separated, globs allowed; keep it to the files that will actually change, not every file mentioned. This is the coupling signal drain-it parses to avoid running two file-overlapping issues concurrently, so under-scoping it re-introduces the conflict churn it exists to prevent. Example: `touches: skills/create-dev-workflows/references/templates/drain-it.template.md skills/create-dev-workflows/references/templates/fill-it.template.md`.
+3. Write the **touch-set**: a single `touches:` line on its own line in the body, listing the repo-relative paths/globs the issue's PR will edit — distilled from the scope/touchpoints you just grounded and the evidence `file:line` citations (no new work; you already read them). Space-separated, globs allowed; keep it to the files that will actually change, not every file mentioned. This is the coupling signal drain-it parses to avoid running two file-overlapping issues concurrently, so under-scoping it re-introduces the conflict churn it exists to prevent. Example: `touches: skills/refresh-sassydog-skills/references/templates/drain-it.template.md skills/refresh-sassydog-skills/references/templates/fill-it.template.md`.
 4. Record repo gotchas the sub-agent needs ({{GOTCHA_SUMMARY}}).
 5. `gh issue edit N --repo {{REPO_SLUG}} --body-file ...` — edit, don't comment-and-hope.
 

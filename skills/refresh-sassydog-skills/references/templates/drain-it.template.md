@@ -20,7 +20,7 @@ description: >
   or invokes it via /loop. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 5 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: drain-it | template-version: 5 -->
 
 # {{PROJECT_NAME}} Drain-It
 

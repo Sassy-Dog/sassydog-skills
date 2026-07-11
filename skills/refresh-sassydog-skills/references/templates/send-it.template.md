@@ -12,7 +12,7 @@ watch CI, merge, clean up. Use when the user says "send it", "ship it", "open th
   "create a PR", or asks to merge a branch. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: send-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: send-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Send-It
 

@@ -9,7 +9,7 @@ Every generated SKILL.md carries, in order:
    HTML comment) may precede it.
 2. **Generated-by marker** on the first non-blank line after the closing `---` of the frontmatter,
    with a blank line on each side:
-   `<!-- generated-by: ai-agent-skills:create-dev-workflows | template: <plate-it|fill-it|take-it|drain-it|send-it|clean-it> | template-version: N -->`
+   `<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: <plate-it|fill-it|take-it|drain-it|send-it|clean-it> | template-version: N -->`
 3. **Project-specific fences** at the slots the template defines:
    `<!-- BEGIN PROJECT-SPECIFIC: <slot> --> ... <!-- END PROJECT-SPECIFIC -->`
    Slots: `extra-surfaces`, `scoring-overrides`, `subagent-rules`, `extra-gates`, `extra-cleanup`, `extra-guardrails`. Fence markers stay in the generated file forever — they're the splice anchors.
@@ -17,10 +17,13 @@ Every generated SKILL.md carries, in order:
 Everything outside the fences is **template-owned**: hand-edits there are legal but will be flagged (and may be replaced) on the next update. Durable project customization belongs inside a fence.
 
 When detecting update-mode candidates or splicing, match the generated-by marker **anywhere in the
-file** — not just at a fixed line. Files rendered before this contract placed the marker on line 1
-(a broken layout the loader can't parse), and hand-fixed files may have moved it; both must still
-be recognized as generated. On update, normalize the output to this contract (frontmatter on line 1,
-marker right after it).
+file** — not just at a fixed line — and **accept either producer name**: match on the
+`generated-by: ai-agent-skills:` prefix, so both `refresh-sassydog-skills` (current) and the legacy
+`create-dev-workflows` (files rendered by plugin ≤ 0.8.1, before the skill was renamed) are
+recognized as generated. Files rendered before this contract placed the marker on line 1
+(a broken layout the loader can't parse), and hand-fixed files may have moved it; all of these must
+still be recognized as generated. On update, normalize the output to this contract (frontmatter on
+line 1, marker right after it, current producer name).
 
 ## Update mode (generated-by marker present)
 

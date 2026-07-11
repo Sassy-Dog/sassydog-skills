@@ -21,7 +21,7 @@ description: >
   <!-- IF:CLAIM_LABEL -->Also clears leftover {{CLAIM_LABEL}} claim labels on issues whose PR already merged.<!-- ENDIF -->
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: clean-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: clean-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Clean-It
 
