@@ -23,11 +23,11 @@ Show the detected value (`merge_queue: true/false/null` + repo settings) and hav
 
 ### 3b. fill-it / drain-it wanted? (opt-in pair; skip in update mode unless raised)
 
-Both require `IF:BOARD` with a **Ready** status column; drain-it additionally requires take-it. Default **no** unless the repo already runs a Ready-based flow. If drain-it is wanted, confirm two policy facts:
+Both are **board-optional**: with `IF:BOARD` they drive the board's **Ready** status column; boardless renders drive the `ready` + `in-progress` labels instead (the degraded-board contract — Ready column → `ready` label, In progress + assignee → assignee @me + `in-progress`, failure demotion → strip labels + `blocked` + comment). drain-it additionally requires take-it. Default **no** unless the repo already runs a Ready-based flow (board column or `ready` label). If drain-it is wanted, confirm two policy facts:
 
 - `{{MAX_IN_FLIGHT}}` — concurrent in-flight cap (default **5**).
 - `{{DISPATCH_MODEL}}` — model for dispatched sub-agents (default **`opus`** = latest Opus alias, for cost control; the coordinator tick stays on the session model). Record verbatim in the rendered §4.
-- Pin `{{BOARD_READY_OPTION_ID}}` (and Backlog id for bounce-backs) alongside the other board IDs.
+- If `IF:BOARD`: pin `{{BOARD_READY_OPTION_ID}}` (and Backlog id for bounce-backs) alongside the other board IDs.
 - fill-it: confirm `{{GOTCHA_SUMMARY}}` — the one-line list of repo gotchas every refined issue body should carry (e.g. codegen paths, i18n catalogs, migration policy).
 
 ### 4. Commands (fact confirmation, free-text)
