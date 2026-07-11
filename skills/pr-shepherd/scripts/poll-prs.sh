@@ -5,6 +5,12 @@
 # Does NOT merge anything — coordinator inspects exit state and decides.
 # Prints a one-line status table per tick to stderr; emits final JSON to stdout.
 #
+# Surfaces headRefOid per tick and in the final JSON (issue #27): after a fix
+# is requested but before it is pushed, the head is still the failed commit,
+# so the rollup keeps reporting the old failing run. Callers must compare the
+# head SHA against the previously-failed one before counting a red read as a
+# failed redispatch attempt — same SHA means the fix is still in flight.
+#
 # Usage: poll-prs.sh <PR1> [PR2 ...]
 # Env:   REPO=owner/name        target repo (default: inferred from cwd)
 #        POLL_INTERVAL=60       seconds between ticks
@@ -63,14 +69,15 @@ snapshot_line() {
     local pr="$1"
     local view
     view=$(gh pr view "$pr" $repo_flag \
-        --json state,mergeable,mergeStateStatus,statusCheckRollup,title 2>/dev/null) \
+        --json state,mergeable,mergeStateStatus,statusCheckRollup,title,headRefOid 2>/dev/null) \
         || { printf "PR #%-5s  ERROR (gh pr view failed)\n" "$pr"; return; }
 
-    local state mergeable mergeStateStatus title
+    local state mergeable mergeStateStatus title head
     state=$(jq -r '.state' <<<"$view")
     mergeable=$(jq -r '.mergeable' <<<"$view")
     mergeStateStatus=$(jq -r '.mergeStateStatus' <<<"$view")
     title=$(jq -r '.title' <<<"$view" | cut -c1-50)
+    head=$(jq -r '.headRefOid // "-"' <<<"$view" | cut -c1-8)
 
     local total green failed pending
     total=$(jq '.statusCheckRollup | length' <<<"$view")
@@ -79,8 +86,8 @@ snapshot_line() {
         or .state=="FAILURE" or .state=="ERROR")] | length' <<<"$view")
     pending=$(jq "[.statusCheckRollup[]? | select($PENDING_FILTER)] | length" <<<"$view")
 
-    printf "PR #%-5s  %-8s  %-10s  checks: %d✅ %d❌ %d⏳ /%d  (%s)  %s\n" \
-        "$pr" "$state" "$mergeStateStatus" "$green" "$failed" "$pending" "$total" "$mergeable" "$title"
+    printf "PR #%-5s  %-8s  %-10s  head:%-8s  checks: %d✅ %d❌ %d⏳ /%d  (%s)  %s\n" \
+        "$pr" "$state" "$mergeStateStatus" "$head" "$green" "$failed" "$pending" "$total" "$mergeable" "$title"
 }
 
 tick=0
@@ -113,7 +120,7 @@ out='{"prs":['
 first=1
 for pr in "${PRS[@]}"; do
     view=$(gh pr view "$pr" $repo_flag \
-        --json number,state,mergeable,mergeStateStatus,statusCheckRollup,title,headRefName 2>/dev/null \
+        --json number,state,mergeable,mergeStateStatus,statusCheckRollup,title,headRefName,headRefOid 2>/dev/null \
         || echo '{}')
     [[ "$first" == "1" ]] || out+=','
     out+="$view"
