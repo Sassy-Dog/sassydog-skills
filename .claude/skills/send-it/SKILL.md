@@ -7,7 +7,7 @@ description: >
   ai-agent-skills-specific.
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: send-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: send-it | template-version: 1 -->
 
 # ai-agent-skills Send-It
 

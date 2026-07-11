@@ -9,7 +9,7 @@ description: >
   ai-agent-skills-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 3 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: take-it | template-version: 3 -->
 
 # ai-agent-skills Take-It
 
