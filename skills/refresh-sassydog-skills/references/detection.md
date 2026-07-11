@@ -3,7 +3,7 @@
 Run the bundled probe from the target repo's root:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/create-dev-workflows/scripts/detect-capabilities.sh
+bash ${CLAUDE_PLUGIN_ROOT}/skills/refresh-sassydog-skills/scripts/detect-capabilities.sh
 ```
 
 It emits one JSON object; every probe degrades to `null`/`[]` plus an entry in `detect_failures` rather than aborting. Treat the output as *evidence to confirm*, not truth — the interview validates anything consequential.

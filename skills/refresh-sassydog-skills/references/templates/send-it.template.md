@@ -12,11 +12,11 @@ watch CI, merge, clean up. Use when the user says "send it", "ship it", "open th
   "create a PR", or asks to merge a branch. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: send-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: send-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Send-It
 
-End-to-end PR flow for this repo, in order: worktree audit → freshness gates → pre-flight guardrails → PR body → commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
+End-to-end PR flow for this repo, in order: worktree audit → freshness gates → pre-flight guardrails → PR body → commit/push → watch + merge (delegated to `{{CAP_NS}}pr-shepherd`).
 
 {{MERGE_POLICY_NOTE}}
 
@@ -136,10 +136,10 @@ gh pr create --title "..." --body "..."   # template-compliant body from §4
 
 **Watch + merge (delegated).** Do NOT reimplement polling/merging inline:
 
-Skill: `ai-agent-skills:pr-shepherd`
+Skill: `{{CAP_NS}}pr-shepherd`
 Args: "Shepherd PR #<N> in {{REPO_SLUG}}: mergeable check first, watch checks, then <!-- IF:MERGE_QUEUE -->enqueue via merge queue (`--auto`, no method flag, confirm isInMergeQueue)<!-- ELSE -->squash-merge with `--delete-branch`<!-- ENDIF -->. After merge, reconcile local {{DEFAULT_BRANCH}} and delete the feature branch."
 
-If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell the user to install the plugin (`claude plugin install ai-agent-skills`) — do not improvise the merge flow from memory.
+If `{{CAP_NS}}pr-shepherd` is not in your available skills, STOP and tell the user to <!-- IF:INDEPENDENT -->re-run "refresh the sassydog skills" from a machine with the ai-agent-skills plugin installed — the vendored copy under `.claude/skills/pr-shepherd/` is missing or not loading<!-- ELSE -->install the plugin (`claude plugin install ai-agent-skills`)<!-- ENDIF --> — do not improvise the merge flow from memory.
 
 ## Guardrails
 

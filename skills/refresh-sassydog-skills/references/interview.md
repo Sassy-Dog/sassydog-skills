@@ -4,6 +4,21 @@ Ask ONLY what detection couldn't establish or what's policy (not fact). Use AskU
 
 ## Questions
 
+### 0. Delegation mode — plugin-backed or independent?
+
+Ask in **create and adopt mode**. In **update mode never re-ask**: any `vendored-by:` marker under
+`.claude/skills/*/SKILL.md` → independent (re-sync silently per `references/independent-mode.md`);
+none → plugin-backed. Revisit only if the user raises a switch ("make this repo independent",
+"switch back to plugin mode").
+
+| Option | Meaning |
+|---|---|
+| **Plugin-backed** (default) | Generated skills delegate to the `ai-agent-skills` plugin's capability skills. Smallest repo footprint; every machine that runs them needs the plugin installed (`claude plugin install ai-agent-skills`). |
+| **Independent** | Refresh vendors the needed capability skills into this repo's `.claude/skills/` (pr-shepherd, github-issues, repo-cleanup, repo-health, plus sentry-triage/testflight when detected) so a fresh clone works with no plugin install. Refresh re-syncs the copies; hand-edits to vendored files are overwritten on the next refresh. |
+
+Sets `IF:INDEPENDENT` and `{{CAP_NS}}` (`ai-agent-skills:` when plugin-backed, empty when
+independent). Independent → read `references/independent-mode.md` before Phase 3.
+
 ### 1. take-it wanted? (skip in update mode unless the user raised it)
 
 Parallel issue-shipping is opt-in. Default **yes** if the repo has GitHub Issues + Actions and a worktree-friendly dev loop; default **no** if the repo is a prototype or the user runs strictly serial. A trio without take-it is a valid steady state — update mode must never add take-it unasked.
@@ -51,4 +66,4 @@ Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfac
 
 ## Defaults summary (when the user says "just use defaults")
 
-take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · no project-specific extras.
+delegation: plugin-backed · take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · no project-specific extras.

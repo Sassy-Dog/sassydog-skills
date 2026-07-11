@@ -21,13 +21,13 @@ description: >
   <!-- IF:CLAIM_LABEL -->Also clears leftover {{CLAIM_LABEL}} claim labels on issues whose PR already merged.<!-- ENDIF -->
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: clean-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: clean-it | template-version: 1 -->
 
 # {{PROJECT_NAME}} Clean-It
 
 Post-shipping git reconciliation for this repo. This skill is **thin**: it holds {{PROJECT_NAME}}'s
 facts and delegates the actual mechanics (the `[gone]` grep trap, squash-merge `-D`, stash triage by
-`closedByPullRequestsReferences`, agent-worktree teardown) to `ai-agent-skills:repo-cleanup`, so the
+`closedByPullRequestsReferences`, agent-worktree teardown) to `{{CAP_NS}}repo-cleanup`, so the
 plumbing lives in one place across all repos.
 
 **Acting principle:** assess first, act on what's confident, escalate only on mixed signal —
@@ -53,7 +53,7 @@ issue; never auto-discard outside the allowlist.
 Delegate the full reconciliation to the capability skill, passing the facts above:
 
 ```
-Skill: ai-agent-skills:repo-cleanup
+Skill: {{CAP_NS}}repo-cleanup
 Args: "Reconcile {{REPO_SLUG}} post-shipping. default-branch={{DEFAULT_BRANCH}};
        delete-branch-on-merge={{DELETE_BRANCH_ON_MERGE}};
        dep-version-globs={{DEP_VERSION_GLOBS}};
@@ -65,9 +65,12 @@ Args: "Reconcile {{REPO_SLUG}} post-shipping. default-branch={{DEFAULT_BRANCH}};
        branches<!-- IF:CLAIM_LABEL -->, clear orphan claim labels<!-- ENDIF -->. Apply the assess-first / ask-on-mixed-signal principle."
 ```
 
-If `ai-agent-skills:repo-cleanup` is not in your available skills, STOP and tell the user to install
-the plugin (`claude plugin install ai-agent-skills`) — do not improvise the reconciliation from
-memory (the `[gone]` grep trap and squash-merge `-D` are easy to get wrong and lose work).
+If `{{CAP_NS}}repo-cleanup` is not in your available skills, STOP and tell the user to
+<!-- IF:INDEPENDENT -->re-run "refresh the sassydog skills" from a machine with the ai-agent-skills
+plugin installed — the vendored copy under `.claude/skills/repo-cleanup/` is missing or not
+loading<!-- ELSE -->install the plugin (`claude plugin install ai-agent-skills`)<!-- ENDIF --> — do
+not improvise the reconciliation from memory (the `[gone]` grep trap and squash-merge `-D` are easy
+to get wrong and lose work).
 
 <!-- BEGIN PROJECT-SPECIFIC: extra-cleanup -->
 <!-- Repo-unique cleanup steps that repo-cleanup doesn't cover (extra label hygiene, cache dirs,

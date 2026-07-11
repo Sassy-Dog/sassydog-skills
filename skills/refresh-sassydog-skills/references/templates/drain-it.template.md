@@ -20,7 +20,7 @@ description: >
   or invokes it via /loop. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 5 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: drain-it | template-version: 5 -->
 
 # {{PROJECT_NAME}} Drain-It
 
@@ -30,7 +30,7 @@ One invocation = **one tick** of a drain loop. All state lives in GitHub (<!-- I
 
 Find work this loop already started. <!-- IF:BOARD -->**The board snapshot is the source of truth**: cards in **In progress** / **In review** with assignee @me are in-flight<!-- ELSE -->**Live issue state is the source of truth**: open issues with assignee @me AND the `in-progress` label are in-flight (`gh issue list --repo {{REPO_SLUG}} --state open --assignee @me --label in-progress`)<!-- ENDIF --> — whether or not a PR exists yet (a sub-agent mid-implementation has only a `*/issue-N-*` branch; PR-based queries undercount and overshoot the cap).
 
-- Open PRs from those branches → delegate to `ai-agent-skills:pr-shepherd`: mergeable check, merge greens (<!-- IF:MERGE_QUEUE -->merge queue: `gh pr merge --auto`, no method flag, no `--delete-branch`, confirm `isInMergeQueue` via GraphQL<!-- ELSE -->direct: `--squash --delete-branch`<!-- ENDIF -->), tear down worktrees for merged PRs, reconcile local {{DEFAULT_BRANCH}}.
+- Open PRs from those branches → delegate to `{{CAP_NS}}pr-shepherd`: mergeable check, merge greens (<!-- IF:MERGE_QUEUE -->merge queue: `gh pr merge --auto`, no method flag, no `--delete-branch`, confirm `isInMergeQueue` via GraphQL<!-- ELSE -->direct: `--squash --delete-branch`<!-- ENDIF -->), tear down worktrees for merged PRs, reconcile local {{DEFAULT_BRANCH}}.
 - **Failed/red PRs**: surface in the tick report with the failing check named. Comment `drain-it: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the failure context added to the prompt is allowed on a later tick; a second failure <!-- IF:BOARD -->moves the card back to **Backlog** with a `blocked` label and a comment<!-- ELSE -->strips the claim and adds `blocked` plus a comment (`gh issue edit N --repo {{REPO_SLUG}} --remove-label ready --remove-label in-progress --add-label blocked`)<!-- ENDIF --> — a human (or fill-it, after the human weighs in) decides next. Never park failures in Ready: Ready must stay synonymous with dispatchable.
 - **`CONFLICTING` PRs**: never auto-rebase; surface and hold.
 
@@ -41,7 +41,7 @@ Find work this loop already started. <!-- IF:BOARD -->**The board snapshot is th
 ## 3. Select from Ready — and only Ready
 
 <!-- IF:BOARD -->
-Snapshot board {{BOARD_NUMBER}} via `ai-agent-skills:github-issues`; take the **Ready** column in board order (board order = priority). Filter, in order:
+Snapshot board {{BOARD_NUMBER}} via `{{CAP_NS}}github-issues`; take the **Ready** column in board order (board order = priority). Filter, in order:
 <!-- ELSE -->
 Query the queue: `gh issue list --repo {{REPO_SLUG}} --state open --label ready --json number,title,labels,assignees`, ordered by **issue number ascending** (oldest first); when the repo defines priority labels, issues carrying them sort ahead — the boardless stand-in for "board order = priority". Filter, in order:
 <!-- ENDIF -->
@@ -61,7 +61,7 @@ Additional filter — **migration serialization**: at most ONE issue touching {{
 Additional filter — **codegen coupling**: codegen-coupled issues may run in parallel, but flag them to pr-shepherd so their merges serialize.
 <!-- ENDIF -->
 
-Take the first `capacity` survivors. The Collision filter is the primary defense against concurrent file-overlapping dispatch; `ai-agent-skills:pr-shepherd`'s coupled-PR serialization (`references/serialization.md`) stays the **fallback** for overlaps this filter can't see — chiefly `unannotated` issues that turn out to collide at merge time.
+Take the first `capacity` survivors. The Collision filter is the primary defense against concurrent file-overlapping dispatch; `{{CAP_NS}}pr-shepherd`'s coupled-PR serialization (`references/serialization.md`) stays the **fallback** for overlaps this filter can't see — chiefly `unannotated` issues that turn out to collide at merge time.
 
 ## 4. Dispatch
 
@@ -110,7 +110,7 @@ Safety rails: self-cancel ONLY on the confirmed complete state above. Anything s
 - **Hard cap {{MAX_IN_FLIGHT}} in flight**, counting carry-over from previous ticks, not just this tick's dispatches.
 - **Idempotent ticks**: every action re-checks live GitHub state first; a crashed tick must be safely re-runnable (worktrees reclaimable via the batch manifest).
 - **Single-writer**: only the coordinator merges/enqueues; max one redispatch per issue without a human.
-- If `ai-agent-skills:pr-shepherd` or take-it is missing, STOP and say so — do not improvise dispatch or merge mechanics.
+- If `{{CAP_NS}}pr-shepherd` or take-it is missing, STOP and say so — do not improvise dispatch or merge mechanics.
 
 <!-- BEGIN PROJECT-SPECIFIC: extra-sequencing -->
 <!-- END PROJECT-SPECIFIC -->

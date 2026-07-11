@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# detect-capabilities.sh — read-only repo capability probe for create-dev-workflows.
+# detect-capabilities.sh — read-only repo capability probe for refresh-sassydog-skills.
 # Emits ONE JSON object on stdout. Every probe degrades to null/[] and appends to
 # detect_failures rather than aborting — the interview phase fills the gaps.
 #

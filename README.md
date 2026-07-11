@@ -9,7 +9,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
 | `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
-| `ai-agent-skills` | `create-dev-workflows` | Generator: creates/updates a repo's project-specific `plate-it` / `fill-it` / `take-it` / `drain-it` / `send-it` / `clean-it` workflow skills |
+| `ai-agent-skills` | `refresh-sassydog-skills` | Generator/refresher: creates, updates, and re-syncs a repo's project-specific `plate-it` / `fill-it` / `take-it` / `drain-it` / `send-it` / `clean-it` workflow skills (plugin-backed or independent/vendored) |
 | `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
@@ -18,7 +18,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 
 ### Generator + capability skills
 
-`create-dev-workflows` generates **project-level** `plate-it` (prioritized work plate), `fill-it` (backlog grooming to Ready), `drain-it` (loop-driven Ready dispatcher — board column or `ready` label), `take-it`
+`refresh-sassydog-skills` generates and refreshes **project-level** `plate-it` (prioritized work plate), `fill-it` (backlog grooming to Ready), `drain-it` (loop-driven Ready dispatcher — board column or `ready` label), `take-it`
 (parallel issue-shipping: "take #341, #432"), `send-it` (single-PR end-to-end), and `clean-it`
 (post-shipping git reconciliation) skills into a product repo's `.claude/skills/`. The plugin
 deliberately ships no generic runtime versions of these — only project skills exist at runtime, so
@@ -27,6 +27,16 @@ shared mechanics to the capability skills (`github-issues`, `sentry-triage`, `pr
 `repo-cleanup`, `repo-health`, `testflight`). `plate-it` / `send-it` / `clean-it` are core (always
 generated); `take-it` / `fill-it` / `drain-it` are opt-in. (`clean-it`'s engine is `repo-cleanup`,
 named distinctly so the "clean it" phrase resolves to the project skill, not the capability.)
+
+**Delegation modes.** By default generated skills are **plugin-backed**: they delegate to the
+plugin's capability skills, so every machine running them needs the plugin installed. A repo can
+instead be set up **independent**: refresh vendors the needed capability skills (transitive
+closure — `pr-shepherd`, `github-issues`, `repo-cleanup`, `repo-health`, plus `sentry-triage` /
+`testflight` when detected) into the repo's own `.claude/skills/`, each stamped with a
+`vendored-by:` marker, so a fresh clone works with no plugin install. Later refreshes re-sync the
+vendored copies from the current plugin (hand-edits to them are overwritten), and a repo can switch
+modes at any time ("make this repo independent" / "switch back to plugin mode"). The presence of
+`vendored-by:` markers *is* the persisted mode — there's no config file to drift.
 
 ### Review agents
 
