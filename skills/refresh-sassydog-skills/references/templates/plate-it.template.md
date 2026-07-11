@@ -65,7 +65,7 @@ Issue the independent pulls in a single message with multiple tool calls.
 ### A. Customer pain
 
 <!-- IF:SENTRY -->
-**Sentry** — invoke `ai-agent-skills:sentry-triage`: org `{{SENTRY_ORG}}`, project(s) {{SENTRY_PROJECTS}}. Gate policy: <!-- IF:WRITE_GATE_SENTRY -->defaults ({{SENTRY_GATE_SUMMARY}})<!-- ELSE -->report-only, no escalation<!-- ENDIF -->. It handles query syntax, the qualifying gate, and GH cross-referencing.
+**Sentry** — invoke `{{CAP_NS}}sentry-triage`: org `{{SENTRY_ORG}}`, project(s) {{SENTRY_PROJECTS}}. Gate policy: <!-- IF:WRITE_GATE_SENTRY -->defaults ({{SENTRY_GATE_SUMMARY}})<!-- ELSE -->report-only, no escalation<!-- ENDIF -->. It handles query syntax, the qualifying gate, and GH cross-referencing.
 <!-- ENDIF -->
 
 **GitHub bugs** —
@@ -78,7 +78,7 @@ gh issue list --repo {{REPO_SLUG}} --state open --label bug \
 Demand proxy = reactions + comments.
 
 <!-- IF:TESTFLIGHT -->
-**TestFlight** — invoke `ai-agent-skills:testflight`, bundle id `{{BUNDLE_ID}}`, command `feedback`. Parse screenshot submissions (tester comments) and crash submissions (stack signatures). Tag items `[TestFlight]`.
+**TestFlight** — invoke `{{CAP_NS}}testflight`, bundle id `{{BUNDLE_ID}}`, command `feedback`. Parse screenshot submissions (tester comments) and crash submissions (stack signatures). Tag items `[TestFlight]`.
 <!-- ENDIF -->
 <!-- IF:POSTHOG -->
 **PostHog** *(best-effort)* — if a read key is provisioned, pull survey responses / high-frequency `$exception` events; otherwise render `skipped — PostHog (no read key)` and move on.
@@ -89,14 +89,14 @@ Demand proxy = reactions + comments.
 {{BACKLOG_SOURCE_NOTE}}
 
 <!-- IF:BOARD -->
-Board snapshot — invoke `ai-agent-skills:github-issues` (board snapshot, `PROJECT_NUMBER={{BOARD_NUMBER}}`, `OWNER={{ORG}}`), plus its stale-issue detection (`REPO={{REPO_SLUG}}`).
+Board snapshot — invoke `{{CAP_NS}}github-issues` (board snapshot, `PROJECT_NUMBER={{BOARD_NUMBER}}`, `OWNER={{ORG}}`), plus its stale-issue detection (`REPO={{REPO_SLUG}}`).
 <!-- ELSE -->
-Open issues + labels — `gh issue list --repo {{REPO_SLUG}} --state open --limit 200 --json number,title,labels,updatedAt`, plus `ai-agent-skills:github-issues` stale-issue detection (`REPO={{REPO_SLUG}}`).
+Open issues + labels — `gh issue list --repo {{REPO_SLUG}} --state open --limit 200 --json number,title,labels,updatedAt`, plus `{{CAP_NS}}github-issues` stale-issue detection (`REPO={{REPO_SLUG}}`).
 <!-- ENDIF -->
 
 ### C. Tech debt + dev experience
 
-Invoke `ai-agent-skills:repo-health`:
+Invoke `{{CAP_NS}}repo-health`:
 
 - tech-debt scan with `SCAN_PATHS="{{SCAN_PATHS}}"`, `EXCLUDE_PATHSPECS="{{EXCLUDE_PATHSPECS}}"`
 - CI health with `WORKFLOW={{CI_WORKFLOW}}`
@@ -128,7 +128,7 @@ Score each category independently; surface a cross-category top-5 by relative ra
 
 **Backlog**: lead with the issue's own priority label ({{PRIORITY_LABELS}}), tie-break by reactions + comments. Don't re-derive a priority the maintainer already assigned.
 
-**Tech debt + dev experience**: `ai-agent-skills:repo-health` scoring defaults.
+**Tech debt + dev experience**: `{{CAP_NS}}repo-health` scoring defaults.
 
 <!-- BEGIN PROJECT-SPECIFIC: scoring-overrides -->
 <!-- Project-specific re-weights (e.g. "funnel drop-off below PRD target overrides the formula → P0") go here. -->
@@ -173,7 +173,7 @@ _To ship: `take #<N> #<M>`_
 <!-- IF:WRITE_GATE_SENTRY -->
 ## 6. Conditional creation policy
 
-The skill writes in exactly ONE place: qualifying Sentry hits promoted to GitHub issues via `ai-agent-skills:github-issues`' `file-or-link-issue.sh` with `--marker "sentry-source: <SHORT_ID>"`. Gate and burst rail per `ai-agent-skills:sentry-triage` (`references/qualifying-gate.md`): {{SENTRY_GATE_SUMMARY}}. Labels `bug,sentry-escalation`<!-- IF:BOARD -->; board {{BOARD_NUMBER}} → Backlog (`--project-id {{BOARD_PROJECT_ID}} --status-field-id {{BOARD_STATUS_FIELD_ID}} --status-option-id {{BOARD_BACKLOG_OPTION_ID}}`)<!-- ENDIF -->.
+The skill writes in exactly ONE place: qualifying Sentry hits promoted to GitHub issues via `{{CAP_NS}}github-issues`' `file-or-link-issue.sh` with `--marker "sentry-source: <SHORT_ID>"`. Gate and burst rail per `{{CAP_NS}}sentry-triage` (`references/qualifying-gate.md`): {{SENTRY_GATE_SUMMARY}}. Labels `bug,sentry-escalation`<!-- IF:BOARD -->; board {{BOARD_NUMBER}} → Backlog (`--project-id {{BOARD_PROJECT_ID}} --status-field-id {{BOARD_STATUS_FIELD_ID}} --status-option-id {{BOARD_BACKLOG_OPTION_ID}}`)<!-- ENDIF -->.
 
 Hard prohibitions: never mutate Sentry status; never edit existing issues from this gate; never file from tech debt / CI / memory / next-bet surfaces — those stay recommendations. Dry-run with `DRY_RUN=1` after any gate change.
 <!-- ELSE -->

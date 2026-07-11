@@ -35,6 +35,7 @@ The plugin deliberately ships **no generic runtime versions** of these — only 
    - `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it,clean-it}/SKILL.md` containing a `generated-by: ai-agent-skills:` marker — either producer name: `refresh-sassydog-skills` (current) or the legacy `create-dev-workflows` (renders from plugin ≤ 0.8.1). Match it anywhere in the file — older renders placed it on line 1, fixed ones right after the frontmatter → **update mode**
    - legacy hand-written skills matching `*plate-it*`/`*get-it*`/`*send-it*`/`*clean-it*` without the marker → **adopt mode**
    - neither → **create mode**
+3. Detect the delegation mode: any `vendored-by:` marker under `.claude/skills/*/SKILL.md` → the repo is **independent** (vendored capability skills; re-sync them during update per `references/independent-mode.md`); none → **plugin-backed**. Never a question in update mode — only interview question 0 (create/adopt) or an explicit user switch changes it.
 
 ## Phase 1 — detect
 
@@ -48,6 +49,7 @@ Read `references/interview.md`. Ask only policy questions and unconfirmable fact
 
 Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`, `clean-it`). Render rules are in each template's header: fill `{{FACTS}}`, resolve `IF:` conditionals from policy answers, keep the `generated-by` marker (it sits immediately after the closing `---` — the rendered file's frontmatter `---` must be line 1 or Claude Code won't parse it) and PROJECT-SPECIFIC fence markers, drop template-comment blocks.
 
+- **Independent renders** (`IF:INDEPENDENT` on, `{{CAP_NS}}` empty): read `references/independent-mode.md` first — vendoring the capability bundle is part of generation, re-sync is part of update, and both sit behind the same preview-then-approve gate as generated files.
 - **Create mode**: render all selected skills, then **print every rendered file in full and write only after the user approves** — writing into a product repo is an outward-facing action; never write silently.
 - **Update / adopt mode**: read `references/update-mode.md` first. Update = re-render + splice fences + per-file diff + approval. Adopt = side-by-side review of hand-written content, then replace the legacy prefixed skills (deleting their directories and superseded scripts on approval).
 - **Naming guard**: generated names are plain (`plate-it`, `fill-it`, `take-it`, `drain-it`, `send-it`, `clean-it`); check no personal skill (`~/.claude/skills/<name>`) shadows them — personal beats project for same-name skills. If one exists, stop and surface it. Note `clean-it` delegates to the capability skill `ai-agent-skills:repo-cleanup` (deliberately a *different* name, so the user's "clean it" phrase resolves to the project skill, not the capability).
@@ -55,8 +57,9 @@ Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `dr
 ## Phase 4 — verify
 
 1. Frontmatter sanity: opening `---` is line 1 of each written file (nothing before it — Claude Code won't parse the frontmatter otherwise), name matches directory, description present, valid YAML.
-2. Remind: skills load on the next session in that repo.
-3. Suggest first runs: `plate it` (with `DRY_RUN=1` if a write gate was enabled), `send it` on a trivial branch, and `take #<small-issue>` once comfortable.
+2. Independent repos additionally: every vendored SKILL.md has its `vendored-by:` marker right after the closing `---`; `grep -r 'CLAUDE_PLUGIN_ROOT' .claude/skills/` returns nothing (the rewrite reached every file); vendored `scripts/*.sh` kept their execute bits.
+3. Remind: skills load on the next session in that repo.
+4. Suggest first runs: `plate it` (with `DRY_RUN=1` if a write gate was enabled), `send it` on a trivial branch, and `take #<small-issue>` once comfortable.
 
 ## Guardrails
 
@@ -64,3 +67,4 @@ Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `dr
 - Never delete hand-written skills except through adopt mode's reviewed replacement.
 - Update mode never adds take-it to a repo that doesn't have it unless the user asks (a trio-minus-take-it is a valid steady state). Same for fill-it/drain-it — both are opt-in and board-optional (boardless renders drive the `ready`/`in-progress` labels instead of a board), and drain-it is invalid without take-it. `clean-it` is core, not opt-in: update mode adds it if missing (like plate-it/send-it), with the usual preview + approval.
 - Project-specific knowledge goes inside fences; if the user asks to hand-edit a template-owned section, offer the fence instead and explain why (updates will clobber template-owned text).
+- Vendored capability directories (`vendored-by:` marker) are plugin-owned: never deleted except through the reviewed independent→plugin switch, never treated as legacy skills to adopt, and hand-edits to them are flagged as lost-on-resync (durable customization goes in PROJECT-SPECIFIC fences or upstream in the plugin).

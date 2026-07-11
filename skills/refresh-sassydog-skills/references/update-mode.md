@@ -27,6 +27,11 @@ line 1, marker right after it, current producer name).
 
 ## Update mode (generated-by marker present)
 
+A `vendored-by:` marker under any `.claude/skills/*/SKILL.md` means the repo is **independent**:
+render with `{{CAP_NS}}` empty + `IF:INDEPENDENT` on, and re-sync the vendored capability bundle as
+part of the update (see `references/independent-mode.md`). Never ask the delegation question in
+update mode — the markers are the answer.
+
 1. Re-run Phase 1 detection; re-confirm only facts that changed (don't re-interview settled policy — read current policy from the existing file's rendered conditionals, e.g. presence of the §6 write gate).
 2. Render fresh output from the **current** template with those facts/policies.
 3. **Splice**: copy each fenced block from the existing file into the matching slot of the new render. A fence in the old file with no slot in the new template → append under a `<!-- PROJECT-SPECIFIC (orphaned slot: X) -->` marker and tell the user.
@@ -44,7 +49,7 @@ Never silently overwrite or delete a hand-written skill.
 3. Render the new plain-named skills (`plate-it`, `send-it`, `clean-it` are core; `take-it`/fill-it/drain-it only if asked).
 4. **Side-by-side review per skill**: list every hand-written section that has no equivalent in the render (repo-specific traps, war stories, special recipes). For each, the user picks: move into a PROJECT-SPECIFIC fence / promote upstream (note it as plugin-improvement feedback) / drop.
 5. On approval: write the new skills, then **delete the legacy prefixed directories** (they'd otherwise compete for the same trigger phrases). Remind the user the rename also frees the old names: anything else referencing `<prefix>-send-it` (hooks, docs, other skills) needs updating — grep the repo for the old names before finishing.
-6. The legacy skills' `scripts/` are superseded by the plugin capability skills' scripts; delete with the directory unless a script is project-unique (then it moves to a path the fenced content references).
+6. The legacy skills' `scripts/` are superseded by the plugin capability skills' scripts — or, in an independent repo, by the vendored copies under `.claude/skills/<cap>/scripts/`; either way delete with the directory unless a script is project-unique (then it moves to a path the fenced content references). **Never treat a `vendored-by`-marked directory as a legacy skill to adopt or delete** — vendored capability copies are plugin-owned, not hand-written strays.
 
 ## Naming guard
 

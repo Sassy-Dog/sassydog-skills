@@ -29,7 +29,7 @@ Groom the backlog until every issue is either **Ready** (a cold sub-agent could 
 <!-- IF:BOARD -->
 Board {{BOARD_NUMBER}} is authoritative ({{BACKLOG_SOURCE_DESCRIPTION}}):
 
-- Snapshot via `ai-agent-skills:github-issues` (`board-snapshot.sh`, `PROJECT_NUMBER={{BOARD_NUMBER}} OWNER={{BOARD_OWNER}}`).
+- Snapshot via `{{CAP_NS}}github-issues` (`board-snapshot.sh`, `PROJECT_NUMBER={{BOARD_NUMBER}} OWNER={{BOARD_OWNER}}`).
 - Candidates: every open issue in **Backlog** or with **no status** (open issues missing from the board get added to it). Re-validate existing Ready items every run (the snapshot is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the card back to Backlog with a comment. Ready is a promise; stale promises break drain-it.
 <!-- ELSE -->
 Open issues are the backlog ({{BACKLOG_SOURCE_DESCRIPTION}}); the `ready` label is Ready:
@@ -70,14 +70,14 @@ Decisions are NEVER guessed: present each to the user as a recommendation with t
 
 ## 4. Epic split
 
-A multi-workstream issue gets child issues (one per dispatchable unit) via the gated write path — `ai-agent-skills:github-issues` `file-or-link-issue.sh`, marker `epic-split: #<parent>/<slug>`, body containing `Part of #<parent>` (NOT `Closes`). Child issues then pass the §2 rubric individually; the parent stays out of Ready (it tracks, it doesn't dispatch). **Run splits FIRST in a grooming pass**: `Depends on #N` lines must point at dispatchable issues — children, never a tracking parent — so an issue depending on "the schema part of epic #E" cannot finalize its dependency line until #E's split has produced the child number.
+A multi-workstream issue gets child issues (one per dispatchable unit) via the gated write path — `{{CAP_NS}}github-issues` `file-or-link-issue.sh`, marker `epic-split: #<parent>/<slug>`, body containing `Part of #<parent>` (NOT `Closes`). Child issues then pass the §2 rubric individually; the parent stays out of Ready (it tracks, it doesn't dispatch). **Run splits FIRST in a grooming pass**: `Depends on #N` lines must point at dispatchable issues — children, never a tracking parent — so an issue depending on "the schema part of epic #E" cannot finalize its dependency line until #E's split has produced the child number.
 
 ## 5. Promote + report
 
 <!-- IF:BOARD -->
-Move qualifying cards to **Ready** per `ai-agent-skills:github-issues` (`references/board-graphql.md`; project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, Ready `{{BOARD_READY_OPTION_ID}}`).
+Move qualifying cards to **Ready** per `{{CAP_NS}}github-issues` (`references/board-graphql.md`; project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, Ready `{{BOARD_READY_OPTION_ID}}`).
 <!-- ELSE -->
-Label qualifying issues **`ready`**, ensuring the label exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing with color + description):
+Label qualifying issues **`ready`**, ensuring the label exists first — the `{{CAP_NS}}github-issues` ensure-label pattern (idempotent create-if-missing with color + description):
 
 ```bash
 gh label create ready --repo {{REPO_SLUG}} --color 0E8A16 \

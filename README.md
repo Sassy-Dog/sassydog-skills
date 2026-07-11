@@ -28,6 +28,16 @@ shared mechanics to the capability skills (`github-issues`, `sentry-triage`, `pr
 generated); `take-it` / `fill-it` / `drain-it` are opt-in. (`clean-it`'s engine is `repo-cleanup`,
 named distinctly so the "clean it" phrase resolves to the project skill, not the capability.)
 
+**Delegation modes.** By default generated skills are **plugin-backed**: they delegate to the
+plugin's capability skills, so every machine running them needs the plugin installed. A repo can
+instead be set up **independent**: refresh vendors the needed capability skills (transitive
+closure — `pr-shepherd`, `github-issues`, `repo-cleanup`, `repo-health`, plus `sentry-triage` /
+`testflight` when detected) into the repo's own `.claude/skills/`, each stamped with a
+`vendored-by:` marker, so a fresh clone works with no plugin install. Later refreshes re-sync the
+vendored copies from the current plugin (hand-edits to them are overwritten), and a repo can switch
+modes at any time ("make this repo independent" / "switch back to plugin mode"). The presence of
+`vendored-by:` markers *is* the persisted mode — there's no config file to drift.
+
 ### Review agents
 
 `assess-it` ships dedicated audit-mode agents (namespaced `ai-agent-skills:<name>`):

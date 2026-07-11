@@ -44,7 +44,7 @@ Skip + announce if: not OPEN; `blocked` label; assignee already set<!-- IF:BOARD
 
 ## 3. Claim each issue
 
-Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo {{REPO_SLUG}} --add-assignee @me`, and <!-- IF:BOARD -->move the board card to In progress per `ai-agent-skills:github-issues` (`references/board-graphql.md`; board {{BOARD_NUMBER}}, IDs: project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, In progress `{{BOARD_IN_PROGRESS_OPTION_ID}}`)<!-- ELSE -->set the `in-progress` claim label, ensuring it exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing):
+Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo {{REPO_SLUG}} --add-assignee @me`, and <!-- IF:BOARD -->move the board card to In progress per `{{CAP_NS}}github-issues` (`references/board-graphql.md`; board {{BOARD_NUMBER}}, IDs: project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, In progress `{{BOARD_IN_PROGRESS_OPTION_ID}}`)<!-- ELSE -->set the `in-progress` claim label, ensuring it exists first — the `{{CAP_NS}}github-issues` ensure-label pattern (idempotent create-if-missing):
 
 ```bash
 gh label create in-progress --repo {{REPO_SLUG}} --color 1D76DB \
@@ -93,10 +93,10 @@ git switch {{DEFAULT_BRANCH}} >/dev/null 2>&1 && git pull --ff-only origin {{DEF
 
 Use the plugin capability skill for ALL polling/merge/teardown mechanics — do NOT reimplement them inline:
 
-Skill: `ai-agent-skills:pr-shepherd`
+Skill: `{{CAP_NS}}pr-shepherd`
 Args: "Watch PRs <numbers from the RESULT lines> in {{REPO_SLUG}}. Merge policy: <!-- IF:MERGE_QUEUE -->MERGE QUEUE — enqueue greens with `gh pr merge --auto` (no method flag, no --delete-branch), confirm isInMergeQueue, handle ejects<!-- ELSE -->DIRECT — `gh pr merge --squash --delete-branch`, serialize coupled PRs<!-- ENDIF -->. <!-- IF:MIGRATIONS -->Coupled-PR concern: migrations in {{MIGRATION_DIRS}} (regenerate with `{{MIGRATION_REGEN_COMMAND}}`).<!-- ENDIF --> <!-- IF:CODEGEN -->Coupled-PR concern: codegen ({{CODEGEN_HINT}}).<!-- ENDIF --> After all PRs are terminal, tear down these worktrees: <paths from the batch manifest>, then reconcile local {{DEFAULT_BRANCH}}."
 
-If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell the user to install the plugin (`claude plugin install ai-agent-skills`) — do not improvise the merge loop from memory.
+If `{{CAP_NS}}pr-shepherd` is not in your available skills, STOP and tell the user to <!-- IF:INDEPENDENT -->re-run "refresh the sassydog skills" from a machine with the ai-agent-skills plugin installed — the vendored copy under `.claude/skills/pr-shepherd/` is missing or not loading<!-- ELSE -->install the plugin (`claude plugin install ai-agent-skills`)<!-- ENDIF --> — do not improvise the merge loop from memory.
 
 Run the coordinator synchronously; backgrounding it orphans PRs at "checks pending".
 
