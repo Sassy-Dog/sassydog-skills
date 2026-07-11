@@ -10,7 +10,7 @@ description: >
   or invokes it via /loop. ai-agent-skills-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 5 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: drain-it | template-version: 5 -->
 
 # ai-agent-skills Drain-It
 

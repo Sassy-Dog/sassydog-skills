@@ -8,7 +8,7 @@ description: >
   to remove stale worktrees/branches/stashes. ai-agent-skills-specific.
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: clean-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: clean-it | template-version: 1 -->
 
 # ai-agent-skills Clean-It
 
@@ -48,9 +48,10 @@ Args: "Reconcile Sassy-Dog/ai-agent-skills post-shipping. default-branch=main;
        branches. Apply the assess-first / ask-on-mixed-signal principle."
 ```
 
-If `ai-agent-skills:repo-cleanup` is not in your available skills, STOP and tell the user to install
-the plugin (`claude plugin install ai-agent-skills`) — do not improvise the reconciliation from
-memory (the `[gone]` grep trap and squash-merge `-D` are easy to get wrong and lose work).
+If `ai-agent-skills:repo-cleanup` is not in your available skills, STOP and tell the user to
+install the plugin (`claude plugin install ai-agent-skills`) — do
+not improvise the reconciliation from memory (the `[gone]` grep trap and squash-merge `-D` are easy
+to get wrong and lose work).
 
 <!-- BEGIN PROJECT-SPECIFIC: extra-cleanup -->
 <!-- Repo-unique cleanup steps that repo-cleanup doesn't cover (extra label hygiene, cache dirs,

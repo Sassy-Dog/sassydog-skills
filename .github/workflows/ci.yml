@@ -36,6 +36,20 @@ jobs:
             exit 1
           fi
 
+      - name: No legacy skill-name residue
+        # The generator was renamed create-dev-workflows -> refresh-sassydog-skills (0.9.0).
+        # The legacy name may appear only in the sanctioned backward-compat mentions; anything
+        # else is a stale reference that would confuse renders or docs.
+        run: |
+          if git grep -l 'create-dev-workflows' -- \
+            ':!skills/refresh-sassydog-skills/references/update-mode.md' \
+            ':!skills/refresh-sassydog-skills/SKILL.md' \
+            ':!CLAUDE.md' \
+            ':!.github/workflows/ci.yml'; then
+            echo "::error::legacy skill name 'create-dev-workflows' outside the sanctioned back-compat files"
+            exit 1
+          fi
+
       - name: Plugin manifests are valid JSON
         run: jq -e . .claude-plugin/plugin.json .claude-plugin/marketplace.json > /dev/null
 

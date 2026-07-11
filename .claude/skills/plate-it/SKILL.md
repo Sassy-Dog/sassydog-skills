@@ -11,7 +11,7 @@ description: >
   Read-only — never files issues, never mutates state.
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: plate-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:refresh-sassydog-skills | template: plate-it | template-version: 1 -->
 
 # ai-agent-skills Plate-It
 
