@@ -1,5 +1,5 @@
 <!--
-TEMPLATE: drain-it · version 2
+TEMPLATE: drain-it · version 3
 Render rules: see plate-it.template.md header. Same conventions.
 REQUIRES: a ProjectV2 board with a Ready column (IF:BOARD must be true) AND take-it generated
 in the same repo (drain-it reuses take-it's dispatch mechanics verbatim).
@@ -17,7 +17,7 @@ description: >
   or invokes it via /loop. {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 2 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: drain-it | template-version: 3 -->
 
 # {{PROJECT_NAME}} Drain-It
 
@@ -74,13 +74,26 @@ Plus one line per failure with its next action.
 
 ## 6. Drain complete
 
-Ready empty AND in-flight zero → announce loudly:
+Ready empty AND in-flight zero, **confirmed from live GitHub state read this tick** (the §1 reconcile + §3 snapshot — never a stale or transient read) → announce loudly:
 
 ```
-DRAIN COMPLETE — Ready is empty and nothing is in flight. Cancel the loop (or run fill-it to refill).
+DRAIN COMPLETE — Ready is empty and nothing is in flight.
 ```
 
-Under a self-paced loop, do not schedule another wake-up after this. Under `/loop 5m`, tell the user to cancel — ticks after completion are no-ops, not errors.
+Then stop the loop yourself, according to how this tick was invoked — three modes:
+
+| Mode | Recognize it by | Stop path |
+|------|-----------------|-----------|
+| **Self-paced loop** (ScheduleWakeup) | This tick was woken by a wake-up the previous tick scheduled | Do not schedule another wake-up — the loop ends here |
+| **Cron / fixed interval** (`/loop <interval> /drain-it`, CronCreate-backed) | A cron job fires the skill on a schedule | **Self-cancel the cron** — see below. Do not merely advise the user to cancel; act |
+| **Manual invocation** | No loop context | Nothing to cancel — announce and finish |
+
+**Cron self-cancel.** The skill must find the loop's job id itself: run `CronList` and select the job whose `prompt` is this drain-it invocation (`/drain-it` or the skill invoked by name).
+
+- **Exactly one match** → `CronDelete <id>`, then append to the report: `Loop <id> cancelled — run fill-it to refill Ready and start a new drain when there's more to ship.`
+- **Zero, multiple, or ambiguous matches** (several drain-it crons; a prompt that only mentions drain-it among other work) → delete NOTHING. Fall back to announcing completion, listing the candidate ids, and telling the user to `CronDelete` the right one — deleting the wrong job is worse than a few extra no-op ticks.
+
+Safety rails: self-cancel ONLY on the confirmed complete state above. Anything still In progress/In review, an open PR (in-flight until actually MERGED, per §2), or a non-empty Ready means the drain is not complete and the loop stays alive. If live state could not be verified this tick (e.g. API failure mid-tick), leave the cron alone — the next tick re-checks. Ticks that fire between completion and cancellation are no-ops, not errors: each one re-runs this section and retries the self-cancel.
 
 ## Guardrails
 
