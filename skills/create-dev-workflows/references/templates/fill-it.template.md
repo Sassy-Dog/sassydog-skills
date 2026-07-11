@@ -1,22 +1,24 @@
 <!--
-TEMPLATE: fill-it · version 1
+TEMPLATE: fill-it · version 2
 Render rules: see plate-it.template.md header. Same conventions.
-REQUIRES: a ProjectV2 board with Backlog + Ready status columns (IF:BOARD must be true).
+REQUIRES: GitHub Issues. Board-optional: IF:BOARD true renders board-backed promotion
+(ProjectV2 board with Backlog + Ready status columns); IF:BOARD false renders the boardless
+degraded-board contract (Ready = the `ready` label, demotion = remove label + comment).
 -->
 ---
 
 name: fill-it
 description: >
   Backlog grooming for {{PROJECT_NAME}}: refine open issues until they are fully dispatchable
-  by a cold worktree sub-agent, then move them to Ready on the board. The counterpart that
+  by a cold worktree sub-agent, then <!-- IF:BOARD -->move them to Ready on the board<!-- ELSE -->promote them to Ready via the `ready` label<!-- ENDIF -->. The counterpart that
   feeds drain-it. Use when the user says "fill it", "groom the backlog", "refine the backlog",
   "scope these issues", "make these dispatchable", "get the backlog ready", or asks to move
-  issues to Ready. Writes: issue-body edits, board moves, and
+  issues to Ready. Writes: issue-body edits, <!-- IF:BOARD -->board moves<!-- ELSE -->`ready`-label changes<!-- ENDIF -->, and
   epic-split sub-issues only — never deletes, never closes, never dispatches work —
   {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: fill-it | template-version: 1 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: fill-it | template-version: 2 -->
 
 # {{PROJECT_NAME}} Fill-It
 
@@ -24,10 +26,17 @@ Groom the backlog until every issue is either **Ready** (a cold sub-agent could 
 
 ## 1. Collect candidates
 
+<!-- IF:BOARD -->
 Board {{BOARD_NUMBER}} is authoritative ({{BACKLOG_SOURCE_DESCRIPTION}}):
 
 - Snapshot via `ai-agent-skills:github-issues` (`board-snapshot.sh`, `PROJECT_NUMBER={{BOARD_NUMBER}} OWNER={{BOARD_OWNER}}`).
 - Candidates: every open issue in **Backlog** or with **no status** (open issues missing from the board get added to it). Re-validate existing Ready items every run (the snapshot is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the card back to Backlog with a comment. Ready is a promise; stale promises break drain-it.
+<!-- ELSE -->
+Open issues are the backlog ({{BACKLOG_SOURCE_DESCRIPTION}}); the `ready` label is Ready:
+
+- List via `gh issue list --repo {{REPO_SLUG}} --state open --limit 200 --json number,title,labels,assignees`.
+- Candidates: every open issue **without** the `ready` label (skip issues another loop already claimed — assignee set + `in-progress` label). Re-validate issues already carrying `ready` every run (the list is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the issue (`gh issue edit N --repo {{REPO_SLUG}} --remove-label ready` + a comment naming the drift). Ready is a promise; stale promises break drain-it.
+<!-- ENDIF -->
 - Read each candidate IN FULL: `gh issue view N --repo {{REPO_SLUG}} --comments` — scope often lives in follow-up comments.
 
 ## 2. The dispatchability rubric
@@ -40,7 +49,7 @@ An issue is **Ready** only if ALL of these hold:
 | 2 | Scope names real touchpoints (files/components/services) or enough pointers that a cold agent finds them in one recon pass | Refine (§3) — recon the codebase yourself, write the map in |
 | 3 | Acceptance criteria checklist present | Refine (§3) |
 | 4 | Self-contained: screenshots/attachments transcribed into prose (GitHub `user-attachments` URLs are cookie-walled — unreadable from a worktree agent), referenced docs committed on the default branch | Refine (§3); ask the user to paste any image you cannot read — until they do, the verdict is **parked: awaiting-user** |
-| 5 | No open product decisions: no `(decision)` markers, no `## Open questions`, no "TBD" | Surface the decision to the user with a recommended default; issue stays Backlog until resolved |
+| 5 | No open product decisions: no `(decision)` markers, no `## Open questions`, no "TBD" | Surface the decision to the user with a recommended default; issue stays <!-- IF:BOARD -->Backlog<!-- ELSE -->unpromoted<!-- ENDIF --> until resolved |
 | 6 | Right-sized: one coherent PR per issue | Epic → split (§4) |
 | 7 | Dependencies recorded as literal `Depends on #N` lines (one per line) | Add them — drain-it enforces ordering from these lines |
 
@@ -63,7 +72,20 @@ A multi-workstream issue gets child issues (one per dispatchable unit) via the g
 
 ## 5. Promote + report
 
+<!-- IF:BOARD -->
 Move qualifying cards to **Ready** per `ai-agent-skills:github-issues` (`references/board-graphql.md`; project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, Ready `{{BOARD_READY_OPTION_ID}}`).
+<!-- ELSE -->
+Label qualifying issues **`ready`**, ensuring the label exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing with color + description):
+
+```bash
+gh label create ready --repo {{REPO_SLUG}} --color 0E8A16 \
+  --description "Dispatchable: a cold worktree agent could ship this (fill-it promoted)" \
+  2>/dev/null || true
+gh issue edit N --repo {{REPO_SLUG}} --add-label ready
+```
+
+Demotion is the reverse: `gh issue edit N --repo {{REPO_SLUG}} --remove-label ready` plus a comment naming why — never a silent strip.
+<!-- ENDIF -->
 
 Final table: issue · verdict (**Ready** / needs-decision / split → children / parked: awaiting-user / parked: reason) · what changed. End with the decisions awaiting the user, if any.
 

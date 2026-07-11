@@ -15,9 +15,9 @@ description: >
 Generator for the project dev-workflow family:
 
 - **plate-it** — synthesize all work surfaces into one prioritized plate
-- **fill-it** — backlog grooming: refine issues until dispatchable, promote to Ready (requires a board)
+- **fill-it** — backlog grooming: refine issues until dispatchable, promote to Ready (board column or `ready` label — board optional)
 - **take-it** — parallel issue-shipping ("take #341, #432"): one sub-agent per issue in isolated worktrees
-- **drain-it** — loop-driven dispatcher: one idempotent tick per invocation, tops up to N in-flight from Ready until empty (requires a board + take-it; designed for "/loop 5m /drain-it")
+- **drain-it** — loop-driven dispatcher: one idempotent tick per invocation, tops up to N in-flight from Ready until empty (requires take-it, board optional; designed for "/loop 5m /drain-it")
 - **send-it** — single-PR end-to-end flow with repo-specific gates
 - **clean-it** — post-shipping git reconciliation: sync+prune, stale branch/worktree teardown, stash triage, untracked-noise sweep
 
@@ -59,5 +59,5 @@ Templates live in `references/templates/` (`plate-it`, `fill-it`, `take-it`, `dr
 
 - Never write or overwrite files in the target repo without showing the full content/diff and getting approval.
 - Never delete hand-written skills except through adopt mode's reviewed replacement.
-- Update mode never adds take-it to a repo that doesn't have it unless the user asks (a trio-minus-take-it is a valid steady state). Same for fill-it/drain-it — both are opt-in, and drain-it is invalid without take-it and a board Ready column. `clean-it` is core, not opt-in: update mode adds it if missing (like plate-it/send-it), with the usual preview + approval.
+- Update mode never adds take-it to a repo that doesn't have it unless the user asks (a trio-minus-take-it is a valid steady state). Same for fill-it/drain-it — both are opt-in and board-optional (boardless renders drive the `ready`/`in-progress` labels instead of a board), and drain-it is invalid without take-it. `clean-it` is core, not opt-in: update mode adds it if missing (like plate-it/send-it), with the usual preview + approval.
 - Project-specific knowledge goes inside fences; if the user asks to hand-edit a template-owned section, offer the fence instead and explain why (updates will clobber template-owned text).

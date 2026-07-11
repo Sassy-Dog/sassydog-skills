@@ -1,6 +1,8 @@
 <!--
-TEMPLATE: take-it · version 2
+TEMPLATE: take-it · version 3
 Render rules: see plate-it.template.md header. Same conventions.
+Board-optional: both renders claim with assignee @me; IF:BOARD adds the board-card move,
+boardless renders drive the `in-progress` claim label instead.
 -->
 ---
 
@@ -14,7 +16,7 @@ description: >
   {{PROJECT_NAME}}-specific
 ---
 
-<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 2 -->
+<!-- generated-by: ai-agent-skills:create-dev-workflows | template: take-it | template-version: 3 -->
 
 # {{PROJECT_NAME}} Take-It
 
@@ -38,13 +40,19 @@ Parallel issue-shipping: the user hands you GitHub issue numbers; this skill shi
 gh issue view N --repo {{REPO_SLUG}} --json number,title,state,labels,body,assignees
 ```
 
-Skip + announce if: not OPEN; `blocked` label; assignee already set<!-- IF:BOARD --> or board card already In progress/In review<!-- ENDIF -->; or stub body (< 80 chars) — but **check `gh issue view N --comments` before calling it a stub**; scope may live in a follow-up comment. For survivors capture title, body, labels (label → conventional-commit prefix: `bug`→`fix`, `enhancement`→`feat`, `documentation`→`docs`, else `chore`).
+Skip + announce if: not OPEN; `blocked` label; assignee already set<!-- IF:BOARD --> or board card already In progress/In review<!-- ELSE --> or `in-progress` label already present (another loop's claim)<!-- ENDIF -->; or stub body (< 80 chars) — but **check `gh issue view N --comments` before calling it a stub**; scope may live in a follow-up comment. For survivors capture title, body, labels (label → conventional-commit prefix: `bug`→`fix`, `enhancement`→`feat`, `documentation`→`docs`, else `chore`).
 
-<!-- IF:BOARD -->
 ## 3. Claim each issue
 
-Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo {{REPO_SLUG}} --add-assignee @me`, and move the board card to In progress per `ai-agent-skills:github-issues` (`references/board-graphql.md`; board {{BOARD_NUMBER}}, IDs: project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, In progress `{{BOARD_IN_PROGRESS_OPTION_ID}}`). Claim failures are logged, never fatal — the PR's `Closes #N` lands the card on Done regardless.
-<!-- ENDIF -->
+Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo {{REPO_SLUG}} --add-assignee @me`, and <!-- IF:BOARD -->move the board card to In progress per `ai-agent-skills:github-issues` (`references/board-graphql.md`; board {{BOARD_NUMBER}}, IDs: project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, In progress `{{BOARD_IN_PROGRESS_OPTION_ID}}`)<!-- ELSE -->set the `in-progress` claim label, ensuring it exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing):
+
+```bash
+gh label create in-progress --repo {{REPO_SLUG}} --color 1D76DB \
+  --description "Claimed by a take-it/drain-it loop" 2>/dev/null || true
+gh issue edit N --repo {{REPO_SLUG}} --add-label in-progress --remove-label ready
+```
+
+(`--remove-label ready` is a no-op when the label isn't set — dispatch always moves an issue out of Ready)<!-- ENDIF -->. Claim failures are logged, never fatal — the PR's `Closes #N` <!-- IF:BOARD -->lands the card on Done<!-- ELSE -->closes the issue<!-- ENDIF --> regardless.
 
 ## 4. Dispatch sub-agents in parallel
 
@@ -100,7 +108,11 @@ Run the coordinator synchronously; backgrounding it orphans PRs at "checks pendi
 | #240 | #261 | ⚠️ FAILED | named failing check + log excerpt |
 | #216 | — | ⏭ SKIPPED | reason |
 
-Always end with: claims to unwind by hand (assignments<!-- IF:BOARD -->, board cards<!-- ENDIF --> for unshipped issues) and a next-action one-liner per failure.
+<!-- IF:BOARD -->
+<!-- ELSE -->
+For every MERGED row, clear the claim label: `gh issue edit N --repo {{REPO_SLUG}} --remove-label in-progress` — `Closes #N` closed the issue but does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
+<!-- ENDIF -->
+Always end with: claims to unwind by hand (assignments<!-- IF:BOARD -->, board cards<!-- ELSE -->, `in-progress` labels<!-- ENDIF --> for unshipped issues) and a next-action one-liner per failure.
 
 ## Guardrails
 
