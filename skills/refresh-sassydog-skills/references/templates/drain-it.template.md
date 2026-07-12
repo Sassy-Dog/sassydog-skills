@@ -28,10 +28,10 @@ One invocation = **one tick** of a drain loop. All state lives in GitHub (<!-- I
 
 ## 1. Reconcile in-flight (always first)
 
-Find work this loop already started. <!-- IF:BOARD -->**The board snapshot is the source of truth**: cards in **In progress** / **In review** with assignee @me are in-flight<!-- ELSE -->**Live issue state is the source of truth**: open issues with assignee @me AND the `in-progress` label are in-flight (`gh issue list --repo {{REPO_SLUG}} --state open --assignee @me --label in-progress`)<!-- ENDIF --> — whether or not a PR exists yet (a sub-agent mid-implementation has only a `*/issue-N-*` branch; PR-based queries undercount and overshoot the cap).
+Find work this loop already started. <!-- IF:BOARD -->**The board snapshot is the source of truth**: cards in **In progress** / **In review** with assignee @me are in-flight<!-- ELSE -->**Live issue state is the source of truth**: snapshot the queue via `{{CAP_NS}}github-issues`'s `queue-snapshot.sh` (`REPO={{REPO_SLUG}}`) — one call returns `ready[]`, `in_flight[]`, and `blocked[]` with the `touches:` and `Depends on #N` body contracts already parsed. In-flight = `in_flight[]` entries with `mine: true` (assignee @me + `in-progress` label)<!-- ENDIF --> — whether or not a PR exists yet (a sub-agent mid-implementation has only a `*/issue-N-*` branch; PR-based queries undercount and overshoot the cap).
 
 - Open PRs from those branches → delegate to `{{CAP_NS}}pr-shepherd`: mergeable check, merge greens (<!-- IF:MERGE_QUEUE -->merge queue: `gh pr merge --auto`, no method flag, no `--delete-branch`, confirm `isInMergeQueue` via GraphQL<!-- ELSE -->direct: `--squash --delete-branch`<!-- ENDIF -->), tear down worktrees for merged PRs, reconcile local {{DEFAULT_BRANCH}}.
-- **Failed/red PRs**: surface in the tick report with the failing check named. Comment `drain-it: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the failure context added to the prompt is allowed on a later tick; a second failure <!-- IF:BOARD -->moves the card back to **Backlog** with a `blocked` label and a comment<!-- ELSE -->strips the claim and adds `blocked` plus a comment (`gh issue edit N --repo {{REPO_SLUG}} --remove-label ready --remove-label in-progress --add-label blocked`)<!-- ENDIF --> — a human (or fill-it, after the human weighs in) decides next. Never park failures in Ready: Ready must stay synonymous with dispatchable.
+- **Failed/red PRs**: surface in the tick report with the failing check named. Comment `drain-it: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the failure context added to the prompt is allowed on a later tick; a second failure <!-- IF:BOARD -->moves the card back to **Backlog** with a `blocked` label and a comment<!-- ELSE -->demotes to blocked via `{{CAP_NS}}github-issues`'s `issue-claim.sh block N --repo {{REPO_SLUG}} --comment "drain-it: 2 failed attempts — <cause>"` (strips `ready` + `in-progress`, adds `blocked`, ensures the label exists, posts the required reason)<!-- ENDIF --> — a human (or fill-it, after the human weighs in) decides next. Never park failures in Ready: Ready must stay synonymous with dispatchable.
 - **`CONFLICTING` PRs**: never auto-rebase; surface and hold.
 
 ## 2. Compute capacity
@@ -43,7 +43,7 @@ Find work this loop already started. <!-- IF:BOARD -->**The board snapshot is th
 <!-- IF:BOARD -->
 Snapshot board {{BOARD_NUMBER}} via `{{CAP_NS}}github-issues`; take the **Ready** column in board order (board order = priority). Filter, in order:
 <!-- ELSE -->
-Query the queue: `gh issue list --repo {{REPO_SLUG}} --state open --label ready --json number,title,labels,assignees`, ordered by **issue number ascending** (oldest first); when the repo defines priority labels, issues carrying them sort ahead — the boardless stand-in for "board order = priority". Filter, in order:
+Take `ready[]` from the §1 `queue-snapshot.sh` read (already ordered **issue number ascending**, oldest first, with `touches`, `depends_on`, and `unannotated` parsed per issue); when the repo defines priority labels, issues carrying them sort ahead — the boardless stand-in for "board order = priority". Filter, in order:
 <!-- ENDIF -->
 
 | Filter | Rule |
@@ -52,7 +52,7 @@ Query the queue: `gh issue list --repo {{REPO_SLUG}} --state open --label ready 
 | Blocked | Skip `blocked` label |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges |
 | Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's `touches:` set. Read each in-flight issue's `touches:` line (the in-flight set is known from §1) and intersect: same repo-relative path, or a glob on one side matching a path on the other. Defer to a later tick — re-eligible automatically once the overlapping issue merges (its slot frees, its files unlock). An issue with **no** `touches:` line is treated as intersecting nothing (fill-it left it unannotated), but is flagged `unannotated` in the tick report so the coupling gap is visible, not silently risky. |
-| Smell test | Run take-it's pre-flight smell test (research-shaped titles, open-question sections, stub bodies). Failures: comment why + <!-- IF:BOARD -->move the card back to Backlog<!-- ELSE -->remove the `ready` label<!-- ENDIF --> for fill-it. Never "fix it up" inline — that hides the grooming gap. |
+| Smell test | Run take-it's pre-flight smell test (research-shaped titles, open-question sections, stub bodies). Failures: <!-- IF:BOARD -->comment why + move the card back to Backlog<!-- ELSE -->`issue-claim.sh demote N --comment "<why>"` (comment is required — never a silent strip)<!-- ENDIF --> for fill-it. Never "fix it up" inline — that hides the grooming gap. |
 
 <!-- IF:MIGRATIONS -->
 Additional filter — **migration serialization**: at most ONE issue touching {{MIGRATION_DIRS}} in flight at a time (in-flight included); hold the rest in Ready.

@@ -37,15 +37,13 @@ Skip + announce if: not OPEN; `blocked` label; assignee already set or `in-progr
 
 ## 3. Claim each issue
 
-Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo Sassy-Dog/ai-agent-skills --add-assignee @me`, and set the `in-progress` claim label, ensuring it exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing):
+Best-effort, so parallel sessions don't double-pick: claim via `ai-agent-skills:github-issues`'s `issue-claim.sh` — one call per batch handles everything the old inline blob did and more:
 
 ```bash
-gh label create in-progress --repo Sassy-Dog/ai-agent-skills --color 1D76DB \
-  --description "Claimed by a take-it/drain-it loop" 2>/dev/null || true
-gh issue edit N --repo Sassy-Dog/ai-agent-skills --add-label in-progress --remove-label ready
+issue-claim.sh claim N1 N2 --repo Sassy-Dog/ai-agent-skills
 ```
 
-(`--remove-label ready` is a no-op when the label isn't set — dispatch always moves an issue out of Ready). Claim failures are logged, never fatal — the PR's `Closes #N` closes the issue regardless.
+(idempotent: ensures the `in-progress` label exists, sets assignee @me, adds `in-progress`, strips `ready`; **skips issues already assigned to someone else** — the double-pick guard — and retries transient GitHub failures). Claim failures are logged, never fatal — the PR's `Closes #N` closes the issue regardless.
 
 ## 4. Dispatch sub-agents in parallel
 
@@ -77,7 +75,7 @@ git switch main >/dev/null 2>&1 && git pull --ff-only origin main
 <!-- BEGIN PROJECT-SPECIFIC: subagent-rules -->
 > 4. **README/version sync**: if you add or remove a skill (`skills/*/SKILL.md`) or reviewer agent (`agents/*.md`), update `README.md`'s plugin/skill table and agent list in the same PR, and bump `version` in `.claude-plugin/plugin.json` for release-worthy changes.
 <!-- END PROJECT-SPECIFIC -->
-> 5. Run the send-it pre-flight locally and fix anything red: the frontmatter sanity check (every changed `skills/*/SKILL.md` / `agents/*.md` has `---` frontmatter fences with `name:` + `description:`, and a SKILL.md `name` matches its directory) — full script in `.claude/skills/send-it/SKILL.md` §2.
+> 5. Run the send-it pre-flight locally and fix anything red: `bash scripts/preflight.sh` (every CI gate — shellcheck, frontmatter sanity, positional-token + legacy-name guards, manifest JSON, markdownlint; `--fix` auto-fixes markdownlint findings) — details in `.claude/skills/send-it/SKILL.md` §2.
 > 6. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a literal `Closes #{N}` line.
 > 7. Push and open a PR per the send-it template — the body MUST contain `Closes #{N}` on its own line (sections: Summary · Changes · Verification).
 > 8. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name> status=<opened|skipped|failed> note=<one-line>`
@@ -101,7 +99,7 @@ Run the coordinator synchronously; backgrounding it orphans PRs at "checks pendi
 | #240 | #261 | ⚠️ FAILED | named failing check + log excerpt |
 | #216 | — | ⏭ SKIPPED | reason |
 
-For every MERGED row, clear the claim label: `gh issue edit N --repo Sassy-Dog/ai-agent-skills --remove-label in-progress` — `Closes #N` closed the issue but does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
+For every MERGED row, clear the claim label via `ai-agent-skills:github-issues`'s `issue-claim.sh release N1 N2 --repo Sassy-Dog/ai-agent-skills` — `Closes #N` closed the issue but does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
 
 Always end with: claims to unwind by hand (assignments, `in-progress` labels for unshipped issues) and a next-action one-liner per failure.
 

@@ -35,7 +35,7 @@ Board {{BOARD_NUMBER}} is authoritative ({{BACKLOG_SOURCE_DESCRIPTION}}):
 Open issues are the backlog ({{BACKLOG_SOURCE_DESCRIPTION}}); the `ready` label is Ready:
 
 - List via `gh issue list --repo {{REPO_SLUG}} --state open --limit 200 --json number,title,labels,assignees`.
-- Candidates: every open issue **without** the `ready` label (skip issues another loop already claimed — assignee set + `in-progress` label). Re-validate issues already carrying `ready` every run (the list is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the issue (`gh issue edit N --repo {{REPO_SLUG}} --remove-label ready` + a comment naming the drift). Ready is a promise; stale promises break drain-it.
+- Candidates: every open issue **without** the `ready` label (skip issues another loop already claimed — assignee set + `in-progress` label). Re-validate issues already carrying `ready` every run (the list is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the issue via `{{CAP_NS}}github-issues`'s `issue-claim.sh demote N --repo {{REPO_SLUG}} --comment "<the drift>"` (the comment is mandatory). Ready is a promise; stale promises break drain-it.
 <!-- ENDIF -->
 - Read each candidate IN FULL: `gh issue view N --repo {{REPO_SLUG}} --comments` — scope often lives in follow-up comments.
 
@@ -77,16 +77,13 @@ A multi-workstream issue gets child issues (one per dispatchable unit) via the g
 <!-- IF:BOARD -->
 Move qualifying cards to **Ready** per `{{CAP_NS}}github-issues` (`references/board-graphql.md`; project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, Ready `{{BOARD_READY_OPTION_ID}}`).
 <!-- ELSE -->
-Label qualifying issues **`ready`**, ensuring the label exists first — the `{{CAP_NS}}github-issues` ensure-label pattern (idempotent create-if-missing with color + description):
+Label qualifying issues **`ready`** via `{{CAP_NS}}github-issues`'s `issue-claim.sh` — it owns the label taxonomy (names, colors, descriptions) and ensure-creates before use:
 
 ```bash
-gh label create ready --repo {{REPO_SLUG}} --color 0E8A16 \
-  --description "Dispatchable: a cold worktree agent could ship this (fill-it promoted)" \
-  2>/dev/null || true
-gh issue edit N --repo {{REPO_SLUG}} --add-label ready
+issue-claim.sh promote N1 N2 --repo {{REPO_SLUG}}
 ```
 
-Demotion is the reverse: `gh issue edit N --repo {{REPO_SLUG}} --remove-label ready` plus a comment naming why — never a silent strip.
+Demotion is the reverse and **requires the reason**: `issue-claim.sh demote N --repo {{REPO_SLUG}} --comment "<why>"` — never a silent strip.
 <!-- ENDIF -->
 
 Every promoted issue carries its `touches:` line (rubric #8) — that's the coupling signal drain-it reads to avoid dispatching two file-overlapping issues at once.

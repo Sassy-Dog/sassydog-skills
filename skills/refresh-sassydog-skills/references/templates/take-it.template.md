@@ -44,15 +44,13 @@ Skip + announce if: not OPEN; `blocked` label; assignee already set<!-- IF:BOARD
 
 ## 3. Claim each issue
 
-Best-effort, so parallel sessions don't double-pick: `gh issue edit N --repo {{REPO_SLUG}} --add-assignee @me`, and <!-- IF:BOARD -->move the board card to In progress per `{{CAP_NS}}github-issues` (`references/board-graphql.md`; board {{BOARD_NUMBER}}, IDs: project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, In progress `{{BOARD_IN_PROGRESS_OPTION_ID}}`)<!-- ELSE -->set the `in-progress` claim label, ensuring it exists first — the `{{CAP_NS}}github-issues` ensure-label pattern (idempotent create-if-missing):
+Best-effort, so parallel sessions don't double-pick: <!-- IF:BOARD -->`gh issue edit N --repo {{REPO_SLUG}} --add-assignee @me`, and move the board card to In progress per `{{CAP_NS}}github-issues` (`references/board-graphql.md`; board {{BOARD_NUMBER}}, IDs: project `{{BOARD_PROJECT_ID}}`, status field `{{BOARD_STATUS_FIELD_ID}}`, In progress `{{BOARD_IN_PROGRESS_OPTION_ID}}`)<!-- ELSE -->claim via `{{CAP_NS}}github-issues`'s `issue-claim.sh` — one call per batch handles everything the old inline blob did and more:
 
 ```bash
-gh label create in-progress --repo {{REPO_SLUG}} --color 1D76DB \
-  --description "Claimed by a take-it/drain-it loop" 2>/dev/null || true
-gh issue edit N --repo {{REPO_SLUG}} --add-label in-progress --remove-label ready
+issue-claim.sh claim N1 N2 --repo {{REPO_SLUG}}
 ```
 
-(`--remove-label ready` is a no-op when the label isn't set — dispatch always moves an issue out of Ready)<!-- ENDIF -->. Claim failures are logged, never fatal — the PR's `Closes #N` <!-- IF:BOARD -->lands the card on Done<!-- ELSE -->closes the issue<!-- ENDIF --> regardless.
+(idempotent: ensures the `in-progress` label exists, sets assignee @me, adds `in-progress`, strips `ready`; **skips issues already assigned to someone else** — the double-pick guard — and retries transient GitHub failures)<!-- ENDIF -->. Claim failures are logged, never fatal — the PR's `Closes #N` <!-- IF:BOARD -->lands the card on Done<!-- ELSE -->closes the issue<!-- ENDIF --> regardless.
 
 ## 4. Dispatch sub-agents in parallel
 
@@ -110,7 +108,7 @@ Run the coordinator synchronously; backgrounding it orphans PRs at "checks pendi
 
 <!-- IF:BOARD -->
 <!-- ELSE -->
-For every MERGED row, clear the claim label: `gh issue edit N --repo {{REPO_SLUG}} --remove-label in-progress` — `Closes #N` closed the issue but does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
+For every MERGED row, clear the claim label via `{{CAP_NS}}github-issues`'s `issue-claim.sh release N1 N2 --repo {{REPO_SLUG}}` — `Closes #N` closed the issue but does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
 <!-- ENDIF -->
 Always end with: claims to unwind by hand (assignments<!-- IF:BOARD -->, board cards<!-- ELSE -->, `in-progress` labels<!-- ENDIF --> for unshipped issues) and a next-action one-liner per failure.
 

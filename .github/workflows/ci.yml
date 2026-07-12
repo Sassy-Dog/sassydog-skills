@@ -18,43 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: ShellCheck (warning severity)
-        run: git ls-files '*.sh' | xargs --no-run-if-empty shellcheck -S warning
-
-      - name: Frontmatter sanity
-        run: bash scripts/check-frontmatter.sh
-
-      - name: No bare positional tokens in Skill-args substitution surfaces
-        # SKILL.md bodies (and templates that render into consumer-repo SKILL.md bodies) get
-        # $1-$9/$ARGUMENTS substituted when the skill is invoked with args — a literal $1 in a
-        # snippet is corrupted at render time. references/ docs and scripts/ are not substituted.
-        run: |
-          # shellcheck disable=SC2016  # the regex is a literal, not a missed expansion
-          if git ls-files 'skills/*/SKILL.md' '.claude/skills/*/SKILL.md' 'skills/refresh-sassydog-skills/references/templates/*.md' \
-            | xargs --no-run-if-empty grep -nE '\$([0-9]|@|\*)'; then
-            echo "::error::bare positional token (\$1-\$9/\$@/\$*) in a Skill-args substitution surface — use cut -f1/%(format) idioms or move the snippet to references/ or scripts/ (see issue #39)"
-            exit 1
-          fi
-
-      - name: No legacy skill-name residue
-        # The generator was renamed create-dev-workflows -> refresh-sassydog-skills (0.9.0).
-        # The legacy name may appear only in the sanctioned backward-compat mentions; anything
-        # else is a stale reference that would confuse renders or docs.
-        run: |
-          if git grep -l 'create-dev-workflows' -- \
-            ':!skills/refresh-sassydog-skills/references/update-mode.md' \
-            ':!skills/refresh-sassydog-skills/SKILL.md' \
-            ':!CLAUDE.md' \
-            ':!.github/workflows/ci.yml'; then
-            echo "::error::legacy skill name 'create-dev-workflows' outside the sanctioned back-compat files"
-            exit 1
-          fi
-
-      - name: Plugin manifests are valid JSON
-        run: jq -e . .claude-plugin/plugin.json .claude-plugin/marketplace.json > /dev/null
+      # All gates live in scripts/preflight.sh (single source of truth for
+      # version pins and guard regexes — run the same script locally before a
+      # PR). It skips actionlint under CI=true; the dockerized step below owns
+      # that gate here.
+      - name: Preflight gates (shellcheck, frontmatter, guards, manifests, markdownlint)
+        run: bash scripts/preflight.sh
 
       - name: actionlint
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
-
-      - name: markdownlint
-        run: npx -y markdownlint-cli2@0.18.1 "**/*.md"

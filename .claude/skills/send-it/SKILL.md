@@ -37,16 +37,13 @@ Untracked files (`??`) are the highest-risk class: invisible to `git diff`, easy
 
 ## 2. Pre-flight guardrails
 
-Mirror the `CI` workflow locally (no build step in this repo; these are the gates):
+Mirror the `CI` workflow locally (no build step in this repo; CI runs this same script):
 
 ```bash
-git ls-files '*.sh' | xargs shellcheck -S warning
-bash scripts/check-frontmatter.sh
-jq -e . .claude-plugin/plugin.json .claude-plugin/marketplace.json > /dev/null
-npx -y markdownlint-cli2@0.18.1 "**/*.md"
+bash scripts/preflight.sh
 ```
 
-Any check fails → fix before commit (markdownlint blank-line findings usually auto-fix with `--fix`). Never push a known-red change.
+One call runs every gate — shellcheck (`-S warning`), frontmatter sanity, the positional-token and legacy-name guards, manifest JSON, markdownlint — plus best-effort actionlint. Any gate fails → fix before commit (`bash scripts/preflight.sh --fix` auto-fixes markdownlint findings first). Never push a known-red change.
 
 <!-- BEGIN PROJECT-SPECIFIC: extra-gates -->
 **README/version sync gate** — if the diff adds or removes a skill (`skills/*/SKILL.md`) or reviewer agent (`agents/*.md`):

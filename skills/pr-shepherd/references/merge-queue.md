@@ -97,8 +97,7 @@ Merge/enqueue only when: all checks green AND `mergeable=MERGEABLE` AND `mergeSt
 For any PR with a failing check, pull the log so the final report names the failure instead of saying "CI red":
 
 ```bash
-RUN_ID=$(gh pr checks "$PR" --json name,state,link \
-  --jq '.[] | select(.state=="FAILURE") | .link' | head -1 \
-  | grep -oE '[0-9]+/job/[0-9]+' | cut -d/ -f1)
-gh run view "$RUN_ID" --log-failed | tail -50
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/pr-failure-log.sh "$PR" --repo "$REPO"
 ```
+
+The script selects every FAILURE/ERROR check, extracts each Actions run id from the check's link, and prints a labeled `--log-failed` tail per failure. Checks that are not Actions runs (Vercel-style StatusContexts) have no fetchable log — it prints their link as "external check" instead of erroring, which is exactly where the old hand-rolled `grep`-the-run-id-out-of-the-link pipeline broke. Exit `10` = nothing failing.

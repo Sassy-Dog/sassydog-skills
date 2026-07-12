@@ -279,14 +279,22 @@ after the work merged. For each open issue carrying the label:
 gh issue list --repo "$REPO" --label "$CLAIM_LABEL" --state open --json number,closedByPullRequestsReferences
 ```
 
-If its work already merged (`closedByPullRequestsReferences` has a MERGED PR) → remove the label:
+If its work already merged (`closedByPullRequestsReferences` has a MERGED PR) → remove the label.
+When the repo uses the standard boardless taxonomy (`in-progress` from take-it/drain-it), route the
+removal through github-issues' claim script — it already wraps the mutation in `gh-retry.sh`:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh release <N> --repo "$REPO"
+```
+
+For a non-standard claim label (e.g. `status:in-progress`), edit directly:
 
 ```bash
 gh issue edit <N> --repo "$REPO" --remove-label "$CLAIM_LABEL"
 ```
 
 Ask if the issue is genuinely open with no merged PR (work may truly be in-flight). Use the caller's
-`gh-retry` wrapper for the mutation if one was supplied (GraphQL flakes).
+`gh-retry` wrapper for the direct mutation if one was supplied (GraphQL flakes).
 
 ## 9. Final verification
 
