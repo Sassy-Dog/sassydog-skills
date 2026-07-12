@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A **Claude Code plugin marketplace** containing a single plugin (`ai-agent-skills`) that bundles reusable skills and review agents for Claude Code, Gemini CLI, and other AI coding tools. Repo visibility is `INTERNAL` (the Sassy Dog org default).
 
-There is **no build step** — the entire repo is Markdown (skills/agents) plus the Bash scripts bundled inside skills' `scripts/` directories. CI (`.github/workflows/ci.yml`, required on `main`) runs `bash scripts/preflight.sh` — the single source of truth for every gate: shellcheck (`-S warning`), `scripts/check-frontmatter.sh` (frontmatter `---` on line 1, `name`/`description` present, name matches directory/filename), the positional-token and legacy-name guards, manifest JSON validation, and markdownlint (`.markdownlint-cli2.jsonc`) — plus a separate dockerized actionlint step. **Run `bash scripts/preflight.sh` locally before every PR** (`--fix` auto-fixes markdownlint findings). Those gates are necessary but not sufficient: "correctness" still means accurate trigger phrases and skill instructions that actually work when invoked — verify changes by installing the plugin locally (below) and exercising the skill.
+There is **no build step** — the entire repo is Markdown (skills/agents) plus the Bash scripts bundled inside skills' `scripts/` directories. CI (`.github/workflows/ci.yml`, required on `main`) runs `bash scripts/preflight.sh` — the single source of truth for every gate: shellcheck (`-S warning`), `scripts/check-frontmatter.sh` (frontmatter `---` on line 1, `name`/`description` present, name matches directory/filename), the positional-token and legacy-name guards, manifest JSON validation + the CalVer version-of-record guard, the versioning tests (`scripts/test-versioning.sh`), and markdownlint (`.markdownlint-cli2.jsonc`) — plus a separate dockerized actionlint step. **Run `bash scripts/preflight.sh` locally before every PR** (`--fix` auto-fixes markdownlint findings). Those gates are necessary but not sufficient: "correctness" still means accurate trigger phrases and skill instructions that actually work when invoked — verify changes by installing the plugin locally (below) and exercising the skill.
 
 ## Layout (flat — everything at root)
 
@@ -14,7 +14,7 @@ This repo *is* the plugin; there is no nesting under a plugin subdirectory.
 
 ```
 .claude-plugin/
-  plugin.json        # plugin manifest (name, version, author) — bump version here on release
+  plugin.json        # plugin manifest — version is the version-of-record, stamped by scripts/stamp-version.sh (never hand-edit)
   marketplace.json   # marketplace entry pointing at the GitHub repo
 agents/
   *-reviewer.md      # subagents, auto-discovered, namespaced ai-agent-skills:<name>
@@ -71,4 +71,10 @@ After editing a skill or agent, reload via `--plugin-dir` and invoke the skill t
 
 ## Releasing
 
-Bump `version` in `.claude-plugin/plugin.json`. Keep `README.md`'s plugin/skill table and the agent list in sync when skills or reviewer agents are added or removed.
+The plugin version is **monthly-rolling CalVer** (`YYYY.M.<commits-this-month>`, e.g. `2026.7.16`) per the org Versioning spec; the committed `version` in `.claude-plugin/plugin.json` is the version-of-record. **Never hand-edit it** — stamp it:
+
+```bash
+bash scripts/stamp-version.sh   # resolves CalVer and writes .claude-plugin/plugin.json
+```
+
+Commit the stamped manifest in the release PR. Build number: N/A for this repo; tags optional. Full instance doc — including the **one-way ratchet** (no `0.x`/`1.x` may ever follow CalVer): [`docs/VERSIONING.md`](docs/VERSIONING.md). Keep `README.md`'s plugin/skill table and the agent list in sync when skills or reviewer agents are added or removed.
