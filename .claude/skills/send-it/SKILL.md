@@ -49,7 +49,7 @@ One call runs every gate — shellcheck (`-S warning`), frontmatter sanity, the 
 **README/version sync gate** — if the diff adds or removes a skill (`skills/*/SKILL.md`) or reviewer agent (`agents/*.md`):
 
 - `README.md`'s plugin/skill table and agent list must be updated in the same PR.
-- `.claude-plugin/plugin.json` `version` must be bumped for release-worthy changes.
+- `.claude-plugin/plugin.json` `version` must be re-stamped for release-worthy changes: run `bash scripts/stamp-version.sh` (monthly CalVer; **never hand-edit** — one-way ratchet, see `docs/VERSIONING.md`).
 
 ```bash
 git diff --name-only origin/main | grep -qE '^(skills/[^/]+/SKILL\.md|agents/)' \

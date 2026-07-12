@@ -73,7 +73,7 @@ claude --plugin-dir ~/Repos/sassy-dog/ai-agent-skills
 
 ## Updating / Troubleshooting
 
-Plugin updates are **manual** — the cache does not follow releases. After every release (a `version` bump in `.claude-plugin/plugin.json`), each consumer machine must run:
+Plugin updates are **manual** — the cache does not follow releases. After every release (a new CalVer stamped into `.claude-plugin/plugin.json` via `scripts/stamp-version.sh` — see `docs/VERSIONING.md`), each consumer machine must run:
 
 ```bash
 claude plugin update ai-agent-skills@sassy-dog-skills
@@ -89,10 +89,10 @@ claude plugin update ai-agent-skills@sassy-dog-skills
 
 ```bash
 ls ~/.claude/plugins/cache/sassy-dog-skills/ai-agent-skills/
-# 0.5.0    <- installed version (stale)
+# 2026.6.4    <- installed version (stale)
 ```
 
-Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `0.7.0`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
+Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `2026.7.16`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
 
 ### Updates freeze at the cached version (SAML error)
 

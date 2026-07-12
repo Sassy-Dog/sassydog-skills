@@ -11,9 +11,12 @@
 #   2. frontmatter sanity (scripts/check-frontmatter.sh)
 #   3. no bare positional tokens in Skill-args substitution surfaces (issue #39)
 #   4. no legacy 'create-dev-workflows' residue outside sanctioned files
-#   5. plugin manifests are valid JSON
-#   6. markdownlint (pinned markdownlint-cli2 version)
-#   7. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#   5. plugin manifests are valid JSON, the plugin version is CalVer
+#      (YYYY.M.P — the one-way ratchet, docs/VERSIONING.md), and any
+#      marketplace.json plugins[].version equals it (issue #31)
+#   6. versioning tests (scripts/test-versioning.sh)
+#   7. markdownlint (pinned markdownlint-cli2 version)
+#   8. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -92,6 +95,28 @@ fi
 if command -v jq >/dev/null 2>&1; then
     if jq -e . .claude-plugin/plugin.json .claude-plugin/marketplace.json >/dev/null; then
         pass "plugin manifests valid JSON"
+
+        # Version-of-record guard (issue #31; docs/VERSIONING.md; org
+        # Versioning spec §7 committed-manifest row). CalVer adoption is a
+        # ONE-WAY RATCHET: a hand-rolled 0.x/1.x here reads as a permanent
+        # downgrade to version-ordering consumers. Stamp via
+        # scripts/stamp-version.sh, never by hand.
+        plugin_version=$(jq -r '.version // empty' .claude-plugin/plugin.json)
+        if echo "$plugin_version" | grep -qE '^[0-9]{4}\.[0-9]{1,2}\.[0-9]+$'; then
+            pass "plugin version is CalVer ($plugin_version)"
+        else
+            failed "plugin version '$plugin_version' is not CalVer (YYYY.M.P) — stamp via scripts/stamp-version.sh (docs/VERSIONING.md)"
+        fi
+
+        # One repo-wide CalVer: any plugins[].version in marketplace.json
+        # must equal the version-of-record (per-plugin drift forbidden).
+        if jq -e --arg v "$plugin_version" \
+            '[.plugins[]? | select(has("version")) | .version == $v] | all' \
+            .claude-plugin/marketplace.json >/dev/null; then
+            pass "marketplace plugins[].version matches version-of-record"
+        else
+            failed "marketplace.json plugins[].version differs from plugin.json — one repo-wide CalVer; stamp via scripts/stamp-version.sh"
+        fi
     else
         failed "plugin manifests valid JSON"
     fi
@@ -99,7 +124,14 @@ else
     skip "plugin manifests (jq not installed — CI still enforces)"
 fi
 
-# --- 6. markdownlint ---------------------------------------------------------
+# --- 6. versioning tests -------------------------------------------------------
+if bash scripts/test-versioning.sh; then
+    pass "versioning tests (scripts/test-versioning.sh)"
+else
+    failed "versioning tests (scripts/test-versioning.sh)"
+fi
+
+# --- 7. markdownlint ---------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -114,7 +146,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 7. actionlint (best-effort locally; CI runs its own dockerized step) ----
+# --- 8. actionlint (best-effort locally; CI runs its own dockerized step) ----
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then

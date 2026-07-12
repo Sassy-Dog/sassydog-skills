@@ -73,7 +73,7 @@ git switch main >/dev/null 2>&1 && git pull --ff-only origin main
 > 2. Read the issue carefully. If scope is genuinely unclear after the body and linked issues/PRs, STOP and report back — do not guess.
 > 3. Implement the change following the repo's `CLAUDE.md`.
 <!-- BEGIN PROJECT-SPECIFIC: subagent-rules -->
-> 4. **README/version sync**: if you add or remove a skill (`skills/*/SKILL.md`) or reviewer agent (`agents/*.md`), update `README.md`'s plugin/skill table and agent list in the same PR, and bump `version` in `.claude-plugin/plugin.json` for release-worthy changes.
+> 4. **README/version sync**: if you add or remove a skill (`skills/*/SKILL.md`) or reviewer agent (`agents/*.md`), update `README.md`'s plugin/skill table and agent list in the same PR, and re-stamp `version` in `.claude-plugin/plugin.json` via `bash scripts/stamp-version.sh` for release-worthy changes (monthly CalVer; never hand-edit — `docs/VERSIONING.md`).
 <!-- END PROJECT-SPECIFIC -->
 > 5. Run the send-it pre-flight locally and fix anything red: `bash scripts/preflight.sh` (every CI gate — shellcheck, frontmatter sanity, positional-token + legacy-name guards, manifest JSON, markdownlint; `--fix` auto-fixes markdownlint findings) — details in `.claude/skills/send-it/SKILL.md` §2.
 > 6. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a literal `Closes #{N}` line.
