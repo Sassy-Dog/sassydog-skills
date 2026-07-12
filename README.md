@@ -10,6 +10,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
 | `ai-agent-skills` | `refresh-sassydog-skills` | Generator/refresher: creates, updates, and re-syncs a repo's project-specific `plate-it` / `fill-it` / `take-it` / `drain-it` / `send-it` / `clean-it` workflow skills (plugin-backed or independent/vendored) |
+| `ai-agent-skills` | `refresh-sassydog-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
 | `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
@@ -27,6 +28,13 @@ shared mechanics to the capability skills (`github-issues`, `sentry-triage`, `pr
 `repo-cleanup`, `repo-health`, `testflight`). `plate-it` / `send-it` / `clean-it` are core (always
 generated); `take-it` / `fill-it` / `drain-it` are opt-in. (`clean-it`'s engine is `repo-cleanup`,
 named distinctly so the "clean it" phrase resolves to the project skill, not the capability.)
+
+`refresh-sassydog-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,
+prettier, markdownlint, shellcheck, dart, rustfmt, gofmt, dotnet format — keyed on repo config, not
+installed binaries) and renders a single PostToolUse dispatcher into `.claude/hooks/`, wired into
+`.claude/settings.json`. Formatters fix silently; unfixable lint findings exit 2 so they feed
+straight back for an immediate fix. Re-runs reconcile only entries the generator owns (command path
+references `sassydog-`), never hand-written hooks.
 
 **Delegation modes.** By default generated skills are **plugin-backed**: they delegate to the
 plugin's capability skills, so every machine running them needs the plugin installed. A repo can
