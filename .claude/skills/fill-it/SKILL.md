@@ -21,7 +21,7 @@ Groom the backlog until every issue is either **Ready** (a cold sub-agent could 
 Open issues are the backlog (open GitHub issues + labels); the `ready` label is Ready:
 
 - List via `gh issue list --repo Sassy-Dog/ai-agent-skills --state open --limit 200 --json number,title,labels,assignees`.
-- Candidates: every open issue **without** the `ready` label (skip issues another loop already claimed — assignee set + `in-progress` label). Re-validate issues already carrying `ready` every run (the list is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the issue (`gh issue edit N --repo Sassy-Dog/ai-agent-skills --remove-label ready` + a comment naming the drift). Ready is a promise; stale promises break drain-it.
+- Candidates: every open issue **without** the `ready` label (skip issues another loop already claimed — assignee set + `in-progress` label). Re-validate issues already carrying `ready` every run (the list is already in hand) — drift happens; a decision marker or new blocker added after promotion demotes the issue via `ai-agent-skills:github-issues`'s `issue-claim.sh demote N --repo Sassy-Dog/ai-agent-skills --comment "<the drift>"` (the comment is mandatory). Ready is a promise; stale promises break drain-it.
 - Read each candidate IN FULL: `gh issue view N --repo Sassy-Dog/ai-agent-skills --comments` — scope often lives in follow-up comments.
 
 ## 2. The dispatchability rubric
@@ -59,16 +59,13 @@ A multi-workstream issue gets child issues (one per dispatchable unit) via the g
 
 ## 5. Promote + report
 
-Label qualifying issues **`ready`**, ensuring the label exists first — the `ai-agent-skills:github-issues` ensure-label pattern (idempotent create-if-missing with color + description):
+Label qualifying issues **`ready`** via `ai-agent-skills:github-issues`'s `issue-claim.sh` — it owns the label taxonomy (names, colors, descriptions) and ensure-creates before use:
 
 ```bash
-gh label create ready --repo Sassy-Dog/ai-agent-skills --color 0E8A16 \
-  --description "Dispatchable: a cold worktree agent could ship this (fill-it promoted)" \
-  2>/dev/null || true
-gh issue edit N --repo Sassy-Dog/ai-agent-skills --add-label ready
+issue-claim.sh promote N1 N2 --repo Sassy-Dog/ai-agent-skills
 ```
 
-Demotion is the reverse: `gh issue edit N --repo Sassy-Dog/ai-agent-skills --remove-label ready` plus a comment naming why — never a silent strip.
+Demotion is the reverse and **requires the reason**: `issue-claim.sh demote N --repo Sassy-Dog/ai-agent-skills --comment "<why>"` — never a silent strip.
 
 Every promoted issue carries its `touches:` line (rubric #8) — that's the coupling signal drain-it reads to avoid dispatching two file-overlapping issues at once.
 

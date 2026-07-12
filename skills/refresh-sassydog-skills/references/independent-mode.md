@@ -15,8 +15,8 @@ re-sync possible.
 
 | Capability | Vendored | Why |
 |---|---|---|
-| `pr-shepherd` | always (the mandatory root) | send-it/take-it/drain-it delegate to it; `repo-cleanup` calls its `teardown.sh`; `github-issues` calls its `gh-retry.sh` |
-| `github-issues` | always | plate-it/fill-it/take-it/drain-it board+issue mechanics; sentry-triage's escalation path |
+| `pr-shepherd` | always (the mandatory root) | send-it/take-it/drain-it delegate to it; `repo-cleanup` calls its `teardown.sh`; `github-issues` calls its `gh-retry.sh` (from `issue-claim.sh` and doc'd board flows) |
+| `github-issues` | always | plate-it/fill-it/take-it/drain-it board+issue mechanics, incl. `issue-claim.sh` label-state claims and `queue-snapshot.sh` queue reads; sentry-triage's escalation path |
 | `repo-cleanup` | always | the clean-it (core) engine — ships no scripts of its own, hence pr-shepherd above |
 | `repo-health` | always | plate-it (core) signal scans |
 | `sentry-triage` | only when `IF:SENTRY` | plate-it Sentry surface |

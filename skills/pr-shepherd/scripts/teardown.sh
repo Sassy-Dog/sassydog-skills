@@ -10,6 +10,12 @@
 #                                                        #   whose remote branch is gone, PLUS
 #                                                        #   orphan isolation branches whose
 #                                                        #   worktree is already gone
+#   teardown.sh --reconcile-only                         # skip all worktree/branch phases; just
+#                                                        #   the default-branch reconcile (switch,
+#                                                        #   fetch --prune, clear ff-blocking
+#                                                        #   stragglers, pull --ff-only) + report.
+#                                                        #   A failed ff exits 1 in this mode
+#                                                        #   (other modes warn and continue).
 # Env:
 #   DEFAULT_BRANCH            override the reconcile target (default: origin/HEAD, fallback "main")
 #   ISOLATION_BRANCH_PREFIX   prefix of the Agent runtime's isolation branches
@@ -89,7 +95,10 @@ remove_worktree() {  # $1 = worktree path
   if [ "$iso" != "$br" ]; then delete_isolation_branch "$iso"; fi
 }
 
-if [ "${1:-}" = "--sweep" ]; then
+RECONCILE_ONLY=0
+if [ "${1:-}" = "--reconcile-only" ]; then
+  RECONCILE_ONLY=1
+elif [ "${1:-}" = "--sweep" ]; then
   echo "== sweep: agent worktrees whose remote branch is gone (squash-merged + deleted) =="
   git fetch --prune --quiet origin 2>/dev/null || true
   while IFS= read -r path; do
@@ -141,10 +150,10 @@ elif [ "$#" -gt 0 ]; then
   echo "== explicit teardown of $# worktree(s) =="
   for path in "$@"; do remove_worktree "$path"; done
 else
-  echo "teardown: pass worktree path(s) or --sweep" >&2; exit 2
+  echo "teardown: pass worktree path(s), --sweep, or --reconcile-only" >&2; exit 2
 fi
 
-git worktree prune
+[ "$RECONCILE_ONLY" = "1" ] || git worktree prune
 
 echo "== reconcile $BRANCH =="
 git switch "$BRANCH" >/dev/null 2>&1 || true
@@ -161,6 +170,9 @@ if git pull --ff-only origin "$BRANCH" >/dev/null 2>&1; then
   echo "  $BRANCH @ $(git rev-parse --short HEAD)"
 else
   echo "  ⚠ ff-only reconcile failed — residual local changes; clean up by hand"
+  # In --reconcile-only mode the ff IS the job — surface the failure to the caller.
+  # Explicit/sweep modes keep warn-and-continue: teardown already did its real work.
+  [ "$RECONCILE_ONLY" = "1" ] && exit 1
 fi
 
 echo "== residual =="

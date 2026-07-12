@@ -18,10 +18,10 @@ One invocation = **one tick** of a drain loop. All state lives in GitHub (labels
 
 ## 1. Reconcile in-flight (always first)
 
-Find work this loop already started. **Live issue state is the source of truth**: open issues with assignee @me AND the `in-progress` label are in-flight (`gh issue list --repo Sassy-Dog/ai-agent-skills --state open --assignee @me --label in-progress`) — whether or not a PR exists yet (a sub-agent mid-implementation has only a `*/issue-N-*` branch; PR-based queries undercount and overshoot the cap).
+Find work this loop already started. **Live issue state is the source of truth**: snapshot the queue via `ai-agent-skills:github-issues`'s `queue-snapshot.sh` (`REPO=Sassy-Dog/ai-agent-skills`) — one call returns `ready[]`, `in_flight[]`, and `blocked[]` with the `touches:` and `Depends on #N` body contracts already parsed. In-flight = `in_flight[]` entries with `mine: true` (assignee @me + `in-progress` label) — whether or not a PR exists yet (a sub-agent mid-implementation has only a `*/issue-N-*` branch; PR-based queries undercount and overshoot the cap).
 
 - Open PRs from those branches → delegate to `ai-agent-skills:pr-shepherd`: mergeable check, merge greens (direct: `--squash --delete-branch`), tear down worktrees for merged PRs, reconcile local main.
-- **Failed/red PRs**: surface in the tick report with the failing check named. Comment `drain-it: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the failure context added to the prompt is allowed on a later tick; a second failure strips the claim and adds `blocked` plus a comment (`gh issue edit N --repo Sassy-Dog/ai-agent-skills --remove-label ready --remove-label in-progress --add-label blocked`) — a human (or fill-it, after the human weighs in) decides next. Never park failures in Ready: Ready must stay synonymous with dispatchable.
+- **Failed/red PRs**: surface in the tick report with the failing check named. Comment `drain-it: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the failure context added to the prompt is allowed on a later tick; a second failure demotes to blocked via `ai-agent-skills:github-issues`'s `issue-claim.sh block N --repo Sassy-Dog/ai-agent-skills --comment "drain-it: 2 failed attempts — <cause>"` (strips `ready` + `in-progress`, adds `blocked`, ensures the label exists, posts the required reason) — a human (or fill-it, after the human weighs in) decides next. Never park failures in Ready: Ready must stay synonymous with dispatchable.
 - **`CONFLICTING` PRs**: never auto-rebase; surface and hold.
 
 ## 2. Compute capacity
@@ -30,7 +30,7 @@ Find work this loop already started. **Live issue state is the source of truth**
 
 ## 3. Select from Ready — and only Ready
 
-Query the queue: `gh issue list --repo Sassy-Dog/ai-agent-skills --state open --label ready --json number,title,labels,assignees`, ordered by **issue number ascending** (oldest first); when the repo defines priority labels, issues carrying them sort ahead — the boardless stand-in for "board order = priority". Filter, in order:
+Take `ready[]` from the §1 `queue-snapshot.sh` read (already ordered **issue number ascending**, oldest first, with `touches`, `depends_on`, and `unannotated` parsed per issue); when the repo defines priority labels, issues carrying them sort ahead — the boardless stand-in for "board order = priority". Filter, in order:
 
 | Filter | Rule |
 |--------|------|
@@ -38,7 +38,7 @@ Query the queue: `gh issue list --repo Sassy-Dog/ai-agent-skills --state open --
 | Blocked | Skip `blocked` label |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges |
 | Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's `touches:` set. Read each in-flight issue's `touches:` line (the in-flight set is known from §1) and intersect: same repo-relative path, or a glob on one side matching a path on the other. Defer to a later tick — re-eligible automatically once the overlapping issue merges (its slot frees, its files unlock). An issue with **no** `touches:` line is treated as intersecting nothing (fill-it left it unannotated), but is flagged `unannotated` in the tick report so the coupling gap is visible, not silently risky. |
-| Smell test | Run take-it's pre-flight smell test (research-shaped titles, open-question sections, stub bodies). Failures: comment why + remove the `ready` label for fill-it. Never "fix it up" inline — that hides the grooming gap. |
+| Smell test | Run take-it's pre-flight smell test (research-shaped titles, open-question sections, stub bodies). Failures: `issue-claim.sh demote N --comment "<why>"` (comment is required — never a silent strip) for fill-it. Never "fix it up" inline — that hides the grooming gap. |
 
 Take the first `capacity` survivors. The Collision filter is the primary defense against concurrent file-overlapping dispatch; `ai-agent-skills:pr-shepherd`'s coupled-PR serialization (`references/serialization.md`) stays the **fallback** for overlaps this filter can't see — chiefly `unannotated` issues that turn out to collide at merge time.
 

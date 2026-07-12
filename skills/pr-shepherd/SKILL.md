@@ -36,6 +36,12 @@ From the caller's request (ask if missing and not inferable):
 gh pr view "$PR" --repo "$REPO" --json mergeable,mergeStateStatus --jq '"\(.mergeable) \(.mergeStateStatus)"'
 ```
 
+For more than one PR — or a "where does everything stand" probe — prefer the scripted snapshot over hand-rolled `--jq` variants; it reuses the poller's type-aware pending predicate and prints the same table + JSON as a watch tick:
+
+```bash
+REPO="$REPO" bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/poll-prs.sh --once "$PR"   # zero PR args = every open PR
+```
+
 Surface `CONFLICTING` immediately — do not auto-rebase. For generated-file conflicts, point the caller at the regenerate-don't-hand-merge recipe in `references/serialization.md`.
 
 ### 2. Watch checks
@@ -48,7 +54,7 @@ Multiple PRs (batch): use the bundled poller — read-only, polls every 60s, exi
 REPO="$REPO" bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/poll-prs.sh "$PR1" "$PR2"
 ```
 
-Run it synchronously — backgrounding the watcher orphans PRs at "checks pending" with nobody deciding.
+Run it synchronously — backgrounding the watcher orphans PRs at "checks pending" with nobody deciding. For a single no-wait snapshot (state reconciliation at the top of a loop tick, not a watch), use `--once` — exit `0` = all terminal, `11` = something still pending (same "re-run later" code as `merge-shepherd.sh`).
 
 ### 3. Merge or enqueue greens
 
@@ -82,7 +88,11 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- pr merge "$
 
 If the batch contains coupled PRs (same migrations/codegen directories), follow `references/serialization.md`: under a queue with a gating freshness check, enqueue all and let the queue eject stale ones; without one, merge coupled PRs one at a time with a mergeable re-check between each.
 
-For red PRs: do not merge; pull the failing job log (`gh run view <id> --log-failed | tail -50`) so the report names the failure.
+For red PRs: do not merge; pull the failing logs so the report names the failure — the bundled script handles run-id extraction and non-Actions checks (Vercel-style StatusContexts have no fetchable log; it prints their link instead of erroring):
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/pr-failure-log.sh "$PR" --repo "$REPO"
+```
 
 **Stale pre-fix check trap — verify the head SHA before counting a redispatch failure.** After a fix has been *requested* (a redispatch or resume message to a fix agent) but before it has been *pushed*, the PR's head is still the failed commit, so `mergeStateStatus`/`statusCheckRollup` keep reporting the old failing run — the PR reads red even though the fix is in flight. A naive "PR is red → attempt N failed" read parks shippable work. Before treating a red read as a failed fix attempt:
 
@@ -101,17 +111,18 @@ After a batch with worktree-isolated sub-agents, read `references/worktree-teard
 bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh <wt_path...>   # or --sweep
 ```
 
-Then reconcile the session (cwd back to repo root, switch to default branch, `git pull --ff-only`, delete local feature branches). Squash-merge repos: "remote branch gone" is the merged signal, never `git branch --merged`. Teardown also deletes each worktree's `worktree-agent-*` **isolation branch** — it never had an upstream, so it is never `[gone]` and would otherwise accumulate one orphan per merge (see the isolation-branch leak in `references/worktree-teardown.md`).
+Then reconcile the session (cwd back to repo root, switch to default branch, `git pull --ff-only`, delete local feature branches) — `teardown.sh --reconcile-only` runs exactly that reconcile (including clearing origin-identical untracked stragglers that block the ff) without touching any worktree or branch, and exits `1` when the ff fails so the caller sees it. Squash-merge repos: "remote branch gone" is the merged signal, never `git branch --merged`. Teardown also deletes each worktree's `worktree-agent-*` **isolation branch** — it never had an upstream, so it is never `[gone]` and would otherwise accumulate one orphan per merge (see the isolation-branch leak in `references/worktree-teardown.md`).
 
 ## Bundled scripts
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. Surfaces `headRefOid` per tick and in the final JSON so callers can spot stale pre-fix runs before counting a redispatch failure. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on timeout. |
+| `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. Surfaces `headRefOid` per tick and in the final JSON so callers can spot stale pre-fix runs before counting a redispatch failure. `--once` = single snapshot tick, no loop (zero PR args probes every open PR); exit 0 all-terminal / 11 pending. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on watch timeout. |
+| `scripts/pr-failure-log.sh` | Names a red PR's failing checks and prints each one's `--log-failed` tail, labeled. Handles the run-id extraction from check links and prints non-Actions (StatusContext) checks as external links instead of erroring. Read-only. Exit 0 reported / 10 no failures / 1 a log fetch failed. |
 | `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Teardown also deletes the worktree's `worktree-agent-*` isolation branch (never the PR's own head branch — `--delete-branch`/`[gone]` owns that). Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env (same contract as `teardown.sh`). |
 | `scripts/poll-queue.sh` | Queue-phase companion to `poll-prs.sh`: polls 1+ enqueued PRs' merge-queue state (GraphQL) until each is `MERGED`, ejected (`OPEN` + `isInMergeQueue:false`, reported loudly), or closed without merge. Read-only — never re-enqueues or recovers. Same env/contract: `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS`, exit 124 on timeout, final JSON on stdout. |
 | `scripts/gh-retry.sh` | Exponential-backoff retry for mutating `gh` calls on transient failures (502/503/504, "Merge already in progress", transient GraphQL). Exit 124 on exhaustion so the caller decides best-effort vs escalate. |
-| `scripts/teardown.sh` | Batch worktree cleanup: force-removes locked agent worktrees, deletes local branches + their `worktree-agent-*` isolation branches, prunes, clears origin-identical stragglers, ff-reconciles the default branch. `--sweep` reclaims orphans whose remote branch is gone AND sweeps orphan isolation branches whose worktree is gone (ancestry OR merged-PR classification; unmerged ones surfaced, live ones untouched). Never drops stashes. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env override. |
+| `scripts/teardown.sh` | Batch worktree cleanup: force-removes locked agent worktrees, deletes local branches + their `worktree-agent-*` isolation branches, prunes, clears origin-identical stragglers, ff-reconciles the default branch. `--sweep` reclaims orphans whose remote branch is gone AND sweeps orphan isolation branches whose worktree is gone (ancestry OR merged-PR classification; unmerged ones surfaced, live ones untouched). `--reconcile-only` runs just the default-branch reconcile + residual report (exit 1 if the ff fails). Never drops stashes. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env override. |
 
 ## Guardrails
 

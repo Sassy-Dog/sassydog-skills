@@ -37,14 +37,20 @@ The script force-removes each worktree (the Agent runtime leaves them locked, he
 
 **Drift B — cwd inside a sub-agent worktree.** The shell cwd silently became a `.claude/worktrees/agent-*` path. `git switch main` fails with `'main' is already used by worktree at '<main repo path>'`. Symptom: `pwd` shows the worktree path, not the project root.
 
-Single ordered recovery that handles both (substitute the repo root and default branch):
+Single ordered recovery that handles both — `cd` back to the main repo root first (Drift B), then run the scripted reconcile:
 
 ```bash
 cd <main-repo-root>                         # snap cwd back (Drift B)
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh --reconcile-only
+git branch -D "<feature-branch>" 2>/dev/null || true
+```
+
+`--reconcile-only` is the script's reconcile tail with nothing else: `git switch <default-branch>` (snaps HEAD back, Drift A), `fetch --prune`, clears origin-identical untracked stragglers that would block the ff (see below), then `pull --ff-only` — and exits `1` when the ff still fails, because in this mode the ff *is* the job. Equivalent by hand, if the script is unavailable:
+
+```bash
 git switch <default-branch> 2>/dev/null || true   # snap HEAD back (Drift A)
 git fetch origin <default-branch> --prune   # refresh + drop deleted-remote refs
 git pull --ff-only origin <default-branch>  # advance to the squash-merge commit
-git branch -D "<feature-branch>" 2>/dev/null || true
 ```
 
 ## Straggler files
