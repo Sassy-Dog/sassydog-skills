@@ -15,12 +15,27 @@
 #                  "default_branch_ci",       # latest push/merge_group run on default branch
 #                  "scheduled_failing": [ { "workflow", "url", "created_at" } ],
 #                  "last_failure": { "workflow", "branch", "event", "url", "created_at" } | null,
-#                  "dependabot": { "enabled": true|false|null, "open", "high_crit" } } ] }
+#                  "dependabot": { "enabled": true|false|null, "open", "high_crit",
+#                                  "oldest_high_crit_age_days",
+#                                  "open_fix_prs": [ { "number", "title", "state", "age_days" } ] } } ] }
 #
-# Cost is 1 + 2N calls (one roster + run-list and alert-list per repo). That is the
-# deliberate trade: the org-level searches in pull-org-github.sh cannot express
-# "recent workflow conclusions" or "alert severity", so those two genuinely need a
-# loop. Keep RUN_LIMIT small — this is a triage sweep, not a CI analytics pass.
+# Cost is 1 + 2N calls, plus ONE extra per repo that actually has high/critical
+# alerts (for its open Dependabot PRs). A healthy org pays nothing for that third
+# call. That is the deliberate trade: the org-level searches in pull-org-github.sh
+# cannot express "recent workflow conclusions" or "alert severity", so those two
+# genuinely need a loop. Keep RUN_LIMIT small — this is a triage sweep, not a CI
+# analytics pass.
+#
+# WHY AGE AND FIX-PR STATE ARE PART OF THE CONTRACT: a bare alert count is a
+# LAGGING indicator. It only falls when a fix MERGES, so it conflates "we were
+# slow" with "the world just changed" — and the consumer cannot tell them apart.
+# On 2026-07-25 this script reported 25 high/critical across 6 repos; every alert
+# was under 48h old (a published Next.js/drizzle/sharp CVE batch) and the fix PR
+# for the worst repo was already open and green. That is a healthy system, and it
+# read as a fire. Meanwhile the genuinely broken cases — a green fix PR parked for
+# days, or alerts with an available patch and no PR at all — were invisible,
+# because both look identical to "some number of alerts". Never re-narrow this
+# back to a count.
 #
 # `dependabot.enabled` is THREE-STATE on purpose. A 403 from the alerts endpoint
 # means either "the feature is off" or "this token can't see it", and those demand
@@ -65,18 +80,71 @@ for repo in "${targets[@]}"; do
   [[ -z "$runs" ]] && runs='[]'
 
   # Dependabot: distinguish "off" from "invisible to this token" — see header.
-  dependabot='{"enabled":null,"open":null,"high_crit":null}'
+  dependabot='{"enabled":null,"open":null,"high_crit":null,"oldest_high_crit_age_days":null,"open_fix_prs":null}'
   if alerts=$(gh api "repos/${ORG}/${repo}/dependabot/alerts?state=open&per_page=100" 2>&1); then
     if jq -e 'type == "array"' >/dev/null 2>&1 <<<"$alerts"; then
-      dependabot=$(jq -c '{
+      dependabot=$(jq -c '
+        ([ .[] | select(.security_advisory.severity == "critical"
+                     or .security_advisory.severity == "high") ]) as $hc
+        | {
         enabled: true,
         open: length,
-        high_crit: ([ .[] | select(.security_advisory.severity == "critical"
-                                or .security_advisory.severity == "high") ] | length)
+        high_crit: ($hc | length),
+        # AGE IS THE POINT. A raw count cannot tell "a CVE batch published this
+        # morning, fix already queued" from "a year of neglect" — they render
+        # identically, and the first one reads as a fire it is not. Measured from
+        # the OLDEST high/crit, so it is the true exposure window.
+        oldest_high_crit_age_days:
+          (if ($hc | length) == 0 then null
+           else ($hc | map((now - (.created_at | fromdateiso8601)) / 86400 | floor) | max)
+           end),
+        # The packages actually under advisory. Remediation is judged PER PACKAGE
+        # against this list — see the matching note below.
+        vulnerable_packages: ($hc | map(.dependency.package.name) | unique),
+        open_fix_prs: null,
+        unremediated_packages: null
       }' <<<"$alerts")
+
+      # Remediation state, but only where it can matter: a repo with no high/crit
+      # alerts needs no fix PR, so it costs nothing. This keeps the sweep O(1) in
+      # a healthy org and O(repos-with-exposure) in a bad one — never O(all).
+      if [[ "$(jq -r '.high_crit' <<<"$dependabot")" -gt 0 ]]; then
+        fix_prs=$(gh pr list --repo "${ORG}/${repo}" --state open --author 'app/dependabot' \
+          --json number,title,mergeStateStatus,createdAt,headRefName --limit 20 2>/dev/null) || fix_prs='[]'
+        [[ -z "$fix_prs" ]] && fix_prs='[]'
+        dependabot=$(jq -c --argjson prs "$fix_prs" '
+          .vulnerable_packages as $vuln
+          # MATCH PER PACKAGE, NOT PER REPO. "This repo has an open Dependabot PR"
+          # does NOT mean "this alert is being fixed" — brewslate and what2wear
+          # both had a CLEAN actions-group PR open while their drizzle-orm
+          # advisory had no PR at all. Counting any PR as remediation would have
+          # marked the two genuinely-stuck repos as healthy.
+          #
+          # Dependabot encodes the package in the head ref
+          # (dependabot/npm_and_yarn/apps/web/next-16.2.11), which is more
+          # reliable than the title. Scoped names appear unscoped there
+          # (@types/node -> types/node), so drop a leading "@" before matching.
+          | .open_fix_prs = ( $prs
+              | map({
+                  number, title,
+                  # CLEAN == green and mergeable. A CLEAN PR sitting for days is
+                  # the worst state in this report: the fix exists, it works, and
+                  # nobody is merging it. That is a process failure, not a CVE.
+                  state: .mergeStateStatus,
+                  age_days: ((now - (.createdAt | fromdateiso8601)) / 86400 | floor),
+                  addresses: [ $vuln[] as $p
+                               | select(.headRefName | ascii_downcase
+                                        | contains($p | ltrimstr("@") | ascii_downcase))
+                               | $p ]
+                })
+              | map(select(.addresses | length > 0)) )
+          | .unremediated_packages =
+              ( $vuln - ( .open_fix_prs | map(.addresses[]) | unique ) )
+        ' <<<"$dependabot")
+      fi
     fi
   elif grep -q 'are disabled for this repository' <<<"$alerts"; then
-    dependabot='{"enabled":false,"open":null,"high_crit":null}'
+    dependabot='{"enabled":false,"open":null,"high_crit":null,"oldest_high_crit_age_days":null,"open_fix_prs":null}'
   fi
 
   results=$(jq -c \

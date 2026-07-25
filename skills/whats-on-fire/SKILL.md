@@ -71,8 +71,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/whats-on-fire/scripts/pull-repo-signals.sh
   precomputed), and every open issue. Archived repos are flagged in `repos` but excluded from `prs`
   and `issues`; read the script header for why that filtering is load-bearing.
 - `pull-repo-signals.sh` — per-repo workflow failure counts, the **current** default-branch CI
-  conclusion, currently-failing scheduled workflows, and Dependabot state. Slower (1 + 2N calls,
-  ~25s for 15 repos); run it concurrently with the Sentry pulls, not after them.
+  conclusion, currently-failing scheduled workflows, and Dependabot state — including alert AGE and
+  per-package fix-PR state. Slower (1 + 2N calls, plus one more per repo that actually has
+  high/critical alerts, so a healthy org pays nothing extra; ~25s for 15 repos); run it concurrently
+  with the Sentry pulls, not after them.
 
 `default_branch_ci` and `scheduled_failing` are separate fields and must stay separate in the
 report. Push-class red means shipping is blocked (P0); a failing nightly job is an ops problem that
@@ -86,6 +88,12 @@ Assemble from data already pulled, plus two local comparisons:
 
 - Dependabot `enabled == false` → disabled. `enabled == null` → **unknown**, report as a token-scope
   question, never as "disabled".
+- A repo with `unremediated_packages` non-empty **and no `open_fix_prs` at all** → *Dependabot is
+  alerting but not fixing*. This is a structural blind spot, not a backlog item: the usual cause is
+  that the repo's `dependabot.yml` dropped the ecosystem to dodge a lockfile its updater cannot
+  regenerate (Bun, CocoaPods), while **security** updates keep firing regardless — they cannot be
+  opted out of that way. Name the ecosystem and route it; the remedy is a lockfile-sync workflow, not
+  a version bump.
 - Active repos with no matching Sentry project → no error monitoring.
 - Zero metric alert rules org-wide → no alerting. Check once via the alert-rules tool.
 - Roster entries with no directory under `PORTFOLIO_ROOT` → never cloned.
@@ -111,6 +119,22 @@ Apply `references/scoring.md`. The two rules that matter most:
   123 days outranks one idle 3 days.
 - **A red default branch is P0 on its own**, independent of historical failure rate. Rate answers
   "is CI trustworthy"; the current conclusion answers "is it broken right now".
+- **Dependabot exposure is ranked by REMEDIATION STATE, never by alert count.** The count is a
+  lagging indicator — it falls only when a fix merges, so "we were slow" and "the world just
+  changed" produce the identical number. Rank from `dependabot.oldest_high_crit_age_days`,
+  `open_fix_prs[].state`, and `unremediated_packages`:
+
+  | Condition | Tier | Why |
+  |---|---|---|
+  | `open_fix_prs[]` has a `CLEAN` PR with `age_days >= 3` | **P0** | The fix exists, it is green, and nobody is merging it. A pure process failure — the cheapest P0 you will ever close. |
+  | `unremediated_packages` non-empty and `oldest_high_crit_age_days >= 14` | **P0** | No PR was ever opened and the exposure is real. Broken plumbing, not a busy week. |
+  | `open_fix_prs[]` PR is `BLOCKED`/`DIRTY`/`UNSTABLE` | **P1** | Dependabot did its job; the repo's CI rejects the fix. Name the failing check — this is usually a lockfile the bot cannot regenerate. |
+  | `unremediated_packages` non-empty, `oldest_high_crit_age_days < 14` | **P1** | Genuinely unfixed, but young enough that it may simply be unpatched upstream. Check whether a patched version exists before escalating. |
+  | `oldest_high_crit_age_days <= 2` **and** every vulnerable package appears in some `open_fix_prs[].addresses` | **not a fire** | A fresh advisory batch with fixes already queued is the system WORKING. One line under `✓ Clean today:`. |
+
+  Judge remediation **per package**, never per repo — `open_fix_prs` is already filtered to PRs whose
+  head ref names a vulnerable package, precisely so an unrelated actions-group PR cannot be mistaken
+  for a fix. Report `unremediated_packages` by name; "3 high/critical" tells nobody what to do.
 
 Normalize priority labels across the repos' differing taxonomies using the map in the reference —
 but never re-derive a priority a maintainer already assigned.
