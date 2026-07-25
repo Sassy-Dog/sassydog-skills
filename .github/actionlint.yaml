@@ -1,0 +1,13 @@
+# actionlint cannot know an org's self-hosted runner labels, so it flags every
+# custom one as unknown. Declaring them here keeps the `runner-label` check
+# useful — a genuine typo like `sassy-dgo` still fails — instead of forcing the
+# whole check to be disabled.
+#
+# `self-hosted`, `linux`, `macos`, `x64` and `arm64` are built in; only the
+# org-specific labels need listing. The product-scoped ones are legacy: the
+# Linux runners still carry them, but new workflows should use `sassy-dog`.
+self-hosted-runner:
+  labels:
+    - sassy-dog
+    - velovate
+    - qr-ninja
