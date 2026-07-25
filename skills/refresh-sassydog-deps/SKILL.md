@@ -71,9 +71,14 @@ apply. Rendering only ever DELETES lines, so every template is valid YAML as-is 
 valid by construction — the same guarantee `refresh-sassydog-hooks` relies on. Never hand-edit a
 rendered file to fix a bug; fix the template and re-render.
 
-Facts: `{{RUNNER}}` (default `ubuntu-latest`; the pod template **must** get a macOS runner),
-`{{PUBSPEC_PATH}}`, `{{IOS_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the release
-workflow).
+Facts: `{{RUNNER}}`, `{{PUBSPEC_PATH}}`, `{{IOS_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep
+with the release workflow).
+
+`{{RUNNER}}` defaults to the Sassy Dog self-hosted fleet — `[self-hosted, linux, sassy-dog]`, or
+`[self-hosted, macOS, sassy-dog]` for the pod template, which **must** have macOS to run
+`pod install`. Both org runner groups are `visibility=all`, so every repo can reach the fleet.
+Prefer those label forms over the legacy product-scoped ones (`velovate`, `qr-ninja`): the runners
+still carry those labels, but scoping by product is a leftover, not a constraint.
 
 **The lockfile trap — the single most important thing this skill exists for.** Dependabot updates a
 manifest but writes only the lockfile formats it supports. It cannot write `bun.lock`, and it has no

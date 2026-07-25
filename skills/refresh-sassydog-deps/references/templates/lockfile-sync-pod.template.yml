@@ -1,7 +1,8 @@
 # TEMPLATE: lockfile-sync-pod · version 1
 # Rendered by ai-agent-skills:refresh-sassydog-deps for repos where
 # detect-ecosystems.sh reports cocoapods with lockfile_risk (a tracked Podfile).
-#   {{RUNNER}}           → runs-on value; MUST be a macOS runner (pod install)
+#   {{RUNNER}}           → runs-on; MUST be macOS (pod install). Default:
+#                          [self-hosted, macOS, sassy-dog]
 #   {{PUBSPEC_PATH}}     → path to the Flutter pubspec.yaml that triggers this
 #   {{IOS_DIR}}          → directory holding the Podfile
 #   {{FLUTTER_VERSION}}  → keep in lockstep with the release workflow
