@@ -41,5 +41,23 @@ jobs:
       - name: Preflight gates (shellcheck, frontmatter, guards, manifests, markdownlint)
         run: bash scripts/preflight.sh
 
+      # Native binary rather than the dockerized action. `docker` IS installed on
+      # the self-hosted image, but its daemon cannot bind-mount the workspace —
+      # `docker run -v "$PWD:/repo"` fails with
+      #   mkdir /opt/actions-runner: permission denied
+      # because the daemon is rootless and the runner is non-root. Presence of
+      # docker does not imply usable volume mounts on this fleet; prefer a
+      # released binary unpacked into $HOME, same as the shellcheck step above.
+      - name: Install actionlint (docker bind-mounts unavailable on the fleet)
+        env:
+          ACTIONLINT_VERSION: 1.7.7
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz actionlint
+          mkdir -p "$HOME/.local/bin"
+          mv actionlint "$HOME/.local/bin/actionlint"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: actionlint
-        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
+        run: actionlint -color
