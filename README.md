@@ -11,6 +11,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
 | `ai-agent-skills` | `refresh-sassydog-skills` | Generator/refresher: creates, updates, and re-syncs a repo's project-specific `plate-it` / `fill-it` / `take-it` / `drain-it` / `send-it` / `clean-it` workflow skills (plugin-backed or independent/vendored) |
 | `ai-agent-skills` | `refresh-sassydog-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
+| `ai-agent-skills` | `refresh-sassydog-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
 | `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
