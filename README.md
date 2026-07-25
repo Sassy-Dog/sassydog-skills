@@ -18,6 +18,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `repo-cleanup` | Post-shipping git reconciliation mechanics — `[gone]`/squash-merged branch sweep, stale-worktree teardown, stash triage, untracked-noise sweep (the engine behind a repo's `clean-it`) |
 | `ai-agent-skills` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag |
 | `ai-agent-skills` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `plate-it` |
+| `ai-agent-skills` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
 
 ### Generator + capability skills
 
