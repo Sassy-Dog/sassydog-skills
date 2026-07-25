@@ -1,0 +1,90 @@
+# TEMPLATE: lockfile-sync-bun · version 1
+# Rendered by ai-agent-skills:refresh-sassydog-deps for repos where
+# detect-ecosystems.sh reports npm with lockfile_risk (a tracked bun.lock).
+#   {{RUNNER}}  → runs-on value (default: ubuntu-latest)
+# Delete this header block from the rendered output; keep the generated-by line.
+---
+# generated-by: ai-agent-skills:refresh-sassydog-deps | template: lockfile-sync-bun | template-version: 1
+#
+# Refresh bun.lock on Dependabot npm PRs.
+#
+# THE PROBLEM THIS SOLVES: Dependabot updates package.json but cannot write
+# bun.lock (a Bun-specific format). CI then runs `bun install --frozen-lockfile`
+# and rejects the PR. Without this workflow, every npm PR in a Bun repo is dead
+# on arrival — qr-ninja merged 0 of 20 before deleting the ecosystem outright.
+# Security updates cannot be opted out of that way, so the fix has to be here.
+#
+# Why pull_request_target: Dependabot's GITHUB_TOKEN is read-only by design.
+# Pushing the lockfile commit needs write, which only the BASE repo context
+# grants. That makes the actor gate below load-bearing, not decorative.
+#
+# Why an App token rather than GITHUB_TOKEN for the push: a GITHUB_TOKEN push
+# lands as github-actions[bot], which (a) does not re-trigger CI on the new
+# commit and (b) trips the bot-actor "awaiting approval" gate on any run that
+# does appear. The App push re-fires CI normally with no approval step.
+#
+# Security posture — do not weaken any of these:
+#   1. Hard-gated to dependabot[bot], so contributor PR code never reaches a
+#      write-capable context.
+#   2. `--ignore-scripts` blocks lifecycle scripts (preinstall/postinstall/
+#      prepare) during install. Lockfile content does not depend on their
+#      output, so the result is functionally identical to a normal install.
+#   3. permissions: contents: write only — the push is the sole privileged op.
+#   4. PR head ref/repo funnelled through env:, never inlined into a run:
+#      shell. Inlining is the classic Actions script-injection vector.
+
+name: Dependabot bun.lock sync
+
+on:
+  pull_request_target:
+    paths:
+      - '**/package.json'
+
+permissions:
+  contents: write
+
+jobs:
+  update-bun-lock:
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: {{RUNNER}}
+    env:
+      PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+    steps:
+      - name: Mint GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PLATFORM_WRITER_APP_ID }}
+          private-key: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ env.PR_HEAD_REF }}
+          repository: ${{ env.PR_HEAD_REPO }}
+          token: ${{ steps.app_token.outputs.token }}
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      # Force a FULL regeneration by deleting the lockfile first. A loose
+      # `bun install` considers Dependabot's npm-style lockfile edit valid and
+      # writes nothing — while strict `--frozen-lockfile` in CI still rejects
+      # it. Deleting guarantees Bun rewrites it in strict-valid form, which is
+      # what main needs after the merge.
+      - name: Regenerate bun.lock from package.json
+        run: |
+          rm -f bun.lock
+          bun install --ignore-scripts
+
+      - name: Commit and push bun.lock if changed
+        run: |
+          if git diff --quiet bun.lock; then
+            echo "bun.lock unchanged after regeneration — nothing to commit."
+            exit 0
+          fi
+          git config user.name "dependabot[bot]"
+          git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
+          git add bun.lock
+          git commit -m "chore(deps): regenerate bun.lock for Dependabot npm bump"
+          git push origin "HEAD:${PR_HEAD_REF}"
