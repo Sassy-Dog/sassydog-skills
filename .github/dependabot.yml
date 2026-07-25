@@ -1,0 +1,27 @@
+---
+# generated-by: ai-agent-skills:refresh-sassydog-deps | template: dependabot.yml | template-version: 1
+#
+# Scoped to github-actions deliberately. That ecosystem touches only workflow
+# YAML — no lockfile — so its PRs always apply cleanly. Adding `npm` here would
+# need .github/workflows/dependabot-bun-lockfile.yml alongside it: Dependabot
+# edits package.json but cannot write bun.lock, so CI running
+# `bun install --frozen-lockfile` rejects every PR it opens. Render that pair
+# together via ai-agent-skills:refresh-sassydog-deps, not by adding npm here.
+#
+# Each ecosystem declares TWO groups. A group with no `applies-to` covers
+# version updates ONLY, silently leaving security PRs ungrouped — and that
+# default stays invisible until a flood of one-PR-per-package arrives.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
