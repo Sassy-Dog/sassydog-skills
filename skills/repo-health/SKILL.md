@@ -36,6 +36,26 @@ WORKFLOW=ci.yml bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-ci-he
 
 Emits JSON: `{sample, median_min, p90_min, flake_runs, flake_shas}`. `REPO` defaults to cwd; `LIMIT` defaults to 50 runs. A "flake" is the same (headSha, event) failing then passing — the event key deliberately excludes merge-queue false positives (explained in the script header; don't simplify it away).
 
+### Dependency exposure + remediation
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-dependency-exposure.sh
+```
+
+Emits JSON: `{enabled, open, high_crit, oldest_high_crit_age_days, vulnerable_packages, open_fix_prs, unremediated_packages, parked_green}`. `REPO` defaults to cwd.
+
+**Rank by remediation state, never by alert count.** The count is lagging — it falls only when a fix merges, so a same-day CVE batch with fixes already queued is indistinguishable from a year of neglect:
+
+| Condition | Tier |
+|---|---|
+| `parked_green[]` with `age_days >= 3` | **P0** — green, mergeable, and nobody is merging it. Quote the PR number and the merge command. |
+| `unremediated_packages` non-empty, `oldest_high_crit_age_days >= 14` | **P0** — no PR was ever opened; the plumbing is broken. |
+| `open_fix_prs[].state` is `BLOCKED`/`DIRTY`/`UNSTABLE` | **P1** — the bot did its job, the repo's CI rejects the fix. Usually a lockfile the updater cannot regenerate. |
+| `unremediated_packages` non-empty, age `< 14` | **P1** — check whether a patched version exists upstream before escalating. |
+| age `<= 2` and every vulnerable package is covered by an `open_fix_prs[]` entry | **not a finding** — one line on the clean list. The system is working. |
+
+`open_fix_prs` is already filtered to PRs whose head ref names a vulnerable package, so an unrelated actions-group PR is never mistaken for a fix — judge per package, not per repo. `enabled: null` means "this token cannot see alerts", NOT "disabled"; report it as a scope question.
+
 ### Mobile release lag
 
 ```bash
