@@ -1,6 +1,9 @@
 # TEMPLATE: dependabot-auto-merge · version 1
 # Rendered by ai-agent-skills:refresh-sassydog-deps.
 #   {{FACT}}              → replace with the detected/confirmed value
+#   {{RUNNER}}            → runs-on value. Default [self-hosted, linux, sassy-dog]
+#                           (the org fleet); both runner groups are visibility=all
+#                           so every repo can reach it.
 #   # {{IF:FLAG}} ... # {{ENDIF}}
 #                         → keep the block or delete it entirely; rendering only
 #                           DELETES lines, so the template is valid YAML as-is
@@ -38,7 +41,7 @@ permissions:
 jobs:
   auto-merge:
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
-    runs-on: ubuntu-latest
+    runs-on: {{RUNNER}}
     steps:
       - name: Fetch Dependabot metadata
         id: meta
