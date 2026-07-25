@@ -4,10 +4,15 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Required for the merge queue: without this the queue builds a merge_group
+  # ref, no check ever reports against it, and entries sit until they time out.
+  merge_group:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a merge_group run — cancelling one ejects the entry from
+  # the queue. Only PR-branch runs are safe to supersede.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
