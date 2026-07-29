@@ -1,0 +1,16 @@
+# Checks that must pass before a PR merges to the default branch.
+# Rendered into this repo's branch ruleset by Sassy-Dog/platform.
+# `satisfies` claims org-wide floor categories; every repo must claim
+# lint and test at least once across its checks.
+#
+# This repo has exactly one required context: `ci` (.github/workflows/ci.yml,
+# job `ci`). It carries the whole floor itself:
+#   - lint: shellcheck -S warning, actionlint, and markdownlint all run as
+#     real steps of this job (see scripts/preflight.sh and the dedicated
+#     actionlint step).
+#   - test: scripts/test-versioning.sh runs a real assertion-based suite
+#     against a throwaway fixture repo (floor, month-roll reset, collision
+#     replay, idempotent re-run, dry-run, ratchet enforcement).
+required_checks:
+  - context: "ci"
+    satisfies: [lint, test]
