@@ -1,10 +1,10 @@
-# TEMPLATE: lockfile-sync-bun · version 1
+# TEMPLATE: lockfile-sync-bun · version 2
 # Rendered by ai-agent-skills:refresh-sassydog-deps for repos where
 # detect-ecosystems.sh reports npm with lockfile_risk (a tracked bun.lock).
 #   {{RUNNER}}  → runs-on value (default: [self-hosted, linux, sassy-dog])
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: ai-agent-skills:refresh-sassydog-deps | template: lockfile-sync-bun | template-version: 1
+# generated-by: ai-agent-skills:refresh-sassydog-deps | template: lockfile-sync-bun | template-version: 2
 #
 # Refresh bun.lock on Dependabot npm PRs.
 #
@@ -50,6 +50,7 @@ jobs:
     env:
       PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
       PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
     steps:
       - name: Mint GitHub App token
         id: app_token
@@ -67,15 +68,32 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
-      # Force a FULL regeneration by deleting the lockfile first. A loose
-      # `bun install` considers Dependabot's npm-style lockfile edit valid and
-      # writes nothing — while strict `--frozen-lockfile` in CI still rejects
-      # it. Deleting guarantees Bun rewrites it in strict-valid form, which is
-      # what main needs after the merge.
-      - name: Regenerate bun.lock from package.json
+      # Restore the BASE branch's bun.lock, then loose-install. Discarding the
+      # PR's lockfile edit matters because a loose `bun install` considers
+      # Dependabot's npm-style edit valid and writes nothing — while strict
+      # `--frozen-lockfile` in CI still rejects it. Against the pristine base
+      # lock, the bumped package.json range genuinely no longer resolves, so
+      # Bun re-resolves ONLY that subtree and writes it back strict-valid.
+      #
+      # v1 deleted bun.lock and regenerated from scratch. That floated every
+      # semver range in the workspace: a one-package mobile bump carried a
+      # 2,486-line lock diff (qr-ninja#748 — @base-ui/react 1.2→1.6 among
+      # ~40 unrelated floats), one of which broke web's type check on every
+      # npm PR. Wholesale regeneration also destroys per-package attribution
+      # and smuggles an unreviewed all-deps upgrade into an auto-mergeable
+      # bump PR — minimal churn is a supply-chain property, not cosmetics.
+      - name: Update bun.lock for the bumped packages only
         run: |
-          rm -f bun.lock
+          git fetch --no-tags --depth=1 origin "$PR_BASE_REF"
+          git checkout FETCH_HEAD -- bun.lock
           bun install --ignore-scripts
+
+      # Fail-closed assertion (never trust a green that checked nothing): the
+      # rewritten lock must satisfy the same strict install CI runs. If the
+      # minimal update could not produce a frozen-valid lock, fail HERE with
+      # the real error rather than shipping a commit that reddens CI.
+      - name: Assert the lock is frozen-valid
+        run: bun install --ignore-scripts --frozen-lockfile
 
       - name: Commit and push bun.lock if changed
         run: |
