@@ -28,6 +28,8 @@ Gate-and-escalate triage: pull not-resolved Sentry issues for a project, apply a
 
 Query `!is:resolved` — one call covers unresolved + ignored (status is exclusive; boolean `OR` returns HTTP 400 — full syntax notes in `references/query-syntax.md`). Pull per issue: `shortId, title, count, userCount, lastSeen, firstSeen, level, culprit, permalink, status`.
 
+**Then resolve environments before gating** (gate rule 6). Issue search does not return an environment breakdown, and an issue can span several, so ask the events dataset once per project rather than per issue: an aggregate over the `errors` dataset with fields `["environment", "count()"]` grouped by environment, scoped to the same window. An issue whose events are *entirely* in a non-production environment is `skip-nonprod`. Skipping this step is not a smaller version of the gate — it is the version that ranks CI noise as a customer-facing outage, because a CI environment manufactures `userCount` (see the rule 6 rationale).
+
 ### 2. Gate
 
 Read `references/qualifying-gate.md`; apply each rule and tag non-qualifiers (`skip-noise` / `skip-stale` / `skip-parked` / `already-linked`) so the report shows *why* something didn't escalate, not just that it didn't.
