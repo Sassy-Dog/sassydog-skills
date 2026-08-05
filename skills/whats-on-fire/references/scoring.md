@@ -86,7 +86,7 @@ absence of information, not a judgment of low priority.
 | No alerting | `find_alert_rules` returns zero metric rules org-wide |
 | Archived but still checked out | `repos[].archived == true` with a local clone present |
 | In the org, never cloned | roster entry with no local directory |
-| No `plate-it` | active repo without `.claude/skills/plate-it/` |
+| No `plate-it` config | active repo without `.claude/sassy-dog/plate-it.md` (the skill ships in the plugin, so only the config signals a tuned deep-dive) |
 
 The reason this section exists: a repo with no Sentry project reports zero errors, and a per-repo
 plate-it will faithfully print `✓ Clean today: Sentry`. That is technically true and completely

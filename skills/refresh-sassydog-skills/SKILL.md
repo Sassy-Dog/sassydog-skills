@@ -24,7 +24,20 @@ Generator for the project dev-workflow family:
 - **send-it** — single-PR end-to-end flow with repo-specific gates
 - **clean-it** — post-shipping git reconciliation: sync+prune, stale branch/worktree teardown, stash triage, untracked-noise sweep
 
-The plugin deliberately ships **no generic runtime versions** of these — only project-level skills generated here, so "plate it" (or "clean it") in a repo always resolves to that repo's own skill. Generated skills are thin: project facts + policy gates, delegating shared mechanics to the capability skills (`ai-agent-skills:github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
+> **⚠️ This skill is mid-migration — do not run it against a migrated repo.**
+>
+> The plugin now ships **generic** `plate-it` / `groom-it` / `take-it` / `drain-it` / `send-it` /
+> `clean-it` skills, which read per-repo behavior from `.claude/sassy-dog/<skill>.md`. The contract
+> is `references/config-contract.md`. This refresher has **not** been converted yet: it still
+> renders the legacy per-repo skill bodies below, which would re-create the duplicate
+> `.claude/skills/<name>/` directories the migration removes — and two skills claiming the same
+> trigger phrases resolve non-deterministically.
+>
+> Until the conversion lands, use it only on repos that have not migrated. This repo's own
+> `.claude/sassy-dog/` config was written by hand and is the reference target the converted
+> refresher must reproduce.
+
+Generated skills are thin: project facts + policy gates, delegating shared mechanics to the capability skills (`ai-agent-skills:github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
 
 **Core vs opt-in:** `plate-it`, `send-it`, and `clean-it` are **core** — always generated, and update mode adds them if missing. `take-it`, `fill-it`, and `drain-it` are **opt-in** (a trio-minus-take-it is a valid steady state).
 
