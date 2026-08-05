@@ -40,9 +40,14 @@ frontmatter carries the sweep policy — `dep_version_globs`, `noise_allowlist`,
 optional `claim_label` — and its `##` sections carry repo-specific prose. The contract is
 `ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
 
-**If it reads `NO_CONFIG`**, this repo has not been set up yet. Do not abort and do not invent a
-policy. The §1 facts are still available, so run with an **empty** noise allowlist — nothing is
-auto-discarded — and tell the user:
+**If it reads `NO_CONFIG`**, this repo has not been set up yet. The §1 facts are still available,
+so the branch/worktree work is safe to do. But run with an **empty** noise allowlist and an empty
+dep-version-glob list: with no `never_discard` list you cannot know which untracked files are
+precious, so **discard nothing at all** and report what you would have swept.
+
+**Do not infer an allowlist from the repo's `.gitignore` or file extensions.** `.gitignore` lists
+files that are intentionally untracked, which is the opposite of disposable — that is exactly where
+`.env.local` lives. Then tell the user:
 
 > No `.claude/sassy-dog/clean-it.md` in this repo — running in conservative mode with no
 > auto-discard. Run `ai-agent-skills:refresh-sassydog-skills` to set this repo up.

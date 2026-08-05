@@ -209,8 +209,35 @@ a git repo regardless. The command is safe outside a repo — it yields `NO_CONF
 
 **`NO_CONFIG` is a first-class state, not an error.** A skill that finds no config must derive what
 it safely can, run in its most conservative mode, and tell the user to run
-`ai-agent-skills:refresh-sassydog-skills`. It must never abort, and never guess a value that would
-cause a write.
+`ai-agent-skills:refresh-sassydog-skills`.
+
+### The no-invention rule
+
+**"Derivable" means derivable from git or `gh` in this repo. It does NOT mean "reachable by some
+other means."** This distinction is the whole safety property, and it is easy to lose.
+
+Observed 2026-08-05: the generic `plate-it` was run in an un-migrated repo, correctly reported
+`NO_CONFIG`, and then invoked the Sentry surface anyway and ran the tech-debt scan with the example
+`SCAN_PATHS` from `repo-health`'s own docs. Sentry projects *are* listable for the org, and a scan
+path *can* be guessed from the directory tree — so both looked derivable. The result was a plate
+built on invented inputs that read exactly like a real one.
+
+Two rules follow, and both are load-bearing:
+
+1. **A surface with no config block is OFF**, however reachable it looks. Render it
+   `skipped — not configured`.
+2. **State the rule at the point of use, not only in the `NO_CONFIG` preamble.** The failure above
+   happened because the instruction lived in §1 and the temptation lived in §3. By the time a skill
+   reaches the pull section it has read a lot of text, and a parenthetical `*(if configured)*` is a
+   weak signal against a concrete, available action. Each conditional surface must carry its own
+   **ONLY if** guard.
+
+The asymmetry that justifies the strictness: **skipping a surface knowingly is recoverable; acting
+on a fabricated one is not**, because the output is indistinguishable from a real result. This is
+sharpest in `send-it`, which pushes and merges on the strength of a pre-flight command — a guessed
+command that exits 0 without running anything looks exactly like a passing check.
+
+Skills that write or dispatch unattended (`take-it`, `drain-it`) do not degrade at all; they stop.
 
 ## Cloud sessions and routines
 

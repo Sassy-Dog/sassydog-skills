@@ -27,10 +27,31 @@ Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority
 **Write posture is decided here.** `write_policy: read-only` (or absent, or `NO_CONFIG`) means this
 skill NEVER files issues or mutates anything. Only `write_policy: gated` unlocks §7.
 
-**If it reads `NO_CONFIG`**, run read-only across whatever surfaces are derivable — GitHub bugs,
-open issues, and a tech-debt scan over the repo root — mark every configured surface `skipped — not
-configured`, and tell the user to run `ai-agent-skills:refresh-sassydog-skills`. A degraded plate is
-useful; a wrong one is not.
+### If it reads `NO_CONFIG`
+
+**Run EXACTLY these two surfaces and nothing else:**
+
+1. GitHub bugs and open issues (§3A "GitHub bugs" + §3B boardless form) — derivable from `gh`
+2. `repo-health` tech-debt scan **with no `SCAN_PATHS`**, letting it default to the whole tracked
+   tree — you do not know this repo's source layout
+
+**Do NOT run**, and render each as `skipped — not configured` on the sources line: Sentry,
+TestFlight, PostHog, mobile release lag, board snapshot, secret bootstrap, CI health.
+
+> **The trap this closes.** "Derivable" means *derivable from git or `gh` in this repo*. It does
+> NOT mean "I can discover it another way." Sentry projects for the org are listable, and a
+> `SCAN_PATHS` value can be guessed from the directory tree — doing either produces a plate built
+> on invented inputs that reads exactly like a real one. A surface with no config block is OFF, no
+> matter how reachable it looks.
+
+Then tell the user:
+
+> No `.claude/sassy-dog/plate-it.md` in this repo — ran GitHub issues + a whole-tree debt scan
+> only. If this repo has a project-level `plate-it` under `.claude/skills/`, use that instead; it
+> has the real config. Otherwise run `ai-agent-skills:refresh-sassydog-skills` to set this repo up.
+
+A degraded plate is useful. A plate built from guessed inputs is worse than none, because it looks
+authoritative.
 
 ## 2. Prerequisites
 
@@ -59,7 +80,7 @@ Issue the independent pulls in a single message with multiple tool calls.
 
 ### A. Customer pain
 
-**Sentry** *(if `sentry:` is configured)* — invoke `ai-agent-skills:sentry-triage` with the
+**Sentry** — **ONLY if the config has a `sentry:` block.** No block → `skipped — not configured`; do not list org projects to discover one. Invoke `ai-agent-skills:sentry-triage` with the
 configured org and projects. Gate policy: the configured `sentry.gate` when `write_policy: gated`,
 otherwise report-only with no escalation. It handles query syntax, the qualifying gate, and GitHub
 cross-referencing.
@@ -73,11 +94,11 @@ gh issue list --state open --label bug \
 
 Demand proxy = reactions + comments.
 
-**TestFlight** *(if `testflight:` is configured)* — invoke `ai-agent-skills:testflight` with the
+**TestFlight** — **ONLY if the config has a `testflight:` block.** No block → `skipped — not configured`. Invoke `ai-agent-skills:testflight` with the
 configured bundle id, command `feedback`. Parse screenshot submissions (tester comments) and crash
 submissions (stack signatures). Tag items `[TestFlight]`.
 
-**PostHog** *(if `posthog: true`, best-effort)* — if a read key is provisioned, pull survey
+**PostHog** — **ONLY if the config sets `posthog: true`** (best-effort even then). No key → `skipped`. If a read key is provisioned, pull survey
 responses and high-frequency `$exception` events; otherwise render `skipped — PostHog (no read
 key)` and move on.
 
@@ -98,8 +119,10 @@ plus `ai-agent-skills:github-issues` stale-issue detection.
 
 Invoke `ai-agent-skills:repo-health`:
 
-- tech-debt scan with the configured `scan_paths` and `exclude_pathspecs`
-- CI health with the configured `ci_workflow`
+- tech-debt scan with the configured `scan_paths` and `exclude_pathspecs`. **Never invent these** —
+  with no config, omit `SCAN_PATHS` entirely so the script defaults to the whole tracked tree. A
+  guessed path silently scans the wrong subtree and reports a clean repo.
+- CI health with the configured `ci_workflow`. No config → skip; do not guess a workflow filename.
 - dependency exposure + remediation (no environment needed; defaults to cwd)
 - mobile release lag with the configured `mobile.release_workflow` and `mobile.path_prefix`, **if
   `mobile:` is configured**

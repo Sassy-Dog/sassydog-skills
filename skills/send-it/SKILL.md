@@ -28,11 +28,22 @@ gh repo view --json nameWithOwner,defaultBranchRef \
   --jq '"repo=\(.nameWithOwner) branch=\(.defaultBranchRef.name)"'
 ```
 
-**If it reads `NO_CONFIG`**: still run §2 (the worktree audit is universal), skip the optional
-gates, and infer pre-flight from what the repo obviously has — a `Makefile` target, a `scripts/`
-entry, or the CI workflow's own commands. Say which you inferred, and tell the user to run
-`ai-agent-skills:refresh-sassydog-skills`. Never skip §2 and never merge on a red CI regardless of
-config state.
+### If it reads `NO_CONFIG`
+
+Run §2 — the worktree audit is universal and never skipped. Then **stop before pushing** and say so:
+
+> No `.claude/sassy-dog/send-it.md` in this repo. I can audit the worktree and draft the commit,
+> but I don't know this repo's pre-flight commands or PR template. If this repo has a project-level
+> `send-it` under `.claude/skills/`, use that instead. Otherwise: tell me the pre-flight command, or
+> run `ai-agent-skills:refresh-sassydog-skills`.
+
+**Do NOT infer pre-flight commands from a `Makefile` target, a `scripts/` entry, or the CI
+workflow.** A guessed command that exits 0 without running anything is indistinguishable from a
+passing check, and this skill *pushes and merges* on the strength of it. Skipping the gates
+knowingly is recoverable; believing a gate passed when it never ran is not.
+
+The optional §3 gates are simply off — no `migrations:` block means no migration check, and that is
+correct, not degraded.
 
 ## 2. Worktree audit
 
@@ -87,7 +98,10 @@ output with the change.
 ## 4. Pre-flight CI guardrails
 
 Mirror CI locally, scoped to changed paths — seconds locally beats a CI round-trip. Run
-`preflight_commands` from config.
+`preflight_commands` **exactly as written in config**.
+
+**Never substitute a command you inferred.** With no configured value there is no pre-flight; stop
+and ask rather than running something that looks equivalent.
 
 Any check fails → fix before commit. Never push and rely on CI to surface it.
 
