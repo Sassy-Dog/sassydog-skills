@@ -4,15 +4,17 @@ pr_template_sections: [Summary, Changes, Verification]
 preflight_commands: |
   bash scripts/preflight.sh
 coauthor: Claude Opus 5 (1M context) <noreply@anthropic.com>
-merge_queue: false
+merge_queue: true
 ---
 
 ## extra-gates
 
-**Merge policy note** — direct squash merge (`gh pr merge --squash --delete-branch`). There is no
-merge queue and auto-merge is disabled; never use `--auto`, which would silently never merge. The
-repo setting `deleteBranchOnMerge` is off, so `--delete-branch` is what cleans up. PRs run the `CI`
-workflow (job `ci`), required by branch protection on `main`.
+**Merge policy note** — `main` has a **merge queue** (squash method). Enqueue with
+`gh pr merge --auto`, with **no** method flag and **no** `--delete-branch` — GitHub rejects
+`--delete-branch` outright when a queue is enabled, and `deleteBranchOnMerge` is on, so cleanup is
+automatic. Confirm `isInMergeQueue` after enqueuing. PRs run the `CI` workflow (job `ci`), required
+by branch protection on `main`; `ci.yml` carries the `merge_group` trigger, without which queue
+entries strand.
 
 **PR body** — no `.github/PULL_REQUEST_TEMPLATE.md` exists; use the three sections above:
 

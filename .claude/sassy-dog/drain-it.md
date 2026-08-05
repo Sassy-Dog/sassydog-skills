@@ -1,6 +1,6 @@
 ---
 max_in_flight: 3
-merge_queue: false
+merge_queue: true
 claim_label: in-progress
 ---
 

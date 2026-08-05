@@ -6,7 +6,7 @@ stack_summary: >
 preflight_commands: |
   bash scripts/preflight.sh
 pr_template_sections: [Summary, Changes, Verification]
-merge_queue: false
+merge_queue: true
 claim_label: in-progress
 ---
 

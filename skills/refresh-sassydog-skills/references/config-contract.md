@@ -29,6 +29,17 @@ that can drift; a derived value cannot.
 This is why no `repo:` or `default_branch:` key appears in the schemas below, even though the old
 templates rendered `{{REPO_SLUG}}` and `{{DEFAULT_BRANCH}}` into every generated skill.
 
+**This is not theoretical.** Migrating this repo surfaced two facts that had drifted in its
+generated skills: they asserted `delete_branch_on_merge: false` and "there is no merge queue", while
+the repo had since enabled both. The derivable one self-corrected the moment it became derived. The
+other — `merge_queue`, which has no `gh repo view` equivalent — carried the staleness across, and
+only a rejected `gh pr merge --delete-branch` exposed it.
+
+So: the principle removes drift exactly where a fact is derivable, and nowhere else. **A refresh
+must re-verify every configured fact against live state**, not copy it forward from the previous
+render. `merge_queue` in particular should be checked via the `mergeQueue(branch:)` GraphQL field
+rather than asked about or inherited.
+
 ## Governing principle: presence is the toggle
 
 The old templates carried paired state — an `IF:SENTRY` flag *and* `{{SENTRY_ORG}}`/`{{SENTRY_PROJECTS}}`
