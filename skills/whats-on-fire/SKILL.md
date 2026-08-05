@@ -98,7 +98,9 @@ Assemble from data already pulled, plus two local comparisons:
 - Zero metric alert rules org-wide → no alerting. Check once via the alert-rules tool.
 - Roster entries with no directory under `PORTFOLIO_ROOT` → never cloned.
 - Local directories whose repo is `archived` → archived but still checked out.
-- Active repos with no `.claude/skills/plate-it/` → no deep-dive skill to route to.
+- Active repos with no `.claude/sassy-dog/plate-it.md` → no tuned deep-dive to route to. `plate-it`
+  itself is a plugin skill present everywhere, so directory existence proves nothing; the **config**
+  is what makes it repo-aware. An unconfigured repo still runs `plate-it`, just degraded.
 
 ## 3. Roster and rollup
 

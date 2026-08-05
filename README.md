@@ -6,10 +6,16 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
+| `ai-agent-skills` | `plate-it` | Prioritized work plate — customer pain, backlog, tech debt, dev experience, synthesized next bets |
+| `ai-agent-skills` | `groom-it` | Backlog grooming — refine issues until dispatchable, then promote to Ready (formerly `fill-it`) |
+| `ai-agent-skills` | `take-it` | Parallel issue-shipping — "take #341, #432", one worktree sub-agent per issue |
+| `ai-agent-skills` | `drain-it` | Loop-driven Ready dispatcher — one idempotent tick per invocation, under `/loop` |
+| `ai-agent-skills` | `send-it` | Single-PR end-to-end — worktree audit, freshness gates, pre-flight, PR body, watch, merge |
+| `ai-agent-skills` | `clean-it` | Post-shipping git reconciliation — stale branches, worktrees, stashes, untracked noise |
 | `ai-agent-skills` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
 | `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
-| `ai-agent-skills` | `refresh-sassydog-skills` | Generator/refresher: creates, updates, and re-syncs a repo's project-specific `plate-it` / `fill-it` / `take-it` / `drain-it` / `send-it` / `clean-it` workflow skills (plugin-backed or independent/vendored) |
+| `ai-agent-skills` | `refresh-sassydog-skills` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
 | `ai-agent-skills` | `refresh-sassydog-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
 | `ai-agent-skills` | `refresh-sassydog-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
 | `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
@@ -20,17 +26,26 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `plate-it` |
 | `ai-agent-skills` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
 
-### Generator + capability skills
+### Workflow skills + capability skills
 
-`refresh-sassydog-skills` generates and refreshes **project-level** `plate-it` (prioritized work plate), `fill-it` (backlog grooming to Ready), `drain-it` (loop-driven Ready dispatcher — board column or `ready` label), `take-it`
-(parallel issue-shipping: "take #341, #432"), `send-it` (single-PR end-to-end), and `clean-it`
-(post-shipping git reconciliation) skills into a product repo's `.claude/skills/`. The plugin
-deliberately ships no generic runtime versions of these — only project skills exist at runtime, so
-trigger phrases always resolve to the repo's own skill. Generated skills stay thin by delegating
-shared mechanics to the capability skills (`github-issues`, `sentry-triage`, `pr-shepherd`,
-`repo-cleanup`, `repo-health`, `testflight`). `plate-it` / `send-it` / `clean-it` are core (always
-generated); `take-it` / `fill-it` / `drain-it` are opt-in. (`clean-it`'s engine is `repo-cleanup`,
-named distinctly so the "clean it" phrase resolves to the project skill, not the capability.)
+The six workflow skills — `plate-it` (prioritized work plate), `groom-it` (backlog grooming to
+Ready), `take-it` (parallel issue-shipping: "take #341, #432"), `drain-it` (loop-driven Ready
+dispatcher), `send-it` (single-PR end-to-end), and `clean-it` (post-shipping git reconciliation) —
+each have **one** generic implementation, shipped in the plugin. There is no per-repo copy.
+
+Per-repo behavior lives in that repo's `.claude/sassy-dog/<skill>.md`: YAML frontmatter for facts
+and toggles, `##` sections for freeform prose that survives refreshes. Each skill inlines its config
+at load time, and treats a missing config as a first-class `NO_CONFIG` state — degrading to a
+conservative mode rather than erroring. `take-it` and `drain-it` are the two exceptions that stop
+instead, because both act unattended and outward-facing.
+
+Facts that can be derived are never configured: repo slug, default branch, and
+`delete_branch_on_merge` all come from `gh repo view` at runtime, so they cannot drift.
+
+Workflow skills stay thin by delegating shared mechanics to the capability skills
+(`github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
+`repo-cleanup` remains distinct from `clean-it`: the former is the mechanics engine, the latter the
+user-facing flow.
 
 `refresh-sassydog-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,
 prettier, markdownlint, shellcheck, dart, rustfmt, gofmt, dotnet format — keyed on repo config, not

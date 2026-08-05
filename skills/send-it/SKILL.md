@@ -1,0 +1,145 @@
+---
+name: send-it
+description: >
+  Ship a PR end-to-end — worktree audit, freshness gates, pre-flight CI guardrails,
+  template-compliant PR body, commit, push, watch checks, merge, clean up. Use when the user says
+  "send it", "ship it", "open the PR", "create a PR", or asks to merge a branch. Reads the current
+  repo's settings from `.claude/sassy-dog/send-it.md`; run `refresh-sassydog-skills` if that file
+  is missing.
+---
+
+# Send-It
+
+End-to-end PR flow, in order: worktree audit → freshness gates → pre-flight guardrails → PR body →
+commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
+
+## 1. Repo config
+
+!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/send-it.md" 2>/dev/null || echo "NO_CONFIG"`
+
+Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`, `coauthor`,
+`merge_queue`, and the optional `migrations`, `codegen`, and `review_agent` blocks. Contract:
+`ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
+
+Repo slug and default branch are **derived, never configured**:
+
+```bash
+gh repo view --json nameWithOwner,defaultBranchRef \
+  --jq '"repo=\(.nameWithOwner) branch=\(.defaultBranchRef.name)"'
+```
+
+**If it reads `NO_CONFIG`**: still run §2 (the worktree audit is universal), skip the optional
+gates, and infer pre-flight from what the repo obviously has — a `Makefile` target, a `scripts/`
+entry, or the CI workflow's own commands. Say which you inferred, and tell the user to run
+`ai-agent-skills:refresh-sassydog-skills`. Never skip §2 and never merge on a red CI regardless of
+config state.
+
+## 2. Worktree audit
+
+**Non-negotiable, even on a "trivial" one-file PR.** Run first:
+
+```bash
+git status --short
+git stash list
+```
+
+For **every** entry — modified, added, deleted, untracked, including pre-existing dirt — pick
+exactly one action and announce it before proceeding:
+
+| Action | When | How |
+| --- | --- | --- |
+| **Ship with this PR** | Part of the same logical change | `git add <file>` — explicit paths, never `git add -A` |
+| **Ship as a separate PR** | Real work, unrelated scope | Branch + commit it FIRST on its own branch, push, open PR; then return |
+| **Stash for later** | Mid-flight WIP | `git stash push -m "<descriptive name>" -- <files>` |
+| **Discard** | Truly unwanted | `git restore <file>` / `rm <file>` — only after confirming |
+
+Untracked files (`??`) are the highest-risk class: invisible to `git diff`, easy to lose. Do not
+proceed until `git status --short` is empty OR every entry has a confirmed disposition. "I'll just
+stage the file I changed" is the failure mode this step exists to prevent.
+
+## 3. Freshness gates
+
+Run each gate **only if** the matching config block is present. Skip silently otherwise.
+
+### If `migrations:` is set
+
+Schema source of truth changed ⇒ a generated migration must ship alongside it. Collect the changed
+set once, against the derived default branch:
+
+```bash
+CHANGED=$( { git diff --name-only "origin/<default_branch>"; git ls-files --others --exclude-standard; } | sort -u )
+```
+
+If anything under `migrations.schema_dir` changed, run `migrations.regen_command`, then
+`git status --short <migrations.dirs>`. A new migration → stage and commit it **with** the schema
+change. Nothing produced → already in lockstep.
+
+**Destructive-SQL guard** — never ship data-losing SQL; write a data-preserving multi-step
+migration instead. Scan changed `.sql` files under `migrations.dirs` for `TRUNCATE`, `DROP TABLE`,
+`DROP COLUMN`, and `ALTER TABLE … DROP`, and stop if any match.
+
+### If `codegen:` is set
+
+Never ship stale generated artifacts. If the source the generator reads changed, run
+`codegen.command` and `git status --short <codegen.output_dirs>`, then commit the regenerated
+output with the change.
+
+## 4. Pre-flight CI guardrails
+
+Mirror CI locally, scoped to changed paths — seconds locally beats a CI round-trip. Run
+`preflight_commands` from config.
+
+Any check fails → fix before commit. Never push and rely on CI to surface it.
+
+### If `review_agent:` is set
+
+Lint, type, and test cannot catch design regressions. Before drafting the PR body, dispatch the
+configured agent against the staged diff versus the default branch, with a one-line scope
+statement. Blocking findings → fix and re-run. Nits → roll in, or note "Known and accepted" in the
+PR body.
+
+Apply any `## extra-gates` section from config here.
+
+## 5. Template-compliant PR body
+
+**MANDATORY CHECKPOINT.** The body must contain every section listed in `pr_template_sections`,
+matching `pr_template_path`. Never pass a one-liner `--body "fix bug"` that bypasses the template.
+
+### Issue references — close-on-merge rules
+
+- Closing an issue requires a literal `Closes #<N>` (or `Fixes`/`Resolves`) **on its own line** —
+  one line per issue. Comma lists don't reliably parse.
+- **A title parenthetical like `fix(web): foo (#240)` is a hyperlink, NOT a close trigger.** This
+  is the classic shipped-but-still-open cause.
+- If `sentry:` is configured and this fixes a Sentry issue, add `Fixes <SENTRY-SHORT-ID>` on its
+  own line — the Sentry↔GitHub integration only parses the literal keyword form.
+- Partial or follow-up work → omit the keyword, leave the issue open.
+
+## 6. Commit, push, watch, merge
+
+Commit with a conventional-commit subject, a brief why, the `Closes #<N>` line, and the configured
+`coauthor` trailer. Push with `git push -u origin "$(git branch --show-current)"`, then
+`gh pr create` with the §5 body.
+
+**Watch + merge is delegated.** Do NOT reimplement polling or merging inline:
+
+```
+Skill: ai-agent-skills:pr-shepherd
+Args: "Shepherd PR #<N> in <repo>: mergeable check first, watch checks, then
+       <merge_queue ? 'enqueue via merge queue (--auto, no method flag, confirm isInMergeQueue)'
+                    : 'squash-merge with --delete-branch'>.
+       After merge, reconcile local <default_branch> and delete the feature branch."
+```
+
+If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell the user to install
+the plugin (`claude plugin install ai-agent-skills`) — do not improvise the merge flow from memory.
+
+## Guardrails
+
+- Never silently scope to "the file we just edited" — §2 in full, every time.
+- Never ship a schema change without its migration; never ship destructive SQL.
+- Never push past a failing pre-flight check; never merge past a red CI.
+- Never force-push the default branch.
+- Draft PRs: stop after `gh pr create` — the author flips to ready.
+
+Apply any `## extra-guardrails` section from config on top of these.
