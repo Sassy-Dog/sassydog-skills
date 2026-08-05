@@ -28,8 +28,11 @@ Frontmatter supplies `gotcha_summary` and the optional `board` block. Contract:
 `ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, run boardless (the `ready`-label flow below) and skip the repo-gotchas
-step in §4. Grooming is safe to run un-configured — its writes are issue-body edits and label
-changes, both reversible — so proceed and mention that gotchas weren't available.
+step in §4 — **do not invent gotchas** by reading the repo's CLAUDE.md or CI config; a wrong gotcha
+in an issue body misleads a cold sub-agent that has no way to check it. Say the step was skipped.
+
+Grooming is otherwise safe to run un-configured: its writes are issue-body edits and label changes,
+both reversible. Do not assume a board exists — a board with no config block is OFF.
 
 ## 2. Collect candidates
 
