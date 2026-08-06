@@ -270,6 +270,32 @@ git push origin --delete <branch1> <branch2> ...
 git fetch --prune
 ```
 
+### Base-branch guard — subtract before deleting
+
+**A branch that is the base of an OPEN PR must never be deleted, however merged it looks.** GitHub
+closes a pull request outright when its base branch is deleted, so this turns a tidy-up into
+destroying someone's open PR — and the "merged PR" signal above does not protect against it, because
+the branch really did merge; something else is still pointing at it.
+
+Stacked PRs make this routine rather than exotic: layer 1 merges, and until GitHub finishes
+retargeting layer 2, layer 1's branch is still layer 2's base. But the guard is not stack-specific —
+any hand-based PR (`gh pr create --base some-feature-branch`) has the same exposure.
+
+Subtract the live bases from the candidate set:
+
+```bash
+gh pr list --repo "$REPO" --state open --limit 200 --json baseRefName \
+  --jq '.[].baseRefName' | sort -u > /tmp/open-bases.txt
+comm -12 /tmp/remote-branches.txt /tmp/merged-heads.txt \
+  | comm -23 - /tmp/open-bases.txt          # candidates MINUS anything still a base
+
+comm -12 /tmp/remote-branches.txt /tmp/merged-heads.txt \
+  | comm -12 - /tmp/open-bases.txt          # what the guard held back — report these
+```
+
+Report anything the guard held back rather than dropping it silently — a merged branch that is still
+a base means a stack is mid-landing, and that is worth seeing.
+
 ## 8. Clear orphan claim labels (only if a claim label was supplied)
 
 A take-it-style claim label (e.g. `status:in-progress`) can be left behind when a coordinator crashes
@@ -310,6 +336,7 @@ Anything else is either in-flight (intentional) or got missed — re-run from st
 ## Guardrails
 
 - **Never delete a branch with an OPEN PR.** Check `gh pr list --repo "$REPO" --state all --search "head:<branch>"` when in doubt.
+- **Never delete a branch that is the BASE of an open PR** — distinct from the rule above, and not covered by it. Deleting a base branch makes GitHub close the PR pointing at it, and a merged branch can still be a live base (a stack mid-landing, or any hand-based PR). Subtract the open-PR `baseRefName` set before deleting, and report what the guard held back.
 - **Never delete a `worktree-agent-*` isolation branch whose worktree is still present** — that's a live agent checkout, not debris. Only isolation branches whose worktree is gone are sweep candidates, and unclassifiable ones (not an ancestor, no merged PR) are surfaced, not deleted.
 - **Never `git worktree remove --force` a worktree at a SHA that isn't in the default branch** without confirming — potentially in-flight work.
 - **Never auto-drop a stash referencing an OPEN issue.** Auto-drop is for confidently-shipped or confidently-abandoned work only.

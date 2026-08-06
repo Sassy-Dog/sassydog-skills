@@ -18,8 +18,8 @@ commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/send-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
-`merge_queue`, and the optional `migrations`, `codegen`, and `review_agent` blocks. Contract:
-`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
+`merge_queue`, and the optional `migrations`, `codegen`, `review_agent`, and `stacked_prs` blocks.
+Contract: `ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
 Repo slug and default branch are **derived, never configured**:
 
@@ -81,7 +81,8 @@ exactly one action and announce it before proceeding:
 | Action | When | How |
 | --- | --- | --- |
 | **Ship with this PR** | Part of the same logical change | `git add <file>` — explicit paths, never `git add -A` |
-| **Ship as a separate PR** | Real work, unrelated scope | Branch + commit it FIRST on its own branch, push, open PR; then return |
+| **Ship as a separate PR** | Real work, unrelated scope that does NOT depend on this branch | Branch + commit it FIRST on its own branch, push, open PR; then return |
+| **Ship as a stack layer** | Real work, separate scope, but it *builds on* this branch | Only if `stacked_prs:` is configured — see §6a. Otherwise treat it as "ship with this PR" or stash; do NOT branch it from the default branch, because it would not compile without this branch's changes |
 | **Stash for later** | Mid-flight WIP | `git stash push -m "<descriptive name>" -- <files>` |
 | **Discard** | Truly unwanted | `git restore <file>` / `rm <file>` — only after confirming |
 
@@ -166,6 +167,41 @@ configure-only-what-cannot-be-derived rule applied to the one fact that changes 
 touching the repo. Push with `git push -u origin "$(git branch --show-current)"`, then
 `gh pr create` with the §5 body.
 
+**Derive the base — never assume the default branch.** `gh pr create` silently defaults to the
+repo's default branch, which is wrong for any branch cut from another feature branch and is how a
+PR ends up showing a diff full of someone else's commits:
+
+```bash
+git merge-base --fork-point "$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)" 2>/dev/null
+git log --oneline --graph --decorate -15   # what does this branch actually sit on?
+```
+
+If this branch was cut from the default branch (the normal case), nothing changes. If it was cut
+from another **branch that still has an open PR**, pass that branch explicitly:
+`gh pr create --base <that branch>`. State the base you chose and why — a silently wrong base is
+invisible in the PR body and obvious only in the diff.
+
+### 6a. If this is a stack layer (ONLY if `stacked_prs:` is configured)
+
+**Skip this whole section when the config has no `stacked_prs:` block.** Nothing below applies, and
+a branch cut from another feature branch is still handled by the base derivation above.
+
+When it IS configured and this branch sits on another open PR's branch, link the two into a stack
+after creating this PR — bottom (the existing PR) then top (yours):
+
+```bash
+echo '{"pull_requests":[<lower pr>,<this pr>]}' \
+  | gh api "repos/<slug>/stacks" -X POST --input -
+```
+
+Pass explicit JSON: `pull_requests` must be integers, and `gh api -f` would send strings. If the
+repo is not enabled for the preview the call fails — that is harmless. The PR is already correctly
+based, which is the part that matters; linking only adds GitHub's stack UI and merge ordering.
+
+**Then hand off and stop watching for a merge.** `ai-agent-skills:pr-shepherd` will not merge a
+layer while a lower one is open (exit 23), and refuses a stack under a merge queue outright
+(exit 24). Say which applies rather than leaving the user watching a PR that will not land.
+
 **Watch + merge is delegated.** Do NOT reimplement polling or merging inline:
 
 ```
@@ -185,6 +221,8 @@ the plugin (`claude plugin install ai-agent-skills`) — do not improvise the me
 - Never ship a schema change without its migration; never ship destructive SQL.
 - Never push past a failing pre-flight check; never merge past a red CI.
 - Never force-push the default branch.
+- **Never let `gh pr create` default its base** on a branch cut from another feature branch — derive
+  it and say which base you used.
 - Draft PRs: stop after `gh pr create` — the author flips to ready.
 
 Apply any `## extra-guardrails` section from config on top of these.
