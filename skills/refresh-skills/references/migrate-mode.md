@@ -47,7 +47,6 @@ concrete values rather than placeholders:
 | `priority_labels` | plate-it §4 Backlog scoring line |
 | `preflight_commands` | send-it pre-flight block |
 | `pr_template_path`, `pr_template_sections` | send-it PR-body section |
-| `coauthor` | send-it commit trailer |
 | `migrations.*`, `codegen.*` | send-it freshness gates |
 | `review_agent` | send-it review-orchestrator block |
 | `stack_summary` | take-it sub-agent prompt, first line |
@@ -120,6 +119,17 @@ gh api graphql -f query='{repository(owner:"OWNER",name:"NAME"){mergeQueue(branc
 # Workflows named in ci_workflow / mobile.release_workflow still exist
 gh workflow list --json name,path
 ```
+
+**Do not carry `coauthor` forward — drop it.** Older generated skills pinned a commit trailer
+naming a specific model (`Co-Authored-By: Claude Opus 4.8 (1M context)`). That fact is wrong the
+moment a different model does the work, and it is wrong on *every commit* while looking entirely
+deliberate. The trailer is now derived from the running model; if the config being migrated has a
+`coauthor` key, drop it and say so in the preview.
+
+**Also grep the extracted prose for a pinned model name.** Prose is user-owned and never rewritten,
+so a `Commit trailer: Co-Authored-By: Claude <old model>` line inside a `subagent-rules` block
+survives migration intact and keeps pinning the wrong model. Surface it for the user to edit; do not
+silently rewrite it.
 
 Board option IDs, Sentry project slugs, and label names are equally capable of drifting. Anything
 you cannot verify, surface to the user rather than carrying it forward silently.

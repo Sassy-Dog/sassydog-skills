@@ -8,7 +8,6 @@ pr_template_path: "{{PR_TEMPLATE_PATH}}"
 pr_template_sections: {{PR_TEMPLATE_SECTIONS}}
 preflight_commands: |
   {{PREFLIGHT_COMMANDS}}
-coauthor: {{COAUTHOR_LINE}}
 merge_queue: {{MERGE_QUEUE}}
 
 # optional
