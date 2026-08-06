@@ -32,6 +32,27 @@ loop — running it against an unconfigured repo means guessing a concurrency ca
 migration serialization while nobody is watching. Tell the user to run
 `ai-agent-skills:refresh-skills` first.
 
+### Offer to set this repo up
+
+Then offer to fix it — this is the next step, so ask now:
+
+- **If `.claude/skills/drain-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
+  superseded generated-skills architecture. Say so concretely: *"This repo has a generated
+  `drain-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
+  only after you approve. Want me to?"*
+- **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
+  how this repo works. Want me to?"*
+
+Naming which path applies matters: one of them ends in deleting a file the user may not know is
+there.
+
+On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+refresher owns the contract, and a skill that writes its own forks the format the moment the
+contract moves.
+
+**Offer once per session.** Running deliberately in an unconfigured repo is legitimate; re-prompting
+every invocation is noise. If declined, carry on and don't raise it again.
+
 ## 2. Reconcile in-flight (always first)
 
 Find work this loop already started.

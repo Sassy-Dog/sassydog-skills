@@ -48,7 +48,10 @@ Then tell the user:
 
 > No `.claude/sassy-dog/plate-it.md` in this repo — ran GitHub issues + a whole-tree debt scan
 > only. If this repo has a project-level `plate-it` under `.claude/skills/`, use that instead; it
-> has the real config. Otherwise run `ai-agent-skills:refresh-skills` to set this repo up.
+> has the real config.
+
+Routing to an existing project skill takes precedence over offering to migrate: it gets the user a
+real plate now. Make the setup offer in the final section, after the output.
 
 A degraded plate is useful. A plate built from guessed inputs is worse than none, because it looks
 authoritative.
@@ -226,3 +229,26 @@ from this gate; never file from tech debt, CI, memory, or next-bet surfaces — 
 recommendations. Dry-run with `DRY_RUN=1` after any gate change.
 
 Apply any `## extra-guardrails` section from config on top of these.
+
+## If this repo had no config
+
+### Offer to set this repo up
+
+**Then, after the output above — not before it — offer once:**
+
+- **If `.claude/skills/plate-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
+  superseded generated-skills architecture. Say so concretely: *"This repo has a generated
+  `plate-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
+  only after you approve. Want me to?"*
+- **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
+  how this repo works. Want me to?"*
+
+Naming which path applies matters: one of them ends in deleting a file the user may not know is
+there.
+
+On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+refresher owns the contract, and a skill that writes its own forks the format the moment the
+contract moves.
+
+**Offer once per session.** Running deliberately in an unconfigured repo is legitimate; re-prompting
+every invocation is noise. If declined, carry on and don't raise it again.

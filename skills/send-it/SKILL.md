@@ -37,6 +37,27 @@ Run §2 — the worktree audit is universal and never skipped. Then **stop befor
 > `send-it` under `.claude/skills/`, use that instead. Otherwise: tell me the pre-flight command, or
 > run `ai-agent-skills:refresh-skills`.
 
+### Offer to set this repo up
+
+Then offer to fix it — this is the next step, so ask now:
+
+- **If `.claude/skills/send-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
+  superseded generated-skills architecture. Say so concretely: *"This repo has a generated
+  `send-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
+  only after you approve. Want me to?"*
+- **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
+  how this repo works. Want me to?"*
+
+Naming which path applies matters: one of them ends in deleting a file the user may not know is
+there.
+
+On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+refresher owns the contract, and a skill that writes its own forks the format the moment the
+contract moves.
+
+**Offer once per session.** Running deliberately in an unconfigured repo is legitimate; re-prompting
+every invocation is noise. If declined, carry on and don't raise it again.
+
 **Do NOT infer pre-flight commands from a `Makefile` target, a `scripts/` entry, or the CI
 workflow.** A guessed command that exits 0 without running anything is indistinguishable from a
 passing check, and this skill *pushes and merges* on the strength of it. Skipping the gates
