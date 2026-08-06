@@ -21,7 +21,7 @@ does not re-prioritize.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
 and the optional `board`, `migrations`, `codegen`, and `claim_label` blocks. Contract:
-`ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
+`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
 Repo slug and default branch are derived, never configured:
 
@@ -34,7 +34,7 @@ gh repo view --json nameWithOwner,defaultBranchRef \
 summary or pre-flight commands produces low-quality PRs, so **stop and say so** rather than
 guessing. This is the one workflow skill where `NO_CONFIG` blocks: everything it does is
 outward-facing and hard to unwind. Tell the user to run
-`ai-agent-skills:refresh-sassydog-skills` first.
+`ai-agent-skills:refresh-skills` first.
 
 ## 2. Parse the issue list
 

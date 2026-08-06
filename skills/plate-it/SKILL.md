@@ -21,7 +21,7 @@ Synthesize everything we might tackle into one prioritized plate.
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
 `write_policy`, and the optional `sentry`, `board`, `testflight`, `mobile`, `posthog`, and
-`secret_bootstrap` blocks. Contract: `ai-agent-skills:refresh-sassydog-skills` →
+`secret_bootstrap` blocks. Contract: `ai-agent-skills:refresh-skills` →
 `references/config-contract.md`.
 
 **Write posture is decided here.** `write_policy: read-only` (or absent, or `NO_CONFIG`) means this
@@ -48,7 +48,7 @@ Then tell the user:
 
 > No `.claude/sassy-dog/plate-it.md` in this repo — ran GitHub issues + a whole-tree debt scan
 > only. If this repo has a project-level `plate-it` under `.claude/skills/`, use that instead; it
-> has the real config. Otherwise run `ai-agent-skills:refresh-sassydog-skills` to set this repo up.
+> has the real config. Otherwise run `ai-agent-skills:refresh-skills` to set this repo up.
 
 A degraded plate is useful. A plate built from guessed inputs is worse than none, because it looks
 authoritative.

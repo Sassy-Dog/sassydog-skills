@@ -1,0 +1,178 @@
+# TEMPLATE: dependabot.yml · version 1
+# Rendered by ai-agent-skills:refresh-deps from detect-ecosystems.sh.
+#   {{FACT}}   → detected/confirmed value
+#   # {{IF:ECOSYSTEM}} ... # {{ENDIF}}
+#              → keep the block for each detected ecosystem, delete the rest.
+#                Rendering only DELETES lines, so this file is valid as-is.
+# Delete this header block from the rendered output; keep the generated-by line.
+---
+# generated-by: ai-agent-skills:refresh-deps | template: dependabot.yml | template-version: 1
+#
+# GROUPING IS THE POINT OF THIS FILE. Ungrouped, one vulnerable transitive
+# dependency can open a dozen PRs; across this org that turned 74 alerts into a
+# PR flood nobody merges. Each ecosystem below declares TWO groups —
+# `applies-to: version-updates` and `applies-to: security-updates` — because a
+# group with no `applies-to` covers version updates ONLY, silently leaving
+# security PRs ungrouped. That default is the single easiest thing to get wrong
+# here, and it is invisible until the flood arrives.
+#
+# Semver-major is excluded from the routine groups: majors are API breaks that
+# need a human, and dependabot-auto-merge.yml holds them anyway. A major that
+# is ALSO a security fix still comes through as its own security PR — security
+# updates ignore version-update ignore rules, which is the behaviour we want.
+
+version: 2
+updates:
+# {{IF:GITHUB_ACTIONS}}
+  # Workflow YAML only — no lockfile, so these always apply cleanly. Also feeds
+  # SHA-pinning hygiene, since Dependabot rewrites pinned SHAs with a version
+  # comment rather than reverting them to floating tags.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+      actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:NPM}}
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    ignore:
+      # Majors are held for a human. Security majors still arrive separately —
+      # security updates deliberately bypass version-update ignore rules.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+# {{ENDIF}}
+# {{IF:NUGET}}
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      nuget-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      nuget-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:PUB}}
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      pub-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      pub-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:GOMOD}}
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      go-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:CARGO}}
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      cargo-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:SWIFT}}
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      swift-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      swift-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:GRADLE}}
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      gradle-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      gradle-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:PIP}}
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      pip-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      pip-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}
+# {{IF:DOCKER}}
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      docker-security:
+        applies-to: security-updates
+        patterns: ["*"]
+# {{ENDIF}}

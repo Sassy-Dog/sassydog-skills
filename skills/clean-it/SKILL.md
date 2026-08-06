@@ -6,7 +6,7 @@ description: >
   remove stale worktrees, delete merged-PR branches local + remote. Use when the user says "clean
   it", "clean up", "tidy the repo", "clean branches", or asks to remove stale
   worktrees/branches/stashes. Reads the current repo's settings from
-  `.claude/sassy-dog/clean-it.md`; run `refresh-sassydog-skills` if that file is missing.
+  `.claude/sassy-dog/clean-it.md`; run `refresh-skills` if that file is missing.
 ---
 
 # Clean-It
@@ -38,7 +38,7 @@ gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge \
 The block above is this repo's `.claude/sassy-dog/clean-it.md`, inlined at load time. Its
 frontmatter carries the sweep policy — `dep_version_globs`, `noise_allowlist`, `never_discard`,
 optional `claim_label` — and its `##` sections carry repo-specific prose. The contract is
-`ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
+`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, this repo has not been set up yet. The §1 facts are still available,
 so the branch/worktree work is safe to do. But run with an **empty** noise allowlist and an empty
@@ -50,7 +50,7 @@ files that are intentionally untracked, which is the opposite of disposable — 
 `.env.local` lives. Then tell the user:
 
 > No `.claude/sassy-dog/clean-it.md` in this repo — running in conservative mode with no
-> auto-discard. Run `ai-agent-skills:refresh-sassydog-skills` to set this repo up.
+> auto-discard. Run `ai-agent-skills:refresh-skills` to set this repo up.
 
 ## 3. Run
 

@@ -24,13 +24,13 @@ Anything that smells undispatchable gets bounced back, never patched up inline.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/drain-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`, and
-`merge_queue` keys. Contract: `ai-agent-skills:refresh-sassydog-skills` →
+`merge_queue` keys. Contract: `ai-agent-skills:refresh-skills` →
 `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, STOP. Drain-it dispatches sub-agents and merges PRs unattended, on a
 loop — running it against an unconfigured repo means guessing a concurrency cap and skipping
 migration serialization while nobody is watching. Tell the user to run
-`ai-agent-skills:refresh-sassydog-skills` first.
+`ai-agent-skills:refresh-skills` first.
 
 ## 2. Reconcile in-flight (always first)
 

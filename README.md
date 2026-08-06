@@ -15,9 +15,9 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `ai-agent-skills` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
 | `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
-| `ai-agent-skills` | `refresh-sassydog-skills` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
-| `ai-agent-skills` | `refresh-sassydog-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
-| `ai-agent-skills` | `refresh-sassydog-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
+| `ai-agent-skills` | `refresh-skills` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
+| `ai-agent-skills` | `refresh-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
+| `ai-agent-skills` | `refresh-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
 | `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
@@ -47,22 +47,12 @@ Workflow skills stay thin by delegating shared mechanics to the capability skill
 `repo-cleanup` remains distinct from `clean-it`: the former is the mechanics engine, the latter the
 user-facing flow.
 
-`refresh-sassydog-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,
+`refresh-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,
 prettier, markdownlint, shellcheck, dart, rustfmt, gofmt, dotnet format — keyed on repo config, not
 installed binaries) and renders a single PostToolUse dispatcher into `.claude/hooks/`, wired into
 `.claude/settings.json`. Formatters fix silently; unfixable lint findings exit 2 so they feed
 straight back for an immediate fix. Re-runs reconcile only entries the generator owns (command path
 references `sassydog-`), never hand-written hooks.
-
-**Delegation modes.** By default generated skills are **plugin-backed**: they delegate to the
-plugin's capability skills, so every machine running them needs the plugin installed. A repo can
-instead be set up **independent**: refresh vendors the needed capability skills (transitive
-closure — `pr-shepherd`, `github-issues`, `repo-cleanup`, `repo-health`, plus `sentry-triage` /
-`testflight` when detected) into the repo's own `.claude/skills/`, each stamped with a
-`vendored-by:` marker, so a fresh clone works with no plugin install. Later refreshes re-sync the
-vendored copies from the current plugin (hand-edits to them are overwritten), and a repo can switch
-modes at any time ("make this repo independent" / "switch back to plugin mode"). The presence of
-`vendored-by:` markers *is* the persisted mode — there's no config file to drift.
 
 ### Review agents
 

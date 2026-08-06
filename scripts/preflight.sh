@@ -65,31 +65,49 @@ else
 fi
 
 # --- 3. no bare positional tokens in Skill-args substitution surfaces -------
-# SKILL.md bodies (and templates that render into consumer-repo SKILL.md
-# bodies) get $1-$9/$ARGUMENTS substituted when the skill is invoked with args
-# — a literal $1 in a snippet is corrupted at render time. references/ docs
-# and scripts/ (including this one) are not substituted.
-# shellcheck disable=SC2016  # the regex is a literal, not a missed expansion
-if git ls-files 'skills/*/SKILL.md' '.claude/skills/*/SKILL.md' 'skills/refresh-sassydog-skills/references/templates/*.md' \
-    | xargs grep -nE '\$([0-9]|@|\*)'; then
-    failed "positional-token guard — use cut -f1/%(format) idioms or move the snippet to references/ or scripts/ (issue #39)"
+# SKILL.md bodies (and the config templates that render into consumer repos)
+# get $1-$9/$ARGUMENTS substituted when the skill is invoked with args — a
+# literal $1 in a snippet is corrupted at render time. references/ docs and
+# scripts/ (including this one) are not substituted.
+#
+# The template pathspec is asserted non-empty FIRST. A pathspec that matches
+# nothing makes `git ls-files` emit no paths, so the guard would still pass
+# while silently covering nothing — which is exactly what a rename of the
+# generator directory used to cause. Fail loudly instead.
+POSITIONAL_TEMPLATE_GLOB='skills/refresh-skills/references/templates/*'
+if [ -z "$(git ls-files "$POSITIONAL_TEMPLATE_GLOB")" ]; then
+    failed "positional-token guard — template pathspec '$POSITIONAL_TEMPLATE_GLOB' matched no tracked files (renamed or moved? the guard would silently cover nothing)"
 else
-    pass "positional-token guard"
+    # shellcheck disable=SC2016  # the regex is a literal, not a missed expansion
+    if git ls-files 'skills/*/SKILL.md' '.claude/skills/*/SKILL.md' "$POSITIONAL_TEMPLATE_GLOB" \
+        | xargs grep -nE '\$([0-9]|@|\*)'; then
+        failed "positional-token guard — use cut -f1/%(format) idioms or move the snippet to references/ or scripts/ (issue #39)"
+    else
+        pass "positional-token guard"
+    fi
 fi
 
 # --- 4. no legacy skill-name residue -----------------------------------------
-# The generator was renamed create-dev-workflows -> refresh-sassydog-skills
-# (0.9.0). The legacy name may appear only in the sanctioned backward-compat
-# mentions; anything else is a stale reference that would confuse renders.
-if git grep -l 'create-dev-workflows' -- \
-    ':!skills/refresh-sassydog-skills/references/update-mode.md' \
-    ':!skills/refresh-sassydog-skills/SKILL.md' \
-    ':!CLAUDE.md' \
-    ':!scripts/preflight.sh'; then
-    failed "legacy-name guard — 'create-dev-workflows' outside the sanctioned back-compat files"
-else
-    pass "legacy-name guard"
-fi
+# The generator has been renamed twice: create-dev-workflows -> (0.9.0)
+# refresh-skills -> refresh-skills. Both legacy names may appear only
+# in the sanctioned backward-compat mentions — migrate mode still has to
+# RECOGNISE renders produced by the older producers. Anything else is a stale
+# reference that would confuse a render or send a reader to a dead path.
+legacy_residue=0
+for legacy in 'create-dev-workflows' 'refresh-sassydog-'; do
+    if git grep -l "$legacy" -- \
+        ':!skills/refresh-skills/references/update-mode.md' \
+        ':!skills/refresh-skills/references/migrate-mode.md' \
+        ':!skills/refresh-skills/SKILL.md' \
+        ':!skills/refresh-deps/SKILL.md' \
+        ':!skills/refresh-hooks/SKILL.md' \
+        ':!CLAUDE.md' \
+        ':!scripts/preflight.sh'; then
+        failed "legacy-name guard — '$legacy' outside the sanctioned back-compat files"
+        legacy_residue=1
+    fi
+done
+[ "$legacy_residue" -eq 0 ] && pass "legacy-name guard"
 
 # --- 5. plugin manifests -----------------------------------------------------
 if command -v jq >/dev/null 2>&1; then
