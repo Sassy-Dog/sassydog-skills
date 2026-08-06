@@ -56,9 +56,32 @@ concrete values rather than placeholders:
 | `dep_version_globs`, `noise_allowlist`, `never_discard` | clean-it project-facts table |
 | `claim_label` | clean-it claim-label row, or take-it's claim step |
 
-**Prose**, from the fences. Copy the content *between* the markers verbatim — never the marker
-comments, and never a fence whose body is only an instructional HTML comment (those are empty
-placeholders, not content):
+**Prose**, from the fences. Copy the content *between* the markers verbatim.
+
+Three rules, each of which was violated by a first attempt at this migration:
+
+1. **Strip HTML comments before deciding whether a fence is empty — and they span multiple lines.**
+   A line-based filter reports this as two lines of prose when it is an empty placeholder:
+
+   ```markdown
+   <!-- BEGIN PROJECT-SPECIFIC: extra-cleanup -->
+   <!-- Repo-unique cleanup steps that repo-cleanup doesn't cover (extra label hygiene, cache dirs,
+        vendored-artifact pruning, etc.) go here and survive template updates. -->
+   <!-- END PROJECT-SPECIFIC -->
+   ```
+
+   Strip with a DOTALL `<!--.*?-->` pass, then test whether anything remains. Migrating a
+   placeholder writes template boilerplate into config as if the user had authored it — and the
+   next refresh then preserves it forever, because prose is never rewritten.
+
+2. **Verbatim means verbatim — do not re-wrap.** Line width is not yours to normalise. MD013 is
+   disabled in this repo's markdownlint config precisely so long lines survive.
+
+3. **Never synthesise prose from a fact you already captured in frontmatter.** If `merge_queue:
+   true` is in the frontmatter, do not also write a "Merge policy" paragraph restating it — that is
+   two sources for one fact, and the prose half is the one that goes stale silently.
+
+Fence-to-config mapping:
 
 | Fence slot | Config section | Destination file |
 | --- | --- | --- |
@@ -100,6 +123,22 @@ gh workflow list --json name,path
 
 Board option IDs, Sentry project slugs, and label names are equally capable of drifting. Anything
 you cannot verify, surface to the user rather than carrying it forward silently.
+
+**Measured on a real migration.** Running this against this plugin's own pre-migration skills, six
+facts were extractable and five were safe to carry:
+
+| Fact | Extracted | Live | Verdict |
+| --- | --- | --- | --- |
+| `scan_paths` | `skills agents` | — | safe |
+| `exclude_pathspecs` | `""` | — | safe |
+| `ci_workflow` | `ci.yml` | confirmed by `gh workflow list` | safe |
+| `write_policy` | `read-only` | — | safe |
+| `max_in_flight` | `3` | — | safe |
+| **merge policy** | **"direct squash merge"** | **queue enabled** | **WRONG** |
+
+The one poisoned fact is indistinguishable from the other five by inspection — it reads as a
+confident, specific statement. Only the live check separates them, which is why this step is not
+optional and not a "when in doubt" measure.
 
 ## Step 3 — `fill-it` → `groom-it`
 
