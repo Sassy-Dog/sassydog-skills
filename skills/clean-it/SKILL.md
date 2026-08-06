@@ -50,7 +50,11 @@ files that are intentionally untracked, which is the opposite of disposable — 
 `.env.local` lives. Then tell the user:
 
 > No `.claude/sassy-dog/clean-it.md` in this repo — running in conservative mode with no
-> auto-discard. Run `ai-agent-skills:refresh-skills` to set this repo up.
+> auto-discard.
+
+Then run the reconciliation, and make the offer in the final section — after the user has seen what
+was found, not before. The inventory is the useful part; a setup prompt in front of it just delays
+the answer they asked for.
 
 ## 3. Run
 
@@ -93,3 +97,26 @@ directories, vendored-artifact pruning.
 - Don't disable `delete_branch_on_merge`; don't run inside a worktree you're about to remove.
 
 Apply any `## extra-guardrails` section from the config on top of these.
+
+## If this repo had no config
+
+### Offer to set this repo up
+
+**Then, after the output above — not before it — offer once:**
+
+- **If `.claude/skills/clean-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
+  superseded generated-skills architecture. Say so concretely: *"This repo has a generated
+  `clean-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
+  only after you approve. Want me to?"*
+- **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
+  how this repo works. Want me to?"*
+
+Naming which path applies matters: one of them ends in deleting a file the user may not know is
+there.
+
+On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+refresher owns the contract, and a skill that writes its own forks the format the moment the
+contract moves.
+
+**Offer once per session.** Running deliberately in an unconfigured repo is legitimate; re-prompting
+every invocation is noise. If declined, carry on and don't raise it again.
