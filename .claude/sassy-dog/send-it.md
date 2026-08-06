@@ -3,7 +3,6 @@ pr_template_path: ""
 pr_template_sections: [Summary, Changes, Verification]
 preflight_commands: |
   bash scripts/preflight.sh
-coauthor: Claude Opus 5 (1M context) <noreply@anthropic.com>
 merge_queue: true
 ---
 

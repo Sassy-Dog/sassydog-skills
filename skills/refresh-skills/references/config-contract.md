@@ -25,6 +25,7 @@ that can drift; a derived value cannot.
 | `delete_branch_on_merge` | `gh repo view --json deleteBranchOnMerge --jq .deleteBranchOnMerge` |
 | Current branch | `git branch --show-current` |
 | Repo root | `git rev-parse --show-toplevel` |
+| Commit co-author trailer | the running model's own name — `Co-Authored-By: Claude <model> <noreply@anthropic.com>` |
 
 This is why no `repo:` or `default_branch:` key appears in the schemas below, even though the old
 templates rendered `{{REPO_SLUG}}` and `{{DEFAULT_BRANCH}}` into every generated skill.
@@ -158,7 +159,6 @@ pr_template_path: .github/pull_request_template.md
 pr_template_sections: [Summary, Testing, Risk]
 preflight_commands: |
   bash scripts/preflight.sh
-coauthor: Claude Opus 5 (1M context) <noreply@anthropic.com>
 ```
 
 Prose sections: `## extra-gates`, `## extra-guardrails`.

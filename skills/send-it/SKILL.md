@@ -17,7 +17,7 @@ commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
 
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/send-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
-Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`, `coauthor`,
+Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
 `merge_queue`, and the optional `migrations`, `codegen`, and `review_agent` blocks. Contract:
 `ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
@@ -152,8 +152,18 @@ matching `pr_template_path`. Never pass a one-liner `--body "fix bug"` that bypa
 
 ## 6. Commit, push, watch, merge
 
-Commit with a conventional-commit subject, a brief why, the `Closes #<N>` line, and the configured
-`coauthor` trailer. Push with `git push -u origin "$(git branch --show-current)"`, then
+Commit with a conventional-commit subject, a brief why, the `Closes #<N>` line, and the co-author
+trailer:
+
+```text
+Co-Authored-By: Claude <your model> <noreply@anthropic.com>
+```
+
+**Derive the model name from whichever model is running — never from config.** The trailer records
+who actually wrote the commit, so a stored value is wrong the moment a different model does the
+work, and wrong in the most confident-looking way: every commit carries it. This is the
+configure-only-what-cannot-be-derived rule applied to the one fact that changes without anyone
+touching the repo. Push with `git push -u origin "$(git branch --show-current)"`, then
 `gh pr create` with the §5 body.
 
 **Watch + merge is delegated.** Do NOT reimplement polling or merging inline:
