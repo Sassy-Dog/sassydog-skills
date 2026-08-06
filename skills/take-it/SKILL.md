@@ -20,8 +20,11 @@ does not re-prioritize.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/take-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
-and the optional `board`, `migrations`, `codegen`, and `claim_label` blocks. Contract:
+and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs` blocks. Contract:
 `ai-agent-skills:refresh-skills` → `references/config-contract.md`.
+
+`stack_summary` (the repo's tech stack, always present) and `stacked_prs` (stacked pull requests,
+usually absent) are unrelated despite the shared word.
 
 Repo slug and default branch are derived, never configured:
 
@@ -71,6 +74,33 @@ Cap at **5 sub-agents per dispatch**; queue the rest for the next round.
 | Title starts with `Assess`, `Investigate`, `Evaluate`, `Spike:`, `Decide:` | Flag — research doc, not implementation; confirm before dispatching |
 | Body is a batch checklist of many independent sub-items | Flag — dispatch as ONE PR or a coherent subset; confirm intent |
 | Body contains `## Open questions` / `## Decision criteria` | Flag — decision not yet made |
+
+### Stack detection (ONLY if `stacked_prs:` is configured)
+
+**With no `stacked_prs:` block, skip this section entirely** — every issue dispatches independently,
+exactly as before. That is the default.
+
+When it IS configured, check whether the named issues form a declared chain:
+
+1. Read each named issue's body for a `stack:` line (groom-it writes it on the **bottom** issue,
+   naming every member bottom → top).
+2. A chain applies only when **every** member it names is in the set the user just handed you. A
+   partial overlap is not a stack — say which members are missing and dispatch independently rather
+   than silently shipping half a chain.
+3. Confirm this repo can actually use stacks:
+
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh --repo "<slug>"
+   ```
+
+   Exit `11` means the repo is not enabled for the preview. Say so plainly and dispatch the chain
+   **serially instead** — issue by issue, waiting for each to merge — because the members depend on
+   each other and parallel worktrees would collide. Do not silently fall back to parallel.
+4. Depth over `stacked_prs.max_depth` → dispatch the first `max_depth` layers as a stack and hold
+   the rest for a later invocation. Announce which layers were held.
+
+Announce the resolved shape before dispatching, as in
+`Taking #101 → #102 → #103 as a 3-layer stack — 1 sub-agent.`
 
 ## 3. Pre-flight per issue
 
@@ -156,6 +186,50 @@ as `.git/take-it-batch.json`, so a crashed coordinator's worktrees stay reclaima
 > 8. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name> status=<opened|skipped|failed>
 >    note=<one-line>`
 
+### Stacked variant (ONLY for a chain resolved in §2)
+
+A stack is sequential by construction — layer 2 needs layer 1's code — so it gets **ONE sub-agent in
+ONE worktree building every layer in order**, not one agent per issue. Dispatching the layers to
+parallel agents is the failure this shape exists to prevent: they would each branch from the default
+branch and rediscover the dependency as a conflict.
+
+Substitute steps 6–8 of the prompt above with the following; steps 1–5 (worktree confinement, never
+`git stash`, no shared-interpreter installs, read the issue, follow `CLAUDE.md` and
+`## subagent-rules`, run the pre-flight) apply unchanged **per layer**:
+
+> You are shipping a STACK of {depth} GitHub issues, bottom → top: {ordered list, e.g. #101 → #102 → #103}.
+> Each layer's PR targets the branch of the layer below it; the bottom targets `{default_branch}`.
+>
+> Work the layers **strictly in order**. For each one:
+>
+> 1. Branch from the layer below — `git switch -c {prefix}/issue-{N}-{slug}` while that lower branch
+>    is checked out. The bottom layer branches from `{default_branch}`. **Never return to
+>    `{default_branch}` between layers**; that is what breaks the chain.
+> 2. Implement only that layer's issue. Keep the layers genuinely separable — if you find yourself
+>    editing a lower layer's code from an upper one, STOP and report it, because the split is wrong.
+> 3. Run the pre-flight and fix anything red before moving up: {preflight_commands from config}
+> 4. Commit with a conventional-commit message containing a literal `Closes #{N}` line.
+> 5. Push, then open the PR against the layer below:
+>    `gh pr create --base <branch of the layer below, or {default_branch} for the bottom>`.
+>    The body MUST contain `Closes #{N}` on its own line and cover {pr_template_sections from config}.
+>
+> After every layer has a PR, link them into a stack bottom → top. Pass explicit JSON — the field
+> must be an array of integers, which `gh api -f` would send as strings:
+>
+> ```bash
+> echo '{"pull_requests":[<pr numbers bottom to top>]}' \
+>   | gh api "repos/{repo_slug}/stacks" -X POST --input -
+> ```
+>
+> If that call fails, the PRs are still correct and correctly based — report the failure and let the
+> coordinator link them. **A failed link is recoverable; a wrong base is not.**
+>
+> **Do NOT merge any layer.** Report back one line:
+> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> note=<one-line>`
+
+If a middle layer fails, the layers below it are still valid, independent PRs. Report the partial
+stack rather than discarding the work — the coordinator can land what exists and re-dispatch the rest.
+
 ## 6. Coordinator: watch + merge (delegated)
 
 Use the capability skill for ALL polling, merge, and teardown mechanics — do NOT reimplement them
@@ -170,9 +244,16 @@ Args: "Watch PRs <numbers from the RESULT lines> in <repo>. Merge policy:
        <if migrations: 'Coupled-PR concern: migrations in <migrations.dirs> (regenerate with
        <migrations.regen_command>).'>
        <if codegen: 'Coupled-PR concern: codegen (<codegen.hint>).'>
+       <if a stack was dispatched: 'STACKED: PRs <bottom..top> are layers of one stack. Merge
+       bottom-up only — stack-probe.sh gates this; merge-shepherd exits 23 on a blocked layer
+       (re-run) and 24 when it needs a human. Tear the shared worktree down only after the TOP
+       layer is terminal.'>
        After all PRs are terminal, tear down these worktrees: <paths from the batch manifest>,
        then reconcile the local default branch."
 ```
+
+A stack's worktree is shared by every layer, so it appears **once** in the manifest, not once per
+issue. Tearing it down after the bottom layer merges would strand the layers above it.
 
 If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell the user to install
 the plugin (`claude plugin install ai-agent-skills`) — do not improvise the merge loop from memory.
@@ -198,7 +279,10 @@ for unshipped issues) and a next-action one-liner per failure.
 
 - **Single-writer**: sub-agents never merge or enqueue; only the coordinator does, and only for
   green PRs.
-- **Never auto-rebase a CONFLICTING PR** — surface it.
+- **Never auto-rebase a CONFLICTING PR** — surface it. Expect an upper stack layer to go
+  `CONFLICTING` after the layer below squash-merges; that is the normal shape, not a fault.
 - Cap parallelism at 5. Don't dispatch on stubs or `blocked` issues.
+- **Never split a stack across parallel agents**, and never dispatch a partially-named chain. One
+  chain = one agent = one worktree, layers built in order.
 
 Apply any `## extra-guardrails` section from config on top of these.
