@@ -25,7 +25,7 @@ agent with zero conversation context.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/groom-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `gotcha_summary` and the optional `board` block. Contract:
-`ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
+`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, run boardless (the `ready`-label flow below) and skip the repo-gotchas
 step in §4 — **do not invent gotchas** by reading the repo's CLAUDE.md or CI config; a wrong gotcha

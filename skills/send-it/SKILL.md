@@ -4,7 +4,7 @@ description: >
   Ship a PR end-to-end — worktree audit, freshness gates, pre-flight CI guardrails,
   template-compliant PR body, commit, push, watch checks, merge, clean up. Use when the user says
   "send it", "ship it", "open the PR", "create a PR", or asks to merge a branch. Reads the current
-  repo's settings from `.claude/sassy-dog/send-it.md`; run `refresh-sassydog-skills` if that file
+  repo's settings from `.claude/sassy-dog/send-it.md`; run `refresh-skills` if that file
   is missing.
 ---
 
@@ -19,7 +19,7 @@ commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
 
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`, `coauthor`,
 `merge_queue`, and the optional `migrations`, `codegen`, and `review_agent` blocks. Contract:
-`ai-agent-skills:refresh-sassydog-skills` → `references/config-contract.md`.
+`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
 Repo slug and default branch are **derived, never configured**:
 
@@ -35,7 +35,7 @@ Run §2 — the worktree audit is universal and never skipped. Then **stop befor
 > No `.claude/sassy-dog/send-it.md` in this repo. I can audit the worktree and draft the commit,
 > but I don't know this repo's pre-flight commands or PR template. If this repo has a project-level
 > `send-it` under `.claude/skills/`, use that instead. Otherwise: tell me the pre-flight command, or
-> run `ai-agent-skills:refresh-sassydog-skills`.
+> run `ai-agent-skills:refresh-skills`.
 
 **Do NOT infer pre-flight commands from a `Makefile` target, a `scripts/` entry, or the CI
 workflow.** A guessed command that exits 0 without running anything is indistinguishable from a

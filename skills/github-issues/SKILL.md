@@ -78,7 +78,7 @@ Output actions: `filed` / `already-linked` / `filed-no-board` / `would-file`. Bo
 
 | Label | Color | Meaning |
 |-------|-------|---------|
-| `ready` | `0E8A16` | Dispatchable: a cold worktree agent could ship this (fill-it promoted) |
+| `ready` | `0E8A16` | Dispatchable: a cold worktree agent could ship this (groom-it promoted) |
 | `in-progress` | `1D76DB` | Claimed by a take-it/drain-it loop |
 | `blocked` | `B60205` | Needs a human decision before it can be dispatched (drain-it demoted) |
 

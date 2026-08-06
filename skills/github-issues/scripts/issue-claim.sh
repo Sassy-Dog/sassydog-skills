@@ -15,7 +15,7 @@
 #   block    N...  ensure `blocked` exists; strip ready + in-progress, add
 #                  blocked, post the --comment (REQUIRED — a demotion to blocked
 #                  without a reason is a silent failure for the next human).
-#   promote  N...  ensure `ready` exists; add ready (fill-it promotion).
+#   promote  N...  ensure `ready` exists; add ready (groom-it promotion).
 #   demote   N...  remove ready, post the --comment (REQUIRED — never a silent
 #                  strip; Ready is a promise and breaking it needs a why).
 #
@@ -39,15 +39,16 @@
 # Label ops are idempotent by nature (add existing / remove absent = no-op), so
 # re-running any subcommand is safe. Mutations route through pr-shepherd's
 # gh-retry.sh when present (exponential backoff on transient GitHub failures);
-# resolved relative to this script so the same path works in the plugin tree
-# AND a vendored .claude/skills/ tree (pr-shepherd is the mandatory bundle root).
+# resolved relative to this script, so the path holds wherever the plugin is
+# installed (pr-shepherd is the script root: repo-cleanup ships none and calls
+# its teardown.sh; this script calls its gh-retry.sh).
 
 set -uo pipefail
 
 # --- label taxonomy (canonical definition; SKILL.md documents this table) ---
 READY_LABEL="ready"
 READY_COLOR="0E8A16"
-READY_DESC="Dispatchable: a cold worktree agent could ship this (fill-it promoted)"
+READY_DESC="Dispatchable: a cold worktree agent could ship this (groom-it promoted)"
 INPROG_LABEL="in-progress"
 INPROG_COLOR="1D76DB"
 INPROG_DESC="Claimed by a take-it/drain-it loop"
