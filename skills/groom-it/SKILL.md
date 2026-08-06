@@ -24,7 +24,7 @@ agent with zero conversation context.
 
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/groom-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
-Frontmatter supplies `gotcha_summary` and the optional `board` block. Contract:
+Frontmatter supplies `gotcha_summary` and the optional `board` and `stacked_prs` blocks. Contract:
 `ai-agent-skills:refresh-skills` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, run boardless (the `ready`-label flow below) and skip the repo-gotchas
@@ -79,6 +79,37 @@ test 4 demands transcription rather than a link.
 
 A dependency being open does NOT block Ready — drain-it sequences at dispatch time. Only
 *unrecorded* dependencies block, because invisible ordering is how parallel agents collide.
+
+### Stack candidates (ONLY if `stacked_prs:` is configured)
+
+**Skip this entirely when the config has no `stacked_prs:` block** — that is the default and it means
+this repo has not opted in. Do not propose a stack because the chain looks like one.
+
+A recorded `Depends on #N` chain is *not* automatically a stack. "Depends on" usually means **later**;
+a stack means **ship together, as one worktree, merged bottom-up**. Propose one only when all hold:
+
+| # | Test |
+| --- | --- |
+| 1 | The chain is **linear** — each issue depends on exactly one other, no fan-in or fan-out |
+| 2 | The layers genuinely build on each other's code, not merely on each other's *decisions* |
+| 3 | Depth ≤ `stacked_prs.max_depth` |
+| 4 | Every member is otherwise Ready by the rubric above |
+
+Then propose it to the user — never write it unprompted, because it changes how the chain dispatches
+(one sequential agent instead of N parallel ones). On approval, add ONE line to the **bottom** issue,
+naming every member including itself, bottom → top:
+
+```text
+stack: #101 #102 #103
+```
+
+Order is the merge order, so it is never sorted. It lives on the bottom issue alone; a copy on each
+member is a second source of truth that drifts. Members above the bottom keep their `Depends on #N`
+lines unchanged — the two contracts coexist, and a repo that later turns `stacked_prs:` off falls
+back to dependency sequencing with nothing lost.
+
+Fan-out or fan-in dependency graphs are exactly what stacks cannot express (a stack is a line, not a
+tree). Leave them to drain-it's dependency filter and say so rather than forcing a linearisation.
 
 ## 4. Refine
 
@@ -137,6 +168,7 @@ awaiting-user / parked: reason) · what changed. End with the decisions awaiting
 - Never close issues, never delete content — the original ask survives as a quote.
 - Never promote with an unresolved decision "because the default is obvious" — the default goes to
   the user first.
+- Never write a `stack:` line unprompted, and never write one at all without a `stacked_prs:` block.
 - Ready is a promise to drain-it. When in doubt, park with a reason instead.
 
 Apply any `## extra-rubric` section from config as additional Ready tests.

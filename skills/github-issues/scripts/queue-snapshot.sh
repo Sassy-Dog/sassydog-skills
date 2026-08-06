@@ -2,9 +2,13 @@
 # queue-snapshot.sh — one-call read of the boardless fill/drain work queue.
 #
 # Replaces drain-it's per-tick pair of ad-hoc `gh issue list` reads AND puts the
-# parsing of the two machine-readable body contracts in one place:
+# parsing of the machine-readable body contracts in one place:
 #   - `touches:` line   → the collision-avoidance file/dir set (issue #38)
 #   - `Depends on #N`   → literal dependency lines
+#   - `stack:` line     → a declared stacked-PR chain, bottom→top, carried on
+#                         the BOTTOM issue and naming every member including
+#                         itself. Distinct from `Depends on`: a dependency
+#                         often means "later", a stack means "ship together".
 #
 # Buckets:
 #   ready     open + `ready` label, ordered number-ascending (oldest first)
@@ -23,8 +27,8 @@
 #
 # Output: single JSON object on stdout:
 #   {"repo":"...","me":"login-or-null",
-#    "ready":[{number,title,labels,assignees,touches,depends_on,unannotated}...],
-#    "in_flight":[{number,title,labels,assignees,mine,touches}...],
+#    "ready":[{number,title,labels,assignees,touches,stack,depends_on,unannotated}...],
+#    "in_flight":[{number,title,labels,assignees,mine,touches,stack}...],
 #    "blocked":[N...]}
 #
 # Exit codes: 0 ok; 10 skipped (gh/python3 missing or no repo); 64 usage.
@@ -73,29 +77,43 @@ touches_re = re.compile(r'^\s*touches:\s*(.+)$', re.IGNORECASE)
 # `Depends on #N` lines — every #N on a line that starts with "Depends on"
 # (compound "Depends on #12 and #13" yields both).
 depends_re = re.compile(r'^\s*depends\s+on\b(.*)$', re.IGNORECASE)
+# `stack:` line — a declared stacked-PR chain, bottom→top. Order is MEANINGFUL
+# (it is the merge order), so unlike depends_on this is never sorted or
+# de-duplicated into a set. First matching line wins.
+stack_re = re.compile(r'^\s*stack:\s*(.+)$', re.IGNORECASE)
 ref_re = re.compile(r'#(\d+)')
 
 def parse_body(body):
-    touches, depends = [], []
+    touches, depends, stack = [], [], []
     for line in (body or "").splitlines():
         m = touches_re.match(line)
         if m and not touches:
             raw = m.group(1).replace('`', ' ')
             touches = [t for t in re.split(r'[,\s]+', raw.strip()) if t]
             continue
+        m = stack_re.match(line)
+        if m and not stack:
+            seen = set()
+            for x in ref_re.findall(m.group(1)):
+                n = int(x)
+                if n not in seen:      # drop repeats, keep first-seen order
+                    seen.add(n)
+                    stack.append(n)
+            continue
         m = depends_re.match(line)
         if m:
             depends += [int(x) for x in ref_re.findall(m.group(1))]
-    return touches, sorted(set(depends))
+    return touches, sorted(set(depends)), stack
 
 def slim(issue, with_deps):
-    touches, depends = parse_body(issue.get("body"))
+    touches, depends, stack = parse_body(issue.get("body"))
     out = {
         "number": issue["number"],
         "title": issue.get("title", ""),
         "labels": sorted(l["name"] for l in issue.get("labels", [])),
         "assignees": sorted(a["login"] for a in issue.get("assignees", [])),
         "touches": touches,
+        "stack": stack,
     }
     if with_deps:
         out["depends_on"] = depends

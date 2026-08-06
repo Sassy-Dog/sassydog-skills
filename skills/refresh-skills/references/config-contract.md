@@ -98,6 +98,9 @@ codegen:
   output_dirs: apps/web/src/generated
   hint: run codegen after touching any tRPC router
 
+stacked_prs:
+  max_depth: 4              # cap on layers a dispatcher will build
+
 secret_bootstrap: eval "$(doppler secrets download --no-file --format env 2>/dev/null)"
 review_agent: qr-ninja-review-orchestrator
 claim_label: in-progress
@@ -106,6 +109,22 @@ merge_queue: false
 ```
 
 Omit any block the repo doesn't use.
+
+### `stacked_prs` — read by `groom-it`, `take-it`, `drain-it`, `send-it`
+
+Presence enables GitHub [stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs): `groom-it` may propose a `stack:` chain, and the dispatchers may build one. **Absent is the correct value for a repo that has not deliberately opted in**, and it is absent everywhere today.
+
+Three things are deliberately NOT configured here, because they are derived:
+
+| Fact | How it is obtained |
+| --- | --- |
+| Is this repo enabled for stacks? | `ai-agent-skills:pr-shepherd` → `scripts/stack-probe.sh` (REST `GET /repos/{o}/{n}/stacks`, 200 vs 404) |
+| Is a given PR a stack layer, and which? | the same probe (GraphQL `PullRequest.stack`) |
+| Is it safe to merge this layer now? | the probe's derived `lower_open` |
+
+The preview is still rolling out per-repo, so enablement is exactly the kind of fact that would go stale the day after it was written down. Config carries only the *policy* — may we stack here, and how deep.
+
+**`stacked_prs` and `merge_queue: true` together are refused at merge time,** not at config time: GitHub's queue support for stacks is still rolling out, and `pr-shepherd` stops with exit 24 rather than guessing. Setting both is legal — it simply means the dispatchers may open stacks that a human has to land.
 
 ## Per-skill schemas
 
