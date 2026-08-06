@@ -25,6 +25,7 @@ From the caller's request (ask if missing and not inferable):
 3. **Merge policy** — merge queue or direct merge. Project skills state this explicitly; otherwise detect (see `references/merge-queue.md`) and confirm a guess rather than acting on it.
 4. **Coupled-PR concerns** — does the batch touch migrations / codegen / other derived artifacts? (See `references/serialization.md`.)
 5. **Teardown scope** — worktree paths from a batch manifest, if the caller ran parallel sub-agents.
+6. **Stacked PRs** — is any PR a layer of a stack? Detected automatically by `scripts/stack-probe.sh`, never asked. (See `references/stacked-prs.md`.)
 
 ## Workflow
 
@@ -43,6 +44,16 @@ REPO="$REPO" bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/poll-prs.sh -
 ```
 
 Surface `CONFLICTING` immediately — do not auto-rebase. For generated-file conflicts, point the caller at the regenerate-don't-hand-merge recipe in `references/serialization.md`.
+
+### 1b. Stack check — before any merge decision
+
+A middle layer of a stacked PR reports green + `MERGEABLE` + `CLEAN` exactly like an ordinary PR, because its base *is* a real branch and there is no textual conflict. Merging on that reading lands an upper layer into a lower layer's branch while the bottom is still open. `merge-shepherd.sh` gates this automatically; when driving by hand, probe first:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh "$PR" --repo "$REPO"
+```
+
+Exit `0` in a stack · `10` not stacked · `11` stacks unavailable in this repo · `1` error. A non-empty `lower_open` means **merge the layer below first**. Read `references/stacked-prs.md` before acting on a stack — in particular, why detection needs two probes and why a merge queue plus a stack is refused rather than guessed.
 
 ### 2. Watch checks
 
@@ -66,7 +77,7 @@ Merge only PRs with **all checks green AND `mergeable=MERGEABLE` AND `mergeState
 bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/merge-shepherd.sh "$PR" --repo "$REPO" [--direct] [--worktree "$WT"] [--watch 240]
 ```
 
-Distinct exit codes let the caller loop "re-run until terminal" without parsing output: `0` merged (+teardown) · `10` enqueued · `11` waiting/in-flight (re-run) · `20` red checks · `22` conflicting. Queue mode is the default (`--auto`, NO method flag, NO `--delete-branch`, GraphQL-only enqueue confirm); pass `--direct` for repos without a merge queue (`--squash --delete-branch`). It already encodes the guardrails — never merges past red (advisory failures also stop it), never auto-rebases `CONFLICTING`, wraps the merge call in `gh-retry.sh`.
+Distinct exit codes let the caller loop "re-run until terminal" without parsing output: `0` merged (+teardown) · `10` enqueued · `11` waiting/in-flight (re-run) · `20` red checks · `22` conflicting · `23` blocked by an open lower stack layer (re-run — it clears when the layer below lands) · `24` stack needs a human (a lower layer closed unmerged, or the repo runs a merge queue). Queue mode is the default (`--auto`, NO method flag, NO `--delete-branch`, GraphQL-only enqueue confirm); pass `--direct` for repos without a merge queue (`--squash --delete-branch`). It already encodes the guardrails — never merges past red (advisory failures also stop it), never auto-rebases `CONFLICTING`, wraps the merge call in `gh-retry.sh`.
 
 **Stateless-eject caveat**: a stateless pass cannot distinguish "the queue ejected it" from "never enqueued" (head-commit checks stay green either way), so an ejected-but-`CLEAN` PR is simply re-enqueued on the next pass — the right recovery for transient ejects. A PR that keeps failing `merge_group` checks on the rebased ref will ping-pong enqueued→waiting; if repeated runs alternate like that, stop re-running, watch with `poll-queue.sh` (eject-aware), and follow "Eject recovery" in `references/merge-queue.md`.
 
@@ -119,8 +130,9 @@ Then reconcile the session (cwd back to repo root, switch to default branch, `gi
 |--------|---------|
 | `scripts/poll-prs.sh` | Polls 1+ PRs every 60s until all terminal. Read-only. Surfaces `headRefOid` per tick and in the final JSON so callers can spot stale pre-fix runs before counting a redispatch failure. `--once` = single snapshot tick, no loop (zero PR args probes every open PR); exit 0 all-terminal / 11 pending. `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS` env. Exit 124 on watch timeout. |
 | `scripts/pr-failure-log.sh` | Names a red PR's failing checks and prints each one's `--log-failed` tail, labeled. Handles the run-id extraction from check links and prints non-Actions (StatusContext) checks as external links instead of erroring. Read-only. Exit 0 reported / 10 no failures / 1 a log fetch failed. |
-| `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Teardown also deletes the worktree's `worktree-agent-*` isolation branch (never the PR's own head branch — `--delete-branch`/`[gone]` owns that). Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env (same contract as `teardown.sh`). |
+| `scripts/merge-shepherd.sh` | The single WRITER: stateless, idempotent merge step for ONE PR — red/pending gate, stacked-layer gate (never merges a layer with open lower layers), enqueue `--auto` (or `--direct` squash), GraphQL enqueue confirm, teardown + ff-only reconcile. Teardown also deletes the worktree's `worktree-agent-*` isolation branch (never the PR's own head branch — `--delete-branch`/`[gone]` owns that). Re-run after any kill; bounded `--watch N` mode. Exit codes 0/10/11/20/22. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env (same contract as `teardown.sh`). |
 | `scripts/poll-queue.sh` | Queue-phase companion to `poll-prs.sh`: polls 1+ enqueued PRs' merge-queue state (GraphQL) until each is `MERGED`, ejected (`OPEN` + `isInMergeQueue:false`, reported loudly), or closed without merge. Read-only — never re-enqueues or recovers. Same env/contract: `REPO`, `POLL_INTERVAL`, `POLL_MAX_TICKS`, exit 124 on timeout, final JSON on stdout. |
+| `scripts/stack-probe.sh` | The single stacked-PR detection primitive: REST `GET /repos/{o}/{n}/stacks` for repo availability + GraphQL `PullRequest.stack` for membership (both are needed — GraphQL `null` cannot distinguish "repo not enabled" from "PR not stacked"). Emits `position`, `entries[]` bottom→top, and the derived `lower_open` / `lower_closed_unmerged` the merge gate reads. Read-only. Exit 0 in a stack / 10 not stacked / 11 stacks unavailable / 1 error. |
 | `scripts/gh-retry.sh` | Exponential-backoff retry for mutating `gh` calls on transient failures (502/503/504, "Merge already in progress", transient GraphQL). Exit 124 on exhaustion so the caller decides best-effort vs escalate. |
 | `scripts/teardown.sh` | Batch worktree cleanup: force-removes locked agent worktrees, deletes local branches + their `worktree-agent-*` isolation branches, prunes, clears origin-identical stragglers, ff-reconciles the default branch. `--sweep` reclaims orphans whose remote branch is gone AND sweeps orphan isolation branches whose worktree is gone (ancestry OR merged-PR classification; unmerged ones surfaced, live ones untouched). `--reconcile-only` runs just the default-branch reconcile + residual report (exit 1 if the ff fails). Never drops stashes. `DEFAULT_BRANCH` / `ISOLATION_BRANCH_PREFIX` env override. |
 
@@ -128,6 +140,8 @@ Then reconcile the session (cwd back to repo root, switch to default branch, `gi
 
 - **Single-writer**: only the coordinating session merges/enqueues; sub-agents never do. One owner per PR — never point `merge-shepherd.sh` and a watcher session (or two writers) at the same PR from different sessions.
 - **Never merge past a red check**; never auto-rebase `CONFLICTING`.
+- **Never merge a stack layer while a lower layer is open.** Stacks merge bottom-up; `CLEAN` on a middle layer is truthful and says nothing about ordering. A stack under a merge queue is refused outright, not guessed at (`references/stacked-prs.md`).
+- **Never treat an inconclusive stack probe as "not stacked."** Unknown means wait and re-run, not merge.
 - **Never count a red PR as a failed fix attempt on a stale head** — confirm the failing run's head SHA is newer than the previously-failed one first (see the stale pre-fix check trap in §3).
 - **Never force-push the default branch.**
 - Draft PRs: watch only; the author flips to ready.

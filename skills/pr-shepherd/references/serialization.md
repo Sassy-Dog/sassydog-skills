@@ -13,6 +13,8 @@ Known instances across Sassy Dog repos:
 
 The same shape applies to any "schema + generated output committed together" pattern (OpenAPI clients, protobuf stubs, lockfile-from-manifest).
 
+**Stacked PRs are the structural alternative to serializing.** Coupled PRs collide because each was branched from the same stale base and neither can see the other's derived output. Layers of a stack cannot have that problem: layer 2 is branched *from* layer 1, so it regenerates on top of layer 1's contribution by construction. Where the coupling is known up front — a schema change and the code that consumes it — stacking them removes the race rather than sequencing around it. See `references/stacked-prs.md`; note that the same `CLEAN`-means-nothing reasoning below applies to stack layers too, for a different reason (ordering, not consistency).
+
 ## With a merge queue: the queue is the structural fix
 
 The queue builds a `merge_group` ref by rebasing each queued PR onto the real tip (main + earlier-queued entries) and **re-runs the required checks there**. If the repo's CI carries a freshness gate (a check that regenerates and diffs the derived artifacts), a stale PR fails its `merge_group` run and the queue **ejects it automatically** instead of merging inconsistent state.
