@@ -62,9 +62,16 @@ to REST exactly as the issues surface does: the cron-monitor recipe in `sentry-t
 `alerts:read`, not just the issue scopes). With neither MCP nor a token, or on a failed call, mark
 the surface `skipped — <reason>` per section 1 — the fallback must never turn "could not check"
 into silence. List cron monitors for the org and read each monitor's per-environment state
-(`environments[].status`, not the lifecycle-only monitor `status`). Any environment not `ok` is a
-P0. Note which projects own monitors — a product with zero monitors isn't passing, it's
-unmonitored, which belongs in blind spots.
+(`environments[].status`, not the lifecycle-only monitor `status`). A `missed` or `timeout`
+environment is a P0, always — no dispatch can vouch for a schedule that never fired. An `error`
+environment is a P0 **unless** the recovery cross-reference in `references/cron-recovery.md`
+downgrades it: check-ins are gated to `schedule` runs, so a fix verified green via
+`workflow_dispatch` leaves the monitor red until the next scheduled run — up to a week — and
+reporting that as a live fire is a false alarm this sweep has produced twice. Run that
+cross-reference for every `error` environment before ranking it; a downgraded monitor becomes the
+third state "fixed, awaiting scheduled confirmation" (section 5), never a P0 and never `✓ Clean`.
+Note which projects own monitors — a product with zero monitors isn't passing, it's unmonitored,
+which belongs in blind spots.
 
 ### B. Stuck shipping + backlog heat
 
@@ -119,6 +126,12 @@ Dog the non-obvious ones are `velovate` → repos `velovate` + `velovate-web` (t
 `velovate-app` maps to the repo named `velovate`), `lupita` → `lupita` + `lupita-web` (both
 archived), and `devcanopy` → `devcanopy`. Everything else is one product, one repo.
 
+This same map is what resolves a red cron monitor's **owning repo** for the recovery
+cross-reference (`references/cron-recovery.md`): monitor → its Sentry project → the owning product
+→ that product's repo(s). It is already load-bearing in the reverse direction — blind spots walk
+repo → Sentry project — so keep both walks on this one map; a second, separate mapping would be
+one more place to drift.
+
 ## 4. Score
 
 Apply `references/scoring.md`. The two rules that matter most:
@@ -167,6 +180,10 @@ _Sources: <pulled, with any "skipped — reason">_
   - Sources: [Sentry](url) · [run](url)
   - Why this matters: <one line>
 
+### ⏳ Fixed, awaiting scheduled confirmation
+- **<product> — `<monitor>` (<project>/<env>)** — green [dispatch](url) at <time>; awaiting
+  scheduled confirmation <nextCheckIn date>
+
 ## 🚧 Stuck shipping
 - **<repo>#<N> <title>** — idle <D>d · <one-line why>
 
@@ -179,12 +196,27 @@ _Sources: <pulled, with any "skipped — reason">_
 ## 👉 Today's top 5 (cross-product)
 1. **<title>** — <product> · <one-line why>
 
+_⚠ Cron recovery cross-reference could not run for: <repo> · <repo> — red monitors there are
+shown at full severity._
+
 _To dig in: `cd <product> && /plate-it`_
 _To ship: `cd <product> && take #<N>`_
 ```
 
 Keep the footer. This skill's job ends at naming the product; the per-repo `plate-it` and `take-it`
 take it from there, and the footer is what makes that handoff explicit rather than implied.
+
+Two rules for the cron-recovery lines, from `references/cron-recovery.md`:
+
+- **"Fixed, awaiting scheduled confirmation" is a third state** — never folded into P0, never onto
+  `✓ Clean today:`. Link the verifying dispatch and name the environment's own `nextCheckIn` as the
+  confirmation date (unknown when null — never invent one). Do not lead with the outage duration:
+  "`error` for 6d" is true of the monitor and misleading about the world. The section follows the
+  skip-empty-tiers rule like any other.
+- **The cross-reference footer appears only when a lookup actually failed** (missing `actions:read`,
+  network, 5xx — the exit-10 cases), and it names each repo it could not read. A 404 — no such
+  workflow in the owning repo — is "not applicable", never a footer entry; a footer that fires on
+  every sweep is a footer nobody reads.
 
 ## 6. Read-only contract
 

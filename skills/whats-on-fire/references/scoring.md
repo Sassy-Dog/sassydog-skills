@@ -21,7 +21,8 @@ So: **customer pain decays with age; stuck work escalates with age.** Never shar
 | Signal | Source |
 |---|---|
 | Sentry issue passing the qualifying gate, `lastSeen` ≤ 48h | `sentry-triage` |
-| Any cron monitor environment not `ok` (`error`, `missed`, `timeout`) | `find_monitors` |
+| Cron monitor environment `missed` or `timeout` — always, a dispatch can never vouch for these | `find_monitors` |
+| Cron monitor environment `error` with **no** qualifying green dispatch after its last failing check-in | `find_monitors` + `cron-recovery.md` |
 | `default_branch_ci` is `failure` | `pull-repo-signals.sh` |
 
 A red default branch is P0 regardless of failure rate — a repo can sit at 0% historical failures and
@@ -51,6 +52,21 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 | PR idle | 3–7 days |
 | Normalized-P1 backlog issues | see the map below |
 | Dependabot | `open` > 0 with no high/critical |
+
+### Not a tier — fixed, awaiting scheduled confirmation
+
+A cron environment in `error` whose backing workflow shows a green `workflow_dispatch` completed
+**after the most recent failing check-in** is verified fixed — the monitor just cannot say so yet,
+because check-ins are gated to `schedule` runs and the next one may be a week out. That is a third
+state, not a severity: not a P0 (the fix shipped and was proven against live infrastructure), and
+not `✓ Clean today:` (the schedule has not yet confirmed it). It gets its own section with the
+verifying run linked and `nextCheckIn` named as the confirmation date.
+
+Only `error` is eligible. `missed` and `timeout` stay P0 with any number of green dispatches on
+file — a manual re-run must never quiet the dead-cron alarm. When the cross-reference cannot run at
+all, the monitor stays P0 **and** the report footer names the repo that could not be read. The full
+contract — reference-instant choice, owning-repo resolution, and the 404/403 split — is
+`cron-recovery.md`.
 
 ### Not ranked — blind spots
 
