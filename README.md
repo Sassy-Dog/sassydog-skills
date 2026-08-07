@@ -42,6 +42,14 @@ instead, because both act unattended and outward-facing.
 Facts that can be derived are never configured: repo slug, default branch, and
 `delete_branch_on_merge` all come from `gh repo view` at runtime, so they cannot drift.
 
+[Stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs) are supported
+and **opt-in per repo** via a `stacked_prs:` config block, absent by default. Handling an existing
+stack safely is not opt-in: `pr-shepherd` always probes before merging, because a middle layer
+reports green + `MERGEABLE` + `CLEAN` exactly like an ordinary PR and merging on that reading lands
+it out of order. Whether a repo is enabled for the preview, whether a PR is a layer, and whether a
+layer is safe to merge now are all derived at runtime by `pr-shepherd`'s `stack-probe.sh` — the
+config carries only the policy.
+
 Workflow skills stay thin by delegating shared mechanics to the capability skills
 (`github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
 `repo-cleanup` remains distinct from `clean-it`: the former is the mechanics engine, the latter the
