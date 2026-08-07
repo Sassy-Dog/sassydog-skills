@@ -1,0 +1,83 @@
+# Stacked pull requests
+
+GitHub shipped stacked PRs to public preview on 2026-07-30. A stack is a chain of PRs where the bottom targets the trunk and each layer above targets the branch of the layer below. Layers merge **bottom-up**; when a lower one lands, GitHub keeps the upper ones open and retargets them.
+
+Everything here is **read-and-gate only**. This skill never creates, extends, or dissolves a stack — the dispatchers (`take-it`, `drain-it`) own creation, gated behind their `stacked_prs:` config.
+
+## Why a stack is dangerous to this skill specifically
+
+`merge-shepherd.sh` is the single writer, and it merges any PR that is green **AND** `mergeable=MERGEABLE` **AND** `mergeStateStatus=CLEAN`.
+
+**A middle layer of a stack reports exactly those three values.** Its base is the layer below, that base is a real branch, and there is no textual conflict — so `CLEAN` is truthful and useless. Merging on it lands layer 3 into layer 2's branch while layer 1 is still open: out of order, silently, with no error anywhere.
+
+This is the same shape as the coupled-PR trap in `references/serialization.md` — `CLEAN` reports the absence of a *textual* conflict and says nothing about whether merging is *correct*. The fix here is a gate, not a heuristic: `stack-probe.sh` reports which layers below are still open, and a non-empty list stops the merge.
+
+## Detection needs two probes, not one
+
+This is the part that is easy to get wrong.
+
+| Question | Probe | Answers |
+|---|---|---|
+| Is this **repo** enabled for stacks? | `GET /repos/{owner}/{name}/stacks` | `200` available · `404` not enabled (or no access) |
+| Is this **PR** in a stack? | GraphQL `PullRequest.stack` | object, or `null` |
+
+**GraphQL `null` means both "the repo isn't enabled" and "this PR isn't stacked."** A caller that reads that one null concludes *not stacked, safe to merge* on a repo it never actually checked. Both probes are required, and `stack-probe.sh` is where they live so nothing re-derives the rule.
+
+### `gh pr view --json` has no `stack` field
+
+Membership is GraphQL-only. `gh pr view --json stack` fails with `Unknown JSON field` — the identical trap as `isInMergeQueue` (see `references/merge-queue.md`). `gh`'s JSON surface lags new GitHub features; assume a newly shipped field is GraphQL-only until proven otherwise.
+
+### The probe
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh" <pr> --repo owner/name
+```
+
+Exit `0` in a stack · `10` available but not stacked · `11` stacks unavailable here · `1` usage/API error. Omit the PR number to probe the repo and list its open stacks.
+
+The fields that matter downstream:
+
+- `position` — 1-based, bottom is 1.
+- `lower_open` — layers below this one still `OPEN`. **Non-empty means do not merge.**
+- `lower_closed_unmerged` — layers below closed *without* merging. The stack is broken; a human decides.
+- `truncated` — `entries` is capped at 100; compare against `size`. Never true in practice, but a silently short list would under-report blockers.
+
+## Merge rules
+
+1. **Bottom-up, one layer per run.** There is no REST endpoint to merge a stack — the stacked-PR REST surface is list / create / add / unstack only. Whole-stack merge exists solely as `gh stack merge` in the `gh-stack` extension, which this plugin does not require. Merge the bottom-most open layer with plain `gh pr merge`; the layer above becomes the bottom-most open layer on the next pass. This is already `merge-shepherd.sh`'s stateless "advance one step" contract, so it needs no new loop.
+
+2. **Never merge a layer with a non-empty `lower_open`.** `merge-shepherd.sh` exits **23** instead. 23 is deliberately *not* terminal in `--watch` mode: it clears on its own when the layer below lands.
+
+3. **An inconclusive probe waits — it does not merge.** A probe that could not answer "is this stacked?" is not evidence that it isn't, and the cost of guessing wrong is an out-of-order merge. `merge-shepherd.sh` returns 11 (re-run) on probe error. Transient failures clear on the next pass, so this never wedges.
+
+4. **Merge queue + stack: refuse (exit 24).** GitHub shipped queue support for stacks as "rolling out progressively over the coming weeks," and we cannot verify the interaction. Enqueuing a layer and hoping is exactly the asymmetry the config contract warns about — skipping knowingly is recoverable, acting on an unverified assumption is not. Surface it for a human.
+
+## After a lower layer merges
+
+GitHub retargets the upper layers automatically. It does **not** rewrite their history, which matters under squash-merge:
+
+> Layer 1 squash-merges into `main` as one new commit. Layer 2's branch still contains layer 1's *original* commits, and now targets `main`.
+
+Depending on the diff, layer 2 comes back either clean or `CONFLICTING`. Both land on machinery this skill already has: the existing guardrail is **surface `CONFLICTING`, never auto-rebase**, and the recovery is the regenerate-don't-hand-merge recipe in `references/serialization.md`. Nothing new is needed — but do not be surprised when a layer that was green goes conflicting the moment the layer below it lands. That is the expected shape, not a fault.
+
+## Creating a stack (context for dispatcher callers)
+
+Creation does not need the `gh-stack` extension, and this plugin never requires it — an extension install cannot be assumed in cloud sessions, cron routines, or a consumer repo. Both steps are plain `gh`:
+
+1. Open each PR against the branch below it: `gh pr create --base <lower-branch>`.
+2. Link them, bottom to top. Pass the body as explicit JSON rather than `gh api`'s `key[]=` array
+   sugar — `pull_requests` must be an array of **integers**, and `-f` would send strings:
+
+   ```bash
+   echo '{"pull_requests":[101,102]}' | gh api "repos/$REPO/stacks" -X POST --input -
+   ```
+
+`pull_requests` is ordered **bottom → top** on both create and `POST /stacks/{n}/add`.
+
+The extension remains a fine human convenience (`gh stack view`, `gh stack rebase`, `gh stack merge`); it is simply never a code path here.
+
+## Constraints worth knowing
+
+- **Same-repo only.** Cross-fork stacks are unsupported, so a stack can never span a fork-based contribution.
+- **Every layer enforces branch protection and required checks**, not just the bottom one.
+- **Not supported in GitHub Desktop.** Irrelevant to automation, relevant when a human asks why they cannot see it.

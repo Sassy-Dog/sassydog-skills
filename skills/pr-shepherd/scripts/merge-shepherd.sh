@@ -31,7 +31,15 @@
 #                    (default "worktree-agent-") — same contract as teardown.sh
 #
 # Exit codes: 0 merged(+teardown) · 10 enqueued · 11 waiting/in-flight (re-run)
-#             · 20 red checks · 22 conflicting · 1 usage/error/closed
+#             · 20 red checks · 22 conflicting · 23 blocked by a lower stack
+#             layer (re-run) · 24 stacked under a merge queue (needs a human)
+#             · 1 usage/error/closed
+#
+# STACKED PRs: a middle layer of a stack reads green + MERGEABLE + CLEAN
+# exactly like an ordinary PR, so without a gate this writer would merge layer
+# 3 into layer 2's branch while layer 1 is still open. sibling stack-probe.sh
+# supplies `lower_open`; a non-empty one stops the merge with exit 23. Stacks
+# merge bottom-up, one layer per run — that is already this script's contract.
 #
 # SINGLE-WRITER CONTRACT: one owner per PR. Never point this writer and a
 # watcher session — or two writers — at the same PR from different sessions.
@@ -50,6 +58,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GH_RETRY="$SCRIPT_DIR/gh-retry.sh"
+STACK_PROBE="$SCRIPT_DIR/stack-probe.sh"
 
 REPO=""; PR=""; WT=""; WATCH=0; POLL=30; DIRECT=0
 while [ $# -gt 0 ]; do
@@ -165,8 +174,45 @@ teardown() { # idempotent: safe whether or not the worktree/branch still exist
   echo "  $BRANCH @ $(git -C "$MAIN_WT" log --oneline -1 2>/dev/null)"
 }
 
+# Stacked-PR gate. Returns 0 proceed · 23 blocked by a lower layer ·
+# 24 stacked under a merge queue · 11 unknown (probe failed — wait, re-run).
+#
+# "Unknown" deliberately WAITS rather than merging: a probe that could not
+# answer "is this PR stacked?" is not evidence that it isn't, and the failure
+# mode of guessing wrong is an out-of-order merge. Transient failures clear on
+# the next run, so waiting costs a re-run and never wedges permanently.
+#
+# A repo not enabled for stacks (probe exit 11) is a CLEAN answer, not an
+# error — it proceeds untouched, which is every repo today.
+stack_gate() {
+  local sj rc lower broken
+  [ -x "$STACK_PROBE" ] || [ -f "$STACK_PROBE" ] || return 0
+  sj="$(bash "$STACK_PROBE" "$PR" --repo "$REPO" 2>/dev/null)"; rc=$?
+  case "$rc" in
+    10|11) return 0 ;;                 # not stacked, or stacks unavailable here
+    0) : ;;                            # in a stack — inspect below
+    *) echo "  stack probe inconclusive — not merging this pass"; return 11 ;;
+  esac
+  broken="$(printf '%s' "$sj" | jq -r '.lower_closed_unmerged | join(" ")' 2>/dev/null)"
+  if [ -n "$broken" ]; then
+    echo "STACK BROKEN — lower layer(s) closed without merging: $broken (needs a human)"
+    return 24
+  fi
+  lower="$(printf '%s' "$sj" | jq -r '.lower_open | join(" ")' 2>/dev/null)"
+  if [ -n "$lower" ]; then
+    echo "STACKED layer $(printf '%s' "$sj" | jq -r '.position')/$(printf '%s' "$sj" | jq -r '.size') — blocked by open lower layer(s): $lower"
+    return 23
+  fi
+  if [ "$DIRECT" != 1 ]; then
+    echo "STACKED under a merge queue — interaction unverified upstream (needs a human)"
+    return 24
+  fi
+  echo "  stacked: bottom-most open layer — clear to merge"
+  return 0
+}
+
 advance() { # one idempotent step against live state
-  local st ms inq fails pend
+  local st ms inq fails pend grc
   read -r st ms inq <<<"$(pr_state)"
   [ -z "$st" ] && { echo "state unavailable (transient) — retry later"; return 11; }
   case "$st" in
@@ -177,6 +223,11 @@ advance() { # one idempotent step against live state
   read -r fails pend <<<"$(checks)"
   [ "$ms" = CONFLICTING ] && { echo "CONFLICTING — needs human/rebase (do NOT auto-rebase)"; return 22; }
   if [ "$inq" = "true" ]; then echo "IN_QUEUE (waiting)"; return 11; fi
+  # Stack gate BEFORE the red gate: on a blocked upper layer, "merge the layer
+  # below first" is the actionable report, and its checks re-run on the
+  # retargeted ref anyway once the lower layer lands.
+  stack_gate; grc=$?
+  [ "$grc" -ne 0 ] && return "$grc"
   # Deliberately conservative: counts ADVISORY failures too (e.g. a
   # non-blocking dependency scan), so a PR the queue would accept can still
   # report RED here. Fail-safe by design — a human decides, not the script.
@@ -214,7 +265,9 @@ deadline=$((SECONDS + WATCH))
 while :; do
   out="$(advance)"; rc=$?
   printf '[%ds] %s\n' "$SECONDS" "$out"
-  case "$rc" in 0|1|20|22) exit "$rc" ;; esac    # terminal — stop
+  # 23 (blocked by a lower stack layer) is deliberately NOT terminal — it
+  # clears on its own once the layer below merges. 24 needs a human, so it stops.
+  case "$rc" in 0|1|20|22|24) exit "$rc" ;; esac    # terminal — stop
   [ "$WATCH" -le 0 ] && exit "$rc"               # single-shot
   [ "$SECONDS" -ge "$deadline" ] && { echo "[bounded-exit] still in-flight — re-run to resume"; exit "$rc"; }
   sleep "$POLL"
