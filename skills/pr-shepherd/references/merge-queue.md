@@ -56,7 +56,7 @@ Terminal states: `MERGED` (success), or the entry leaves the queue with the PR s
 
 ### Watch the queue with the bundled poller
 
-Once the enqueue is confirmed, **the canonical queue watch is `scripts/poll-queue.sh`** — it loops the query above every `POLL_INTERVAL` (default 60s; queue cycles are slow) and covers the full terminal matrix per PR: `MERGED` (success), `OPEN` + `isInMergeQueue:false` (**ejected** — reported loudly), `CLOSED` without merge. Transient GraphQL failures log and retry; they never kill the watch. Exits 124 on `POLL_MAX_TICKS` timeout and emits final JSON (`{pr, result, queueEntryState}` per PR) for the caller's decision:
+Once the enqueue is confirmed, **the canonical queue watch is `scripts/poll-queue.sh`** — it loops the query above every `POLL_INTERVAL` (default 60s; queue cycles are slow) and covers the full terminal matrix per PR: `MERGED` (success), `OPEN` + `isInMergeQueue:false` (disambiguated — see below), `CLOSED` without merge. GitHub removes the queue entry a beat before flipping the PR to `MERGED`, so a tick can catch a just-merged PR at `OPEN` + `isInMergeQueue:false`; the poller reads the last `RemovedFromMergeQueueEvent` in the same query and allowlists the benign: reason `merged` reports **merged**, while any other reason — or no removal event at all (never enqueued) — reports **ejected**, loudly. Transient GraphQL failures log and retry; they never kill the watch. Exits 124 on `POLL_MAX_TICKS` timeout and emits final JSON (`{pr, result, queueEntryState}` per PR) for the caller's decision:
 
 ```bash
 REPO="$REPO" bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/poll-queue.sh "$PR1" "$PR2"
