@@ -17,11 +17,13 @@
 #
 # Usage:
 #   merge-shepherd.sh <pr> [--repo owner/name] [--worktree <path>] [--direct]
-#                     [--watch <secs>] [--poll <secs>]
+#                     [--watch <secs>] [--poll <secs>] [--allow-no-checks]
 #   Single-shot by default (advances one step, exits). --watch N polls up to N
 #   seconds (keep N under the host's kill window, e.g. 240) then exits cleanly.
 #   --direct: for repos WITHOUT a merge queue — squash-merge + --delete-branch
 #   instead of enqueueing. Default is queue mode (--auto, NO method flag).
+#   --allow-no-checks: merge even when the PR reports ZERO checks in a repo that
+#   demonstrably runs CI on pull requests (see the empty-rollup trap below).
 #   Repo defaults to the cwd checkout (gh repo view); --repo overrides.
 #
 # Env:
@@ -31,9 +33,24 @@
 #                    (default "worktree-agent-") — same contract as teardown.sh
 #
 # Exit codes: 0 merged(+teardown) · 10 enqueued · 11 waiting/in-flight (re-run)
-#             · 20 red checks · 22 conflicting · 23 blocked by a lower stack
-#             layer (re-run) · 24 stacked under a merge queue (needs a human)
+#             · 20 red checks · 21 no checks reported where CI is expected
+#             (re-run) · 22 conflicting · 23 blocked by a lower stack layer
+#             (re-run) · 24 stacked under a merge queue (needs a human)
 #             · 1 usage/error/closed
+#
+# EMPTY-ROLLUP TRAP: the merge condition is `mergeStateStatus == CLEAN AND no
+# pending checks` — and BOTH are satisfied when there are no checks at all.
+# GitHub reports CLEAN whenever nothing blocks the merge, and a base branch
+# with no required checks blocks nothing. So a PR targeting an unprotected
+# branch (any intermediate chained/stacked PR) reads exactly like a fully green
+# one. "No checks reported" and "CI has not started yet" are also
+# indistinguishable from the rollup alone. Observed live 2026-08-06: during an
+# Actions outage three chained PRs reported CLEAN with zero checks.
+#
+# A blanket "refuse on zero checks" would break every repo that legitimately
+# has no CI, so the gate asks whether THIS repo runs CI on pull requests at all
+# (`actions/runs?event=pull_request` total_count) and only refuses when it
+# does. Override with --allow-no-checks.
 #
 # STACKED PRs: a middle layer of a stack reads green + MERGEABLE + CLEAN
 # exactly like an ordinary PR, so without a gate this writer would merge layer
@@ -60,7 +77,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GH_RETRY="$SCRIPT_DIR/gh-retry.sh"
 STACK_PROBE="$SCRIPT_DIR/stack-probe.sh"
 
-REPO=""; PR=""; WT=""; WATCH=0; POLL=30; DIRECT=0
+REPO=""; PR=""; WT=""; WATCH=0; POLL=30; DIRECT=0; ALLOW_NO_CHECKS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -68,11 +85,12 @@ while [ $# -gt 0 ]; do
     --watch) WATCH="$2"; shift 2 ;;
     --poll) POLL="$2"; shift 2 ;;
     --direct) DIRECT=1; shift ;;
+    --allow-no-checks) ALLOW_NO_CHECKS=1; shift ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) if [ -z "$PR" ]; then PR="$1"; shift; else echo "unexpected arg: $1" >&2; exit 1; fi ;;
   esac
 done
-[ -n "$PR" ] || { echo "usage: merge-shepherd.sh <pr> [--repo o/n] [--worktree p] [--direct] [--watch s] [--poll s]" >&2; exit 1; }
+[ -n "$PR" ] || { echo "usage: merge-shepherd.sh <pr> [--repo o/n] [--worktree p] [--direct] [--watch s] [--poll s] [--allow-no-checks]" >&2; exit 1; }
 case "$PR" in *[!0-9]*|'') echo "PR must be numeric, got: $PR" >&2; exit 1 ;; esac
 case "$WATCH" in *[!0-9]*|'') echo "--watch must be numeric, got: $WATCH" >&2; exit 1 ;; esac
 case "$POLL" in *[!0-9]*|'') echo "--poll must be numeric, got: $POLL" >&2; exit 1 ;; esac
@@ -114,14 +132,29 @@ pr_state() { # -> "STATE MERGESTATE INQUEUE"
     --jq '.data.repository.pullRequest | "\(.state) \(.mergeStateStatus) \(.isInMergeQueue)"' 2>/dev/null
 }
 
-checks() { # -> "FAILS PENDING"
+checks() { # -> "FAILS PENDING TOTAL"
   # Handles both rollup node types (issue #17): CheckRun (.status/.conclusion)
   # and legacy StatusContext (.state only — a bare `.status!="COMPLETED"` or
   # `.conclusion==null` would count every StatusContext as forever-pending and
   # silently block the merge). EXPECTED counts as pending, matching
   # poll-prs.sh's PENDING_FILTER.
   gh pr view "$PR" --repo "$REPO" --json statusCheckRollup --jq \
-    '"\([.statusCheckRollup[]?|select((.conclusion=="FAILURE"or .conclusion=="CANCELLED"or .conclusion=="TIMED_OUT") or (.state=="FAILURE"or .state=="ERROR"))]|length) \([.statusCheckRollup[]?|select((.status!=null and .status!="COMPLETED") or .state=="PENDING" or .state=="EXPECTED")]|length)"' 2>/dev/null
+    '"\([.statusCheckRollup[]?|select((.conclusion=="FAILURE"or .conclusion=="CANCELLED"or .conclusion=="TIMED_OUT") or (.state=="FAILURE"or .state=="ERROR"))]|length) \([.statusCheckRollup[]?|select((.status!=null and .status!="COMPLETED") or .state=="PENDING" or .state=="EXPECTED")]|length) \([.statusCheckRollup[]?]|length)"' 2>/dev/null
+}
+
+# Does this repo run CI on pull requests AT ALL? One cheap call; total_count>0
+# means an empty rollup is anomalous rather than normal. Without this a blanket
+# zero-checks refusal would wedge every repo that has no CI by design.
+# Unknown (call failed) is treated as "yes, expect checks" — consistent with
+# the rest of this script: not knowing is never a licence to merge.
+repo_runs_pr_ci() {
+  local n
+  n="$(gh api "repos/$REPO/actions/runs?event=pull_request&per_page=1" --jq '.total_count' 2>/dev/null)"
+  case "$n" in
+    ''|*[!0-9]*) return 0 ;;   # probe failed -> assume CI is expected
+    0) return 1 ;;             # this repo genuinely never runs PR CI
+    *) return 0 ;;
+  esac
 }
 
 # Prevention (issue #26): the Agent runtime checks each worktree out on a
@@ -212,7 +245,7 @@ stack_gate() {
 }
 
 advance() { # one idempotent step against live state
-  local st ms inq fails pend grc
+  local st ms inq fails pend total grc
   read -r st ms inq <<<"$(pr_state)"
   [ -z "$st" ] && { echo "state unavailable (transient) — retry later"; return 11; }
   case "$st" in
@@ -220,7 +253,7 @@ advance() { # one idempotent step against live state
     CLOSED) echo "CLOSED (not merged)"; return 1 ;;
   esac
   # OPEN:
-  read -r fails pend <<<"$(checks)"
+  read -r fails pend total <<<"$(checks)"
   [ "$ms" = CONFLICTING ] && { echo "CONFLICTING — needs human/rebase (do NOT auto-rebase)"; return 22; }
   if [ "$inq" = "true" ]; then echo "IN_QUEUE (waiting)"; return 11; fi
   # Stack gate BEFORE the red gate: on a blocked upper layer, "merge the layer
@@ -228,6 +261,16 @@ advance() { # one idempotent step against live state
   # retargeted ref anyway once the lower layer lands.
   stack_gate; grc=$?
   [ "$grc" -ne 0 ] && return "$grc"
+  # Empty rollup: CLEAN + 0 pending is ALSO true when there are no checks at
+  # all. Refuse only where this repo demonstrably runs PR CI, so repos without
+  # any CI are unaffected.
+  if [ "${total:-0}" -eq 0 ] && [ "$ALLOW_NO_CHECKS" != 1 ] && repo_runs_pr_ci; then
+    echo "NO CHECKS — this repo runs CI on pull requests, but this PR reports none."
+    echo "  Either CI has not started yet, or the base branch has no required checks"
+    echo "  (an intermediate chained/stacked PR). Not merging — re-run once checks"
+    echo "  appear, or pass --allow-no-checks if this PR genuinely has no CI."
+    return 21
+  fi
   # Deliberately conservative: counts ADVISORY failures too (e.g. a
   # non-blocking dependency scan), so a PR the queue would accept can still
   # report RED here. Fail-safe by design — a human decides, not the script.
