@@ -48,6 +48,19 @@ Both are **board-optional**: with `IF:BOARD` they drive the board's **Ready** st
 - If `IF:BOARD`: pin `{{BOARD_READY_OPTION_ID}}` (and Backlog id for bounce-backs) alongside the other board IDs.
 - groom-it: confirm `{{GOTCHA_SUMMARY}}` — the one-line list of repo gotchas every refined issue body should carry (e.g. codegen paths, i18n catalogs, migration policy).
 
+### 3c. Stacked PRs? (opt-in; default NO — skip in update mode unless raised)
+
+Asked only when take-it or drain-it is on, and only after the merge-policy question, because the two interact.
+
+Enabling writes the `stacked_prs:` block and lets `groom-it` propose a `stack:` chain and the dispatchers build one. **Default no.** Do not ask this as "do you want the new feature?" — ask whether this repo has work that arrives as *genuinely dependent chains* (schema then consumer, extract then refactor). A repo whose issues are mostly independent gains nothing and takes on a sequential dispatch shape for free.
+
+State two things plainly before the user answers:
+
+- **The preview is still rolling out per-repo.** Run `ai-agent-skills:pr-shepherd`'s `scripts/stack-probe.sh --repo <slug>` and report the result. Exit 11 means this repo cannot use stacks *yet* — enabling the block is still legal and simply dormant until GitHub enables it, but say so rather than letting the user assume it works today.
+- **If `merge_queue: true`,** dispatchers may open stacks that `pr-shepherd` will refuse to land (exit 24) until GitHub finishes shipping queue support. That is a real cost; confirm the user accepts landing those by hand.
+
+`{{STACK_MAX_DEPTH}}` — layer cap (default **4**). Beyond it the dispatchers fall back to independent PRs.
+
 ### 4. Commands (fact confirmation, free-text)
 
 - Pre-flight commands (`{{PREFLIGHT_COMMANDS}}`) — propose from the runner; user edits.
@@ -69,4 +82,4 @@ Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfac
 
 ## Defaults summary (when the user says "just use defaults")
 
-delegation: plugin-backed · take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · no project-specific extras.
+delegation: plugin-backed · take-it: yes (if Issues + Actions) · plate-it: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · clean-it: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · **stacked PRs: off** · no project-specific extras.

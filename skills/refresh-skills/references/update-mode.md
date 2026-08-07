@@ -38,6 +38,12 @@ from the short list silently drops two slots.
 
 A fact that cannot be verified is surfaced to the user, never carried forward silently.
 
+**`stacked_prs` is policy, not a detected fact — never add it on a refresh.** Absent means the repo
+has not opted in, which is the correct state for every repo that has not asked for it, and an update
+must leave it absent. Carry an existing block across verbatim; do not "helpfully" add one because
+`stack-probe.sh` reports the repo is now enabled. Enablement is availability; the block is consent.
+Raise it as a suggestion if the user asks what is new, and route them through interview §3c.
+
 ## Adopt mode (no marker — legacy hand-written skills)
 
 For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>-get-it`,
