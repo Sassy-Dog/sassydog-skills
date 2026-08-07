@@ -186,37 +186,90 @@ nothing unannotated, and the `stacks:` line on ticks that dispatch no chain. Whe
 declared but the repo is not enabled for the preview, say so once rather than every tick:
 `stacks: #1720→#1722 declared but stacks unavailable in this repo — sequencing by dependency instead`.
 
-## 7. Drain complete
+## 7. Terminal states — drain complete, drain stalled
 
-Ready empty AND in-flight zero, **confirmed from live GitHub state read this tick** — the §2
-reconcile plus the §4 read, never a stale or transient one → announce loudly:
+A drain loop ends itself in exactly two states. Both must be **confirmed from live GitHub state
+read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live
+state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave
+the loop alone, write no stall record, and let the next tick re-check.
+
+### DRAIN COMPLETE
+
+Ready empty AND in-flight zero → announce loudly and take the stop path below immediately — an
+empty queue needs no confirmation tick:
 
 ```text
 DRAIN COMPLETE — Ready is empty and nothing is in flight.
 ```
 
-Then stop the loop yourself, according to how this tick was invoked:
+### DRAIN STALLED
+
+In-flight zero AND dispatched zero this tick AND Ready non-empty — every Ready item held by a §4
+filter. Nothing this loop controls can change GitHub state before the next tick: no PRs to merge,
+no agents working, and dependency holds only resolve when a dep closes — with nothing in flight,
+only external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone
+must never keep it alive.
+
+Two carve-outs keep the state precise:
+
+- **Self-resolving holds can never trip it.** Collision holds, migration-slot holds, and deps on
+  in-flight issues all require in-flight > 0 — the in-flight = 0 conjunct excludes them by
+  construction.
+- **A foreign claim is not a human gate.** An item skipped by the Claimed filter is another
+  session's in-flight (`mine: false`) and resolves when that session merges, no human needed. A
+  tick whose holds include an active foreign claim is idle, not stalled — keep looping.
+
+**Confirm across two consecutive ticks before stopping** — a single stalled tick may be racing
+another session that is about to close a dependency or unblock an issue. Ticks share no memory,
+so persist the observation next to the §5 batch manifest, in `.git/drain-it-stall.json`: the held
+issue numbers with each one's hold root (the open `Depends on #N` it chains to, the `blocked`
+label, the decision gate).
+
+- **No record, or the recorded hold-set differs from this tick's** → write this tick's hold-set
+  and finish normally, appending to the tick report:
+  `stall: suspected — nothing in flight, all Ready held; an identical hold-set next tick ends the loop`.
+- **Record matches this tick's hold-set exactly** → STALLED is confirmed. Delete the record and
+  announce loudly, naming the reason **per held item** so the human knows exactly what unlocks
+  the queue:
+
+```text
+DRAIN STALLED — nothing dispatchable and nothing in flight; all Ready items gate on human action:
+  #103 #104 #105 #106 #108 → chain to #102 (parked in Backlog: awaiting planning session)
+  #22 → blocked label (drain-it: 2 failed attempts — CI check needs a human call)
+Loop <id> cancelled — resolve the gate(s), then restart the drain.
+```
+
+Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one.
+
+Any tick that dispatches, merges, or observes in-flight work deletes a leftover
+`.git/drain-it-stall.json`: progress resets the confirmation clock.
+
+### Stop path — both terminal states
+
+Stop the loop yourself, according to how this tick was invoked:
 
 | Mode | Recognize it by | Stop path |
 | --- | --- | --- |
 | **Self-paced loop** (ScheduleWakeup) | This tick was woken by a wake-up the previous tick scheduled | Do not schedule another wake-up — the loop ends here |
 | **Cron / fixed interval** (CronCreate-backed) | A cron job fires the skill on a schedule | **Self-cancel the cron** — see below. Do not merely advise the user to cancel; act |
-| **Manual invocation** | No loop context | Nothing to cancel — announce and finish |
+| **Manual invocation** | No loop context | Nothing to cancel — announce and finish. A stalled manual tick announces STALLED immediately: the two-tick confirmation gates loop cancellation, and there is no loop |
 
 **Cron self-cancel.** Find the loop's job id yourself: run `CronList` and select the job whose
 prompt is this drain-it invocation.
 
-- **Exactly one match** → `CronDelete <id>`, then append to the report: `Loop <id> cancelled — run
-  groom-it to refill Ready and start a new drain when there's more to ship.`
-- **Zero, multiple, or ambiguous matches** → delete NOTHING. Announce completion, list the
-  candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is worse
-  than a few extra no-op ticks.
+- **Exactly one match** → `CronDelete <id>`, then append to the report — after COMPLETE: `Loop
+  <id> cancelled — run groom-it to refill Ready and start a new drain when there's more to
+  ship.`; after STALLED: `Loop <id> cancelled — resolve the gate(s), then restart the drain.`
+- **Zero, multiple, or ambiguous matches** → delete NOTHING. Announce the terminal state, list
+  the candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is
+  worse than a few extra no-op ticks.
 
-Safety rails: self-cancel ONLY on the confirmed complete state above. Anything still claimed, an
-open PR (in-flight until actually MERGED, per §3), or any issue still in Ready means the drain is
-not complete and the loop stays alive. If live state could not be verified this tick — an API
-failure mid-tick — leave the cron alone; the next tick re-checks. Ticks that fire between
-completion and cancellation are no-ops, not errors: each re-runs this section and retries.
+Safety rails: self-cancel ONLY on a terminal state confirmed above. For COMPLETE, anything still
+claimed or an open PR (in-flight until actually MERGED, per §3) means the drain is not complete.
+For STALLED, any dispatch, any in-flight work (mine or foreign), or a hold-set that changed since
+the recorded tick means the loop may still make progress — stay alive. An API-failure tick never
+self-cancels and never counts toward stall confirmation. Ticks that fire between confirmation and
+cancellation are no-ops, not errors: each re-runs this section and retries.
 
 ## Guardrails
 
