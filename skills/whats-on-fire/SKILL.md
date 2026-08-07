@@ -56,9 +56,15 @@ ranks but never files. It already owns the qualifying gate, the `!is:resolved` q
 cross-referencing; don't reimplement any of that here.
 
 **Sentry crons** — MCP-first, resolving the tool by capability rather than a hardcoded tool id
-(same convention as `sentry-triage`). List cron monitors for the org and read each monitor's
-environment state. Any environment not `ok` is a P0. Note which projects own monitors — a product
-with zero monitors isn't passing, it's unmonitored, which belongs in blind spots.
+(same convention as `sentry-triage`; never a literal `mcp__...` id). No MCP connected → fall back
+to REST exactly as the issues surface does: the cron-monitor recipe in `sentry-triage`'s
+`references/api-fallback.md` (`SENTRY_AUTH_TOKEN`; the monitors endpoint needs `org:read` or
+`alerts:read`, not just the issue scopes). With neither MCP nor a token, or on a failed call, mark
+the surface `skipped — <reason>` per section 1 — the fallback must never turn "could not check"
+into silence. List cron monitors for the org and read each monitor's per-environment state
+(`environments[].status`, not the lifecycle-only monitor `status`). Any environment not `ok` is a
+P0. Note which projects own monitors — a product with zero monitors isn't passing, it's
+unmonitored, which belongs in blind spots.
 
 ### B. Stuck shipping + backlog heat
 
