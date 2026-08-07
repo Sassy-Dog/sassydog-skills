@@ -23,8 +23,8 @@ Anything that smells undispatchable gets bounced back, never patched up inline.
 
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/drain-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
-Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`, and
-`merge_queue` keys. Contract: `ai-agent-skills:refresh-skills` →
+Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`,
+`merge_queue`, and `stacked_prs` keys. Contract: `ai-agent-skills:refresh-skills` →
 `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, STOP. Drain-it dispatches sub-agents and merges PRs unattended, on a
@@ -102,8 +102,39 @@ Filter, in order:
 | --- | --- |
 | Claimed | Skip if assignee set, or status ≠ Ready / `in-progress` label present — another session got it |
 | Blocked | Skip the `blocked` label |
-| Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges |
-| Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's `touches:` set — same repo-relative path, or a glob on one side matching a path on the other. Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. |
+| Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges. **Exempt: members of a stack this tick is dispatching** (below). |
+| Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's `touches:` set — same repo-relative path, or a glob on one side matching a path on the other. Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
+
+### Stacks (ONLY if `stacked_prs:` is configured)
+
+**With no `stacked_prs:` block this section does not run**, and a dependency chain serializes across
+ticks exactly as before. That is the default and it is correct, not degraded.
+
+When it IS configured, `queue-snapshot.sh` surfaces a `stack` array on the bottom issue of each
+declared chain. A chain is dispatchable as one stacked unit when **every** member is in `ready[]`,
+unclaimed, and unblocked. Then two filter exemptions apply, and only within that chain:
+
+- **Dependencies** — members may depend on each other and still dispatch together. That is the whole
+  point: the chain ships now instead of one layer per tick. Dependencies pointing *outside* the
+  chain still block it, as a unit.
+- **Collision** — overlapping `touches:` sets *between members of the same stack* are expected, not
+  hazardous: layer 2 is branched from layer 1, so it edits layer 1's files on top of layer 1's
+  version by construction. Overlap between a stack member and any **other** in-flight issue still
+  blocks the whole chain.
+
+**Capacity: a chain costs ONE `max_in_flight` slot**, because it is one sub-agent in one worktree —
+not one slot per layer. It does open N PRs, so a chain under a cap of 3 can still leave more PRs
+in flight than an unstacked tick would; that is expected and bounded by `stacked_prs.max_depth`.
+
+Verify the repo is actually enabled before dispatching a chain:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh --repo "<slug>"
+```
+
+Exit `11` means the preview is not enabled here. **Do not fall back to parallel dispatch** — the
+members really do depend on each other. Drop the exemptions, let the ordinary Dependencies filter
+serialize the chain across ticks, and note it once in the tick report.
 | Smell test | Run take-it's pre-flight smell test — research-shaped titles, open-question sections, stub bodies. Failures bounce back to groom-it with a required comment. Never "fix it up" inline; that hides the grooming gap. |
 
 **If `migrations:` is configured** — additional filter: at most ONE issue touching
@@ -123,6 +154,11 @@ Use take-it's mechanics verbatim: claim → fast-forward the local default branc
 issue, `isolation: "worktree"`, single message, batch manifest in `.git/drain-it-batch.json`,
 take-it's self-contained sub-agent prompt.
 
+A stack chain uses take-it's **stacked variant** instead: one sub-agent, one worktree, layers built
+in order, PRs based on the layer below, linked via `POST /repos/{slug}/stacks`. Claim every member
+up front — a half-claimed chain lets another loop pick up a layer mid-build. The shared worktree
+appears **once** in the manifest, and teardown waits for the TOP layer to be terminal.
+
 The reused prompt carries take-it's shared-state isolation rules — worktree confinement, never
 `git stash`, never an editable or dev install into a shared interpreter or global store. Keep them
 intact when appending failure context for a §2 redispatch.
@@ -141,11 +177,14 @@ Terse — this prints every few minutes under `/loop`:
 ```text
 DRAIN TICK — in-flight 3/5 | merged this tick: #1712 | dispatched: #1707 #1711 | Ready remaining: 4
 holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (touches overlaps in-flight #1707)
+stacks: #1720 → #1721 → #1722 dispatched as 1 layer-stack (1 slot, 3 PRs)
 unannotated (dispatched without a touches set — coupling unchecked): #1711
 ```
 
 Plus one line per failure with its next action. Drop the `unannotated` line on ticks that dispatch
-nothing unannotated.
+nothing unannotated, and the `stacks:` line on ticks that dispatch no chain. When a chain was
+declared but the repo is not enabled for the preview, say so once rather than every tick:
+`stacks: #1720→#1722 declared but stacks unavailable in this repo — sequencing by dependency instead`.
 
 ## 7. Drain complete
 
@@ -184,7 +223,9 @@ completion and cancellation are no-ops, not errors: each re-runs this section an
 - **Ready only.** Everything else is groom-it's job — drain-it never promotes, never grooms, never
   files issues.
 - **Hard cap `max_in_flight`**, counting carry-over from previous ticks, not just this tick's
-  dispatches.
+  dispatches. A stack chain is one slot, not one per layer.
+- **Never dispatch a partial chain**, and never split one across parallel agents. If any member is
+  claimed, blocked, or missing from Ready, the whole chain waits.
 - **Idempotent ticks**: every action re-checks live GitHub state first; a crashed tick must be
   safely re-runnable, with worktrees reclaimable via the batch manifest.
 - **Single-writer**: only the coordinator merges or enqueues; max one redispatch per issue without
