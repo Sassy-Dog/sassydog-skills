@@ -9,7 +9,9 @@
 #   teardown.sh --sweep                                  # every .claude/worktrees/agent-*
 #                                                        #   whose remote branch is gone, PLUS
 #                                                        #   orphan isolation branches whose
-#                                                        #   worktree is already gone
+#                                                        #   worktree is already gone, PLUS
+#                                                        #   ordinary [gone] local branches
+#                                                        #   (upstream deleted — guarded, below)
 #   teardown.sh --reconcile-only                         # skip all worktree/branch phases; just
 #                                                        #   the default-branch reconcile (switch,
 #                                                        #   fetch --prune, clear ff-blocking
@@ -37,6 +39,20 @@
 # false-negative safe); genuinely unmerged ones are surfaced, never auto-deleted.
 # Isolation branches whose worktree is still present are LIVE agents — --sweep
 # never touches them ("no upstream" is their normal state, not a merged signal).
+#
+# Ordinary [gone] branches (issue #85): a plain feature branch — an ordinary
+# send-it flow — has no agent worktree and no isolation prefix, so neither sweep
+# phase above ever enumerates it; five accumulated in this repo while the residual
+# report read "clean". --sweep therefore also enumerates refs/heads for a bare
+# [gone] in %(upstream:track). (NOT `git branch -vv`, whose rendering nests the
+# token as `[origin/x: gone]` — grepping THAT output for '[gone]' matches nothing;
+# the known trap.) Deletion is -D, not -d: squash-merged tips are not ancestors of
+# the default branch (see above). Guards: never the default branch; never a branch
+# a live worktree has checked out; never a branch that is the base of an OPEN PR
+# (GitHub closes a PR outright when its base branch is deleted — a merged branch
+# can still be a live base, e.g. a stack mid-landing); and if the open-PR lookup
+# fails, deletion is SKIPPED rather than run unguarded (same stance as
+# merge-shepherd.sh's inconclusive stack probe: unknown means wait, not act).
 #
 # Worktrees are removed with `-f -f` because the Agent runtime leaves them locked.
 # Stashes are reported but NEVER auto-dropped (destructive — human's call).
@@ -96,9 +112,13 @@ remove_worktree() {  # $1 = worktree path
 }
 
 RECONCILE_ONLY=0
+SWEEP_MODE=0        # set in --sweep; gates the [gone]-phase counts in the residual report
+GONE_SWEPT=0        # [gone] branches deleted by the sweep
+GONE_HELD=0         # [gone] branches held back by a guard (reported, never silent)
 if [ "${1:-}" = "--reconcile-only" ]; then
   RECONCILE_ONLY=1
 elif [ "${1:-}" = "--sweep" ]; then
+  SWEEP_MODE=1
   echo "== sweep: agent worktrees whose remote branch is gone (squash-merged + deleted) =="
   git fetch --prune --quiet origin 2>/dev/null || true
   while IFS= read -r path; do
@@ -146,6 +166,50 @@ elif [ "${1:-}" = "--sweep" ]; then
       echo "  ⚠ KEEP $br — tip ${tip:0:7} not in origin/$BRANCH and no merged PR contains it; possibly unmerged work — review by hand"
     fi
   done < <(git for-each-ref --format='%(refname:short) %(objectname)' "refs/heads/${ISO_PREFIX}*" || true)
+
+  echo "== sweep: ordinary [gone] local branches (upstream deleted — no worktree needed) =="
+  # Feature branches from non-worktree flows (send-it): upstream deleted on merge,
+  # never seen by either phase above. Enumerated via %(upstream:track)'s bare
+  # [gone] — not `git branch -vv`'s nested rendering (see header).
+  GONE_LIST="$(git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads \
+    | grep -F '[gone]' | cut -f1 || true)"
+  if [ -z "$GONE_LIST" ]; then
+    echo "  (none)"
+  else
+    # Guard 3 input (one call for the whole phase): branches that are the BASE of
+    # an open PR. Deleting a base branch closes its PR outright, and "merged"
+    # does not protect against it — the branch really did merge; something else
+    # still points at it (stack mid-landing, or any hand-based PR).
+    BASES_OK=0
+    if OPEN_BASES="$(gh pr list --state open --limit 200 --json baseRefName \
+        --jq '.[].baseRefName' 2>/dev/null)"; then
+      BASES_OK=1
+    fi
+    while IFS= read -r br; do
+      [ -z "$br" ] && continue
+      # Isolation-prefix branches belong to the orphan phase above — its verdict
+      # (including "surfaced, review by hand") stands; never re-judged here.
+      case "$br" in "$ISO_PREFIX"*) continue ;; esac
+      if [ "$br" = "$BRANCH" ]; then
+        echo "  KEEP $br (default branch — never deleted)"; GONE_HELD=$((GONE_HELD+1)); continue
+      fi
+      if branch_in_live_worktree "$br"; then
+        echo "  KEEP $br (checked out by a live worktree)"; GONE_HELD=$((GONE_HELD+1)); continue
+      fi
+      if [ "$BASES_OK" != "1" ]; then
+        echo "  ⚠ KEEP $br — open-PR base lookup failed (gh offline?); skipping deletion rather than deleting unguarded — re-run when gh works"
+        GONE_HELD=$((GONE_HELD+1)); continue
+      fi
+      if printf '%s\n' "$OPEN_BASES" | grep -qxF "$br"; then
+        echo "  KEEP $br (base of an OPEN PR — deleting it would close that PR)"; GONE_HELD=$((GONE_HELD+1)); continue
+      fi
+      if git branch -D "$br" >/dev/null 2>&1; then
+        echo "  deleted $br (upstream gone)"; GONE_SWEPT=$((GONE_SWEPT+1))
+      else
+        echo "  ⚠ could not delete $br"; GONE_HELD=$((GONE_HELD+1))
+      fi
+    done <<< "$GONE_LIST"
+  fi
 elif [ "$#" -gt 0 ]; then
   echo "== explicit teardown of $# worktree(s) =="
   for path in "$@"; do remove_worktree "$path"; done
@@ -178,6 +242,9 @@ fi
 echo "== residual =="
 RW=$(git worktree list | grep -c "/.claude/worktrees/" || true)
 echo "  agent worktrees remaining: $RW"
+[ "$SWEEP_MODE" = "1" ] && echo "  [gone] branches: swept $GONE_SWEPT, held back $GONE_HELD"
+GB=$(git for-each-ref --format='%(upstream:track)' refs/heads | grep -cF '[gone]' || true)
+[ "$GB" != "0" ] && echo "  ⚠ $GB [gone] branch(es) remaining — held back or unswept; see above (or run --sweep)"
 IB=$(git for-each-ref --format='%(refname:short)' "refs/heads/${ISO_PREFIX}*" | wc -l | tr -d ' ')
 [ "$IB" != "0" ] && echo "  ⚠ $IB isolation branch(es) (${ISO_PREFIX}*) remaining — live or unmerged; see above"
 SL=$(git stash list 2>/dev/null | wc -l | tr -d ' ')

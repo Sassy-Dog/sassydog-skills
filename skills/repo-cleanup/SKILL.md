@@ -234,19 +234,25 @@ DEFAULT_BRANCH="$DEFAULT_BRANCH" \
 ```
 
 `--sweep` removes every detached or remote-branch-gone agent worktree under `.claude/worktrees/`,
-deletes their local branches **and** their `worktree-agent-*` isolation branches, then sweeps orphan
+deletes their local branches **and** their `worktree-agent-*` isolation branches, sweeps orphan
 isolation branches whose worktree is already gone (ancestor-of-default OR merged-PR classification;
 genuinely unmerged ones are surfaced, never auto-deleted — and live ones, worktree still present,
-are never touched). It prunes, ff-reconciles the default branch, and reports stashes but
-**never** drops them (step 3 owns that). For **non-worktree** stale local branches (regular
-`[gone]` branches with no checkout, and squash-merged branches whose remote still exists), finish the
-sweep here:
+are never touched), **and deletes ordinary `[gone]` local branches** — regular feature branches
+with no checkout whose upstream was deleted on merge. That last phase used to be a hand-run
+follow-up here, and its grep was a known silent-under-deletion trap (step 1's `: gone]` rendering);
+now the script owns it, with the same guards the prose demands: never the default branch, never a
+branch checked out in a live worktree, never a branch that is the base of an open PR (step 7's
+base-branch guard — deleting a base closes its PR), and a failed open-PR lookup skips deletion
+rather than proceeding unguarded. Everything held back is reported, and the `== residual ==` footer
+counts swept vs held so "clean" means clean. The sweep also prunes, ff-reconciles the default
+branch, and reports stashes but **never** drops them (step 3 owns that).
+
+The one branch case `--sweep` does not cover: **squash-merged branches whose remote still exists**
+(auto-delete off, or an API/web merge that skipped it). "Remote still there" reads as "PR likely
+open", so the sweep rightly keeps them — that call needs a per-branch MERGED check
+(`gh pr list --repo "$REPO" --state all --search "head:<branch>"`), a judgement, not a sweep:
 
 ```bash
-# [gone] branches with no worktree — remote already deleted:
-git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads \
-  | grep -F '[gone]' | cut -f1 | xargs -r git branch -D
-
 # squash-merged but remote still exists — verify MERGED first, then -D (not -d):
 git branch -D <branch>
 ```
