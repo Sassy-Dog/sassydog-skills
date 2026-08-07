@@ -29,10 +29,12 @@ skill NEVER files issues or mutates anything. Only `write_policy: gated` unlocks
 
 ### If it reads `NO_CONFIG`
 
-**Run EXACTLY these two surfaces and nothing else:**
+**Run EXACTLY these three surfaces and nothing else:**
 
 1. GitHub bugs and open issues (§3A "GitHub bugs" + §3B boardless form) — derivable from `gh`
-2. `repo-health` tech-debt scan **with no `SCAN_PATHS`**, letting it default to the whole tracked
+2. In-flight work (§3E) — derivable from `gh` and `git` alone; it needs no config block, so it
+   runs unconfigured by design
+3. `repo-health` tech-debt scan **with no `SCAN_PATHS`**, letting it default to the whole tracked
    tree — you do not know this repo's source layout
 
 **Do NOT run**, and render each as `skipped — not configured` on the sources line: Sentry,
@@ -46,9 +48,9 @@ TestFlight, PostHog, mobile release lag, board snapshot, secret bootstrap, CI he
 
 Then tell the user:
 
-> No `.claude/sassy-dog/plate-it.md` in this repo — ran GitHub issues + a whole-tree debt scan
-> only. If this repo has a project-level `plate-it` under `.claude/skills/`, use that instead; it
-> has the real config.
+> No `.claude/sassy-dog/plate-it.md` in this repo — ran GitHub issues, in-flight work, and a
+> whole-tree debt scan only. If this repo has a project-level `plate-it` under `.claude/skills/`,
+> use that instead; it has the real config.
 
 Routing to an existing project skill takes precedence over offering to migrate: it gets the user a
 real plate now. Make the setup offer in the final section, after the output.
@@ -143,6 +145,46 @@ as in-app feedback tables, funnel health, infra drift, or deprecation scans.
 Cluster feedback and error items that lack a GitHub issue into candidate "next bets" — themes with
 ≥2 independent signals. Recommendation-only; never auto-filed.
 
+### E. In-flight work
+
+Feeds §6's `## ✅ Already in flight`. Everything here derives from `gh` and `git` alone — no
+config block, so this surface also runs under `NO_CONFIG`. It is read-only under every
+`write_policy`: report, never file, comment, push, or delete (the `git fetch` below refreshes
+remote-tracking refs only; it touches no working tree and no local branch).
+
+```bash
+# The genuinely in-flight set: open PRs with check status
+gh pr list --state open --json number,title,headRefName,isDraft,statusCheckRollup
+
+# Refresh the remote view BEFORE classifying local branches — a stale
+# origin/<default> feeds the same trap the guardrail below describes
+git fetch origin --quiet
+
+# Classify every local branch (including the checked-out one) by PR STATE
+git for-each-ref refs/heads --format='%(refname:short)' | while read -r branch; do
+  gh pr list --state all --head "$branch" --json number,state,mergedAt
+done
+```
+
+Classification — PR state is the source of truth:
+
+| Probe result | Classification |
+|---|---|
+| Open PR | Genuinely in flight — list with check status, draft flagged |
+| Merged PR | Post-merge residue — route to `clean-it` as a one-line pointer in the output; NEVER surface as an actionable plate item |
+| Closed-unmerged PR | Deliberately dropped — not a plate item |
+| No PR in any state AND commits not in `origin/<default>` (`git rev-list --count` against the just-fetched remote-tracking ref) | Unshipped work — a legitimate plate item, "a `send it` away" |
+
+"Route to `clean-it`" means naming it in the plate (see the residue line in §6's template), not
+running the cleanup from here.
+
+> **Guardrail — squash-merge + a stale local main lie in unison.** Never derive "unshipped" from
+> `main..HEAD` or from an open-only PR list. Under squash merge a branch's commits never land on
+> the default branch verbatim, so against an un-fast-forwarded local main, `main..HEAD` claims
+> "ahead" forever — and the merged PR is invisible to `--state open`. The two stale views
+> corroborate each other into a confident false actionable. This is the same trap
+> `ai-agent-skills:repo-cleanup` documents for branch sweeps: use PR state, never ancestry.
+
 ## 4. Dedupe across sources
 
 Correlation keys: auto-file marker ↔ GitHub body (`<source>-source: <ID>`); bug-labeled issue ↔
@@ -203,7 +245,13 @@ _Sources: <pulled, with any "skipped — reason">_
 ## 🧹 Tech debt
 ## 🛠 Dev experience
 ## 💡 Next bet candidates (synthesized — not yet on the backlog)
-## ✅ Already in flight
+
+## ✅ Already in flight   <!-- from §3E; classified by PR state, never main..HEAD -->
+- **PR #NNN <title>** — <branch> · <checks summary> · <draft?>
+- **<branch>** — unshipped, no PR in any state — a `send it` away
+
+_<N> merged-PR branches lingering locally — residue for `clean it`, not plate items._
+
 ## 🆕 Auto-filed this run   <!-- gated write_policy only; omit entirely when empty -->
 
 ## 👉 Today's recommendations (cross-category top 5)
