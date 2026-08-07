@@ -5,7 +5,10 @@
 #
 # Terminal per PR:
 #   MERGED                        -> result "merged"   (queue succeeded)
-#   OPEN  + isInMergeQueue:false  -> result "ejected"  (queue ejected it — or it never enqueued)
+#   OPEN  + isInMergeQueue:false  -> disambiguate via the last RemovedFromMergeQueueEvent:
+#     reason "merged"               -> result "merged"   (queue merged it; the PR-state flip
+#                                      to MERGED lags the queue-entry removal by a beat — #60)
+#     any other reason, or no event -> result "ejected"  (queue ejected it — or it never enqueued)
 #   CLOSED (not merged)           -> result "closed"   (closed without merge)
 #
 # Does NOT merge, re-enqueue, or recover — coordinator inspects exit state and decides.
@@ -54,13 +57,18 @@ fi
 
 # isInMergeQueue / mergeQueueEntry are GraphQL-only — `gh pr view --json
 # isInMergeQueue` fails with `Unknown JSON field`. This is the query from
-# references/merge-queue.md "Confirm the enqueue took".
+# references/merge-queue.md "Confirm the enqueue took", plus the timeline read
+# that disambiguates a real eject from the merged-but-state-not-flipped race
+# (#60) — same round-trip, no second call.
 query_pr() {
     local pr="$1"
     gh api graphql \
         -f query='query($owner:String!,$name:String!,$pr:Int!){
             repository(owner:$owner,name:$name){
-                pullRequest(number:$pr){ state isInMergeQueue mergeQueueEntry{ state position } }}}' \
+                pullRequest(number:$pr){
+                    state isInMergeQueue mergeQueueEntry{ state position }
+                    timelineItems(itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT], last:1){
+                        nodes{ ... on RemovedFromMergeQueueEvent { reason } }}}}}' \
         -f owner="$OWNER" -f name="$NAME" -F pr="$pr" \
         --jq '.data.repository.pullRequest' 2>/dev/null
 }
@@ -112,14 +120,27 @@ while true; do
                     "$pr" "${q_state:-?}" "${q_pos:-?}" >&2
                 ;;
             OPEN/false)
-                RESULTS[$i]="ejected"
-                {
-                    printf 'PR #%-5s  EJECTED 🚨  OPEN with isInMergeQueue:false (last queue-entry state: %s)\n' \
-                        "$pr" "${QSTATES[$i]:-never seen in queue}"
-                    echo "           Either the queue ejected it (merge_group failed on the rebased ref)"
-                    echo "           or it never enqueued (the --auto method-flag trap). Do NOT blindly"
-                    echo "           re-enqueue — see 'Eject recovery' in references/merge-queue.md."
-                } >&2
+                # Race guard (#60): GitHub removes the queue entry a beat before
+                # flipping the PR to MERGED, so OPEN + isInMergeQueue:false is
+                # momentarily true for a PR the queue just merged. The removal
+                # event's reason disambiguates. Allowlist the benign — reason is
+                # an open String, so ONLY "merged" is a healthy exit; any other
+                # reason, or no removal event at all (never enqueued), is a
+                # genuine eject.
+                removal_reason=$(jq -r '.timelineItems.nodes[-1].reason // empty' <<<"$view")
+                if [[ "$removal_reason" == "merged" ]]; then
+                    RESULTS[$i]="merged"
+                    printf 'PR #%-5s  MERGED ✅  (removal reason "merged"; PR-state flip lagging)\n' "$pr" >&2
+                else
+                    RESULTS[$i]="ejected"
+                    {
+                        printf 'PR #%-5s  EJECTED 🚨  OPEN with isInMergeQueue:false (removal reason: %s; last queue-entry state: %s)\n' \
+                            "$pr" "${removal_reason:-none}" "${QSTATES[$i]:-never seen in queue}"
+                        echo "           Either the queue ejected it (merge_group failed on the rebased ref)"
+                        echo "           or it never enqueued (the --auto method-flag trap). Do NOT blindly"
+                        echo "           re-enqueue — see 'Eject recovery' in references/merge-queue.md."
+                    } >&2
+                fi
                 ;;
             *)
                 echo "PR #$pr   WARN: unexpected response ($state / inQueue=$in_queue) — retrying next tick" >&2
