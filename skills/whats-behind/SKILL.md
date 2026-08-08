@@ -36,7 +36,9 @@ multi-repo product groups are covered; depth counts the repo, not its `.git`.
 **Exclude archived repos before ranking.** The script walks local checkouts, and archived repos
 routinely linger on disk long after they stop mattering. Cross-reference the org
 (`gh repo list <ORG> --json name,isArchived`) and drop the archived ones, or the report will
-solemnly tell you a dead product is behind.
+solemnly tell you a dead product is behind. No `gh` on PATH (cloud sessions): pull the same roster
+via the GitHub MCP list-repos capability — the pattern in `whats-on-fire`'s
+`references/cloud-fallback.md`.
 
 ## 2. Rank peer-relative, not absolute
 
