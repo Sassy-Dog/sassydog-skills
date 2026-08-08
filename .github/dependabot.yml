@@ -1,18 +1,24 @@
 ---
-# generated-by: sassy-dog:refresh-deps | template: dependabot.yml | template-version: 1
+# generated-by: sassy-dog:refresh-deps | template: dependabot.yml | template-version: 2
 #
-# Scoped to github-actions deliberately. That ecosystem touches only workflow
-# YAML — no lockfile — so its PRs always apply cleanly. Adding `npm` here would
-# need .github/workflows/dependabot-bun-lockfile.yml alongside it: Dependabot
-# edits package.json but cannot write bun.lock, so CI running
-# `bun install --frozen-lockfile` rejects every PR it opens. Render that pair
-# together via sassy-dog:refresh-deps, not by adding npm here.
+# GROUPING IS THE POINT OF THIS FILE. Ungrouped, one vulnerable transitive
+# dependency can open a dozen PRs; across this org that turned 74 alerts into a
+# PR flood nobody merges. Each ecosystem below declares TWO groups —
+# `applies-to: version-updates` and `applies-to: security-updates` — because a
+# group with no `applies-to` covers version updates ONLY, silently leaving
+# security PRs ungrouped. That default is the single easiest thing to get wrong
+# here, and it is invisible until the flood arrives.
 #
-# Each ecosystem declares TWO groups. A group with no `applies-to` covers
-# version updates ONLY, silently leaving security PRs ungrouped — and that
-# default stays invisible until a flood of one-PR-per-package arrives.
+# Semver-major is excluded from the routine groups: majors are API breaks that
+# need a human, and dependabot-auto-merge.yml holds them anyway. A major that
+# is ALSO a security fix still comes through as its own security PR — security
+# updates ignore version-update ignore rules, which is the behaviour we want.
+
 version: 2
 updates:
+  # Workflow YAML only — no lockfile, so these always apply cleanly. Also feeds
+  # SHA-pinning hygiene, since Dependabot rewrites pinned SHAs with a version
+  # comment rather than reverting them to floating tags.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
