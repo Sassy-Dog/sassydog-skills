@@ -14,7 +14,9 @@
 # it cannot, CI running a frozen-lockfile install rejects every PR it opens —
 # qr-ninja hit exactly this and merged 0 of 20 npm PRs before removing the
 # ecosystem. A true here means "this ecosystem needs a lockfile-sync workflow,
-# or its PRs will be dead on arrival."
+# or its PRs will be dead on arrival." Since Dependabot's native `bun`
+# ecosystem GA'd (2025-02) the text bun.lock is written natively, so the risk
+# survives only for the binary bun.lockb and for cocoapods.
 #
 # Matching is by PATH REGEX over `git ls-files`, not git pathspec globs: a
 # pathspec like 'package.json' matches only the repo root, which would silently
@@ -56,23 +58,48 @@ det=0; why="no tracked .github/workflows/*.y*ml"
 if has '^\.github/workflows/.*\.ya?ml$'; then det=1; why="tracked workflow files"; fi
 add "github-actions" "$det" 0 "$why"
 
+# --- bun: native Dependabot ecosystem (GA 2025-02) ---------------------------
+# Dependabot's `bun` ecosystem reads and REWRITES the text bun.lock itself
+# (bun >= 1.1.39), so a bun repo needs no lockfile-sync workflow — its version
+# PRs arrive frozen-lockfile valid. Caveats that stay true today: security
+# updates are not yet supported for bun (version updates only), and the binary
+# bun.lockb predates the text format and is NOT readable by the native
+# ecosystem — a lockb-only repo falls through to the legacy npm +
+# lockfile-sync classification below until it migrates
+# (`bun install --save-text-lockfile`).
+det=0; why="no tracked bun.lock"
+if has '(^|/)bun\.lock$'; then
+    if has '(^|/)package\.json$'; then
+        det=1; why="tracked bun.lock + package.json — native bun ecosystem writes the text lockfile itself"
+    else
+        why="bun.lock without package.json — no manifest for Dependabot to update"
+    fi
+elif has '(^|/)bun\.lockb$'; then
+    why="binary bun.lockb only — native bun needs the text bun.lock (bun >= 1.1.39); classified as legacy npm + lockfile sync"
+fi
+add "bun" "$det" 0 "$why"
+
 # --- npm family: the package MANAGER decides whether Dependabot can finish ---
 # Dependabot's npm ecosystem writes package-lock.json / yarn.lock / pnpm-lock.yaml.
-# It does NOT write bun.lock(b). A bun repo therefore needs the lockfile-sync
-# workflow or CI rejects every PR on `bun install --frozen-lockfile`.
+# The text bun.lock belongs to the native bun ecosystem above, so it does NOT
+# count as npm here. Only the legacy binary bun.lockb still lands in npm with
+# lockfile_risk: no Dependabot ecosystem can write it, so those repos keep the
+# npm + lockfile-sync pairing (or migrate the lockfile and re-run this probe).
 det=0; risk=0; why="no tracked package.json"
 if has '(^|/)package\.json$'; then
-    det=1
-    if has '(^|/)bun\.lockb?$'; then
-        risk=1; why="package.json + bun.lock — Dependabot cannot write bun.lock; needs lockfile sync"
+    if has '(^|/)bun\.lock$'; then
+        why="package.json + bun.lock — covered by the native bun ecosystem, not npm"
+    elif has '(^|/)bun\.lockb$'; then
+        det=1; risk=1
+        why="package.json + binary bun.lockb — no Dependabot ecosystem writes it; legacy path: npm + lockfile sync (or migrate via bun install --save-text-lockfile)"
     elif has '(^|/)pnpm-lock\.yaml$'; then
-        why="package.json + pnpm-lock.yaml (Dependabot writes this natively)"
+        det=1; why="package.json + pnpm-lock.yaml (Dependabot writes this natively)"
     elif has '(^|/)yarn\.lock$'; then
-        why="package.json + yarn.lock (Dependabot writes this natively)"
+        det=1; why="package.json + yarn.lock (Dependabot writes this natively)"
     elif has '(^|/)package-lock\.json$'; then
-        why="package.json + package-lock.json (Dependabot writes this natively)"
+        det=1; why="package.json + package-lock.json (Dependabot writes this natively)"
     else
-        why="package.json with no lockfile — nothing to go stale"
+        det=1; why="package.json with no lockfile — nothing to go stale"
     fi
 fi
 add "npm" "$det" "$risk" "$why"

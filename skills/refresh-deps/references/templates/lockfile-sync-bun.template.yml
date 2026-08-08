@@ -1,18 +1,32 @@
-# TEMPLATE: lockfile-sync-bun · version 2
-# Rendered by sassy-dog:refresh-deps for repos where
-# detect-ecosystems.sh reports npm with lockfile_risk (a tracked bun.lock).
+# TEMPLATE: lockfile-sync-bun · version 3
+# LEGACY FALLBACK — not the default for bun repos anymore. Dependabot's native
+# `bun` ecosystem (GA 2025-02) reads and rewrites the text bun.lock itself
+# (bun >= 1.1.39): the default render for a bun repo is the bun block in
+# dependabot.yml.template, with NO sync workflow. Render this pairing only when
+# detect-ecosystems.sh reports npm with lockfile_risk — i.e. when the sync
+# pairing is still the correct call:
+#   - binary bun.lockb (pre-text-lockfile) — no Dependabot ecosystem writes
+#     it; migrate with `bun install --save-text-lockfile`, or keep this pairing
+#   - a repo deliberately kept on grouped npm instead of native bun (qr-ninja
+#     #394: workspaces monorepo, grouped weekly npm + monthly cadence refresh)
+#   - Dependabot SECURITY updates: not yet supported by the bun ecosystem
+#     (version updates only), so security PRs arrive via the npm path —
+#     manifest edit, no bun.lock write — and need this workflow to merge
 #   {{RUNNER}}  → runs-on value (default: [self-hosted, linux, sassy-dog])
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-bun | template-version: 2
+# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-bun | template-version: 3
 #
-# Refresh bun.lock on Dependabot npm PRs.
+# Refresh bun.lock on Dependabot npm PRs (the LEGACY npm + sync pairing —
+# native `bun` is the default for bun repos; see the render conditions above).
 #
-# THE PROBLEM THIS SOLVES: Dependabot updates package.json but cannot write
-# bun.lock (a Bun-specific format). CI then runs `bun install --frozen-lockfile`
-# and rejects the PR. Without this workflow, every npm PR in a Bun repo is dead
-# on arrival — qr-ninja merged 0 of 20 before deleting the ecosystem outright.
-# Security updates cannot be opted out of that way, so the fix has to be here.
+# THE PROBLEM THIS SOLVES: Dependabot's npm ecosystem updates package.json but
+# does not write bun.lock (a Bun-specific format; only the native bun ecosystem
+# writes it). CI then runs `bun install --frozen-lockfile` and rejects the PR.
+# Without this workflow, every npm-path PR in a Bun repo is dead on arrival —
+# qr-ninja merged 0 of 20 before deleting the ecosystem outright. Security
+# updates cannot be opted out of that way, so on this pairing the fix has to
+# be here.
 #
 # Why pull_request_target: Dependabot's GITHUB_TOKEN is read-only by design.
 # Pushing the lockfile commit needs write, which only the BASE repo context

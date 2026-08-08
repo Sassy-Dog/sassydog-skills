@@ -25,7 +25,7 @@ It renders up to three things:
 |---|---|
 | `.github/dependabot.yml` | always — grouped, per detected ecosystem |
 | `.github/workflows/dependabot-auto-merge.yml` | when the repo has a merge gate |
-| `.github/workflows/dependabot-bun-lockfile.yml` | when npm has `lockfile_risk` (tracked `bun.lock`) |
+| `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow |
 | `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected |
 
 Ownership marker: the `generated-by: sassy-dog:refresh-deps` comment on the first
@@ -89,12 +89,19 @@ Prefer those label forms over the legacy product-scoped ones (`velovate`, `qr-ni
 still carry those labels, but scoping by product is a leftover, not a constraint.
 
 **The lockfile trap — the single most important thing this skill exists for.** Dependabot updates a
-manifest but writes only the lockfile formats it supports. It cannot write `bun.lock`, and it has no
-cocoapods ecosystem at all. CI running a frozen-lockfile install then rejects every PR Dependabot
-opens. One repo in this org merged **0 of 20** npm PRs before deleting the ecosystem to stop the
-noise. Security updates cannot be opted out that way — they fire on any vulnerable dependency — so
-in a Bun or CocoaPods repo the sync workflow is not optional polish; without it the security PRs are
-dead on arrival and the alerts stay open.
+manifest but writes only the lockfile formats it supports; CI running a frozen-lockfile install then
+rejects every PR it opens. One repo in this org merged **0 of 20** npm PRs that way before deleting
+the ecosystem to stop the noise. The bun half of that trap is closed by default now: Dependabot's
+native `bun` ecosystem (GA 2025-02) reads and rewrites the text `bun.lock` itself (bun >= 1.1.39),
+so a bun repo renders the `bun` block and no sync workflow. The npm + `lockfile-sync-bun` pairing
+survives only as the legacy fallback — binary `bun.lockb` (which no ecosystem writes), or a repo
+that deliberately stays on grouped npm (qr-ninja#394's workspaces-monorepo stance). One caveat keeps
+that fallback relevant: bun security updates are not yet supported upstream (version updates only),
+and security PRs fire on any vulnerable dependency regardless of the ecosystem list — one arriving
+via the npm path edits the manifest without touching `bun.lock`, and only the sync workflow makes it
+mergeable. CocoaPods is the trap in full force: Dependabot has no cocoapods ecosystem at all, so the
+pod sync workflow is never optional there — without it the security PRs are dead on arrival and the
+alerts stay open.
 
 ## 4. Prerequisites the render assumes
 
@@ -113,7 +120,8 @@ gh api "repos/${REPO}/dependabot/alerts?state=open&per_page=100" --jq 'length'
 ```
 
 After the first Dependabot run, confirm the PRs are **grouped** (one per ecosystem, not one per
-package) and that a bun/pod repo's PR carries a follow-up lockfile commit. An ungrouped flood means
+package) and that a pod repo's PR — or a legacy npm+sync bun repo's — carries a follow-up lockfile
+commit (a native-`bun` PR edits `bun.lock` in the PR itself; no follow-up). An ungrouped flood means
 a group is missing `applies-to: security-updates` — a group without it covers version updates only,
 silently leaving security PRs ungrouped, and the mistake is invisible until the flood arrives.
 

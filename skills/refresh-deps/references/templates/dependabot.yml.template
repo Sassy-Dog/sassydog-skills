@@ -1,4 +1,4 @@
-# TEMPLATE: dependabot.yml · version 1
+# TEMPLATE: dependabot.yml · version 2
 # Rendered by sassy-dog:refresh-deps from detect-ecosystems.sh.
 #   {{FACT}}   → detected/confirmed value
 #   # {{IF:ECOSYSTEM}} ... # {{ENDIF}}
@@ -6,7 +6,7 @@
 #                Rendering only DELETES lines, so this file is valid as-is.
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:refresh-deps | template: dependabot.yml | template-version: 1
+# generated-by: sassy-dog:refresh-deps | template: dependabot.yml | template-version: 2
 #
 # GROUPING IS THE POINT OF THIS FILE. Ungrouped, one vulnerable transitive
 # dependency can open a dozen PRs; across this org that turned 74 alerts into a
@@ -52,6 +52,32 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
       npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    ignore:
+      # Majors are held for a human. Security majors still arrive separately —
+      # security updates deliberately bypass version-update ignore rules.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+# {{ENDIF}}
+# {{IF:BUN}}
+  # Native bun ecosystem (GA 2025-02): Dependabot reads and rewrites the text
+  # bun.lock itself (bun >= 1.1.39), so these PRs arrive frozen-lockfile valid
+  # with no lockfile-sync workflow. Version updates only for now — bun
+  # security updates are not yet supported upstream. The security group is
+  # declared anyway (parity with npm): the applies-to trap is identical, and
+  # this way coverage lands pre-grouped the day GitHub ships it.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      bun-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      bun-security:
         applies-to: security-updates
         patterns: ["*"]
     ignore:
