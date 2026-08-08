@@ -1,4 +1,12 @@
 {
+  "extraKnownMarketplaces": {
+    "sassydog-skills": {
+      "source": {
+        "source": "github",
+        "repo": "Sassy-Dog/sassydog-skills"
+      }
+    }
+  },
   "enabledPlugins": {
     "sassy-dog@sassydog-skills": true
   }

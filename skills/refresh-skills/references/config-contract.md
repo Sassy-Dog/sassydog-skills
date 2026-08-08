@@ -260,7 +260,11 @@ Skills that write or dispatch unattended (`take-it`, `dispatch-ready`) do not de
 
 ## Cloud sessions and routines
 
-A repo carrying these config files must also declare the plugin in its own
-`.claude/settings.json`. Plugin skills enabled only in user settings do not transfer to cloud
-sessions or scheduled routines — only repo-declared plugins install at session start. Without that
-declaration a scheduled `dispatch-ready` silently finds no skill, while every local session works fine.
+A repo carrying these config files must also declare, in its own `.claude/settings.json`, both the
+marketplace (`extraKnownMarketplaces` → `sassydog-skills` from `Sassy-Dog/sassydog-skills`) and the
+plugin (`enabledPlugins` → `sassy-dog@sassydog-skills`). Plugin skills enabled only in user settings
+do not transfer to cloud sessions or scheduled routines — only repo-declared plugins install at
+session start, and they install *from the marketplace the repo declares*. `enabledPlugins` alone
+references the marketplace by name only; the name resolves locally through user-level registration
+(`~/.claude/plugins/known_marketplaces.json`), which never reaches a cloud VM. Without both
+declarations a scheduled `dispatch-ready` silently finds no skill, while every local session works fine.
