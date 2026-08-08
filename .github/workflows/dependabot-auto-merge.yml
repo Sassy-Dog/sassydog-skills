@@ -1,0 +1,66 @@
+---
+# generated-by: sassy-dog:refresh-deps | template: dependabot-auto-merge | template-version: 1
+#
+# Auto-merge green Dependabot PRs so security bumps do not rot in the queue.
+#
+# Policy: minor/patch merge automatically — the required checks are the gate.
+# Semver-major is NEVER auto-merged; it gets a comment and waits for a human,
+# because a major is an API break that a green build does not disprove.
+#
+# Why a minted GitHub App token instead of GITHUB_TOKEN:
+#   Dependabot-triggered runs get a READ-ONLY GITHUB_TOKEN by design, and
+#   merging needs write. The App credentials are read from the DEPENDABOT
+#   secrets store (org-level, visibility private+internal) — NOT the Actions
+#   store. A Dependabot run cannot see Actions secrets at all; this is the most
+#   common reason a copied version of this workflow silently no-ops.
+#
+# Security: no checkout. PR code never executes here — fetch-metadata parses the
+# PR server-side. Do not add a checkout step to "make it easier" to read files.
+
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read # fetch-metadata lists PR commits; a read-only token 403s without this
+
+jobs:
+  auto-merge:
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    runs-on: [self-hosted, linux, sassy-dog]
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mint GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PLATFORM_WRITER_APP_ID }}
+          private-key: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
+
+      # Merge-queue repos: plain `--auto`, NO method flag and NO --delete-branch.
+      # Either one silently prevents queue entry or hard-errors. The queue runs
+      # the required checks in the merge_group and ejects anything that goes red,
+      # so nothing merges unverified.
+      - name: Enqueue minor/patch
+        if: ${{ steps.meta.outputs.update-type != 'version-update:semver-major' }}
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto "$PR_URL"
+
+      - name: Hold semver-major for a human
+        if: ${{ steps.meta.outputs.update-type == 'version-update:semver-major' }}
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr comment "$PR_URL" --body \
+            "dependabot-auto-merge: **held for a human** (semver-major). A green build does not prove a major is safe. Review, then merge manually."
