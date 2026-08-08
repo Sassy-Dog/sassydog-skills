@@ -56,7 +56,7 @@ Enabling writes the `stacked_prs:` block and lets `groom-it` propose a `stack:` 
 
 State two things plainly before the user answers:
 
-- **The preview is still rolling out per-repo.** Run `ai-agent-skills:pr-shepherd`'s `scripts/stack-probe.sh --repo <slug>` and report the result. Exit 11 means this repo cannot use stacks *yet* — enabling the block is still legal and simply dormant until GitHub enables it, but say so rather than letting the user assume it works today.
+- **The preview is still rolling out per-repo.** Run `sassy-dog:pr-shepherd`'s `scripts/stack-probe.sh --repo <slug>` and report the result. Exit 11 means this repo cannot use stacks *yet* — enabling the block is still legal and simply dormant until GitHub enables it, but say so rather than letting the user assume it works today.
 - **If `merge_queue: true`,** dispatchers may open stacks that `pr-shepherd` will refuse to land (exit 24) until GitHub finishes shipping queue support. That is a real cost; confirm the user accepts landing those by hand.
 
 `{{STACK_MAX_DEPTH}}` — layer cap (default **4**). Beyond it the dispatchers fall back to independent PRs.

@@ -7,7 +7,7 @@ description: >
   or any PR-lifecycle mechanics: mergeable checks, check polling, transient-failure retry,
   merge-queue vs direct merge, serialization of migration/codegen-coupled PRs, post-merge
   worktree teardown and branch reconcile. Also triggers when a project workflow skill
-  (a generated take-it or send-it) invokes ai-agent-skills:pr-shepherd by name.
+  (a generated take-it or send-it) invokes sassy-dog:pr-shepherd by name.
 ---
 
 # PR Shepherd

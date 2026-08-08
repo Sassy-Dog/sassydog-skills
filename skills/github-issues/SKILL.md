@@ -7,7 +7,7 @@ description: >
   "dedupe before filing", "link this Sentry or feedback item to a GitHub issue", or any task
   involving GitHub issue/board reads via gh + GraphQL, label taxonomy, stale-issue detection, or
   gated dedupe-then-file issue creation. Also triggers when a project workflow skill (a generated
-  plate-it or take-it) invokes ai-agent-skills:github-issues by name.
+  plate-it or take-it) invokes sassy-dog:github-issues by name.
 ---
 
 # GitHub Issues

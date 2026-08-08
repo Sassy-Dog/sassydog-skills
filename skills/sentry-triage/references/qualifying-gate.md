@@ -34,4 +34,4 @@ Always preview with the filing script's `--dry-run` (returns `would-file` withou
 
 - **Never mutate Sentry**: no resolve, no ignore, no assignment. Triage reads; humans resolve.
 - **Never edit or comment on existing GitHub issues from this gate** — except the signal-escalation comment pattern defined in github-issues' `dedupe-and-file.md`, which is its own explicit step.
-- Escalation goes through `ai-agent-skills:github-issues`' `file-or-link-issue.sh` — never raw `gh issue create` (that's how markers and idempotency drift).
+- Escalation goes through `sassy-dog:github-issues`' `file-or-link-issue.sh` — never raw `gh issue create` (that's how markers and idempotency drift).

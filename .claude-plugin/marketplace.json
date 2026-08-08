@@ -1,5 +1,5 @@
 {
-  "name": "sassy-dog-skills",
+  "name": "sassydog-skills",
   "description": "Sassy Dog AI agent skills for Claude Code, Gemini CLI, and other AI coding tools",
   "owner": {
     "name": "Sassy Dog",
@@ -7,7 +7,7 @@
   },
   "plugins": [
     {
-      "name": "ai-agent-skills",
+      "name": "sassy-dog",
       "description": "Reusable AI agent skills — GitHub secrets management, CI/CD patterns, and more",
       "source": {
         "source": "github",

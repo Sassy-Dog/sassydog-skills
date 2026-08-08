@@ -21,7 +21,7 @@ does not re-prioritize.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
 and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs` blocks. Contract:
-`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
+`sassy-dog:refresh-skills` → `references/config-contract.md`.
 
 `stack_summary` (the repo's tech stack, always present) and `stacked_prs` (stacked pull requests,
 usually absent) are unrelated despite the shared word.
@@ -37,7 +37,7 @@ gh repo view --json nameWithOwner,defaultBranchRef \
 summary or pre-flight commands produces low-quality PRs, so **stop and say so** rather than
 guessing. This is the one workflow skill where `NO_CONFIG` blocks: everything it does is
 outward-facing and hard to unwind. Tell the user to run
-`ai-agent-skills:refresh-skills` first.
+`sassy-dog:refresh-skills` first.
 
 ### Offer to set this repo up
 
@@ -53,7 +53,7 @@ Then offer to fix it — this is the next step, so ask now:
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 
@@ -121,9 +121,9 @@ For survivors capture title, body, and labels. Map label → conventional-commit
 Best-effort, so parallel sessions don't double-pick.
 
 **With `board:` configured** — set the assignee and move the card to In progress per
-`ai-agent-skills:github-issues` (`references/board-graphql.md`), using the board IDs from config.
+`sassy-dog:github-issues` (`references/board-graphql.md`), using the board IDs from config.
 
-**Without a board** — one call per batch via `ai-agent-skills:github-issues`:
+**Without a board** — one call per batch via `sassy-dog:github-issues`:
 
 ```bash
 issue-claim.sh claim N1 N2
@@ -236,7 +236,7 @@ Use the capability skill for ALL polling, merge, and teardown mechanics — do N
 inline:
 
 ```
-Skill: ai-agent-skills:pr-shepherd
+Skill: sassy-dog:pr-shepherd
 Args: "Watch PRs <numbers from the RESULT lines> in <repo>. Merge policy:
        <merge_queue ? 'MERGE QUEUE — enqueue greens with gh pr merge --auto (no method flag, no
        --delete-branch), confirm isInMergeQueue, handle ejects'
@@ -255,8 +255,8 @@ Args: "Watch PRs <numbers from the RESULT lines> in <repo>. Merge policy:
 A stack's worktree is shared by every layer, so it appears **once** in the manifest, not once per
 issue. Tearing it down after the bottom layer merges would strand the layers above it.
 
-If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell the user to install
-the plugin (`claude plugin install ai-agent-skills`) — do not improvise the merge loop from memory.
+If `sassy-dog:pr-shepherd` is not in your available skills, STOP and tell the user to install
+the plugin (`claude plugin install sassy-dog`) — do not improvise the merge loop from memory.
 
 Run the coordinator synchronously; backgrounding it orphans PRs at "checks pending".
 
@@ -269,7 +269,7 @@ Run the coordinator synchronously; backgrounding it orphans PRs at "checks pendi
 | #216 | — | ⏭ SKIPPED | reason |
 
 When no board is configured, clear the claim label for every MERGED row via
-`ai-agent-skills:github-issues`' `issue-claim.sh release N1 N2` — `Closes #N` closed the issue but
+`sassy-dog:github-issues`' `issue-claim.sh release N1 N2` — `Closes #N` closed the issue but
 does not strip labels, and a stale claim label misleads the next loop's in-flight reconcile.
 
 Always end with: claims to unwind by hand (assignments, plus board cards or `in-progress` labels

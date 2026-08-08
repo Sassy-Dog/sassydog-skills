@@ -11,7 +11,7 @@ description: >
   stashes", "remove stale agent worktrees", "why are there worktree-agent branches left over",
   "is this stash safe to drop", or any low-level branch/worktree/stash reconciliation mechanic.
   Also triggers when a project workflow skill (a generated clean-it) invokes
-  ai-agent-skills:repo-cleanup by name. The repo's own generated clean-it owns the top-level
+  sassy-dog:repo-cleanup by name. The repo's own generated clean-it owns the top-level
   post-shipping cleanup request and delegates the mechanics here.
 ---
 
@@ -22,7 +22,7 @@ facts and delegates the actual reconciliation here, so the tricky git plumbing (
 trap, squash-merge `-D`, stash triage by PR linkage) lives in exactly one place.
 
 This skill does **not** own the top-level cleanup request — the per-repo generated `clean-it` does,
-and calls this skill by name. It also pairs with the read-only `ai-agent-skills:repo-health` (health
+and calls this skill by name. It also pairs with the read-only `sassy-dog:repo-health` (health
 = read scan; cleanup = write reconcile) and with the built-in `commit-commands:clean_gone` (a
 narrower `[gone]`-only sweep — this skill supersedes it with stash/untracked/label handling).
 

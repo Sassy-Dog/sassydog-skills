@@ -1,12 +1,12 @@
 # TEMPLATE: dependabot.yml · version 1
-# Rendered by ai-agent-skills:refresh-deps from detect-ecosystems.sh.
+# Rendered by sassy-dog:refresh-deps from detect-ecosystems.sh.
 #   {{FACT}}   → detected/confirmed value
 #   # {{IF:ECOSYSTEM}} ... # {{ENDIF}}
 #              → keep the block for each detected ecosystem, delete the rest.
 #                Rendering only DELETES lines, so this file is valid as-is.
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: ai-agent-skills:refresh-deps | template: dependabot.yml | template-version: 1
+# generated-by: sassy-dog:refresh-deps | template: dependabot.yml | template-version: 1
 #
 # GROUPING IS THE POINT OF THIS FILE. Ungrouped, one vulnerable transitive
 # dependency can open a dozen PRs; across this org that turned 74 alerts into a

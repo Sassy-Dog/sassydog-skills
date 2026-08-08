@@ -6,7 +6,7 @@ description: >
   "cross-reference Sentry with GitHub", "escalate Sentry hits to the backlog", or any task that
   applies a qualifying gate (unresolved, recent, user/event thresholds) to Sentry issues and
   optionally files GitHub issues from the survivors. Also triggers when a project workflow skill
-  (a generated plate-it) invokes ai-agent-skills:sentry-triage by name. For Sentry SDK setup or
+  (a generated plate-it) invokes sassy-dog:sentry-triage by name. For Sentry SDK setup or
   open-ended natural-language Sentry exploration, defer to the sentry plugin's own skills.
 ---
 
@@ -42,7 +42,7 @@ One line per issue: `SHORT_ID · title · events/users · lastSeen · level · g
 
 ### 4. Escalate (only if asked, never silently)
 
-Filing goes through `ai-agent-skills:github-issues` — its `file-or-link-issue.sh` with `--marker "sentry-source: <SHORT_ID>"`, following that skill's preview-then-confirm contract and burst rail (> 5 candidates → stop and summarize). Never raw `gh issue create`.
+Filing goes through `sassy-dog:github-issues` — its `file-or-link-issue.sh` with `--marker "sentry-source: <SHORT_ID>"`, following that skill's preview-then-confirm contract and burst rail (> 5 candidates → stop and summarize). Never raw `gh issue create`.
 
 ## Hard prohibitions
 

@@ -1,4 +1,4 @@
-# Versioning — ai-agent-skills instance
+# Versioning — sassy-dog plugin instance
 
 This repo's instance of the org **Versioning spec v1.0**
 (`~/Documents/Cortex/Sassy Dog/Architecture/Development/Versioning.md`, frozen
@@ -73,7 +73,7 @@ bash scripts/stamp-version.sh --dry-run  # preview without writing
 
 Commit the stamped manifest in the release PR — the committed value **is**
 the release. Never hand-edit `version`. After the merge, consumer machines
-still update manually (`claude plugin update ai-agent-skills@sassy-dog-skills`
+still update manually (`claude plugin update sassy-dog@sassydog-skills`
 — see README "Updating / Troubleshooting").
 
 Migration note (spec §6): the semver → CalVer switch needed no cutover gate —
