@@ -61,7 +61,7 @@ report that says "bump these six" prescribes work that undoes itself.
 
 Say which it is:
 
-- **Lagging AND unmanaged** → the fix is to render the config (`ai-agent-skills:refresh-deps`),
+- **Lagging AND unmanaged** → the fix is to render the config (`sassy-dog:refresh-deps`),
   not to bump by hand. Dependabot then opens the bumps itself and they stay closed.
 - **Lagging BUT managed** → config exists and has not cycled yet, or something is pinning it back.
   Check whether the ecosystem is actually listed and whether its PRs are being merged.

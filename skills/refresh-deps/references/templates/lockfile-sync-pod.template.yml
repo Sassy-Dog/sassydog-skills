@@ -1,5 +1,5 @@
 # TEMPLATE: lockfile-sync-pod · version 1
-# Rendered by ai-agent-skills:refresh-deps for repos where
+# Rendered by sassy-dog:refresh-deps for repos where
 # detect-ecosystems.sh reports cocoapods with lockfile_risk (a tracked Podfile).
 #   {{RUNNER}}           → runs-on; MUST be macOS (pod install). Default:
 #                          [self-hosted, macOS, sassy-dog]
@@ -8,7 +8,7 @@
 #   {{FLUTTER_VERSION}}  → keep in lockstep with the release workflow
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: ai-agent-skills:refresh-deps | template: lockfile-sync-pod | template-version: 1
+# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-pod | template-version: 1
 #
 # Refresh pubspec.lock + Podfile.lock on Dependabot pub PRs — the macOS twin of
 # dependabot-bun-lockfile.yml.

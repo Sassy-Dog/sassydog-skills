@@ -167,7 +167,7 @@ Merge, never overwrite. `refresh-hooks` may already own a hooks entry in the sam
 ```json
 {
   "enabledPlugins": {
-    "ai-agent-skills@sassy-dog-skills": true
+    "sassy-dog@sassydog-skills": true
   }
 }
 ```

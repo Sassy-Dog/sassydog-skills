@@ -15,7 +15,7 @@ Post-shipping git reconciliation for the current repo.
 
 This skill is **thin**: it reads the repo's facts from config and delegates the actual mechanics —
 the `[gone]` grep trap, squash-merge `-D`, stash triage by `closedByPullRequestsReferences`,
-agent-worktree teardown — to `ai-agent-skills:repo-cleanup`, so the plumbing lives in one place
+agent-worktree teardown — to `sassy-dog:repo-cleanup`, so the plumbing lives in one place
 across every repo.
 
 **Acting principle:** assess first, act on what's confident, escalate only on mixed signal —
@@ -38,7 +38,7 @@ gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge \
 The block above is this repo's `.claude/sassy-dog/clean-it.md`, inlined at load time. Its
 frontmatter carries the sweep policy — `dep_version_globs`, `noise_allowlist`, `never_discard`,
 optional `claim_label` — and its `##` sections carry repo-specific prose. The contract is
-`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
+`sassy-dog:refresh-skills` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, this repo has not been set up yet. The §1 facts are still available,
 so the branch/worktree work is safe to do. But run with an **empty** noise allowlist and an empty
@@ -61,7 +61,7 @@ the answer they asked for.
 Delegate the full reconciliation, passing the §1 facts and the §2 policy:
 
 ```
-Skill: ai-agent-skills:repo-cleanup
+Skill: sassy-dog:repo-cleanup
 Args: "Reconcile <repo> post-shipping. default-branch=<default_branch>;
        delete-branch-on-merge=<delete_branch_on_merge>;
        dep-version-globs=<dep_version_globs>;
@@ -77,8 +77,8 @@ Args: "Reconcile <repo> post-shipping. default-branch=<default_branch>;
 `repo`, `default_branch`, and `delete_branch_on_merge` come from §1; the rest come from §2's
 frontmatter. Omit `claim-label` entirely when the config does not set one.
 
-If `ai-agent-skills:repo-cleanup` is not in your available skills, STOP and tell the user to
-install the plugin (`claude plugin install ai-agent-skills`) — do not improvise the reconciliation
+If `sassy-dog:repo-cleanup` is not in your available skills, STOP and tell the user to
+install the plugin (`claude plugin install sassy-dog`) — do not improvise the reconciliation
 from memory. The `[gone]` grep trap and squash-merge `-D` are easy to get wrong and lose work.
 
 ## 4. Repo-specific cleanup
@@ -114,7 +114,7 @@ Apply any `## extra-guardrails` section from the config on top of these.
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

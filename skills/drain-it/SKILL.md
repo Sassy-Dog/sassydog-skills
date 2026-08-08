@@ -24,13 +24,13 @@ Anything that smells undispatchable gets bounced back, never patched up inline.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/drain-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`,
-`merge_queue`, and `stacked_prs` keys. Contract: `ai-agent-skills:refresh-skills` →
+`merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:refresh-skills` →
 `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, STOP. Drain-it dispatches sub-agents and merges PRs unattended, on a
 loop — running it against an unconfigured repo means guessing a concurrency cap and skipping
 migration serialization while nobody is watching. Tell the user to run
-`ai-agent-skills:refresh-skills` first.
+`sassy-dog:refresh-skills` first.
 
 ### Offer to set this repo up
 
@@ -46,7 +46,7 @@ Then offer to fix it — this is the next step, so ask now:
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 
@@ -61,14 +61,14 @@ Find work this loop already started.
 review** with assignee @me are in-flight.
 
 **Without a board** — live issue state is the source of truth. Snapshot the queue via
-`ai-agent-skills:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]`,
+`sassy-dog:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]`,
 and `blocked[]` with the `touches:` and `Depends on #N` body contracts already parsed. In-flight is
 `in_flight[]` entries with `mine: true`.
 
 Either way, in-flight counts whether or not a PR exists yet: a sub-agent mid-implementation has
 only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots the cap.
 
-- **Open PRs from those branches** → delegate to `ai-agent-skills:pr-shepherd`: mergeable check,
+- **Open PRs from those branches** → delegate to `sassy-dog:pr-shepherd`: mergeable check,
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
   local default branch.
 - **Failed or red PRs** → surface in the tick report with the failing check named, and comment
@@ -144,7 +144,7 @@ serialize the chain across ticks, and note it once in the tick report.
 but flag them to pr-shepherd so their merges serialize.
 
 Take the first `capacity` survivors. The Collision filter is the primary defense against concurrent
-file-overlapping dispatch; `ai-agent-skills:pr-shepherd`'s coupled-PR serialization
+file-overlapping dispatch; `sassy-dog:pr-shepherd`'s coupled-PR serialization
 (`references/serialization.md`) stays the **fallback** for overlaps this filter cannot see —
 chiefly `unannotated` issues that turn out to collide at merge time.
 
@@ -283,7 +283,7 @@ cancellation are no-ops, not errors: each re-runs this section and retries.
   safely re-runnable, with worktrees reclaimable via the batch manifest.
 - **Single-writer**: only the coordinator merges or enqueues; max one redispatch per issue without
   a human.
-- If `ai-agent-skills:pr-shepherd` or take-it is missing, STOP and say so — do not improvise
+- If `sassy-dog:pr-shepherd` or take-it is missing, STOP and say so — do not improvise
   dispatch or merge mechanics.
 
 Apply any `## extra-sequencing` section from config as additional §4 filters.

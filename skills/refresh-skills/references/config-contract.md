@@ -118,7 +118,7 @@ Three things are deliberately NOT configured here, because they are derived:
 
 | Fact | How it is obtained |
 | --- | --- |
-| Is this repo enabled for stacks? | `ai-agent-skills:pr-shepherd` → `scripts/stack-probe.sh` (REST `GET /repos/{o}/{n}/stacks`, 200 vs 404) |
+| Is this repo enabled for stacks? | `sassy-dog:pr-shepherd` → `scripts/stack-probe.sh` (REST `GET /repos/{o}/{n}/stacks`, 200 vs 404) |
 | Is a given PR a stack layer, and which? | the same probe (GraphQL `PullRequest.stack`) |
 | Is it safe to merge this layer now? | the probe's derived `lower_open` |
 
@@ -228,7 +228,7 @@ a git repo regardless. The command is safe outside a repo — it yields `NO_CONF
 
 **`NO_CONFIG` is a first-class state, not an error.** A skill that finds no config must derive what
 it safely can, run in its most conservative mode, and tell the user to run
-`ai-agent-skills:refresh-skills`.
+`sassy-dog:refresh-skills`.
 
 ### The no-invention rule
 

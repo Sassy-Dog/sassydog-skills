@@ -107,6 +107,40 @@ for legacy in 'create-dev-workflows' 'refresh-sassydog-'; do
         legacy_residue=1
     fi
 done
+
+# The plugin itself renamed too: ai-agent-skills -> sassy-dog, and the
+# marketplace sassy-dog-skills -> sassydog-skills (issue #71). The old plugin
+# name may appear ONLY where it is still load-bearing:
+#   - README.md / CLAUDE.md / .claude/sassy-dog/send-it.md — the GitHub repo
+#     slug Sassy-Dog/ai-agent-skills, the local checkout path, and the
+#     one-time marketplace re-add instructions (the REPO renames separately,
+#     issue #72)
+#   - .claude-plugin/marketplace.json — source.repo is the repo slug (#72)
+#   - skills/refresh-deps/SKILL.md, skills/refresh-hooks/SKILL.md — the
+#     generated-by recognizers must keep accepting pre-rename
+#     'generated-by: ai-agent-skills:*' markers in consumer-repo renders
+#   - this script (the guard itself)
+if git grep -l 'ai-agent-skills' -- \
+    ':!README.md' \
+    ':!CLAUDE.md' \
+    ':!.claude-plugin/marketplace.json' \
+    ':!.claude/sassy-dog/send-it.md' \
+    ':!skills/refresh-deps/SKILL.md' \
+    ':!skills/refresh-hooks/SKILL.md' \
+    ':!scripts/preflight.sh'; then
+    failed "legacy-name guard — 'ai-agent-skills' outside the sanctioned files (plugin renamed to sassy-dog, issue #71)"
+    legacy_residue=1
+fi
+
+# The old marketplace name may appear only in the one-time re-add
+# instructions (which must name it to remove it) and this script.
+if git grep -l 'sassy-dog-skills' -- \
+    ':!README.md' \
+    ':!scripts/preflight.sh'; then
+    failed "legacy-name guard — 'sassy-dog-skills' outside the sanctioned files (marketplace renamed to sassydog-skills, issue #71)"
+    legacy_residue=1
+fi
+
 [ "$legacy_residue" -eq 0 ] && pass "legacy-name guard"
 
 # --- 5. plugin manifests -----------------------------------------------------

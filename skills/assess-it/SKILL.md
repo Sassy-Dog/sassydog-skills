@@ -36,7 +36,7 @@ Follow the five phases. Full dispatch details, the finding schema, and exact `gh
 
 ### Phase 1 — Fan out (parallel review agents)
 
-Dispatch the relevant `ai-agent-skills:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns findings in the shared schema with mandatory `file:line` evidence.
+Dispatch the relevant `sassy-dog:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns findings in the shared schema with mandatory `file:line` evidence.
 
 See **`orchestration.md`** for the agent→domain map and the finding schema.
 

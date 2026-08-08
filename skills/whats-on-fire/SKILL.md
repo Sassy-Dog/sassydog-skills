@@ -50,7 +50,7 @@ Issue the independent pulls in a single message with multiple tool calls.
 
 ### A. Production fires
 
-**Sentry issues** — invoke `ai-agent-skills:sentry-triage`: org `sassy-dog`, all projects. Gate
+**Sentry issues** — invoke `sassy-dog:sentry-triage`: org `sassy-dog`, all projects. Gate
 policy: **report-only, no escalation** — this skill has no write path, so the gate classifies and
 ranks but never files. It already owns the qualifying gate, the `!is:resolved` query shape, and GH
 cross-referencing; don't reimplement any of that here.

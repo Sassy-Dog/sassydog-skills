@@ -1,10 +1,10 @@
 # TEMPLATE: lockfile-sync-bun · version 2
-# Rendered by ai-agent-skills:refresh-deps for repos where
+# Rendered by sassy-dog:refresh-deps for repos where
 # detect-ecosystems.sh reports npm with lockfile_risk (a tracked bun.lock).
 #   {{RUNNER}}  → runs-on value (default: [self-hosted, linux, sassy-dog])
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: ai-agent-skills:refresh-deps | template: lockfile-sync-bun | template-version: 2
+# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-bun | template-version: 2
 #
 # Refresh bun.lock on Dependabot npm PRs.
 #

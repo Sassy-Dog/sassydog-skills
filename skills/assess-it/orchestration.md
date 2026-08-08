@@ -4,19 +4,19 @@ How the main agent dispatches review agents, what each returns, and how findings
 
 ## Agent → domain map
 
-Dispatch only the agents with signal for the detected stack. All ship with this plugin and namespace as `ai-agent-skills:<name>`.
+Dispatch only the agents with signal for the detected stack. All ship with this plugin and namespace as `sassy-dog:<name>`.
 
 | Agent (`subagent_type`) | Owns rubric areas | Dispatch when |
 |---|---|---|
-| `ai-agent-skills:architecture-reviewer` | 2 structure, 3 architecture, 13 team/scaling | always |
-| `ai-agent-skills:code-quality-reviewer` | 4 code quality, 12 tech debt | always |
-| `ai-agent-skills:security-reviewer` | 5 security (app + supply chain + pipeline + ops) | always |
-| `ai-agent-skills:testing-reviewer` | 7 testing | always |
-| `ai-agent-skills:cicd-release-reviewer` | 8 CI/CD & release | `.github/workflows/` or other CI config present |
-| `ai-agent-skills:infra-platform-reviewer` | 9 infrastructure & platform | `*.tf`/`*.bicep`/`Dockerfile`/k8s manifests present |
-| `ai-agent-skills:observability-ops-reviewer` | 10 observability & operations | always (light if app is tiny) |
-| `ai-agent-skills:dx-docs-reviewer` | 6 DX, 11 docs | always |
-| `ai-agent-skills:dependency-supply-chain-reviewer` | 5 supply-chain slice, 12 dep debt | a lockfile/manifest is present |
+| `sassy-dog:architecture-reviewer` | 2 structure, 3 architecture, 13 team/scaling | always |
+| `sassy-dog:code-quality-reviewer` | 4 code quality, 12 tech debt | always |
+| `sassy-dog:security-reviewer` | 5 security (app + supply chain + pipeline + ops) | always |
+| `sassy-dog:testing-reviewer` | 7 testing | always |
+| `sassy-dog:cicd-release-reviewer` | 8 CI/CD & release | `.github/workflows/` or other CI config present |
+| `sassy-dog:infra-platform-reviewer` | 9 infrastructure & platform | `*.tf`/`*.bicep`/`Dockerfile`/k8s manifests present |
+| `sassy-dog:observability-ops-reviewer` | 10 observability & operations | always (light if app is tiny) |
+| `sassy-dog:dx-docs-reviewer` | 6 DX, 11 docs | always |
+| `sassy-dog:dependency-supply-chain-reviewer` | 5 supply-chain slice, 12 dep debt | a lockfile/manifest is present |
 
 **Dispatch rule:** issue all selected agents in **one message, multiple Agent calls** (concurrent). Give each: the absolute repo path, the detected stack summary, the dedupe index is *not* needed by agents (you dedupe centrally), and an instruction to return **only** the JSON-ish finding list in the schema below. Tell each agent it is in **audit mode**: find what's wrong, cite evidence, do not propose to write code.
 

@@ -11,7 +11,7 @@ description: >
 # Send-It
 
 End-to-end PR flow, in order: worktree audit → freshness gates → pre-flight guardrails → PR body →
-commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
+commit/push → watch + merge (delegated to `sassy-dog:pr-shepherd`).
 
 ## 1. Repo config
 
@@ -19,7 +19,7 @@ commit/push → watch + merge (delegated to `ai-agent-skills:pr-shepherd`).
 
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
 `merge_queue`, and the optional `migrations`, `codegen`, `review_agent`, and `stacked_prs` blocks.
-Contract: `ai-agent-skills:refresh-skills` → `references/config-contract.md`.
+Contract: `sassy-dog:refresh-skills` → `references/config-contract.md`.
 
 Repo slug and default branch are **derived, never configured**:
 
@@ -35,7 +35,7 @@ Run §2 — the worktree audit is universal and never skipped. Then **stop befor
 > No `.claude/sassy-dog/send-it.md` in this repo. I can audit the worktree and draft the commit,
 > but I don't know this repo's pre-flight commands or PR template. If this repo has a project-level
 > `send-it` under `.claude/skills/`, use that instead. Otherwise: tell me the pre-flight command, or
-> run `ai-agent-skills:refresh-skills`.
+> run `sassy-dog:refresh-skills`.
 
 ### Offer to set this repo up
 
@@ -51,7 +51,7 @@ Then offer to fix it — this is the next step, so ask now:
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 
@@ -198,22 +198,22 @@ Pass explicit JSON: `pull_requests` must be integers, and `gh api -f` would send
 repo is not enabled for the preview the call fails — that is harmless. The PR is already correctly
 based, which is the part that matters; linking only adds GitHub's stack UI and merge ordering.
 
-**Then hand off and stop watching for a merge.** `ai-agent-skills:pr-shepherd` will not merge a
+**Then hand off and stop watching for a merge.** `sassy-dog:pr-shepherd` will not merge a
 layer while a lower one is open (exit 23), and refuses a stack under a merge queue outright
 (exit 24). Say which applies rather than leaving the user watching a PR that will not land.
 
 **Watch + merge is delegated.** Do NOT reimplement polling or merging inline:
 
 ```
-Skill: ai-agent-skills:pr-shepherd
+Skill: sassy-dog:pr-shepherd
 Args: "Shepherd PR #<N> in <repo>: mergeable check first, watch checks, then
        <merge_queue ? 'enqueue via merge queue (--auto, no method flag, confirm isInMergeQueue)'
                     : 'squash-merge with --delete-branch'>.
        After merge, reconcile local <default_branch> and delete the feature branch."
 ```
 
-If `ai-agent-skills:pr-shepherd` is not in your available skills, STOP and tell the user to install
-the plugin (`claude plugin install ai-agent-skills`) — do not improvise the merge flow from memory.
+If `sassy-dog:pr-shepherd` is not in your available skills, STOP and tell the user to install
+the plugin (`claude plugin install sassy-dog`) — do not improvise the merge flow from memory.
 
 ## Guardrails
 

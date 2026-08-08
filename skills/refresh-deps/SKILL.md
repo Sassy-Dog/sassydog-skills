@@ -28,15 +28,17 @@ It renders up to three things:
 | `.github/workflows/dependabot-bun-lockfile.yml` | when npm has `lockfile_risk` (tracked `bun.lock`) |
 | `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected |
 
-Ownership marker: the `generated-by: ai-agent-skills:refresh-deps` comment on the first
+Ownership marker: the `generated-by: sassy-dog:refresh-deps` comment on the first
 non-blank line after the YAML document start. Re-runs reconcile **only** files carrying that
 marker — a hand-written `dependabot.yml` is reported and left alone, never overwritten.
 
-**Match on the `generated-by: ai-agent-skills:` prefix, and accept the legacy producer name
-`refresh-sassydog-deps` (plugin ≤ 2026.7.21) as well as the current `refresh-deps`.** Every consumer
-repo rendered before the rename carries the old name; a matcher that only accepts the current one
-would treat those files as hand-written and refuse to update them. Normalise the marker to the
-current name on write.
+**Match on both marker namespaces — the current `generated-by: sassy-dog:` prefix and the
+pre-rename `generated-by: ai-agent-skills:` prefix (plugin ≤ 2026.8.20) — and accept the legacy
+producer name `refresh-sassydog-deps` (plugin ≤ 2026.7.21) as well as the current `refresh-deps`.**
+Every consumer repo rendered before a rename carries the old form: the plugin rename moved the
+namespace *before* the colon, the earlier generator rename moved the name after it. A matcher that
+only accepts the current form would treat those files as hand-written and refuse to update them.
+Normalise the marker to the current form on write.
 
 ## 1. Detect
 

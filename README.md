@@ -6,25 +6,25 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| `ai-agent-skills` | `plate-it` | Prioritized work plate — customer pain, backlog, tech debt, dev experience, synthesized next bets |
-| `ai-agent-skills` | `groom-it` | Backlog grooming — refine issues until dispatchable, then promote to Ready (formerly `fill-it`) |
-| `ai-agent-skills` | `take-it` | Parallel issue-shipping — "take #341, #432", one worktree sub-agent per issue |
-| `ai-agent-skills` | `drain-it` | Loop-driven Ready dispatcher — one idempotent tick per invocation, under `/loop` |
-| `ai-agent-skills` | `send-it` | Single-PR end-to-end — worktree audit, freshness gates, pre-flight, PR body, watch, merge |
-| `ai-agent-skills` | `clean-it` | Post-shipping git reconciliation — stale branches, worktrees, stashes, untracked noise |
-| `ai-agent-skills` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
-| `ai-agent-skills` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
-| `ai-agent-skills` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
-| `ai-agent-skills` | `refresh-skills` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
-| `ai-agent-skills` | `refresh-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
-| `ai-agent-skills` | `refresh-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
-| `ai-agent-skills` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
-| `ai-agent-skills` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
-| `ai-agent-skills` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
-| `ai-agent-skills` | `repo-cleanup` | Post-shipping git reconciliation mechanics — `[gone]`/squash-merged branch sweep, stale-worktree teardown, stash triage, untracked-noise sweep (the engine behind a repo's `clean-it`) |
-| `ai-agent-skills` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag |
-| `ai-agent-skills` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `plate-it` |
-| `ai-agent-skills` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
+| `sassy-dog` | `plate-it` | Prioritized work plate — customer pain, backlog, tech debt, dev experience, synthesized next bets |
+| `sassy-dog` | `groom-it` | Backlog grooming — refine issues until dispatchable, then promote to Ready (formerly `fill-it`) |
+| `sassy-dog` | `take-it` | Parallel issue-shipping — "take #341, #432", one worktree sub-agent per issue |
+| `sassy-dog` | `drain-it` | Loop-driven Ready dispatcher — one idempotent tick per invocation, under `/loop` |
+| `sassy-dog` | `send-it` | Single-PR end-to-end — worktree audit, freshness gates, pre-flight, PR body, watch, merge |
+| `sassy-dog` | `clean-it` | Post-shipping git reconciliation — stale branches, worktrees, stashes, untracked noise |
+| `sassy-dog` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
+| `sassy-dog` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
+| `sassy-dog` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
+| `sassy-dog` | `refresh-skills` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
+| `sassy-dog` | `refresh-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
+| `sassy-dog` | `refresh-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
+| `sassy-dog` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
+| `sassy-dog` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
+| `sassy-dog` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
+| `sassy-dog` | `repo-cleanup` | Post-shipping git reconciliation mechanics — `[gone]`/squash-merged branch sweep, stale-worktree teardown, stash triage, untracked-noise sweep (the engine behind a repo's `clean-it`) |
+| `sassy-dog` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag |
+| `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `plate-it` |
+| `sassy-dog` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
 
 ### Workflow skills + capability skills
 
@@ -64,7 +64,7 @@ references `sassydog-`), never hand-written hooks.
 
 ### Review agents
 
-`assess-it` ships dedicated audit-mode agents (namespaced `ai-agent-skills:<name>`):
+`assess-it` ships dedicated audit-mode agents (namespaced `sassy-dog:<name>`):
 `architecture-reviewer`, `code-quality-reviewer`, `security-reviewer`, `testing-reviewer`,
 `cicd-release-reviewer`, `infra-platform-reviewer`, `observability-ops-reviewer`,
 `dx-docs-reviewer`, `dependency-supply-chain-reviewer`.
@@ -78,7 +78,7 @@ references `sassydog-`), never hand-written hooks.
 claude plugin marketplace add Sassy-Dog/ai-agent-skills
 
 # Install the plugin
-claude plugin install ai-agent-skills
+claude plugin install sassy-dog
 ```
 
 ### Local Development
@@ -89,22 +89,35 @@ claude --plugin-dir ~/Repos/sassy-dog/ai-agent-skills
 
 ## Updating / Troubleshooting
 
+### One-time re-add after the rename to `sassy-dog`
+
+The plugin was renamed `ai-agent-skills` → `sassy-dog` and the marketplace `sassy-dog-skills` →
+`sassydog-skills` in the same release (issue #71). A machine that added the marketplace under the
+old name cannot update across the rename — plugin name, marketplace name, and cache path all moved
+at once. Treat it as uninstall-and-reinstall, exactly once per machine:
+
+```bash
+claude plugin marketplace remove sassy-dog-skills
+claude plugin marketplace add Sassy-Dog/ai-agent-skills
+claude plugin install sassy-dog
+```
+
 Plugin updates are **manual** — the cache does not follow releases. After every release (a new CalVer stamped into `.claude-plugin/plugin.json` via `scripts/stamp-version.sh` — see `docs/VERSIONING.md`), each consumer machine must run:
 
 ```bash
-claude plugin update ai-agent-skills@sassy-dog-skills
+claude plugin update sassy-dog@sassydog-skills
 ```
 
 ### The bare plugin name fails
 
-`claude plugin update ai-agent-skills` returns "not found" — the error doesn't hint at the fix. The marketplace-qualified name is required: `ai-agent-skills@sassy-dog-skills`.
+`claude plugin update sassy-dog` returns "not found" — the error doesn't hint at the fix. The marketplace-qualified name is required: `sassy-dog@sassydog-skills`.
 
 ### `claude plugin marketplace update` is not a plugin update
 
 `claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale. Diagnose with:
 
 ```bash
-ls ~/.claude/plugins/cache/sassy-dog-skills/ai-agent-skills/
+ls ~/.claude/plugins/cache/sassydog-skills/sassy-dog/
 # 2026.6.4    <- installed version (stale)
 ```
 
@@ -121,7 +134,7 @@ This repo is a single plugin: skills, agents, and the manifest live at the root.
 ```
 ai-agent-skills/
 ├── .claude-plugin/plugin.json   # Plugin manifest
-├── agents/                      # Subagents (auto-discovered, namespaced ai-agent-skills:<name>)
+├── agents/                      # Subagents (auto-discovered, namespaced sassy-dog:<name>)
 │   └── *-reviewer.md
 └── skills/
     └── my-skill/

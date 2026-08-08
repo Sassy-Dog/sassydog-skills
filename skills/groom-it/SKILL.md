@@ -25,7 +25,7 @@ agent with zero conversation context.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/groom-it.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `gotcha_summary` and the optional `board` and `stacked_prs` blocks. Contract:
-`ai-agent-skills:refresh-skills` → `references/config-contract.md`.
+`sassy-dog:refresh-skills` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, run boardless (the `ready`-label flow below) and skip the repo-gotchas
 step in §4 — **do not invent gotchas** by reading the repo's CLAUDE.md or CI config; a wrong gotcha
@@ -37,7 +37,7 @@ both reversible. Do not assume a board exists — a board with no config block i
 ## 2. Collect candidates
 
 **With `board:` configured** — the board is authoritative. Snapshot via
-`ai-agent-skills:github-issues` (`board-snapshot.sh`, using `board.number` and `board.owner`).
+`sassy-dog:github-issues` (`board-snapshot.sh`, using `board.number` and `board.owner`).
 Candidates are every open issue in **Backlog** or with **no status**; open issues missing from the
 board get added to it.
 
@@ -52,7 +52,7 @@ claimed — assignee set plus `in-progress` label.
 
 **Either way, re-validate existing Ready items every run.** The snapshot or list is already in
 hand, and drift happens: a decision marker or new blocker added after promotion demotes the item
-back to Backlog with a comment. Demotion via `ai-agent-skills:github-issues`:
+back to Backlog with a comment. Demotion via `sassy-dog:github-issues`:
 `issue-claim.sh demote N --comment "<the drift>"` — the comment is mandatory. Ready is a promise;
 stale promises break drain-it.
 
@@ -133,7 +133,7 @@ fold the answer into the body marked **Decision (date)** so it supersedes any `(
 ## 5. Epic split
 
 A multi-workstream issue gets child issues — one per dispatchable unit — via the gated write path:
-`ai-agent-skills:github-issues` `file-or-link-issue.sh`, marker `epic-split: #<parent>/<slug>`,
+`sassy-dog:github-issues` `file-or-link-issue.sh`, marker `epic-split: #<parent>/<slug>`,
 body containing `Part of #<parent>` (NOT `Closes`). Children then pass the §3 rubric individually;
 the parent stays out of Ready, because it tracks rather than dispatches.
 
@@ -143,10 +143,10 @@ finalize its dependency line until #E's split has produced the child number.
 
 ## 6. Promote and report
 
-**With `board:`** — move qualifying cards to **Ready** per `ai-agent-skills:github-issues`
+**With `board:`** — move qualifying cards to **Ready** per `sassy-dog:github-issues`
 (`references/board-graphql.md`), using the board IDs from config.
 
-**Without a board** — label qualifying issues `ready` via `ai-agent-skills:github-issues`, which
+**Without a board** — label qualifying issues `ready` via `sassy-dog:github-issues`, which
 owns the label taxonomy and ensure-creates before use:
 
 ```bash
@@ -189,7 +189,7 @@ Apply any `## extra-rubric` section from config as additional Ready tests.
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

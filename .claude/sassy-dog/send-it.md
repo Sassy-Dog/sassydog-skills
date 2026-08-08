@@ -32,9 +32,9 @@ agent (`agents/*.md`):
 
 **Post-release plugin update reminder** — if the merged diff bumped `version` in
 `.claude-plugin/plugin.json`, consumer machines do NOT pick up releases automatically. After the
-merge, remind the operator to run `claude plugin update ai-agent-skills@sassy-dog-skills` (the
+merge, remind the operator to run `claude plugin update sassy-dog@sassydog-skills` (the
 marketplace-qualified name — the bare name returns "not found") on each consumer machine, then
-re-check that `ls ~/.claude/plugins/cache/sassy-dog-skills/ai-agent-skills/` shows the new version.
+re-check that `ls ~/.claude/plugins/cache/sassydog-skills/sassy-dog/` shows the new version.
 See README "Updating / Troubleshooting".
 
 ## extra-guardrails

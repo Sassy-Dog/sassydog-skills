@@ -21,7 +21,7 @@ Synthesize everything we might tackle into one prioritized plate.
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
 `write_policy`, and the optional `sentry`, `board`, `testflight`, `mobile`, `posthog`, and
-`secret_bootstrap` blocks. Contract: `ai-agent-skills:refresh-skills` →
+`secret_bootstrap` blocks. Contract: `sassy-dog:refresh-skills` →
 `references/config-contract.md`.
 
 **Write posture is decided here.** `write_policy: read-only` (or absent, or `NO_CONFIG`) means this
@@ -85,7 +85,7 @@ Issue the independent pulls in a single message with multiple tool calls.
 
 ### A. Customer pain
 
-**Sentry** — **ONLY if the config has a `sentry:` block.** No block → `skipped — not configured`; do not list org projects to discover one. Invoke `ai-agent-skills:sentry-triage` with the
+**Sentry** — **ONLY if the config has a `sentry:` block.** No block → `skipped — not configured`; do not list org projects to discover one. Invoke `sassy-dog:sentry-triage` with the
 configured org and projects. Gate policy: the configured `sentry.gate` when `write_policy: gated`,
 otherwise report-only with no escalation. It handles query syntax, the qualifying gate, and GitHub
 cross-referencing.
@@ -99,7 +99,7 @@ gh issue list --state open --label bug \
 
 Demand proxy = reactions + comments.
 
-**TestFlight** — **ONLY if the config has a `testflight:` block.** No block → `skipped — not configured`. Invoke `ai-agent-skills:testflight` with the
+**TestFlight** — **ONLY if the config has a `testflight:` block.** No block → `skipped — not configured`. Invoke `sassy-dog:testflight` with the
 configured bundle id, command `feedback`. Parse screenshot submissions (tester comments) and crash
 submissions (stack signatures). Tag items `[TestFlight]`.
 
@@ -109,7 +109,7 @@ key)` and move on.
 
 ### B. Backlog
 
-**With `board:`** — board snapshot via `ai-agent-skills:github-issues`, using the configured board
+**With `board:`** — board snapshot via `sassy-dog:github-issues`, using the configured board
 number and owner, plus its stale-issue detection.
 
 **Without a board** — open issues and labels:
@@ -118,11 +118,11 @@ number and owner, plus its stale-issue detection.
 gh issue list --state open --limit 200 --json number,title,labels,updatedAt
 ```
 
-plus `ai-agent-skills:github-issues` stale-issue detection.
+plus `sassy-dog:github-issues` stale-issue detection.
 
 ### C. Tech debt + dev experience
 
-Invoke `ai-agent-skills:repo-health`:
+Invoke `sassy-dog:repo-health`:
 
 - tech-debt scan with the configured `scan_paths` and `exclude_pathspecs`. **Never invent these** —
   with no config, omit `SCAN_PATHS` entirely so the script defaults to the whole tracked tree. A
@@ -183,7 +183,7 @@ running the cleanup from here.
 > the default branch verbatim, so against an un-fast-forwarded local main, `main..HEAD` claims
 > "ahead" forever — and the merged PR is invisible to `--state open`. The two stale views
 > corroborate each other into a confident false actionable. This is the same trap
-> `ai-agent-skills:repo-cleanup` documents for branch sweeps: use PR state, never ancestry.
+> `sassy-dog:repo-cleanup` documents for branch sweeps: use PR state, never ancestry.
 
 ## 4. Dedupe across sources
 
@@ -205,7 +205,7 @@ for ≤2d/≤7d/≤30d/older; overlap boost 1.0/1.5/2.0 for 1/2/3 sources.
 **Backlog**: lead with the issue's own priority label (the configured `priority_labels`), tie-break
 by reactions + comments. Don't re-derive a priority the maintainer already assigned.
 
-**Tech debt + dev experience**: `ai-agent-skills:repo-health` scoring defaults.
+**Tech debt + dev experience**: `sassy-dog:repo-health` scoring defaults.
 
 **Dependency exposure**: rank by REMEDIATION STATE, never by alert count — a count only falls when
 a fix merges, so a fresh CVE batch with fixes already queued looks identical to a year of neglect.
@@ -267,8 +267,8 @@ changes Sentry status, or mutates anything. If an unfiled signal deserves an iss
 so and the human files it, or runs the filing flow explicitly. Stop here.
 
 **When `write_policy: gated`** — the skill writes in exactly ONE place: qualifying Sentry hits
-promoted to GitHub issues via `ai-agent-skills:github-issues`' `file-or-link-issue.sh` with
-`--marker "sentry-source: <SHORT_ID>"`. Gate and burst rail per `ai-agent-skills:sentry-triage`
+promoted to GitHub issues via `sassy-dog:github-issues`' `file-or-link-issue.sh` with
+`--marker "sentry-source: <SHORT_ID>"`. Gate and burst rail per `sassy-dog:sentry-triage`
 (`references/qualifying-gate.md`), using the configured `sentry.gate`. Labels
 `bug,sentry-escalation`; when `board:` is configured, file onto its Backlog column.
 
@@ -294,7 +294,7 @@ Apply any `## extra-guardrails` section from config on top of these.
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `ai-agent-skills:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

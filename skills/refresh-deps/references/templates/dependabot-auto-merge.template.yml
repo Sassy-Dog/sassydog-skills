@@ -1,5 +1,5 @@
 # TEMPLATE: dependabot-auto-merge · version 1
-# Rendered by ai-agent-skills:refresh-deps.
+# Rendered by sassy-dog:refresh-deps.
 #   {{FACT}}              → replace with the detected/confirmed value
 #   {{RUNNER}}            → runs-on value. Default [self-hosted, linux, sassy-dog]
 #                           (the org fleet); both runner groups are visibility=all
@@ -10,7 +10,7 @@
 #                           and every render is valid by construction.
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: ai-agent-skills:refresh-deps | template: dependabot-auto-merge | template-version: 1
+# generated-by: sassy-dog:refresh-deps | template: dependabot-auto-merge | template-version: 1
 #
 # Auto-merge green Dependabot PRs so security bumps do not rot in the queue.
 #

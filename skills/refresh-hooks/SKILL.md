@@ -36,11 +36,12 @@ global hook because a global one fires uselessly in repos whose stack it doesn't
 ## Ownership contract (what a re-run may touch)
 
 - Generated scripts are exactly the files matching `.claude/hooks/sassydog-*.sh`, each carrying a
-  `generated-by: ai-agent-skills:refresh-hooks` header comment. **Match on the
-  `generated-by: ai-agent-skills:` prefix and accept the legacy `refresh-sassydog-hooks`
-  (plugin ≤ 2026.7.21)** — repos rendered before the rename carry the old name, and a strict matcher
-  would treat those scripts as hand-written and refuse to refresh them. Normalise on write. (The
-  settings-entry marker below is a command *path*, so the rename does not affect it.)
+  `generated-by: sassy-dog:refresh-hooks` header comment. **Match on both marker namespaces — the
+  current `generated-by: sassy-dog:` prefix and the pre-rename `generated-by: ai-agent-skills:`
+  prefix (plugin ≤ 2026.8.20) — and accept the legacy producer name `refresh-sassydog-hooks`
+  (plugin ≤ 2026.7.21)** — repos rendered before either rename carry an old form, and a strict
+  matcher would treat those scripts as hand-written and refuse to refresh them. Normalise on write.
+  (The settings-entry marker below is a command *path*, so the renames do not affect it.)
 - Settings entries owned by this generator are exactly the hook entries whose command references
   `.claude/hooks/sassydog-`. A refresh regenerates the scripts and adds/removes **only those
   entries** — every other hook (hand-written project hooks, the user's global hooks) is untouched,
