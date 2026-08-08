@@ -33,9 +33,14 @@ Run these probes. For each failure, label that surface `skipped — <reason>` in
 continue. **Never abort the whole sweep on one missing precondition.**
 
 ```bash
-gh auth status
+command -v gh && gh auth status
 ```
 
+- **GitHub CLI** — `gh` missing entirely (cloud/CCR routine sessions ship without it) is the one
+  probe failure that does NOT skip its surfaces: route the section 2B pulls through the GitHub-MCP
+  fallback in `references/cloud-fallback.md` instead. Only the Dependabot half of that surface has
+  no MCP equivalent — it is rendered `skipped — no gh CLI (Dependabot API unreachable)` and named
+  on the sources line like any other skip. `gh` present but unauthenticated stays an ordinary skip.
 - **Sentry** — probe by listing projects for the Sentry org; on error, skip both Sentry surfaces.
 - **Portfolio root** — the local checkout directory (env `PORTFOLIO_ROOT`, default
   `~/Repos/sassy-dog`). Only needed for the two blind spots that compare the org against local
@@ -94,6 +99,15 @@ report. Push-class red means shipping is blocked (P0); a failing nightly job is 
 blocks nobody (P1). Merging them manufactures false alarms.
 
 Both honor `ORG`, degrade with exit 10 + `skipped: <reason>` on stderr, and emit one JSON object.
+
+**No `gh` on PATH** — both scripts exit 10 with `skipped: gh not on PATH`, but do not accept that
+skip: follow `references/cloud-fallback.md` instead. It rebuilds both pulls from the session's
+GitHub MCP tools, resolved by capability exactly like the Sentry crons above (never a literal
+`mcp__...` id): roster via list-repos, per-repo tool scope widened with `add_repo`, per-repo pulls
+fanned out to parallel subagents, every output field mapped so sections 3–5 consume the same shape.
+The one exception is the Dependabot half of `pull-repo-signals.sh`, which has NO MCP equivalent: it
+MUST be rendered `skipped — no gh CLI (Dependabot API unreachable)` and named on the sources line
+(sections 1 and 5) — a named skip, never an approximation.
 
 ### C. Blind spots
 
