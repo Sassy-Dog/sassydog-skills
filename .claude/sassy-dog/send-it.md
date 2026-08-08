@@ -19,7 +19,7 @@ entries strand.
 
 - **Summary** — what and why, one short paragraph
 - **Changes** — bullet list of skills/agents/scripts touched
-- **Verification** — how it was exercised (e.g. `claude --plugin-dir ~/Repos/sassy-dog/ai-agent-skills`
+- **Verification** — how it was exercised (e.g. `claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills`
   plus invoking the skill), or why not applicable
 
 **README/version sync gate** — if the diff adds or removes a skill (`skills/*/SKILL.md`) or reviewer

@@ -1,4 +1,4 @@
-# ai-agent-skills
+# sassydog-skills
 
 Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI coding tools.
 
@@ -75,7 +75,7 @@ references `sassydog-`), never hand-written hooks.
 
 ```bash
 # Add as a marketplace
-claude plugin marketplace add Sassy-Dog/ai-agent-skills
+claude plugin marketplace add Sassy-Dog/sassydog-skills
 
 # Install the plugin
 claude plugin install sassy-dog
@@ -84,7 +84,7 @@ claude plugin install sassy-dog
 ### Local Development
 
 ```bash
-claude --plugin-dir ~/Repos/sassy-dog/ai-agent-skills
+claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills
 ```
 
 ## Updating / Troubleshooting
@@ -98,7 +98,7 @@ at once. Treat it as uninstall-and-reinstall, exactly once per machine:
 
 ```bash
 claude plugin marketplace remove sassy-dog-skills
-claude plugin marketplace add Sassy-Dog/ai-agent-skills
+claude plugin marketplace add Sassy-Dog/sassydog-skills
 claude plugin install sassy-dog
 ```
 
@@ -132,7 +132,7 @@ Plugin install/update does a fresh **SSH** clone of this INTERNAL repo. The SSH 
 This repo is a single plugin: skills, agents, and the manifest live at the root.
 
 ```
-ai-agent-skills/
+sassydog-skills/
 ├── .claude-plugin/plugin.json   # Plugin manifest
 ├── agents/                      # Subagents (auto-discovered, namespaced sassy-dog:<name>)
 │   └── *-reviewer.md

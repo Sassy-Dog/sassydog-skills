@@ -64,10 +64,10 @@ The relationship between the `assess-it` skill and the nine `*-reviewer` agents 
 
 ```bash
 # Run Claude Code with this plugin loaded from the working tree
-claude --plugin-dir ~/Repos/sassy-dog/ai-agent-skills
+claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills
 
 # Install from the published marketplace
-claude plugin marketplace add Sassy-Dog/ai-agent-skills
+claude plugin marketplace add Sassy-Dog/sassydog-skills
 claude plugin install sassy-dog
 ```
 
