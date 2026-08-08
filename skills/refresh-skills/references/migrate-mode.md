@@ -5,8 +5,9 @@ Converts a repo from the superseded generated-skills architecture to config.
 **Before:** `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it,clean-it}/SKILL.md` — each a
 full rendered skill body carrying that repo's facts inline.
 
-**After:** `.claude/sassy-dog/{plate-it,groom-it,take-it,drain-it,send-it,clean-it}.md` — config
-only, read by the generic plugin skills.
+**After:** `.claude/sassy-dog/{survey-work,groom-backlog,take-it,dispatch-ready,send-it,tidy-repo}.md`
+— config only, read by the generic plugin skills. (Four skills were renamed after the generated
+era — the full legacy → current map is Step 3.)
 
 ## The ordering rule
 
@@ -22,7 +23,7 @@ only, read by the generic plugin skills.
 of the repo's Sentry projects, board IDs, scan paths, and project-specific prose. Deleting before
 writing destroys the input and leaves nothing to recover from short of git history.
 
-This was verified live: in an un-migrated repo the generic `plate-it` finds no config and routes
+This was verified live: in an un-migrated repo the generic `survey-work` finds no config and routes
 the user back to the project skill, because that is still where the real configuration lives. Delete
 it early and both paths degrade at once.
 
@@ -84,13 +85,13 @@ Fence-to-config mapping:
 
 | Fence slot | Config section | Destination file |
 | --- | --- | --- |
-| `extra-surfaces` | `## extra-surfaces` | `plate-it.md` |
-| `scoring-overrides` | `## scoring-overrides` | `plate-it.md` |
-| `extra-rubric` | `## extra-rubric` | `groom-it.md` |
+| `extra-surfaces` | `## extra-surfaces` | `survey-work.md` |
+| `scoring-overrides` | `## scoring-overrides` | `survey-work.md` |
+| `extra-rubric` | `## extra-rubric` | `groom-backlog.md` |
 | `subagent-rules` | `## subagent-rules` | `take-it.md` |
-| `extra-sequencing` | `## extra-sequencing` | `drain-it.md` |
+| `extra-sequencing` | `## extra-sequencing` | `dispatch-ready.md` |
 | `extra-gates` | `## extra-gates` | `send-it.md` |
-| `extra-cleanup` | `## extra-cleanup` | `clean-it.md` |
+| `extra-cleanup` | `## extra-cleanup` | `tidy-repo.md` |
 | `extra-guardrails` | `## extra-guardrails` | whichever file it came from |
 
 All eight slots must round-trip. Earlier docs listed only six — `extra-rubric` and
@@ -150,15 +151,29 @@ The one poisoned fact is indistinguishable from the other five by inspection —
 confident, specific statement. Only the live check separates them, which is why this step is not
 optional and not a "when in doubt" measure.
 
-## Step 3 — `fill-it` → `groom-it`
+## Step 3 — the renames: legacy names map to current names
 
-The skill was renamed. Source `.claude/skills/fill-it/` maps to `.claude/sassy-dog/groom-it.md`,
-carrying its `extra-rubric` prose and `gotcha_summary`.
+Four of the six skills have been renamed since the generated era (`fill-it` twice, via `groom-it`).
+Every legacy artifact maps to the **current** config filename — never write a config under a legacy
+name:
 
-Five repos have a `fill-it`; the rest never adopted it. A repo with no `fill-it` gets no
-`groom-it.md`, which is correct — the generic `groom-it` runs fine on `NO_CONFIG`.
+| Legacy generated dir (migrate source) | Pre-rename config (update-mode source) | Current config file |
+| --- | --- | --- |
+| `.claude/skills/plate-it/` | `.claude/sassy-dog/plate-it.md` | `survey-work.md` |
+| `.claude/skills/fill-it/` | `.claude/sassy-dog/groom-it.md` | `groom-backlog.md` |
+| `.claude/skills/drain-it/` | `.claude/sassy-dog/drain-it.md` | `dispatch-ready.md` |
+| `.claude/skills/clean-it/` | `.claude/sassy-dog/clean-it.md` | `tidy-repo.md` |
+| `.claude/skills/take-it/` | — (name unchanged) | `take-it.md` |
+| `.claude/skills/send-it/` | — (name unchanged) | `send-it.md` |
 
-Mention the rename in the preview. `/fill-it` will stop appearing, and that surprises people.
+A middle-vintage repo (config era, pre-rename) is update mode's case, not migrate mode's: the
+rename step in `update-mode.md` performs the `git mv`, prose carried verbatim. A repo with no
+legacy artifact for a skill gets no config file for it, which is correct — the generic skills run
+fine on `NO_CONFIG` (dispatch-ready and take-it stop, by design).
+
+Mention every rename in the preview. `/plate-it`, `/fill-it`, `/drain-it`, and `/clean-it` will
+stop appearing as such, and that surprises people — the legacy trigger *phrases* still resolve to
+the renamed skills.
 
 ## Step 4 — `.claude/settings.json`
 
@@ -177,8 +192,8 @@ plugin, leave it alone.
 
 **Why this matters more than it looks:** `enabledPlugins` honors project settings, and plugin skills
 enabled only in *user* settings do not transfer to cloud sessions or scheduled routines. Omit this
-and a scheduled `drain-it` silently finds no skill while every local session works — a failure mode
-local testing cannot reproduce.
+and a scheduled `dispatch-ready` silently finds no skill while every local session works — a
+failure mode local testing cannot reproduce.
 
 ## Step 5 — preview
 

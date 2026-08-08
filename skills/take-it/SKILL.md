@@ -82,7 +82,7 @@ exactly as before. That is the default.
 
 When it IS configured, check whether the named issues form a declared chain:
 
-1. Read each named issue's body for a `stack:` line (groom-it writes it on the **bottom** issue,
+1. Read each named issue's body for a `stack:` line (groom-backlog writes it on the **bottom** issue,
    naming every member bottom → top).
 2. A chain applies only when **every** member it names is in the set the user just handed you. A
    partial overlap is not a stack — say which members are missing and dispatch independently rather

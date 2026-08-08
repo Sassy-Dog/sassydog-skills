@@ -11,4 +11,4 @@ claim_label: in-progress
 
 ## extra-guardrails
 
-<!-- Additional clean-it guardrails go here. -->
+<!-- Additional tidy-repo guardrails go here. -->

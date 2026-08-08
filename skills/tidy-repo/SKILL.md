@@ -1,17 +1,19 @@
 ---
-name: clean-it
+name: tidy-repo
 description: >
   Clean up local + remote git state after a productive day — fast-forward the default branch and
   prune, inventory stale branches/worktrees, triage orphan stashes, sweep untracked-file noise,
   remove stale worktrees, delete merged-PR branches local + remote. Use when the user says "clean
-  it", "clean up", "tidy the repo", "clean branches", or asks to remove stale
-  worktrees/branches/stashes. Reads the current repo's settings from
-  `.claude/sassy-dog/clean-it.md`; run `refresh-skills` if that file is missing.
+  it", "clean up", "tidy the repo", "tidy up", "tidy it", "clean branches", or asks to remove
+  stale worktrees/branches/stashes. Reads the current repo's settings from
+  `.claude/sassy-dog/tidy-repo.md`; run `refresh-skills` if that file is missing.
 ---
 
-# Clean-It
+# Tidy-Repo
 
 Post-shipping git reconciliation for the current repo.
+
+> Formerly `clean-it`. The "clean it" and "clean up" triggers still resolve here.
 
 This skill is **thin**: it reads the repo's facts from config and delegates the actual mechanics —
 the `[gone]` grep trap, squash-merge `-D`, stash triage by `closedByPullRequestsReferences`,
@@ -33,14 +35,20 @@ gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge \
 
 ## 2. Repo config
 
-!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/clean-it.md" 2>/dev/null || echo "NO_CONFIG"`
+!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/tidy-repo.md" 2>/dev/null || echo "NO_CONFIG"`
 
-The block above is this repo's `.claude/sassy-dog/clean-it.md`, inlined at load time. Its
+The block above is this repo's `.claude/sassy-dog/tidy-repo.md`, inlined at load time. Its
 frontmatter carries the sweep policy — `dep_version_globs`, `noise_allowlist`, `never_discard`,
 optional `claim_label` — and its `##` sections carry repo-specific prose. The contract is
 `sassy-dog:refresh-skills` → `references/config-contract.md`.
 
-**If it reads `NO_CONFIG`**, this repo has not been set up yet. The §1 facts are still available,
+**If it reads `NO_CONFIG`**, first check for a stranded pre-rename config: if
+`.claude/sassy-dog/clean-it.md` exists, this repo is configured but predates the
+`clean-it` → `tidy-repo` rename — say exactly that, route to `sassy-dog:refresh-skills`
+(update mode, it performs the config rename), and stop rather than running degraded. Never read
+the old filename directly.
+
+Otherwise, this repo has not been set up yet. The §1 facts are still available,
 so the branch/worktree work is safe to do. But run with an **empty** noise allowlist and an empty
 dep-version-glob list: with no `never_discard` list you cannot know which untracked files are
 precious, so **discard nothing at all** and report what you would have swept.
@@ -49,7 +57,7 @@ precious, so **discard nothing at all** and report what you would have swept.
 files that are intentionally untracked, which is the opposite of disposable — that is exactly where
 `.env.local` lives. Then tell the user:
 
-> No `.claude/sassy-dog/clean-it.md` in this repo — running in conservative mode with no
+> No `.claude/sassy-dog/tidy-repo.md` in this repo — running in conservative mode with no
 > auto-discard.
 
 Then run the reconciliation, and make the offer in the final section — after the user has seen what
@@ -104,10 +112,10 @@ Apply any `## extra-guardrails` section from the config on top of these.
 
 **Then, after the output above — not before it — offer once:**
 
-- **If `.claude/skills/clean-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
-  superseded generated-skills architecture. Say so concretely: *"This repo has a generated
-  `clean-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
-  only after you approve. Want me to?"*
+- **If `.claude/skills/clean-it/SKILL.md` exists with a `generated-by:` marker** (the legacy
+  generated-skills name) — this repo is on the superseded generated-skills architecture. Say so
+  concretely: *"This repo has a generated `clean-it` I can migrate — I'd extract its config, show
+  you the result, and remove the old skill only after you approve. Want me to?"*
 - **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
   how this repo works. Want me to?"*
 

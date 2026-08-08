@@ -1,33 +1,40 @@
 ---
-name: groom-it
+name: groom-backlog
 description: >
   Backlog grooming: refine open issues until they are fully dispatchable by a cold worktree
-  sub-agent, then promote them to Ready. The counterpart that feeds drain-it. Use when the user
+  sub-agent, then promote them to Ready. The counterpart that feeds dispatch-ready. Use when the user
   says "groom it", "groom the backlog", "refine the backlog", "scope these issues", "make these
   dispatchable", "get the backlog ready", "fill it", or asks to move issues to Ready. Writes:
   issue-body edits, Ready promotion, and epic-split sub-issues only — never deletes, never closes,
-  never dispatches work. Reads the current repo's settings from `.claude/sassy-dog/groom-it.md`.
+  never dispatches work. Reads the current repo's settings from `.claude/sassy-dog/groom-backlog.md`.
 ---
 
-# Groom-It
+# Groom-Backlog
 
 Groom the backlog until every issue is either **Ready** — a cold sub-agent could ship it — or
 **explicitly parked with a named reason**.
 
-Groom-it owns *content quality*; sequencing and dispatch belong to drain-it. The two share one
+Groom-backlog owns *content quality*; sequencing and dispatch belong to dispatch-ready. The two share one
 contract: **Ready means dispatchable.** Nothing reaches Ready that you would not hand to a worktree
 agent with zero conversation context.
 
-> Formerly `fill-it`. The "fill it" trigger still resolves here.
+> Formerly `groom-it`, and `fill-it` before that. The "groom it" and "fill it" triggers still
+> resolve here.
 
 ## 1. Repo config
 
-!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/groom-it.md" 2>/dev/null || echo "NO_CONFIG"`
+!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/groom-backlog.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `gotcha_summary` and the optional `board` and `stacked_prs` blocks. Contract:
 `sassy-dog:refresh-skills` → `references/config-contract.md`.
 
-**If it reads `NO_CONFIG`**, run boardless (the `ready`-label flow below) and skip the repo-gotchas
+**If it reads `NO_CONFIG`**, first check for a stranded pre-rename config: if
+`.claude/sassy-dog/groom-it.md` exists, this repo is configured but predates the
+`groom-it` → `groom-backlog` rename — say exactly that, route to `sassy-dog:refresh-skills`
+(update mode, it performs the config rename), and stop rather than running degraded. Never read
+the old filename directly.
+
+Otherwise run boardless (the `ready`-label flow below) and skip the repo-gotchas
 step in §4 — **do not invent gotchas** by reading the repo's CLAUDE.md or CI config; a wrong gotcha
 in an issue body misleads a cold sub-agent that has no way to check it. Say the step was skipped.
 
@@ -54,7 +61,7 @@ claimed — assignee set plus `in-progress` label.
 hand, and drift happens: a decision marker or new blocker added after promotion demotes the item
 back to Backlog with a comment. Demotion via `sassy-dog:github-issues`:
 `issue-claim.sh demote N --comment "<the drift>"` — the comment is mandatory. Ready is a promise;
-stale promises break drain-it.
+stale promises break dispatch-ready.
 
 Read each candidate IN FULL — `gh issue view N --comments` — scope often lives in follow-up
 comments.
@@ -71,13 +78,13 @@ An issue is **Ready** only if ALL of these hold:
 | 4 | Self-contained: screenshots/attachments transcribed into prose, referenced docs committed on the default branch | Refine (§4); ask the user to paste any image you cannot read — until they do, the verdict is **parked: awaiting-user** |
 | 5 | No open product decisions: no `(decision)` markers, no `## Open questions`, no "TBD" | Surface the decision with a recommended default; issue stays unpromoted until resolved |
 | 6 | Right-sized: one coherent PR per issue | Epic → split (§5) |
-| 7 | Dependencies recorded as literal `Depends on #N` lines, one per line | Add them — drain-it enforces ordering from these lines |
-| 8 | Touch-set annotated: a single machine-readable `touches:` line naming the repo-relative paths/globs the issue's PR will edit | Add it (§4) — drain-it reads it to avoid dispatching two file-overlapping issues concurrently |
+| 7 | Dependencies recorded as literal `Depends on #N` lines, one per line | Add them — dispatch-ready enforces ordering from these lines |
+| 8 | Touch-set annotated: a single machine-readable `touches:` line naming the repo-relative paths/globs the issue's PR will edit | Add it (§4) — dispatch-ready reads it to avoid dispatching two file-overlapping issues concurrently |
 
 GitHub `user-attachments` URLs are cookie-walled and unreadable from a worktree agent, which is why
 test 4 demands transcription rather than a link.
 
-A dependency being open does NOT block Ready — drain-it sequences at dispatch time. Only
+A dependency being open does NOT block Ready — dispatch-ready sequences at dispatch time. Only
 *unrecorded* dependencies block, because invisible ordering is how parallel agents collide.
 
 ### Stack candidates (ONLY if `stacked_prs:` is configured)
@@ -109,7 +116,7 @@ lines unchanged — the two contracts coexist, and a repo that later turns `stac
 back to dependency sequencing with nothing lost.
 
 Fan-out or fan-in dependency graphs are exactly what stacks cannot express (a stack is a line, not a
-tree). Leave them to drain-it's dependency filter and say so rather than forcing a linearisation.
+tree). Leave them to dispatch-ready's dependency filter and say so rather than forcing a linearisation.
 
 ## 4. Refine
 
@@ -122,7 +129,7 @@ Per failing candidate:
 3. Write the **touch-set**: a single `touches:` line listing the repo-relative paths/globs the
    issue's PR will edit, distilled from the scope you just grounded and its `file:line` citations.
    Space-separated, globs allowed. Keep it to files that will actually change, not every file
-   mentioned. This is the coupling signal drain-it parses, so under-scoping it re-introduces the
+   mentioned. This is the coupling signal dispatch-ready parses, so under-scoping it re-introduces the
    conflict churn it exists to prevent.
 4. Record the repo gotchas a cold sub-agent needs, from the config's `gotcha_summary`.
 5. `gh issue edit N --body-file …` — edit the body, don't comment-and-hope.
@@ -163,13 +170,13 @@ awaiting-user / parked: reason) · what changed. End with the decisions awaiting
 
 ## Guardrails
 
-- Never file new issues outside the §5 epic-split gate; synthesis of brand-new work is plate-it's
+- Never file new issues outside the §5 epic-split gate; synthesis of brand-new work is survey-work's
   job.
 - Never close issues, never delete content — the original ask survives as a quote.
 - Never promote with an unresolved decision "because the default is obvious" — the default goes to
   the user first.
 - Never write a `stack:` line unprompted, and never write one at all without a `stacked_prs:` block.
-- Ready is a promise to drain-it. When in doubt, park with a reason instead.
+- Ready is a promise to dispatch-ready. When in doubt, park with a reason instead.
 
 Apply any `## extra-rubric` section from config as additional Ready tests.
 
@@ -179,9 +186,10 @@ Apply any `## extra-rubric` section from config as additional Ready tests.
 
 **Then, after the output above — not before it — offer once:**
 
-- **If `.claude/skills/groom-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
+- **If `.claude/skills/fill-it/SKILL.md` exists with a `generated-by:` marker** (the legacy
+  generated-skills name) — this repo is on the
   superseded generated-skills architecture. Say so concretely: *"This repo has a generated
-  `groom-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
+  `fill-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
   only after you approve. Want me to?"*
 - **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
   how this repo works. Want me to?"*

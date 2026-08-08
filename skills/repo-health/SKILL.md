@@ -6,13 +6,13 @@ description: >
   "is the release pipeline lagging", "mobile release lag", "is TestFlight behind main", or wants a
   quick scripted signals scan of code-debt markers, CI workflow health (median/p90 duration, flake
   hints), and release lag — the fast inputs a prioritization pass consumes. Also triggers when a
-  project workflow skill (a generated plate-it) invokes sassy-dog:repo-health by name.
+  project workflow skill (a generated survey-work) invokes sassy-dog:repo-health by name.
   For a full multi-agent engineering audit filed as GitHub Issues, use assess-it instead.
 ---
 
 # Repo Health
 
-Fast, scripted, read-only signal scans: tech-debt markers, skipped tests, CI duration/flake, mobile release lag. Each scan is one bundled script emitting parseable output. This is the cheap input layer for prioritization (e.g. a project plate-it); it makes no writes and files no issues.
+Fast, scripted, read-only signal scans: tech-debt markers, skipped tests, CI duration/flake, mobile release lag. Each scan is one bundled script emitting parseable output. This is the cheap input layer for prioritization (e.g. a project survey-work); it makes no writes and files no issues.
 
 ## Scans
 

@@ -1,23 +1,26 @@
 ---
-name: plate-it
+name: survey-work
 description: >
   Synthesize the full work surface for the current repo — customer pain (Sentry, GitHub bugs,
   TestFlight feedback), backlog (board or open issues + labels), tech debt (TODO/FIXME, skipped
   tests), dev experience (CI duration/flake, dependency exposure), and synthesized "next bet"
   candidates with no GitHub issue yet. Dedupes across sources, scores within each category, returns
   a prioritized inline plate. Use when the user says "what's on our plate", "what's on our plate
-  today", "what should we work on", "plate it", "what's next", "what should I prioritize", "give me
-  the plate", "what hurts customers most", or "triage". Reads the current repo's settings from
-  `.claude/sassy-dog/plate-it.md`. Read-only unless that config sets `write_policy: gated`.
+  today", "what should we work on", "survey the work", "survey what's on deck", "plate it",
+  "what's next", "what should I prioritize", "give me the plate", "what hurts customers most", or
+  "triage". Reads the current repo's settings from
+  `.claude/sassy-dog/survey-work.md`. Read-only unless that config sets `write_policy: gated`.
 ---
 
-# Plate-It
+# Survey-Work
 
 Synthesize everything we might tackle into one prioritized plate.
 
+> Formerly `plate-it`. The "plate it" and "what's on our plate" triggers still resolve here.
+
 ## 1. Repo config
 
-!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/plate-it.md" 2>/dev/null || echo "NO_CONFIG"`
+!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/survey-work.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
 `write_policy`, and the optional `sentry`, `board`, `testflight`, `mobile`, `posthog`, and
@@ -29,7 +32,13 @@ skill NEVER files issues or mutates anything. Only `write_policy: gated` unlocks
 
 ### If it reads `NO_CONFIG`
 
-**Run EXACTLY these three surfaces and nothing else:**
+**First check for a stranded pre-rename config**: if `.claude/sassy-dog/plate-it.md` exists, this
+repo is configured but predates the `plate-it` → `survey-work` rename. Do NOT run the degraded
+flow below over a repo that actually has a rich config under the old name — say exactly that,
+route to `sassy-dog:refresh-skills` (update mode, it performs the config rename), and stop.
+Never read the old filename directly.
+
+Otherwise, **run EXACTLY these three surfaces and nothing else:**
 
 1. GitHub bugs and open issues (§3A "GitHub bugs" + §3B boardless form) — derivable from `gh`
 2. In-flight work (§3E) — derivable from `gh` and `git` alone; it needs no config block, so it
@@ -48,9 +57,9 @@ TestFlight, PostHog, mobile release lag, board snapshot, secret bootstrap, CI he
 
 Then tell the user:
 
-> No `.claude/sassy-dog/plate-it.md` in this repo — ran GitHub issues, in-flight work, and a
-> whole-tree debt scan only. If this repo has a project-level `plate-it` under `.claude/skills/`,
-> use that instead; it has the real config.
+> No `.claude/sassy-dog/survey-work.md` in this repo — ran GitHub issues, in-flight work, and a
+> whole-tree debt scan only. If this repo has a project-level `plate-it` (the legacy name) or
+> `survey-work` under `.claude/skills/`, use that instead; it has the real config.
 
 Routing to an existing project skill takes precedence over offering to migrate: it gets the user a
 real plate now. Make the setup offer in the final section, after the output.
@@ -171,11 +180,11 @@ Classification — PR state is the source of truth:
 | Probe result | Classification |
 |---|---|
 | Open PR | Genuinely in flight — list with check status, draft flagged |
-| Merged PR | Post-merge residue — route to `clean-it` as a one-line pointer in the output; NEVER surface as an actionable plate item |
+| Merged PR | Post-merge residue — route to `tidy-repo` as a one-line pointer in the output; NEVER surface as an actionable plate item |
 | Closed-unmerged PR | Deliberately dropped — not a plate item |
 | No PR in any state AND commits not in `origin/<default>` (`git rev-list --count` against the just-fetched remote-tracking ref) | Unshipped work — a legitimate plate item, "a `send it` away" |
 
-"Route to `clean-it`" means naming it in the plate (see the residue line in §6's template), not
+"Route to `tidy-repo`" means naming it in the plate (see the residue line in §6's template), not
 running the cleanup from here.
 
 > **Guardrail — squash-merge + a stale local main lie in unison.** Never derive "unshipped" from
@@ -284,9 +293,10 @@ Apply any `## extra-guardrails` section from config on top of these.
 
 **Then, after the output above — not before it — offer once:**
 
-- **If `.claude/skills/plate-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
+- **If `.claude/skills/plate-it/SKILL.md` exists with a `generated-by:` marker** (the legacy
+  generated-skills name) — this repo is on the
   superseded generated-skills architecture. Say so concretely: *"This repo has a generated
-  `plate-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
+  `survey-work` I can migrate — I'd extract its config, show you the result, and remove the old skill
   only after you approve. Want me to?"*
 - **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
   how this repo works. Want me to?"*

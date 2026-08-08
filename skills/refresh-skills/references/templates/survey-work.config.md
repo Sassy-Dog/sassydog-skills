@@ -1,6 +1,6 @@
 <!--
-CONFIG TEMPLATE: plate-it
-Rendered into a consumer repo as .claude/sassy-dog/plate-it.md
+CONFIG TEMPLATE: survey-work
+Rendered into a consumer repo as .claude/sassy-dog/survey-work.md
   {{FACT}}          -> the detected + LIVE-VERIFIED value
   optional: blocks  -> omit the whole block when the repo lacks that surface.
                        Presence is the toggle; there is no `sentry: false`.

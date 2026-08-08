@@ -7,7 +7,7 @@ description: >
   "dedupe before filing", "link this Sentry or feedback item to a GitHub issue", or any task
   involving GitHub issue/board reads via gh + GraphQL, label taxonomy, stale-issue detection, or
   gated dedupe-then-file issue creation. Also triggers when a project workflow skill (a generated
-  plate-it or take-it) invokes sassy-dog:github-issues by name.
+  survey-work or take-it) invokes sassy-dog:github-issues by name.
 ---
 
 # GitHub Issues
@@ -78,9 +78,9 @@ Output actions: `filed` / `already-linked` / `filed-no-board` / `would-file`. Bo
 
 | Label | Color | Meaning |
 |-------|-------|---------|
-| `ready` | `0E8A16` | Dispatchable: a cold worktree agent could ship this (groom-it promoted) |
-| `in-progress` | `1D76DB` | Claimed by a take-it/drain-it loop |
-| `blocked` | `B60205` | Needs a human decision before it can be dispatched (drain-it demoted) |
+| `ready` | `0E8A16` | Dispatchable: a cold worktree agent could ship this (groom-backlog promoted) |
+| `in-progress` | `1D76DB` | Claimed by a take-it/dispatch-ready loop |
+| `blocked` | `B60205` | Needs a human decision before it can be dispatched (dispatch-ready demoted) |
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh \

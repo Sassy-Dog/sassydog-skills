@@ -22,4 +22,4 @@ Backlog priority: this repo has no P0–P3 taxonomy — treat the default GitHub
 
 ## extra-guardrails
 
-<!-- Additional plate-it guardrails go here. -->
+<!-- Additional survey-work guardrails go here. -->

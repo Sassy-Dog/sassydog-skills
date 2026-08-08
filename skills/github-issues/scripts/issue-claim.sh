@@ -15,7 +15,7 @@
 #   block    N...  ensure `blocked` exists; strip ready + in-progress, add
 #                  blocked, post the --comment (REQUIRED — a demotion to blocked
 #                  without a reason is a silent failure for the next human).
-#   promote  N...  ensure `ready` exists; add ready (groom-it promotion).
+#   promote  N...  ensure `ready` exists; add ready (groom-backlog promotion).
 #   demote   N...  remove ready, post the --comment (REQUIRED — never a silent
 #                  strip; Ready is a promise and breaking it needs a why).
 #
@@ -33,7 +33,7 @@
 #   0  — every issue ok / skipped / dry-run
 #   1  — missing tooling (gh/jq) or no repo
 #   2  — at least one hard failure (the batch CONTINUES past failures — claim
-#        failures are logged, never fatal, per the take-it/drain-it contract)
+#        failures are logged, never fatal, per the take-it/dispatch-ready contract)
 #   64 — usage error
 #
 # Label ops are idempotent by nature (add existing / remove absent = no-op), so
@@ -48,13 +48,13 @@ set -uo pipefail
 # --- label taxonomy (canonical definition; SKILL.md documents this table) ---
 READY_LABEL="ready"
 READY_COLOR="0E8A16"
-READY_DESC="Dispatchable: a cold worktree agent could ship this (groom-it promoted)"
+READY_DESC="Dispatchable: a cold worktree agent could ship this (groom-backlog promoted)"
 INPROG_LABEL="in-progress"
 INPROG_COLOR="1D76DB"
-INPROG_DESC="Claimed by a take-it/drain-it loop"
+INPROG_DESC="Claimed by a take-it/dispatch-ready loop"
 BLOCKED_LABEL="blocked"
 BLOCKED_COLOR="B60205"
-BLOCKED_DESC="Needs a human decision before it can be dispatched (drain-it demoted)"
+BLOCKED_DESC="Needs a human decision before it can be dispatched (dispatch-ready demoted)"
 
 usage() {
     cat >&2 <<'EOF'

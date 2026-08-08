@@ -10,7 +10,7 @@ description: >
   against its peers, then reports which repos are lagging and whether the cause is a missing
   automation config. Read-only — never edits pins, never opens PRs. For things that are broken or
   stalled rather than merely old, use whats-on-fire; for single-repo prioritization, use that
-  repository's own plate-it skill.
+  repository's own survey-work skill.
 ---
 
 # What's Behind
