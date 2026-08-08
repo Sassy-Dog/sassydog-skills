@@ -181,19 +181,31 @@ Merge, never overwrite. `refresh-hooks` may already own a hooks entry in the sam
 
 ```json
 {
+  "extraKnownMarketplaces": {
+    "sassydog-skills": {
+      "source": {
+        "source": "github",
+        "repo": "Sassy-Dog/sassydog-skills"
+      }
+    }
+  },
   "enabledPlugins": {
     "sassy-dog@sassydog-skills": true
   }
 }
 ```
 
-Preserve every existing key; add only the `enabledPlugins` entry. If the file already declares the
-plugin, leave it alone.
+Preserve every existing key; add only the `extraKnownMarketplaces` and `enabledPlugins` entries. If
+the file already declares both, leave it alone. A file that declares only `enabledPlugins` is the
+pre-#97 state — add the missing `extraKnownMarketplaces` entry.
 
 **Why this matters more than it looks:** `enabledPlugins` honors project settings, and plugin skills
-enabled only in *user* settings do not transfer to cloud sessions or scheduled routines. Omit this
-and a scheduled `dispatch-ready` silently finds no skill while every local session works — a
-failure mode local testing cannot reproduce.
+enabled only in *user* settings do not transfer to cloud sessions or scheduled routines. And
+`enabledPlugins` alone is not enough: it names the marketplace, but marketplace registration
+otherwise lives in user-level state (`~/.claude/plugins/known_marketplaces.json`) that never reaches
+a cloud VM — `extraKnownMarketplaces` is what lets the session resolve `@sassydog-skills` and
+install the plugin at session start. Omit either and a scheduled `dispatch-ready` silently finds no
+skill while every local session works — a failure mode local testing cannot reproduce.
 
 ## Step 5 — preview
 

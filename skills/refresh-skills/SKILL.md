@@ -20,7 +20,7 @@ plugin. This skill writes the **per-repo config** they read:
 
 ```text
 .claude/sassy-dog/<skill>.md      # YAML frontmatter (facts) + ## sections (prose)
-.claude/settings.json             # enabledPlugins declaration
+.claude/settings.json             # extraKnownMarketplaces + enabledPlugins declarations
 ```
 
 The format is `references/config-contract.md`. **Read it before writing anything.**
@@ -130,10 +130,12 @@ user approves** — writing into a product repo is outward-facing and never sile
 
 1. Every written `.claude/sassy-dog/*.md` parses: `---` on line 1, valid YAML frontmatter, `##`
    sections intact.
-2. `.claude/settings.json` is valid JSON and declares the plugin. **This is the step most likely to
+2. `.claude/settings.json` is valid JSON and declares **both** the marketplace
+   (`extraKnownMarketplaces`) and the plugin (`enabledPlugins`). **This is the step most likely to
    be skipped**, because everything works locally without it — plugin skills enabled only in *user*
-   settings do not transfer to cloud sessions or scheduled routines, so a scheduled
-   `dispatch-ready` silently finds no skill while every local session passes.
+   settings do not transfer to cloud sessions or scheduled routines, and `enabledPlugins` without
+   the marketplace declaration leaves cloud sessions unable to resolve `@sassydog-skills` at all,
+   so a scheduled `dispatch-ready` silently finds no skill while every local session passes.
 3. In migrate mode: `.claude/skills/` contains no marker-carrying directory, and every unmarked one
    still exists.
 4. Remind: config is read at skill invocation, so it takes effect immediately — no session restart
