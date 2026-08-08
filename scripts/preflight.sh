@@ -108,23 +108,19 @@ for legacy in 'create-dev-workflows' 'refresh-sassydog-'; do
     fi
 done
 
-# The plugin itself renamed too: ai-agent-skills -> sassy-dog, and the
-# marketplace sassy-dog-skills -> sassydog-skills (issue #71). The old plugin
-# name may appear ONLY where it is still load-bearing:
-#   - README.md / CLAUDE.md / .claude/sassy-dog/send-it.md — the GitHub repo
-#     slug Sassy-Dog/ai-agent-skills, the local checkout path, and the
-#     one-time marketplace re-add instructions (the REPO renames separately,
-#     issue #72)
-#   - .claude-plugin/marketplace.json — source.repo is the repo slug (#72)
-#   - skills/refresh-deps/SKILL.md, skills/refresh-hooks/SKILL.md — the
-#     generated-by recognizers must keep accepting pre-rename
-#     'generated-by: ai-agent-skills:*' markers in consumer-repo renders
+# The plugin itself renamed too: ai-agent-skills -> sassy-dog, the marketplace
+# sassy-dog-skills -> sassydog-skills (issue #71), and the GitHub repo
+# ai-agent-skills -> sassydog-skills (issue #72). The old plugin name may
+# appear ONLY where it is still load-bearing:
+#   - README.md — the one historical line recording the #71 rename
+#   - CLAUDE.md — the marker-recognition rule: recognizers must accept
+#     pre-rename 'generated-by: ai-agent-skills:*' markers
+#   - skills/refresh-deps/SKILL.md, skills/refresh-hooks/SKILL.md — those
+#     generated-by recognizers themselves
 #   - this script (the guard itself)
 if git grep -l 'ai-agent-skills' -- \
     ':!README.md' \
     ':!CLAUDE.md' \
-    ':!.claude-plugin/marketplace.json' \
-    ':!.claude/sassy-dog/send-it.md' \
     ':!skills/refresh-deps/SKILL.md' \
     ':!skills/refresh-hooks/SKILL.md' \
     ':!scripts/preflight.sh'; then
