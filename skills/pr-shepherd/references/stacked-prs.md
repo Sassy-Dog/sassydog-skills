@@ -2,7 +2,7 @@
 
 GitHub shipped stacked PRs to public preview on 2026-07-30. A stack is a chain of PRs where the bottom targets the trunk and each layer above targets the branch of the layer below. Layers merge **bottom-up**; when a lower one lands, GitHub keeps the upper ones open and retargets them.
 
-Everything here is **read-and-gate only**. This skill never creates, extends, or dissolves a stack — the dispatchers (`take-it`, `drain-it`) own creation, gated behind their `stacked_prs:` config.
+Everything here is **read-and-gate only**. This skill never creates, extends, or dissolves a stack — the dispatchers (`take-it`, `dispatch-ready`) own creation, gated behind their `stacked_prs:` config.
 
 ## Why a stack is dangerous to this skill specifically
 

@@ -1,6 +1,6 @@
 <!--
-CONFIG TEMPLATE: groom-it (formerly fill-it) — see plate-it.config.md header.
-Migrate mode maps .claude/skills/fill-it/ onto .claude/sassy-dog/groom-it.md,
+CONFIG TEMPLATE: groom-backlog (formerly fill-it) — see survey-work.config.md header.
+Migrate mode maps .claude/skills/fill-it/ onto .claude/sassy-dog/groom-backlog.md,
 carrying its extra-rubric prose across.
 -->
 ---

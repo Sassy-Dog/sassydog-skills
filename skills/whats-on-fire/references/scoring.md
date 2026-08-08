@@ -1,11 +1,11 @@
 # Portfolio scoring
 
-Severity tiers for the portfolio sweep. These are **not** the per-repo `plate-it` rules — read the
+Severity tiers for the portfolio sweep. These are **not** the per-repo `survey-work` rules — read the
 inversion below before reusing anything from `repo-health/references/scoring.md`.
 
 ## The staleness inversion
 
-Per-repo `plate-it` applies a `recency_decay` so old signals matter less. That is right for customer
+Per-repo `survey-work` applies a `recency_decay` so old signals matter less. That is right for customer
 pain: a crash nobody has hit in a month is less urgent than one from this morning.
 
 It is exactly wrong for stuck work. A PR idle 123 days is **more** urgent than one idle 3 days — the
@@ -102,9 +102,9 @@ absence of information, not a judgment of low priority.
 | No alerting | `find_alert_rules` returns zero metric rules org-wide |
 | Archived but still checked out | `repos[].archived == true` with a local clone present |
 | In the org, never cloned | roster entry with no local directory |
-| No `plate-it` config | active repo without `.claude/sassy-dog/plate-it.md` (the skill ships in the plugin, so only the config signals a tuned deep-dive) |
+| No `survey-work` config | active repo without `.claude/sassy-dog/survey-work.md` (the skill ships in the plugin, so only the config signals a tuned deep-dive) |
 
 The reason this section exists: a repo with no Sentry project reports zero errors, and a per-repo
-plate-it will faithfully print `✓ Clean today: Sentry`. That is technically true and completely
+survey-work will faithfully print `✓ Clean today: Sentry`. That is technically true and completely
 wrong. Silence from an uninstrumented product is not health — it is the absence of a sensor, and
 only a portfolio-level view can tell the two apart.

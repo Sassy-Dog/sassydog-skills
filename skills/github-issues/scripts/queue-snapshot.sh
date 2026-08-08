@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # queue-snapshot.sh — one-call read of the boardless fill/drain work queue.
 #
-# Replaces drain-it's per-tick pair of ad-hoc `gh issue list` reads AND puts the
+# Replaces dispatch-ready's per-tick pair of ad-hoc `gh issue list` reads AND puts the
 # parsing of the machine-readable body contracts in one place:
 #   - `touches:` line   → the collision-avoidance file/dir set (issue #38)
 #   - `Depends on #N`   → literal dependency lines

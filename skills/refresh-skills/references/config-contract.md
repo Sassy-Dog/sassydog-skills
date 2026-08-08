@@ -1,6 +1,6 @@
 # Repo config contract
 
-The generic workflow skills — `plate-it`, `groom-it`, `take-it`, `drain-it`, `send-it`, `clean-it` —
+The generic workflow skills — `survey-work`, `groom-backlog`, `take-it`, `dispatch-ready`, `send-it`, `tidy-repo` —
 ship one implementation each in the plugin and read their per-repo behavior from:
 
 ```text
@@ -59,12 +59,12 @@ holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_boot
 Two keys are genuine scalars rather than blocks, because they carry no sub-facts:
 
 - `merge_queue: true|false` — merge queue vs. direct squash-merge
-- `write_policy: read-only|gated` — whether `plate-it` may file issues under its Sentry gate
+- `write_policy: read-only|gated` — whether `survey-work` may file issues under its Sentry gate
 
 ## Shared blocks
 
 These appear in whichever skill files need them. A repo that uses a project board puts the same
-`board:` block in `plate-it.md`, `groom-it.md`, `take-it.md`, and `drain-it.md`.
+`board:` block in `survey-work.md`, `groom-backlog.md`, `take-it.md`, and `dispatch-ready.md`.
 
 ```yaml
 board:
@@ -110,9 +110,9 @@ merge_queue: false
 
 Omit any block the repo doesn't use.
 
-### `stacked_prs` — read by `groom-it`, `take-it`, `drain-it`, `send-it`
+### `stacked_prs` — read by `groom-backlog`, `take-it`, `dispatch-ready`, `send-it`
 
-Presence enables GitHub [stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs): `groom-it` may propose a `stack:` chain, and the dispatchers may build one. **Absent is the correct value for a repo that has not deliberately opted in**, and it is absent everywhere today.
+Presence enables GitHub [stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs): `groom-backlog` may propose a `stack:` chain, and the dispatchers may build one. **Absent is the correct value for a repo that has not deliberately opted in**, and it is absent everywhere today.
 
 Three things are deliberately NOT configured here, because they are derived:
 
@@ -130,7 +130,7 @@ The preview is still rolling out per-repo, so enablement is exactly the kind of 
 
 Each section lists only the keys that skill reads *in addition to* the shared blocks above.
 
-### `plate-it.md`
+### `survey-work.md`
 
 ```yaml
 scan_paths: apps packages          # tech-debt scan roots
@@ -142,7 +142,7 @@ write_policy: read-only            # or `gated` to allow the Sentry->GitHub file
 
 Prose sections: `## extra-surfaces`, `## scoring-overrides`, `## extra-guardrails`.
 
-### `groom-it.md`
+### `groom-backlog.md`
 
 ```yaml
 gotcha_summary: >
@@ -163,7 +163,7 @@ pr_template_sections: [Summary, Testing, Risk]
 
 Prose sections: `## subagent-rules`, `## extra-guardrails`.
 
-### `drain-it.md`
+### `dispatch-ready.md`
 
 ```yaml
 max_in_flight: 3
@@ -182,7 +182,7 @@ preflight_commands: |
 
 Prose sections: `## extra-gates`, `## extra-guardrails`.
 
-### `clean-it.md`
+### `tidy-repo.md`
 
 ```yaml
 dep_version_globs: ["**/package.json", "**/bun.lock"]
@@ -199,13 +199,13 @@ generated skills used, so migration is a mechanical lift:
 
 | Old fence slot | New config section | File |
 | --- | --- | --- |
-| `extra-surfaces` | `## extra-surfaces` | `plate-it.md` |
-| `scoring-overrides` | `## scoring-overrides` | `plate-it.md` |
-| `extra-rubric` | `## extra-rubric` | `groom-it.md` |
+| `extra-surfaces` | `## extra-surfaces` | `survey-work.md` |
+| `scoring-overrides` | `## scoring-overrides` | `survey-work.md` |
+| `extra-rubric` | `## extra-rubric` | `groom-backlog.md` |
 | `subagent-rules` | `## subagent-rules` | `take-it.md` |
-| `extra-sequencing` | `## extra-sequencing` | `drain-it.md` |
+| `extra-sequencing` | `## extra-sequencing` | `dispatch-ready.md` |
 | `extra-gates` | `## extra-gates` | `send-it.md` |
-| `extra-cleanup` | `## extra-cleanup` | `clean-it.md` |
+| `extra-cleanup` | `## extra-cleanup` | `tidy-repo.md` |
 | `extra-guardrails` | `## extra-guardrails` | four files |
 
 All eight slots must round-trip through migration. The old `update-mode.md` slot list omitted
@@ -235,7 +235,7 @@ it safely can, run in its most conservative mode, and tell the user to run
 **"Derivable" means derivable from git or `gh` in this repo. It does NOT mean "reachable by some
 other means."** This distinction is the whole safety property, and it is easy to lose.
 
-Observed 2026-08-05: the generic `plate-it` was run in an un-migrated repo, correctly reported
+Observed 2026-08-05: the generic `survey-work` was run in an un-migrated repo, correctly reported
 `NO_CONFIG`, and then invoked the Sentry surface anyway and ran the tech-debt scan with the example
 `SCAN_PATHS` from `repo-health`'s own docs. Sentry projects *are* listable for the org, and a scan
 path *can* be guessed from the directory tree — so both looked derivable. The result was a plate
@@ -256,11 +256,11 @@ on a fabricated one is not**, because the output is indistinguishable from a rea
 sharpest in `send-it`, which pushes and merges on the strength of a pre-flight command — a guessed
 command that exits 0 without running anything looks exactly like a passing check.
 
-Skills that write or dispatch unattended (`take-it`, `drain-it`) do not degrade at all; they stop.
+Skills that write or dispatch unattended (`take-it`, `dispatch-ready`) do not degrade at all; they stop.
 
 ## Cloud sessions and routines
 
 A repo carrying these config files must also declare the plugin in its own
 `.claude/settings.json`. Plugin skills enabled only in user settings do not transfer to cloud
 sessions or scheduled routines — only repo-declared plugins install at session start. Without that
-declaration a scheduled `drain-it` silently finds no skill, while every local session works fine.
+declaration a scheduled `dispatch-ready` silently finds no skill, while every local session works fine.

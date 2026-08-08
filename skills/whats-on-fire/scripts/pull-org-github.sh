@@ -18,7 +18,7 @@
 # THREE org-level API calls total, regardless of repo count — the roster, the PR
 # search, and the issue search are each one request. Do not "improve" this into a
 # per-repo loop; the whole point of the portfolio sweep is that it stays O(1) in
-# repos while the per-repo plate-it skills stay O(deep).
+# repos while the per-repo survey-work skills stay O(deep).
 #
 # Archived repos are RETAINED in `repos` (flagged) but EXCLUDED from `prs` and
 # `issues`. `gh search` happily returns hits from archived repos — at Sassy Dog

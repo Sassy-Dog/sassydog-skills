@@ -1,6 +1,6 @@
 <!--
-CONFIG TEMPLATE: drain-it — see plate-it.config.md header for render rules.
-drain-it STOPS on NO_CONFIG (it dispatches and merges unattended), so this file
+CONFIG TEMPLATE: dispatch-ready — see survey-work.config.md header for render rules.
+dispatch-ready STOPS on NO_CONFIG (it dispatches and merges unattended), so this file
 is required for any repo that runs it.
 -->
 ---

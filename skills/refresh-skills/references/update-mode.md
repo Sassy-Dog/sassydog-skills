@@ -20,21 +20,29 @@ The split is the whole design:
 Prose is never rewritten, reformatted, or summarised by a refresh. If it looks wrong, say so; do
 not fix it.
 
-The eight prose slots: `extra-surfaces`, `scoring-overrides` (plate-it); `extra-rubric` (groom-it);
-`subagent-rules` (take-it); `extra-sequencing` (drain-it); `extra-gates` (send-it); `extra-cleanup`
-(clean-it); and `extra-guardrails`, which appears in four files. An earlier version of this list
+The eight prose slots: `extra-surfaces`, `scoring-overrides` (survey-work); `extra-rubric`
+(groom-backlog); `subagent-rules` (take-it); `extra-sequencing` (dispatch-ready); `extra-gates`
+(send-it); `extra-cleanup` (tidy-repo); and `extra-guardrails`, which appears in four files. An
+earlier version of this list
 omitted `extra-rubric` and `extra-sequencing` while the templates emitted them — a migration written
 from the short list silently drops two slots.
 
 ## Update mode (config already present)
 
-1. Re-run Phase 1 detection.
-2. **Re-verify every fact against live state.** An existing config value is evidence of what was
+1. **Rename step first — pre-rename config filenames.** Four skills were renamed after the config
+   era began (the legacy → current map is in `migrate-mode.md` Step 3): a repo may carry
+   `.claude/sassy-dog/plate-it.md`, `groom-it.md`, `drain-it.md`, or `clean-it.md`. For each such
+   file whose current-name counterpart (`survey-work.md`, `groom-backlog.md`,
+   `dispatch-ready.md`, `tidy-repo.md`) does **not** exist: `git mv` it to the current name, prose
+   carried verbatim — this is a rename, not a regeneration. If BOTH names exist, stop and surface
+   it; never merge or pick silently. Mention every rename in the preview.
+2. Re-run Phase 1 detection.
+3. **Re-verify every fact against live state.** An existing config value is evidence of what was
    true when it was written, not of what is true now. `merge_queue` especially: read it from the
    `mergeQueue(branch:)` GraphQL field, never from the file you are about to overwrite.
-3. Regenerate frontmatter; carry every `##` section across untouched.
-4. Diff per file, showing changed facts as old → new with how each was verified.
-5. Apply on approval, per file.
+4. Regenerate frontmatter; carry every `##` section across untouched.
+5. Diff per file, showing changed facts as old → new with how each was verified.
+6. Apply on approval, per file.
 
 A fact that cannot be verified is surfaced to the user, never carried forward silently.
 
@@ -85,6 +93,8 @@ A **personal** skill (`~/.claude/skills/<name>`) hard-shadows a project skill of
 Plugin skills are namespaced and cannot conflict with either — which is precisely why the workflow
 skills now live in the plugin rather than being generated per repo.
 
-Before writing, check for a personal skill named `plate-it`, `groom-it`, `take-it`, `drain-it`,
-`send-it`, or `clean-it`. One will not shadow the namespaced plugin skill, but it will shadow any
-project skill of that name and is almost certainly stale — surface it rather than working around it.
+Before writing, check for a personal skill named `survey-work`, `groom-backlog`, `take-it`,
+`dispatch-ready`, `send-it`, `tidy-repo` — or any of the legacy names `plate-it`, `groom-it`,
+`fill-it`, `drain-it`, `clean-it`. One will not shadow the namespaced plugin skill, but it will
+shadow any project skill of that name and is almost certainly stale — surface it rather than
+working around it.

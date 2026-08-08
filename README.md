@@ -6,12 +6,12 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| `sassy-dog` | `plate-it` | Prioritized work plate — customer pain, backlog, tech debt, dev experience, synthesized next bets |
-| `sassy-dog` | `groom-it` | Backlog grooming — refine issues until dispatchable, then promote to Ready (formerly `fill-it`) |
+| `sassy-dog` | `survey-work` | Prioritized work plate — customer pain, backlog, tech debt, dev experience, synthesized next bets (formerly `plate-it`) |
+| `sassy-dog` | `groom-backlog` | Backlog grooming — refine issues until dispatchable, then promote to Ready (formerly `groom-it`, originally `fill-it`) |
 | `sassy-dog` | `take-it` | Parallel issue-shipping — "take #341, #432", one worktree sub-agent per issue |
-| `sassy-dog` | `drain-it` | Loop-driven Ready dispatcher — one idempotent tick per invocation, under `/loop` |
+| `sassy-dog` | `dispatch-ready` | Loop-driven Ready dispatcher — one idempotent tick per invocation, under `/loop` (formerly `drain-it`) |
 | `sassy-dog` | `send-it` | Single-PR end-to-end — worktree audit, freshness gates, pre-flight, PR body, watch, merge |
-| `sassy-dog` | `clean-it` | Post-shipping git reconciliation — stale branches, worktrees, stashes, untracked noise |
+| `sassy-dog` | `tidy-repo` | Post-shipping git reconciliation — stale branches, worktrees, stashes, untracked noise (formerly `clean-it`) |
 | `sassy-dog` | `github-secrets` | GitHub Actions secrets & variables — scope hierarchy, CLI usage, common mistakes |
 | `sassy-dog` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `sassy-dog` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
@@ -21,22 +21,22 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `sassy-dog` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `sassy-dog` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `sassy-dog` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
-| `sassy-dog` | `repo-cleanup` | Post-shipping git reconciliation mechanics — `[gone]`/squash-merged branch sweep, stale-worktree teardown, stash triage, untracked-noise sweep (the engine behind a repo's `clean-it`) |
+| `sassy-dog` | `repo-cleanup` | Post-shipping git reconciliation mechanics — `[gone]`/squash-merged branch sweep, stale-worktree teardown, stash triage, untracked-noise sweep (the engine behind a repo's `tidy-repo`) |
 | `sassy-dog` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag |
-| `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `plate-it` |
+| `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `survey-work` |
 | `sassy-dog` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
 
 ### Workflow skills + capability skills
 
-The six workflow skills — `plate-it` (prioritized work plate), `groom-it` (backlog grooming to
-Ready), `take-it` (parallel issue-shipping: "take #341, #432"), `drain-it` (loop-driven Ready
-dispatcher), `send-it` (single-PR end-to-end), and `clean-it` (post-shipping git reconciliation) —
+The six workflow skills — `survey-work` (prioritized work plate), `groom-backlog` (backlog grooming to
+Ready), `take-it` (parallel issue-shipping: "take #341, #432"), `dispatch-ready` (loop-driven Ready
+dispatcher), `send-it` (single-PR end-to-end), and `tidy-repo` (post-shipping git reconciliation) —
 each have **one** generic implementation, shipped in the plugin. There is no per-repo copy.
 
 Per-repo behavior lives in that repo's `.claude/sassy-dog/<skill>.md`: YAML frontmatter for facts
 and toggles, `##` sections for freeform prose that survives refreshes. Each skill inlines its config
 at load time, and treats a missing config as a first-class `NO_CONFIG` state — degrading to a
-conservative mode rather than erroring. `take-it` and `drain-it` are the two exceptions that stop
+conservative mode rather than erroring. `take-it` and `dispatch-ready` are the two exceptions that stop
 instead, because both act unattended and outward-facing.
 
 Facts that can be derived are never configured: repo slug, default branch, and
@@ -52,7 +52,7 @@ config carries only the policy.
 
 Workflow skills stay thin by delegating shared mechanics to the capability skills
 (`github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
-`repo-cleanup` remains distinct from `clean-it`: the former is the mechanics engine, the latter the
+`repo-cleanup` remains distinct from `tidy-repo`: the former is the mechanics engine, the latter the
 user-facing flow.
 
 `refresh-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,

@@ -10,7 +10,7 @@ description: >
   failing workflows, Dependabot exposure, and structural blind spots (products with no error
   monitoring, no alerting, or no dependency scanning), then ranks them across products and routes
   each one to the owning repo. Read-only — never files issues, never mutates state. For deep
-  single-repo prioritization, defer to that repository's own plate-it skill.
+  single-repo prioritization, defer to that repository's own survey-work skill.
 ---
 
 # What's On Fire
@@ -23,7 +23,7 @@ Sentry status, or mutates anything — which is what makes it safe to run on a l
 
 **Scope boundary.** This decides *which product* deserves attention today. It deliberately does not
 decide *what to do inside* that product — no tech-debt scan, no next-bet synthesis, no backlog
-grooming. Those don't roll up meaningfully across a dozen products, and each repo's own `plate-it`
+grooming. Those don't roll up meaningfully across a dozen products, and each repo's own `survey-work`
 already does them with repo-specific knowledge this skill has no business duplicating. Report the
 fire, name the repo, hand off.
 
@@ -111,9 +111,12 @@ Assemble from data already pulled, plus two local comparisons:
 - Zero metric alert rules org-wide → no alerting. Check once via the alert-rules tool.
 - Roster entries with no directory under `PORTFOLIO_ROOT` → never cloned.
 - Local directories whose repo is `archived` → archived but still checked out.
-- Active repos with no `.claude/sassy-dog/plate-it.md` → no tuned deep-dive to route to. `plate-it`
+- Active repos with no `.claude/sassy-dog/survey-work.md` → no tuned deep-dive to route to. `survey-work`
   itself is a plugin skill present everywhere, so directory existence proves nothing; the **config**
-  is what makes it repo-aware. An unconfigured repo still runs `plate-it`, just degraded.
+  is what makes it repo-aware. An unconfigured repo still runs `survey-work`, just degraded. A repo
+  carrying only the legacy `.claude/sassy-dog/plate-it.md` is a **different** row: "config predates
+  the survey-work rename" — it has a tuned config, it just needs `refresh-skills` update mode; never
+  report it as missing.
 
 ## 3. Roster and rollup
 
@@ -199,11 +202,11 @@ _Sources: <pulled, with any "skipped — reason">_
 _⚠ Cron recovery cross-reference could not run for: <repo> · <repo> — red monitors there are
 shown at full severity._
 
-_To dig in: `cd <product> && /plate-it`_
+_To dig in: `cd <product> && /survey-work`_
 _To ship: `cd <product> && take #<N>`_
 ```
 
-Keep the footer. This skill's job ends at naming the product; the per-repo `plate-it` and `take-it`
+Keep the footer. This skill's job ends at naming the product; the per-repo `survey-work` and `take-it`
 take it from there, and the footer is what makes that handoff explicit rather than implied.
 
 Two rules for the cron-recovery lines, from `references/cron-recovery.md`:

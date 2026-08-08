@@ -1,6 +1,6 @@
 <!--
-CONFIG TEMPLATE: clean-it — see plate-it.config.md header for render rules.
-never_discard is the safety list. With no config clean-it discards NOTHING, so
+CONFIG TEMPLATE: tidy-repo — see survey-work.config.md header for render rules.
+never_discard is the safety list. With no config tidy-repo discards NOTHING, so
 an empty list here is safe; a WRONG list is not.
 -->
 ---

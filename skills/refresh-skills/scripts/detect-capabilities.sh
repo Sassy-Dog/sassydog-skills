@@ -105,7 +105,7 @@ fi
 
 # --- secret manager / env bootstrap hint --------------------------------------------------
 # A direnv/secret-manager config means the process env is loaded lazily — non-interactive
-# agent shells never fire direnv, so plate-it's §1 presence probes need a bootstrap command
+# agent shells never fire direnv, so survey-work's §1 presence probes need a bootstrap command
 # first (IF:SECRET_BOOTSTRAP; the exact command is interview-confirmed).
 secret_files=$(ls .envrc doppler.yaml doppler.yml 2>/dev/null | jq -R . | jq -s .)
 secret_hint=""

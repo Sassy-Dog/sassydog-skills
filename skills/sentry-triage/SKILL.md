@@ -6,7 +6,7 @@ description: >
   "cross-reference Sentry with GitHub", "escalate Sentry hits to the backlog", or any task that
   applies a qualifying gate (unresolved, recent, user/event thresholds) to Sentry issues and
   optionally files GitHub issues from the survivors. Also triggers when a project workflow skill
-  (a generated plate-it) invokes sassy-dog:sentry-triage by name. For Sentry SDK setup or
+  (a generated survey-work) invokes sassy-dog:sentry-triage by name. For Sentry SDK setup or
   open-ended natural-language Sentry exploration, defer to the sentry plugin's own skills.
 ---
 

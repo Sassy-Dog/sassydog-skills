@@ -137,6 +137,36 @@ if git grep -l 'sassy-dog-skills' -- \
     legacy_residue=1
 fi
 
+# Four workflow skills lost the -it suffix in the collection-scope naming
+# sweep: plate-it -> survey-work, groom-it -> groom-backlog (nee fill-it),
+# drain-it -> dispatch-ready, clean-it -> tidy-repo. Each legacy name may
+# appear ONLY where it is still load-bearing:
+#   - the renamed skill's own SKILL.md — legacy trigger phrases, the
+#     "Formerly" note, and the stranded-pre-rename-config detection
+#   - skills/refresh-skills/SKILL.md + references/{migrate,update}-mode.md —
+#     the rename map and legacy-artifact recognition (generated dirs and
+#     pre-rename config filenames keep their old names in consumer repos)
+#   - skills/whats-on-fire/SKILL.md — the blind-spot probe distinguishes a
+#     legacy-named survey-work config from a missing one
+#   - README.md — the "(formerly ...)" annotations
+#   - this script (the guard itself)
+for legacy in 'plate-it' 'groom-it' 'drain-it' 'clean-it'; do
+    if git grep -l "$legacy" -- \
+        ':!skills/survey-work/SKILL.md' \
+        ':!skills/groom-backlog/SKILL.md' \
+        ':!skills/dispatch-ready/SKILL.md' \
+        ':!skills/tidy-repo/SKILL.md' \
+        ':!skills/refresh-skills/SKILL.md' \
+        ':!skills/refresh-skills/references/migrate-mode.md' \
+        ':!skills/refresh-skills/references/update-mode.md' \
+        ':!skills/whats-on-fire/SKILL.md' \
+        ':!README.md' \
+        ':!scripts/preflight.sh'; then
+        failed "legacy-name guard — '$legacy' outside the sanctioned back-compat files (naming sweep: collection-scoped skills lost -it)"
+        legacy_residue=1
+    fi
+done
+
 [ "$legacy_residue" -eq 0 ] && pass "legacy-name guard"
 
 # --- 5. plugin manifests -----------------------------------------------------

@@ -1,5 +1,5 @@
 <!--
-CONFIG TEMPLATE: send-it — see plate-it.config.md header for render rules.
+CONFIG TEMPLATE: send-it — see survey-work.config.md header for render rules.
 merge_queue MUST come from live GraphQL, never from a previous render:
   gh api graphql -f query='{repository(owner:"O",name:"N"){mergeQueue(branch:"B"){id}}}'
 -->

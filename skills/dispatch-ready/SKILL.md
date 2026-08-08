@@ -1,45 +1,54 @@
 ---
-name: drain-it
+name: dispatch-ready
 description: >
   Loop-driven dispatcher: each invocation is one idempotent tick that reconciles in-flight PRs,
   then tops the pipeline back up to the configured concurrency limit, pulling ONLY from issues
   marked Ready, respecting dependencies and migration/codegen sequencing, until Ready is empty.
-  Designed to run under "/loop 5m /drain-it" but a single manual invocation is also valid. Use when
-  the user says "drain it", "drain the backlog", "work through Ready", "keep shipping until Ready
-  is empty", or invokes it via /loop. Reads the current repo's settings from
-  `.claude/sassy-dog/drain-it.md`.
+  Designed to run under "/loop 5m /dispatch-ready" but a single manual invocation is also valid.
+  Use when the user says "let's work ready items", "work ready items", "dispatch ready items",
+  "dispatch ready items in the backlog", "dispatch the backlog", "work the ready queue", "drain
+  it", "drain the backlog", "work through Ready", "keep shipping until Ready is empty", or invokes
+  it via /loop. Reads the current repo's settings from `.claude/sassy-dog/dispatch-ready.md`.
 ---
 
-# Drain-It
+# Dispatch-Ready
 
 One invocation = **one tick** of a drain loop.
 
 All state lives in GitHub — status, assignees, PRs, branches — never in conversation memory,
 because under `/loop` each tick may run with no recollection of the previous one. The contract with
-groom-it: **drain-it pulls exclusively from Ready** and trusts that Ready means dispatchable.
+groom-backlog: **dispatch-ready pulls exclusively from Ready** and trusts that Ready means dispatchable.
 Anything that smells undispatchable gets bounced back, never patched up inline.
+
+> Formerly `drain-it`. The "drain it" trigger still resolves here.
 
 ## 1. Repo config
 
-!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/drain-it.md" 2>/dev/null || echo "NO_CONFIG"`
+!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/dispatch-ready.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`,
 `merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:refresh-skills` →
 `references/config-contract.md`.
 
-**If it reads `NO_CONFIG`**, STOP. Drain-it dispatches sub-agents and merges PRs unattended, on a
+**If it reads `NO_CONFIG`**, STOP. Dispatch-ready dispatches sub-agents and merges PRs unattended, on a
 loop — running it against an unconfigured repo means guessing a concurrency cap and skipping
 migration serialization while nobody is watching. Tell the user to run
 `sassy-dog:refresh-skills` first.
+
+**Before the generic message, check for a stranded pre-rename config**: if
+`.claude/sassy-dog/drain-it.md` exists, this repo is configured but predates the
+`drain-it` → `dispatch-ready` rename. Say exactly that, and route to
+`sassy-dog:refresh-skills` (update mode) — it performs the config rename. Still STOP; never
+read the old filename directly.
 
 ### Offer to set this repo up
 
 Then offer to fix it — this is the next step, so ask now:
 
-- **If `.claude/skills/drain-it/SKILL.md` exists with a `generated-by:` marker** — this repo is on the
-  superseded generated-skills architecture. Say so concretely: *"This repo has a generated
-  `drain-it` I can migrate — I'd extract its config, show you the result, and remove the old skill
-  only after you approve. Want me to?"*
+- **If `.claude/skills/drain-it/SKILL.md` exists with a `generated-by:` marker** (the legacy
+  generated-skills name) — this repo is on the superseded generated-skills architecture. Say so
+  concretely: *"This repo has a generated `drain-it` I can migrate — I'd extract its config, show
+  you the result, and remove the old skill only after you approve. Want me to?"*
 - **Otherwise** — nothing to extract from: *"I can set this repo up. It takes a few questions about
   how this repo works. Want me to?"*
 
@@ -72,9 +81,9 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
   local default branch.
 - **Failed or red PRs** → surface in the tick report with the failing check named, and comment
-  `drain-it: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the
+  `dispatch-ready: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the
   failure context appended is allowed on a later tick. A second failure demotes to blocked — via
-  the board plus a `blocked` label, or `issue-claim.sh block N --comment "drain-it: 2 failed
+  the board plus a `blocked` label, or `issue-claim.sh block N --comment "dispatch-ready: 2 failed
   attempts — <cause>"` — and a human decides next. **Never park failures in Ready**: Ready must
   stay synonymous with dispatchable.
 - **`CONFLICTING` PRs** → never auto-rebase; surface and hold.
@@ -135,7 +144,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh --repo "<sl
 Exit `11` means the preview is not enabled here. **Do not fall back to parallel dispatch** — the
 members really do depend on each other. Drop the exemptions, let the ordinary Dependencies filter
 serialize the chain across ticks, and note it once in the tick report.
-| Smell test | Run take-it's pre-flight smell test — research-shaped titles, open-question sections, stub bodies. Failures bounce back to groom-it with a required comment. Never "fix it up" inline; that hides the grooming gap. |
+| Smell test | Run take-it's pre-flight smell test — research-shaped titles, open-question sections, stub bodies. Failures bounce back to groom-backlog with a required comment. Never "fix it up" inline; that hides the grooming gap. |
 
 **If `migrations:` is configured** — additional filter: at most ONE issue touching
 `migrations.dirs` in flight at a time, in-flight included. Hold the rest in Ready.
@@ -151,7 +160,7 @@ chiefly `unannotated` issues that turn out to collide at merge time.
 ## 5. Dispatch
 
 Use take-it's mechanics verbatim: claim → fast-forward the local default branch → one sub-agent per
-issue, `isolation: "worktree"`, single message, batch manifest in `.git/drain-it-batch.json`,
+issue, `isolation: "worktree"`, single message, batch manifest in `.git/dispatch-ready-batch.json`,
 take-it's self-contained sub-agent prompt.
 
 A stack chain uses take-it's **stacked variant** instead: one sub-agent, one worktree, layers built
@@ -221,7 +230,7 @@ Two carve-outs keep the state precise:
 
 **Confirm across two consecutive ticks before stopping** — a single stalled tick may be racing
 another session that is about to close a dependency or unblock an issue. Ticks share no memory,
-so persist the observation next to the §5 batch manifest, in `.git/drain-it-stall.json`: the held
+so persist the observation next to the §5 batch manifest, in `.git/dispatch-ready-stall.json`: the held
 issue numbers with each one's hold root (the open `Depends on #N` it chains to, the `blocked`
 label, the decision gate).
 
@@ -235,14 +244,14 @@ label, the decision gate).
 ```text
 DRAIN STALLED — nothing dispatchable and nothing in flight; all Ready items gate on human action:
   #103 #104 #105 #106 #108 → chain to #102 (parked in Backlog: awaiting planning session)
-  #22 → blocked label (drain-it: 2 failed attempts — CI check needs a human call)
+  #22 → blocked label (dispatch-ready: 2 failed attempts — CI check needs a human call)
 Loop <id> cancelled — resolve the gate(s), then restart the drain.
 ```
 
 Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one.
 
 Any tick that dispatches, merges, or observes in-flight work deletes a leftover
-`.git/drain-it-stall.json`: progress resets the confirmation clock.
+`.git/dispatch-ready-stall.json`: progress resets the confirmation clock.
 
 ### Stop path — both terminal states
 
@@ -255,10 +264,10 @@ Stop the loop yourself, according to how this tick was invoked:
 | **Manual invocation** | No loop context | Nothing to cancel — announce and finish. A stalled manual tick announces STALLED immediately: the two-tick confirmation gates loop cancellation, and there is no loop |
 
 **Cron self-cancel.** Find the loop's job id yourself: run `CronList` and select the job whose
-prompt is this drain-it invocation.
+prompt is this dispatch-ready invocation.
 
 - **Exactly one match** → `CronDelete <id>`, then append to the report — after COMPLETE: `Loop
-  <id> cancelled — run groom-it to refill Ready and start a new drain when there's more to
+  <id> cancelled — run groom-backlog to refill Ready and start a new drain when there's more to
   ship.`; after STALLED: `Loop <id> cancelled — resolve the gate(s), then restart the drain.`
 - **Zero, multiple, or ambiguous matches** → delete NOTHING. Announce the terminal state, list
   the candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is
@@ -273,7 +282,7 @@ cancellation are no-ops, not errors: each re-runs this section and retries.
 
 ## Guardrails
 
-- **Ready only.** Everything else is groom-it's job — drain-it never promotes, never grooms, never
+- **Ready only.** Everything else is groom-backlog's job — dispatch-ready never promotes, never grooms, never
   files issues.
 - **Hard cap `max_in_flight`**, counting carry-over from previous ticks, not just this tick's
   dispatches. A stack chain is one slot, not one per layer.

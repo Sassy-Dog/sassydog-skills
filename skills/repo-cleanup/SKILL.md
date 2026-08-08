@@ -10,25 +10,25 @@ description: >
   "delete the [gone] branches", "why won't this squash-merged branch delete", "triage these orphan
   stashes", "remove stale agent worktrees", "why are there worktree-agent branches left over",
   "is this stash safe to drop", or any low-level branch/worktree/stash reconciliation mechanic.
-  Also triggers when a project workflow skill (a generated clean-it) invokes
-  sassy-dog:repo-cleanup by name. The repo's own generated clean-it owns the top-level
+  Also triggers when a project workflow skill (a generated tidy-repo) invokes
+  sassy-dog:repo-cleanup by name. The repo's own generated tidy-repo owns the top-level
   post-shipping cleanup request and delegates the mechanics here.
 ---
 
 # Repo Cleanup
 
-The shared mechanics behind a repo's `clean-it`. A generated `clean-it` is thin: it holds project
+The shared mechanics behind a repo's `tidy-repo`. A generated `tidy-repo` is thin: it holds project
 facts and delegates the actual reconciliation here, so the tricky git plumbing (the `[gone]` grep
 trap, squash-merge `-D`, stash triage by PR linkage) lives in exactly one place.
 
-This skill does **not** own the top-level cleanup request — the per-repo generated `clean-it` does,
+This skill does **not** own the top-level cleanup request — the per-repo generated `tidy-repo` does,
 and calls this skill by name. It also pairs with the read-only `sassy-dog:repo-health` (health
 = read scan; cleanup = write reconcile) and with the built-in `commit-commands:clean_gone` (a
 narrower `[gone]`-only sweep — this skill supersedes it with stash/untracked/label handling).
 
 ## Inputs to establish first
 
-The caller (a generated `clean-it`, or the user directly) supplies these. Resolve any that are
+The caller (a generated `tidy-repo`, or the user directly) supplies these. Resolve any that are
 missing before acting:
 
 1. **Repo** — `owner/name`. If not given, resolve dynamically (don't hardcode):
@@ -312,7 +312,7 @@ gh issue list --repo "$REPO" --label "$CLAIM_LABEL" --state open --json number,c
 ```
 
 If its work already merged (`closedByPullRequestsReferences` has a MERGED PR) → remove the label.
-When the repo uses the standard boardless taxonomy (`in-progress` from take-it/drain-it), route the
+When the repo uses the standard boardless taxonomy (`in-progress` from take-it/dispatch-ready), route the
 removal through github-issues' claim script — it already wraps the mutation in `gh-retry.sh`:
 
 ```bash

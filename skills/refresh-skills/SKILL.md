@@ -3,7 +3,8 @@ name: refresh-skills
 description: >
   This skill should be used when the user asks to "refresh the sassydog skills", "refresh the
   project workflow skills", "refresh the dev workflow skills", "set up dev workflow skills",
-  "configure plate-it for this repo", "set up the workflow skills here", "bootstrap project
+  "configure survey-work for this repo", "configure plate-it for this repo", "set up the workflow
+  skills here", "bootstrap project
   workflow skills", "update the project workflow skills", "re-sync this repo's workflow config",
   "migrate this repo to the new workflow skills", "move the workflow skills to config", or "adopt
   the legacy plate/get/send skills". Writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow
@@ -13,9 +14,9 @@ description: >
 
 # Refresh Skills
 
-Configuration generator for the workflow family. The six skills themselves — `plate-it`,
-`groom-it`, `take-it`, `drain-it`, `send-it`, `clean-it` — ship generically in this plugin. This
-skill writes the **per-repo config** they read:
+Configuration generator for the workflow family. The six skills themselves — `survey-work`,
+`groom-backlog`, `take-it`, `dispatch-ready`, `send-it`, `tidy-repo` — ship generically in this
+plugin. This skill writes the **per-repo config** they read:
 
 ```text
 .claude/sassy-dog/<skill>.md      # YAML frontmatter (facts) + ## sections (prose)
@@ -89,7 +90,9 @@ The essential shape:
 
 1. **Extract** facts and `BEGIN/END PROJECT-SPECIFIC` fence contents from each generated SKILL.md
 2. **Re-verify** every extracted fact against live state — extracted values are *stale by default*
-3. **Map** `fill-it` → `groom-it.md`, carrying its `extra-rubric` prose
+3. **Map** legacy names to current config files per `references/migrate-mode.md` Step 3
+   (`plate-it` → `survey-work.md`, `fill-it` → `groom-backlog.md`, `drain-it` →
+   `dispatch-ready.md`, `clean-it` → `tidy-repo.md`), carrying each skill's prose
 4. **Write** `.claude/sassy-dog/*.md` + merge `.claude/settings.json`
 5. **Preview** the full config and the exact list of directories to be deleted
 6. **Delete** the old `.claude/skills/<name>/` directories only after approval
@@ -129,8 +132,8 @@ user approves** — writing into a product repo is outward-facing and never sile
    sections intact.
 2. `.claude/settings.json` is valid JSON and declares the plugin. **This is the step most likely to
    be skipped**, because everything works locally without it — plugin skills enabled only in *user*
-   settings do not transfer to cloud sessions or scheduled routines, so a scheduled `drain-it`
-   silently finds no skill while every local session passes.
+   settings do not transfer to cloud sessions or scheduled routines, so a scheduled
+   `dispatch-ready` silently finds no skill while every local session passes.
 3. In migrate mode: `.claude/skills/` contains no marker-carrying directory, and every unmarked one
    still exists.
 4. Remind: config is read at skill invocation, so it takes effect immediately — no session restart

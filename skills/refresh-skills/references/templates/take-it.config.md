@@ -1,5 +1,5 @@
 <!--
-CONFIG TEMPLATE: take-it — see plate-it.config.md header for render rules.
+CONFIG TEMPLATE: take-it — see survey-work.config.md header for render rules.
 -->
 ---
 stack_summary: >
