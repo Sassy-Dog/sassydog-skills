@@ -1,14 +1,36 @@
-# TEMPLATE: lockfile-sync-pod · version 1
+# TEMPLATE: lockfile-sync-pod · version 2
 # Rendered by sassy-dog:refresh-deps for repos where
 # detect-ecosystems.sh reports cocoapods with lockfile_risk (a tracked Podfile).
+#
+# PRECONDITION — check before rendering: '{{APP_DIR}}/ios/Podfile.lock' must
+# itself be TRACKED (`git ls-files` lists it). A tracked Podfile is not enough.
+# In a repo that gitignores the lock (tailoredtip: release builds regenerate it
+# every run, so it is a build artifact there, not a committed version pin)
+# there is nothing to sync, and the rendered workflow hard-fails instead of
+# no-op'ing: `flutter pub get` still changes the tracked pubspec.lock, so the
+# changed-lockfiles guard falls through to `git add` on an explicitly-ignored
+# path — exit 1 under bash -e, a red job holding the fleet's single macOS
+# runner on every pub PR (tailoredtip#252). Gitignored Podfile.lock → do NOT
+# render; record why the pod workflow was skipped.
+#
 #   {{RUNNER}}           → runs-on; MUST be macOS (pod install). Default:
 #                          [self-hosted, macOS, sassy-dog]
-#   {{PUBSPEC_PATH}}     → path to the Flutter pubspec.yaml that triggers this
-#   {{IOS_DIR}}          → directory holding the Podfile
+#   {{APP_DIR}}          → Flutter app directory relative to the repo root, no
+#                          leading ./ and no trailing / (tailoredtip: app ·
+#                          velovate: apps/mobile · root-level app: .).
+#                          Replaces v1's {{PUBSPEC_PATH}} and {{IOS_DIR}} —
+#                          every pubspec/Podfile path below derives from this
+#                          one fact, so the paths can never disagree.
+#                          Nested app: substitute {{APP_DIR}} literally and
+#                          delete only the # {{IF:NESTED_APP}} marker lines.
+#                          Root app (.): delete each # {{IF:NESTED_APP}} block
+#                          wholesale and collapse every '{{APP_DIR}}/' to '' —
+#                          a ./ prefix breaks the on.paths filter, and the
+#                          collapse keeps root renders byte-identical to v1's.
 #   {{FLUTTER_VERSION}}  → keep in lockstep with the release workflow
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-pod | template-version: 1
+# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-pod | template-version: 2
 #
 # Refresh pubspec.lock + Podfile.lock on Dependabot pub PRs — the macOS twin of
 # dependabot-bun-lockfile.yml.
@@ -36,7 +58,7 @@ name: Dependabot pod lockfile sync
 on:
   pull_request_target:
     paths:
-      - '{{PUBSPEC_PATH}}'
+      - '{{APP_DIR}}/pubspec.yaml'
 
 permissions:
   contents: write
@@ -73,24 +95,27 @@ jobs:
       # Regenerate pubspec.lock first: `pod install` resolves against the
       # Flutter plugin set, so a stale pubspec.lock yields a stale Podfile.lock.
       - name: Regenerate pubspec.lock
+        # {{IF:NESTED_APP}}
+        working-directory: '{{APP_DIR}}'
+        # {{ENDIF}}
         run: flutter pub get
 
       # Full clean regeneration. A partial `pod update <name>` chases per-pod
       # constraint prompts and can leave the lock internally inconsistent.
       - name: Regenerate Podfile.lock
-        working-directory: '{{IOS_DIR}}'
+        working-directory: '{{APP_DIR}}/ios'
         run: |
           rm -f Podfile.lock
           pod install --repo-update
 
       - name: Commit and push lockfiles if changed
         run: |
-          if git diff --quiet -- '*.lock' 'Podfile.lock' '{{IOS_DIR}}/Podfile.lock'; then
+          if git diff --quiet -- '*.lock' 'Podfile.lock' '{{APP_DIR}}/ios/Podfile.lock'; then
             echo "lockfiles unchanged after regeneration — nothing to commit."
             exit 0
           fi
           git config user.name "dependabot[bot]"
           git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
-          git add -- '*.lock' '{{IOS_DIR}}/Podfile.lock'
+          git add -- '*.lock' '{{APP_DIR}}/ios/Podfile.lock'
           git commit -m "chore(deps): regenerate pubspec.lock + Podfile.lock for Dependabot pub bump"
           git push origin "HEAD:${PR_HEAD_REF}"
