@@ -26,7 +26,7 @@ It renders up to three things:
 | `.github/dependabot.yml` | always — grouped, per detected ecosystem |
 | `.github/workflows/dependabot-auto-merge.yml` | when the repo has a merge gate |
 | `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow |
-| `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected |
+| `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected **and** the app's `ios/Podfile.lock` is tracked (see §3) |
 
 Ownership marker: the `generated-by: sassy-dog:refresh-deps` comment on the first
 non-blank line after the YAML document start. Re-runs reconcile **only** files carrying that
@@ -79,8 +79,15 @@ apply. Rendering only ever DELETES lines, so every template is valid YAML as-is 
 valid by construction — the same guarantee `refresh-hooks` relies on. Never hand-edit a
 rendered file to fix a bug; fix the template and re-render.
 
-Facts: `{{RUNNER}}`, `{{PUBSPEC_PATH}}`, `{{IOS_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep
-with the release workflow).
+Facts: `{{RUNNER}}`, `{{APP_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the release
+workflow). `{{APP_DIR}}` is the Flutter app directory relative to the repo root — `app` for
+tailoredtip, `apps/mobile` for velovate, `.` for a root-level app. It replaces the pod template's
+v1 `{{PUBSPEC_PATH}}`/`{{IOS_DIR}}` facts: all three named points on the same directory, and
+overlapping facts that must agree will eventually disagree — every pubspec/Podfile path now
+derives from the one fact. Render rules are in the template header: a nested app substitutes the
+token and deletes only the `# {{IF:NESTED_APP}}` marker comments; a root-level app deletes those
+blocks wholesale and collapses each `{{APP_DIR}}/` prefix to nothing (a `./` prefix would break
+the `on.paths` filter), which keeps root renders byte-identical to v1 output.
 
 `{{RUNNER}}` defaults to the Sassy Dog self-hosted fleet — `[self-hosted, linux, sassy-dog]`, or
 `[self-hosted, macOS, sassy-dog]` for the pod template, which **must** have macOS to run
@@ -102,6 +109,19 @@ via the npm path edits the manifest without touching `bun.lock`, and only the sy
 mergeable. CocoaPods is the trap in full force: Dependabot has no cocoapods ecosystem at all, so the
 pod sync workflow is never optional there — without it the security PRs are dead on arrival and the
 alerts stay open.
+
+**Pod-template precondition — a tracked Podfile is necessary but not sufficient.** Render
+`lockfile-sync-pod` only when the app's `ios/Podfile.lock` is itself tracked; check with
+`git ls-files -- "<app-dir>/ios/Podfile.lock"` (empty output = gitignored or untracked). A repo
+that gitignores the lock (tailoredtip: release builds regenerate it every run, so it is a build
+artifact there, not a committed version pin) has nothing to sync — and the rendered workflow
+hard-fails rather than no-ops: `flutter pub get` still changes the tracked `pubspec.lock`, so the
+changed-lockfiles guard falls through to `git add` on an explicitly-ignored path, which exits 1
+under `bash -e` — a red job occupying the fleet's single macOS runner on every pub PR (the
+tailoredtip#252 field report). Gitignored `Podfile.lock` → **do not render**; record in the run
+report why the pod workflow was skipped, so the next refresh skips it deliberately instead of
+shipping a red workflow. If the repo later wants a committed pod pin (velovate's posture), tracking
+the lock is the prerequisite change — the template becomes renderable the moment it lands.
 
 ## 4. Prerequisites the render assumes
 
