@@ -23,20 +23,26 @@ If GraphQL probing is inconclusive (scope limits are common), the caller's instr
 
 The repo's default branch is gated by a GitHub merge queue. **You never merge; you enqueue.**
 
+**The primary enqueue is the GraphQL `enqueuePullRequest` mutation, not `gh pr merge`.** Some queue configurations reject *every* `gh pr merge` flag, `--auto` included ("auto merge is not allowed" — observed live; the CLI path can never enqueue on such repos), so only the mutation is portable across queue variants. Resolve the PR's node id, then mutate (schema-verified: `pullRequestId: ID!` is `EnqueuePullRequestInput`'s only required field):
+
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- \
-  pr merge "$PR" --repo "$REPO" --auto
+PRID=$(gh api graphql \
+  -f query='query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){id}}}' \
+  -f o="${REPO%%/*}" -f n="${REPO##*/}" -F p="$PR" --jq '.data.repository.pullRequest.id')
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- api graphql \
+  -f query='mutation($prid:ID!){enqueuePullRequest(input:{pullRequestId:$prid}){mergeQueueEntry{position state}}}' \
+  -f prid="$PRID"
 ```
 
-(`scripts/merge-shepherd.sh` scripts this whole regime — gate, enqueue, confirm, teardown — as one stateless, re-runnable step; the commands below are the underlying mechanics and the one-off/manual path.)
+(`scripts/merge-shepherd.sh` scripts this whole regime — gate, enqueue via the mutation, confirm, teardown — as one stateless, re-runnable step, dropping to `gh pr merge --auto` only when the mutation errors; the commands here are the underlying mechanics and the one-off/manual path.)
 
-### The method-flag trap (cost a stuck canary in production use)
+### The manual/fallback CLI path and its method-flag trap (cost a stuck canary in production use)
 
-**Use `--auto` with NO merge-method flag and NO `--delete-branch`.**
+Where the queue accepts auto-merge, `gh pr merge "$PR" --repo "$REPO" --auto` also enqueues — it is the fallback when the mutation is unavailable (e.g. an older GHES schema). On this path, **use `--auto` with NO merge-method flag and NO `--delete-branch`.**
 
 - Passing `--squash`/`--merge`/`--rebase` sets a *conflicting* auto-merge method and the PR silently **never enters the queue** — it sits `CLEAN` with auto-merge enabled but `isInMergeQueue:false` forever. Recovery: `gh pr merge "$PR" --disable-auto`, then re-run `--auto` with no method.
 - `--delete-branch` is rejected outright under a queue ("Cannot use `--delete-branch` when merge queue enabled") — the queue deletes via `delete_branch_on_merge`.
-- The repo setting `allow_auto_merge` must be on.
+- The repo setting `allow_auto_merge` must be on — and some queue setups reject `--auto` regardless ("auto merge is not allowed"); those repos have no working CLI path at all, only the mutation.
 
 ### Confirm the enqueue took
 
@@ -48,7 +54,7 @@ gh api graphql -f query='{repository(owner:"OWNER",name:"NAME"){
   --jq '.data.repository.pullRequest | "\(.state) inQueue=\(.isInMergeQueue) \(.mergeQueueEntry.state // "-")"'
 ```
 
-Confirm `isInMergeQueue:true` within ~30s of enqueuing. If it stays `false` while the PR is `CLEAN`, you hit the method-flag trap above.
+Confirm `isInMergeQueue:true` within ~30s of enqueuing — whichever primitive did the enqueuing. If it stays `false` while the PR is `CLEAN` after a mutation enqueue, the mutation errored (its stderr says why); after a CLI enqueue, you likely hit the method-flag trap above.
 
 **This query is the only way to read the field.** `isInMergeQueue` and `mergeQueueEntry` are GraphQL-only — `gh pr view --json isInMergeQueue` fails with `Unknown JSON field` (it is not in `gh pr view`'s field set). Don't substitute a `gh pr view` call here.
 

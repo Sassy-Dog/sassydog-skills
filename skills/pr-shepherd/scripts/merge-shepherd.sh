@@ -8,11 +8,11 @@
 # and a babysitting session dies mid-merge needing manual re-launch. This
 # script inverts that: every run is a SHORT, STATELESS "advance one step"
 # against live GitHub state, so a kill mid-run costs nothing — just run it
-# again. Under a merge queue, `--auto` keeps the merge itself server-side and
-# kill-proof; this adds resilient enqueue + confirmation + teardown.
+# again. Under a merge queue, the enqueue keeps the merge itself server-side
+# and kill-proof; this adds resilient enqueue + confirmation + teardown.
 #
-# One step per run: mergeable check → red/pending gate → enqueue `--auto`
-# with NO method flag (or `--direct` squash-merge) → GraphQL isInMergeQueue
+# One step per run: mergeable check → red/pending gate → enqueue via GraphQL
+# enqueuePullRequest (or `--direct` squash-merge) → GraphQL isInMergeQueue
 # confirmation → teardown + ff-only default-branch reconcile.
 #
 # Usage:
@@ -21,7 +21,8 @@
 #   Single-shot by default (advances one step, exits). --watch N polls up to N
 #   seconds (keep N under the host's kill window, e.g. 240) then exits cleanly.
 #   --direct: for repos WITHOUT a merge queue — squash-merge + --delete-branch
-#   instead of enqueueing. Default is queue mode (--auto, NO method flag).
+#   instead of enqueueing. Default is queue mode (GraphQL enqueuePullRequest;
+#   `gh pr merge --auto` only as a fallback when the mutation errors).
 #   --allow-no-checks: merge even when the PR reports ZERO checks in a repo that
 #   demonstrably runs CI on pull requests (see the empty-rollup trap below).
 #   Repo defaults to the cwd checkout (gh repo view); --repo overrides.
@@ -37,6 +38,17 @@
 #             (re-run) · 22 conflicting · 23 blocked by a lower stack layer
 #             (re-run) · 24 stacked under a merge queue (needs a human)
 #             · 1 usage/error/closed
+#
+# ENQUEUE PRIMITIVE: the GraphQL `enqueuePullRequest` mutation (PR node id
+# resolved in-script), NOT `gh pr merge --auto`. Some queue configurations
+# reject EVERY `gh pr merge` flag including `--auto` ("auto merge is not
+# allowed") — on such repos the CLI call can never enqueue, the isInMergeQueue
+# confirm reads false, and every pass exits 11 forever. The mutation sidesteps
+# the flag matrix entirely (schema-verified: EnqueuePullRequestInput's only
+# required field is pullRequestId). `gh pr merge --auto` (NO method flag) is
+# retained only as a fallback when the mutation itself errors. The stateless
+# eject re-enqueue path (see the queue-ejects note below) reuses the same
+# primitive.
 #
 # EMPTY-ROLLUP TRAP: the merge condition is `mergeStateStatus == CLEAN AND no
 # pending checks` — and BOTH are satisfied when there are no checks at all.
@@ -130,6 +142,34 @@ pr_state() { # -> "STATE MERGESTATE INQUEUE"
             pullRequest(number:$pr){ state mergeStateStatus isInMergeQueue }}}' \
     -f owner="$OWNER" -f name="$NAME" -F pr="$PR" \
     --jq '.data.repository.pullRequest | "\(.state) \(.mergeStateStatus) \(.isInMergeQueue)"' 2>/dev/null
+}
+
+# The enqueue primitive (see ENQUEUE PRIMITIVE in the header): resolve the PR
+# node id, then GraphQL enqueuePullRequest — wrapped in gh-retry.sh exactly
+# like the old CLI enqueue. Falls back to `gh pr merge --auto` (NO method
+# flag) only when the node id cannot be resolved or the mutation errors.
+# Success here is advisory either way — the caller confirms via the
+# isInMergeQueue read, never via this function's exit code.
+enqueue() {
+  local prid
+  prid="$(gh api graphql \
+    -f query='query($owner:String!,$name:String!,$pr:Int!){
+        repository(owner:$owner,name:$name){ pullRequest(number:$pr){ id }}}' \
+    -f owner="$OWNER" -f name="$NAME" -F pr="$PR" \
+    --jq '.data.repository.pullRequest.id' 2>/dev/null)"
+  if [ -n "$prid" ]; then
+    if bash "$GH_RETRY" -- api graphql \
+         -f query='mutation($prid:ID!){
+             enqueuePullRequest(input:{pullRequestId:$prid}){
+                 mergeQueueEntry{ position state }}}' \
+         -f prid="$prid" >/dev/null; then
+      return 0
+    fi
+    echo "  enqueue mutation failed — falling back to gh pr merge --auto" >&2
+  else
+    echo "  PR node id unresolved — falling back to gh pr merge --auto" >&2
+  fi
+  bash "$GH_RETRY" -- pr merge "$PR" --repo "$REPO" --auto >/dev/null
 }
 
 checks() { # -> "FAILS PENDING TOTAL"
@@ -289,8 +329,8 @@ advance() { # one idempotent step against live state
       if [ "$st" = MERGED ]; then echo "  MERGED — tearing down"; teardown; return 0; fi
       echo "  merge not confirmed — re-run"; return 11
     fi
-    echo "CLEAN — enqueuing (--auto, no method flag)"
-    bash "$GH_RETRY" -- pr merge "$PR" --repo "$REPO" --auto >/dev/null \
+    echo "CLEAN — enqueuing (GraphQL enqueuePullRequest)"
+    enqueue \
       || echo "  enqueue call failed (checking whether it took anyway)" >&2
     sleep 8
     read -r _ _ inq <<<"$(pr_state)"
