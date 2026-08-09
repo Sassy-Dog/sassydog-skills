@@ -52,7 +52,32 @@ Confirm cwd is a git repo with a GitHub remote:
 gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge
 ```
 
-Then pick exactly one mode:
+**Probe the remote before trusting the checkout.** Every signal the mode table reads lives in the
+working tree, and the working tree can be days stale. Fetch, then list what the remote default
+branch actually carries (BRANCH is `defaultBranchRef` from the probe above — never assume `main`):
+
+```bash
+git fetch origin --quiet
+git ls-tree --name-only origin/BRANCH .claude/ .claude/sassy-dog/
+```
+
+Route on the **union** of local and remote state. Either remote signal means the checkout is
+stale, not un-migrated:
+
+- The remote has `.claude/sassy-dog/*.md` that the local checkout lacks — the migration already
+  landed on the default branch.
+- The remote no longer carries `.claude/skills/` directories the local checkout still has — the
+  deletion half of the same landed migration.
+
+On either signal, instruct a fast-forward pull of the default branch, then **re-probe before
+picking a mode** — a remote-migrated repo lands in update mode, never migrate mode. This was hit
+live (tailoredtip, 2026-08-08): a 9-day-stale checkout still carried the four marker-bearing
+`.claude/skills/` directories, Phase 0 picked migrate mode from local state alone, and the entire
+extract/interview/preview/write/delete pipeline ran before rebase conflicts against the remote
+exposed that the migration had landed the day before. The probe costs one fetch; the failure it
+prevents is all of that work built on a vanished premise.
+
+With local and remote in agreement, pick exactly one mode:
 
 | Found | Mode |
 | --- | --- |

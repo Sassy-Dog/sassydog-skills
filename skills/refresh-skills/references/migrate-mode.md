@@ -2,6 +2,11 @@
 
 Converts a repo from the superseded generated-skills architecture to config.
 
+Entry here is decided by Phase 0's union of local **and remote** state. Generated skills present
+only in the local checkout — while the remote default branch already carries
+`.claude/sassy-dog/*.md` or has deleted the `.claude/skills/` directories — mean a stale checkout,
+not an un-migrated repo: fast-forward, re-probe, and land in update mode instead.
+
 **Before:** `.claude/skills/{plate-it,fill-it,take-it,drain-it,send-it,clean-it}/SKILL.md` — each a
 full rendered skill body carrying that repo's facts inline.
 
