@@ -2,9 +2,8 @@
 name: repo-cleanup
 description: >
   Post-shipping git working-state reconciliation mechanics: fast-forward + prune the default
-  branch, sweep `[gone]` and squash-merged local branches (the `: gone\]` inner-grep trap, `-D`
-  not `-d`), remove stale/detached agent worktrees, sweep orphan `worktree-agent-*` isolation
-  branches (worktree gone, never had an upstream so never `[gone]`), triage orphan stashes by
+  branch, sweep `[gone]` and squash-merged local branches, remove stale/detached agent
+  worktrees, sweep orphan `worktree-agent-*` isolation branches, triage orphan stashes by
   closedByPullRequestsReferences (not bare issue state), sweep untracked-file noise against an
   allowlist, mop up stale remote branches, and clear orphan claim labels. Use when the user asks
   "delete the [gone] branches", "why won't this squash-merged branch delete", "triage these orphan
