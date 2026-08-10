@@ -1,19 +1,20 @@
 ---
-name: refresh-deps
+name: setup-deps
 description: >
-  This skill should be used when the user asks to "set up Dependabot for this repo", "refresh the
-  dependency automation", "wire up dependabot auto-merge", "group the dependabot PRs", "stop the
-  dependabot PR flood", "why do dependabot PRs keep failing CI", "fix the bun.lock dependabot
-  problem", "regenerate lockfiles on dependabot PRs", "add dependabot config here", "standardize
-  dependency updates across our repos", or "re-sync the dependency workflows". Generates and
-  re-syncs a repo's `.github/dependabot.yml` plus its dependency automation workflows
-  (auto-merge, bun.lock sync, pod lockfile sync) from detected ecosystems. Run from inside the
-  target repository; re-runnable as the stack evolves.
+  This skill should be used when the user asks to "set up Dependabot for this repo", "set up
+  dependency automation", "set up dependency updates here", "set up dependabot auto-merge", "set
+  up the dependency workflows", "add dependabot config here", "wire up dependabot auto-merge",
+  "group the dependabot PRs", "stop the dependabot PR flood", "why do dependabot PRs keep failing
+  CI", "fix the bun.lock dependabot problem", "regenerate lockfiles on dependabot PRs", or
+  "standardize dependency updates across our repos". Generates and re-syncs a repo's
+  `.github/dependabot.yml` plus its dependency automation workflows (auto-merge, bun.lock sync,
+  pod lockfile sync) from detected ecosystems. Run from inside the target repository; re-runnable
+  as the stack evolves.
 ---
 
 <!-- generated-by-companion: templates in references/templates/ -->
 
-# Refresh Sassy Dog Deps
+# Setup Deps
 
 Generator/refresher for a repo's dependency automation, in the same family as
 `setup-config` and `setup-hooks`: detect the stack, render from templates,
@@ -28,22 +29,38 @@ It renders up to three things:
 | `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow |
 | `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected **and** the app's `ios/Podfile.lock` is tracked (see §3) |
 
-Ownership marker: the `generated-by: sassy-dog:refresh-deps` comment on the first
-non-blank line after the YAML document start. Re-runs reconcile **only** files carrying that
-marker — a hand-written `dependabot.yml` is reported and left alone, never overwritten.
+Ownership marker: the `generated-by:` comment on the first non-blank line after the YAML document
+start. Re-runs reconcile **only** files carrying that marker — a hand-written `dependabot.yml` is
+reported and left alone, never overwritten.
 
-**Match on both marker namespaces — the current `generated-by: sassy-dog:` prefix and the
-pre-rename `generated-by: ai-agent-skills:` prefix (plugin ≤ 2026.8.20) — and accept the legacy
-producer name `refresh-sassydog-deps` (plugin ≤ 2026.7.21) as well as the current `refresh-deps`.**
-Every consumer repo rendered before a rename carries the old form: the plugin rename moved the
-namespace *before* the colon, the earlier generator rename moved the name after it. A matcher that
-only accepts the current form would treat those files as hand-written and refuse to update them.
-Normalise the marker to the current form on write.
+**Ownership matching is deliberately wide: accept EITHER marker namespace — the current
+`sassy-dog:` prefix and the pre-rename `ai-agent-skills:` prefix (plugin ≤ 2026.8.20) — paired
+with ANY producer name this generator has ever emitted: `setup-deps` (current), `refresh-deps`
+(plugin ≤ 2026.8.39), and `refresh-sassydog-deps` (plugin ≤ 2026.7.21).** A file is owned when its
+marker matches:
+
+```text
+generated-by: (sassy-dog|ai-agent-skills):(setup-deps|refresh-deps|refresh-sassydog-deps)
+```
+
+All six namespace × producer-name combinations are owned. The plugin rename moved the namespace
+*before* the colon; the two generator renames moved the name after it. This matters more here than
+almost anywhere else in the plugin: the marker is committed **inside every consumer repo**, in
+`.github/dependabot.yml` and each dependency workflow, so a matcher narrowed to the current
+producer name would classify every pre-rename file as hand-written and refuse to reconcile it —
+and it would fail *silently*, because the contract above is report-and-skip, not error.
+**Normalise the marker to the current `sassy-dog:setup-deps` form on write** (expect a one-line
+diff per file on a pre-rename repo's first re-run; that is the intended outcome, not drift).
 
 ## 1. Detect
 
+Before rendering anything, classify each target file: marker matching the wide pattern above →
+**owned**, reconcile it; no `generated-by:` marker at all → **hand-written**, report and skip.
+Never narrow that probe to the current producer name — skipping a repo's own generated files
+because they carry a superseded name is the silent-failure path this contract exists to prevent.
+
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/refresh-deps/scripts/detect-ecosystems.sh
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/detect-ecosystems.sh
 ```
 
 Emits `{repo, ci_workflow, ecosystems{}, present[], needs_lockfile_sync[], detect_failures[]}`.
@@ -78,6 +95,12 @@ Substitute `{{FACT}}` values and delete the `# {{IF:FLAG}}` / `# {{ENDIF}}` bloc
 apply. Rendering only ever DELETES lines, so every template is valid YAML as-is and every render is
 valid by construction — the same guarantee `setup-hooks` relies on. Never hand-edit a
 rendered file to fix a bug; fix the template and re-render.
+
+Every template already carries the current `generated-by: sassy-dog:setup-deps` marker, so a
+render normalises a pre-rename file's marker for free — keep the template's marker line verbatim
+rather than preserving whatever the existing file carried. Leave each template's
+`template-version` alone unless the template's *content* changed: the producer rename is an
+identity change, and bumping the version would force a needless re-render across every consumer.
 
 Facts: `{{RUNNER}}`, `{{APP_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the release
 workflow). `{{APP_DIR}}` is the Flutter app directory relative to the repo root — `app` for

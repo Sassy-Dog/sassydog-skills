@@ -18,7 +18,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `sassy-dog` | `recap` | Session wrap-up report — work completed, what surfaced, issues to file, immediate next steps |
 | `sassy-dog` | `setup-config` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
 | `sassy-dog` | `setup-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
-| `sassy-dog` | `refresh-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
+| `sassy-dog` | `setup-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
 | `sassy-dog` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `sassy-dog` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `sassy-dog` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
@@ -66,6 +66,15 @@ references `sassydog-`), never hand-written hooks. The generated script itself c
 ownership matcher accepts every producer name this generator has ever emitted, in either marker
 namespace, and normalises to the current form on write — a matcher narrowed to the current name
 would treat every pre-rename consumer script as hand-written and silently skip it.
+
+`setup-deps` is the third generator in that family, aimed at dependency automation: it detects the
+repo's ecosystems from tracked files, renders `.github/dependabot.yml` grouped per ecosystem, and
+adds the workflows that keep Dependabot's PRs mergeable — auto-merge behind a real required check,
+plus `bun.lock` / `Podfile.lock` sync where Dependabot cannot rewrite the lockfile itself. Its
+`generated-by:` marker is committed inside every consumer repo's `.github/`, so the same ownership
+rule applies: the matcher accepts every producer name this generator has ever emitted, in either
+marker namespace, normalising to the current form on write, while a file with no marker at all is
+reported as hand-written and never overwritten.
 
 ### Review agents
 

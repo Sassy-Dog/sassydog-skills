@@ -102,7 +102,7 @@ for legacy in 'create-dev-workflows' 'refresh-sassydog-'; do
         ':!skills/setup-config/references/update-mode.md' \
         ':!skills/setup-config/references/migrate-mode.md' \
         ':!skills/setup-config/SKILL.md' \
-        ':!skills/refresh-deps/SKILL.md' \
+        ':!skills/setup-deps/SKILL.md' \
         ':!skills/setup-hooks/SKILL.md' \
         ':!CLAUDE.md' \
         ':!scripts/preflight.sh'; then
@@ -118,17 +118,18 @@ done
 #   - README.md — the one historical line recording the #71 rename
 #   - CLAUDE.md — the marker-recognition rule: recognizers must accept
 #     pre-rename 'generated-by: ai-agent-skills:*' markers
-#   - skills/refresh-deps/SKILL.md, skills/setup-hooks/SKILL.md — those
+#   - skills/setup-deps/SKILL.md, skills/setup-hooks/SKILL.md — those
 #     generated-by recognizers themselves. Their markers are committed inside
 #     every consumer repo, so each must also keep naming its own superseded
-#     producers (setup-hooks accepts refresh-hooks and refresh-sassydog-hooks;
-#     see issue #122) — a narrower matcher would silently treat a pre-rename
+#     producers (setup-hooks accepts refresh-hooks and refresh-sassydog-hooks,
+#     see issue #122; setup-deps accepts refresh-deps and refresh-sassydog-deps,
+#     see issue #123) — a narrower matcher would silently treat a pre-rename
 #     consumer file as hand-written.
 #   - this script (the guard itself)
 if git grep -l 'ai-agent-skills' -- \
     ':!README.md' \
     ':!CLAUDE.md' \
-    ':!skills/refresh-deps/SKILL.md' \
+    ':!skills/setup-deps/SKILL.md' \
     ':!skills/setup-hooks/SKILL.md' \
     ':!scripts/preflight.sh'; then
     failed "legacy-name guard — 'ai-agent-skills' outside the sanctioned files (plugin renamed to sassy-dog, issue #71)"
