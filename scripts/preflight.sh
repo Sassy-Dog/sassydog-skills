@@ -88,24 +88,61 @@ else
 fi
 
 # --- 4. no legacy skill-name residue -----------------------------------------
-# The config generator has been renamed three times:
+# The whole generator family was renamed to setup-* in issue #120:
 #   create-dev-workflows -> refresh-sassydog-skills (0.9.0)
 #   refresh-sassydog-skills -> refresh-skills (2026.7.22)
 #   refresh-skills -> setup-config (issue #121)
-# This loop guards the two OLDEST names; they may appear only in the
-# sanctioned backward-compat mentions — migrate mode still has to RECOGNISE
-# renders produced by the older producers. Anything else is a stale reference
-# that would confuse a render or send a reader to a dead path.
+#   refresh-hooks -> setup-hooks (issue #122)
+#   refresh-deps  -> setup-deps  (issue #123)
+# Every superseded name may appear only in the sanctioned backward-compat
+# mentions — the ownership matchers still have to RECOGNISE artifacts produced
+# under the older names, and those markers are committed inside every consumer
+# repo. Anything else is a stale reference that would confuse a render or send
+# a reader to a dead path.
+#
+# Exclusions are PER NAME, not one shared union: a name is sanctioned in
+# exactly the files that must still spell it out. A union list would let a
+# stale `refresh-deps` hide in a file sanctioned only for `refresh-skills`,
+# which is the residue this guard exists to catch.
 legacy_residue=0
-for legacy in 'create-dev-workflows' 'refresh-sassydog-'; do
-    if git grep -l "$legacy" -- \
-        ':!skills/setup-config/references/update-mode.md' \
-        ':!skills/setup-config/references/migrate-mode.md' \
-        ':!skills/setup-config/SKILL.md' \
-        ':!skills/setup-deps/SKILL.md' \
-        ':!skills/setup-hooks/SKILL.md' \
-        ':!CLAUDE.md' \
-        ':!scripts/preflight.sh'; then
+for legacy in 'create-dev-workflows' 'refresh-sassydog-' 'refresh-skills' 'refresh-hooks' 'refresh-deps'; do
+    case "$legacy" in
+        refresh-skills)
+            # setup-config's marker recognizer, the adopt/update walkthrough
+            # that names the superseded producer, and CLAUDE.md's statement of
+            # the same recognition rule.
+            allow=(
+                ':!skills/setup-config/SKILL.md'
+                ':!skills/setup-config/references/update-mode.md'
+                ':!CLAUDE.md'
+                ':!scripts/preflight.sh'
+            ) ;;
+        refresh-hooks)
+            # setup-hooks' generated-by ownership matcher + CLAUDE.md's
+            # statement of it.
+            allow=(
+                ':!skills/setup-hooks/SKILL.md'
+                ':!CLAUDE.md'
+                ':!scripts/preflight.sh'
+            ) ;;
+        refresh-deps)
+            # setup-deps' generated-by ownership matcher.
+            allow=(
+                ':!skills/setup-deps/SKILL.md'
+                ':!scripts/preflight.sh'
+            ) ;;
+        *)
+            allow=(
+                ':!skills/setup-config/references/update-mode.md'
+                ':!skills/setup-config/references/migrate-mode.md'
+                ':!skills/setup-config/SKILL.md'
+                ':!skills/setup-deps/SKILL.md'
+                ':!skills/setup-hooks/SKILL.md'
+                ':!CLAUDE.md'
+                ':!scripts/preflight.sh'
+            ) ;;
+    esac
+    if git grep -l "$legacy" -- "${allow[@]}"; then
         failed "legacy-name guard — '$legacy' outside the sanctioned back-compat files"
         legacy_residue=1
     fi
