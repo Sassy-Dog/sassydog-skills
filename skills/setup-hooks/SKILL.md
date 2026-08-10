@@ -1,16 +1,17 @@
 ---
-name: refresh-hooks
+name: setup-hooks
 description: >
-  This skill should be used when the user asks to "refresh the sassydog hooks", "generate hooks
-  for this repo", "set up per-repo hooks", "create project hooks for this repo", "add a formatting
-  hook here", "make the hooks repo-specific", "regenerate the hooks", "re-sync the project hooks",
-  "add a post-edit format hook", or "wire up format-on-edit for this repo". Creates and re-syncs a
+  This skill should be used when the user asks to "set up hooks for this repo", "set up the
+  sassydog hooks", "set up per-repo hooks", "set up project hooks here", "set up the
+  format-on-edit hook", "set up a post-edit format hook", "add a formatting hook here", "generate
+  hooks for this repo", "create project hooks for this repo", "make the hooks repo-specific",
+  "wire up format-on-edit for this repo", or "lint on edit in this repo". Creates and re-syncs a
   consumer repo's stack-specific Claude Code hooks: generated dispatcher scripts under
   .claude/hooks/sassydog-*.sh plus their .claude/settings.json wiring. Run from inside the target
   repository; re-runnable as the repo's stack evolves.
 ---
 
-# Refresh Sassydog Hooks
+# Setup Hooks
 
 Generator for **per-repo Claude Code hooks**: inspect the repo's actual stack, render a
 formatter/linter dispatcher tailored to it, wire it into `.claude/settings.json`, and reconcile all
@@ -36,12 +37,23 @@ global hook because a global one fires uselessly in repos whose stack it doesn't
 ## Ownership contract (what a re-run may touch)
 
 - Generated scripts are exactly the files matching `.claude/hooks/sassydog-*.sh`, each carrying a
-  `generated-by: sassy-dog:refresh-hooks` header comment. **Match on both marker namespaces — the
-  current `generated-by: sassy-dog:` prefix and the pre-rename `generated-by: ai-agent-skills:`
-  prefix (plugin ≤ 2026.8.20) — and accept the legacy producer name `refresh-sassydog-hooks`
-  (plugin ≤ 2026.7.21)** — repos rendered before either rename carry an old form, and a strict
-  matcher would treat those scripts as hand-written and refuse to refresh them. Normalise on write.
-  (The settings-entry marker below is a command *path*, so the renames do not affect it.)
+  `generated-by:` header comment. **Ownership matching is deliberately wide: accept EITHER marker
+  namespace — the current `sassy-dog:` prefix and the pre-rename `ai-agent-skills:` prefix
+  (plugin ≤ 2026.8.20) — paired with ANY producer name this generator has ever emitted:
+  `setup-hooks` (current), `refresh-hooks` (plugin ≤ 2026.8.37), and `refresh-sassydog-hooks`
+  (plugin ≤ 2026.7.21).** A script is owned when its header matches:
+
+  ```text
+  generated-by: (sassy-dog|ai-agent-skills):(setup-hooks|refresh-hooks|refresh-sassydog-hooks)
+  ```
+
+  All six namespace × producer-name combinations are owned. This matters more here than anywhere
+  else in the plugin: the marker is committed **inside every consumer repo**, so a strict matcher
+  would classify every pre-rename script as hand-written and refuse to refresh it — and it would
+  fail *silently*, because the ownership contract below is report-and-skip, not error.
+  **Normalise the marker to the current `sassy-dog:setup-hooks` form on write** (expect a one-line
+  diff on a pre-rename repo's first refresh; that is the intended outcome, not drift).
+  (The settings-entry marker below is a command *path*, so no producer rename affects it.)
 - Settings entries owned by this generator are exactly the hook entries whose command references
   `.claude/hooks/sassydog-`. A refresh regenerates the scripts and adds/removes **only those
   entries** — every other hook (hand-written project hooks, the user's global hooks) is untouched,
@@ -52,8 +64,11 @@ global hook because a global one fires uselessly in repos whose stack it doesn't
 ## Phase 0 — locate & mode
 
 1. Confirm cwd is the target repo root: `git rev-parse --show-toplevel`.
-2. Pick the mode: any `.claude/hooks/sassydog-*.sh` with the `generated-by:` header → **refresh
-   mode** (re-detect, re-render, reconcile settings entries); none → **create mode**.
+2. Pick the mode: any `.claude/hooks/sassydog-*.sh` whose `generated-by:` header matches the wide
+   ownership pattern above — **any** of the three producer names, in **either** namespace → **refresh
+   mode** (re-detect, re-render, reconcile settings entries, normalise the marker); none →
+   **create mode**. Never narrow this probe to the current producer name: create mode on a repo
+   that already has generated hooks is the silent-failure path this contract exists to prevent.
 3. Read the existing `.claude/settings.json` (and `settings.local.json`) IN FULL before planning
    any change — the merge is additive and surgical, never a rewrite of unrelated keys.
 
@@ -62,7 +77,7 @@ global hook because a global one fires uselessly in repos whose stack it doesn't
 Run the read-only probe from the repo root and treat its output as evidence:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/refresh-hooks/scripts/detect-hook-stack.sh
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-hooks/scripts/detect-hook-stack.sh
 ```
 
 It emits one JSON object — per-tool `detected` + `why` (ruff, prettier, markdownlint, shellcheck,
@@ -86,7 +101,8 @@ Ask only what detection cannot answer:
 
 Render the dispatcher from `references/templates/sassydog-post-edit.template.sh`: keep each
 `# {{IF:<TOOL>}} ... # {{ENDIF}}` block only when that tool was detected (and confirmed, for slow
-tools), strip the marker comment lines, keep the `generated-by` header. The template is valid,
+tools), strip the marker comment lines, keep the `generated-by` header — normalised to the current
+`sassy-dog:setup-hooks` form, whatever the pre-existing script carried. The template is valid,
 shellcheck-clean bash with every block present — rendering only deletes blocks, so the render is
 valid by construction.
 
@@ -117,7 +133,7 @@ execute bit on the script.
   `.claude/hooks/sassydog-`), and never rewrite unrelated settings keys.
 - The dispatcher must stay non-destructive: format-in-place and read-only lint only — never a
   hook that deletes, commits, pushes, or mutates anything beyond the edited file's formatting.
-- The refresher itself always runs from the plugin — generated hooks are repo state, the generator
+- The generator itself always runs from the plugin — generated hooks are repo state, the generator
   is not.
 
 ## Additional resources

@@ -17,7 +17,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `sassy-dog` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
 | `sassy-dog` | `recap` | Session wrap-up report — work completed, what surfaced, issues to file, immediate next steps |
 | `sassy-dog` | `setup-config` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
-| `sassy-dog` | `refresh-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
+| `sassy-dog` | `setup-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
 | `sassy-dog` | `refresh-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
 | `sassy-dog` | `github-issues` | Issue/board reads, stale-issue detection, idempotent dedupe-then-file issue creation |
 | `sassy-dog` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
@@ -56,12 +56,16 @@ Workflow skills stay thin by delegating shared mechanics to the capability skill
 `repo-cleanup` remains distinct from `tidy-repo`: the former is the mechanics engine, the latter the
 user-facing flow.
 
-`refresh-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,
+`setup-hooks` is the same pattern one layer down: it detects the repo's stack (ruff,
 prettier, markdownlint, shellcheck, dart, rustfmt, gofmt, dotnet format — keyed on repo config, not
 installed binaries) and renders a single PostToolUse dispatcher into `.claude/hooks/`, wired into
 `.claude/settings.json`. Formatters fix silently; unfixable lint findings exit 2 so they feed
 straight back for an immediate fix. Re-runs reconcile only entries the generator owns (command path
-references `sassydog-`), never hand-written hooks.
+references `sassydog-`), never hand-written hooks. The generated script itself carries a
+`generated-by:` producer marker, and because that marker is committed in every consumer repo the
+ownership matcher accepts every producer name this generator has ever emitted, in either marker
+namespace, and normalises to the current form on write — a matcher narrowed to the current name
+would treat every pre-rename consumer script as hand-written and silently skip it.
 
 ### Review agents
 

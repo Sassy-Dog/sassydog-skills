@@ -3,7 +3,7 @@
 # repo actually have, and which of them will hand Dependabot a lockfile it cannot
 # regenerate? Emits one JSON object; every probe degrades to detected:false and
 # appends to detect_failures rather than aborting (same contract as
-# refresh-hooks' detect-hook-stack.sh).
+# setup-hooks' detect-hook-stack.sh).
 #
 # Evidence rule: an ecosystem counts as detected only on TRACKED REPO FILES —
 # never on what happens to be installed on this machine, because the rendered

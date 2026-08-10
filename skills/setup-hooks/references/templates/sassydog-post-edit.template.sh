@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# generated-by: sassy-dog:refresh-hooks | template: sassydog-post-edit | template-version: 1
+# generated-by: sassy-dog:setup-hooks | template: sassydog-post-edit | template-version: 1
 #
 # PostToolUse (Edit|Write) formatter/linter dispatcher. Reads the hook event
 # JSON on stdin, extracts the edited file's path, routes by extension.
