@@ -1,5 +1,5 @@
 ---
-# generated-by: sassy-dog:refresh-deps | template: dependabot.yml | template-version: 2
+# generated-by: sassy-dog:setup-deps | template: dependabot.yml | template-version: 2
 #
 # GROUPING IS THE POINT OF THIS FILE. Ungrouped, one vulnerable transitive
 # dependency can open a dozen PRs; across this org that turned 74 alerts into a

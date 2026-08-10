@@ -1,5 +1,5 @@
 ---
-# generated-by: sassy-dog:refresh-deps | template: dependabot-auto-merge | template-version: 1
+# generated-by: sassy-dog:setup-deps | template: dependabot-auto-merge | template-version: 1
 #
 # Auto-merge green Dependabot PRs so security bumps do not rot in the queue.
 #

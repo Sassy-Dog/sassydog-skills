@@ -15,7 +15,7 @@
 #   {{RUNNER}}  → runs-on value (default: [self-hosted, linux, sassy-dog])
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-bun | template-version: 5
+# generated-by: sassy-dog:setup-deps | template: lockfile-sync-bun | template-version: 5
 #
 # Refresh bun.lock on Dependabot npm PRs (the LEGACY npm + sync pairing —
 # native `bun` is the default for bun repos; see the render conditions above).
