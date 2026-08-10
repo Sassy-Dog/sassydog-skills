@@ -63,11 +63,37 @@ because they carry a superseded name is the silent-failure path this contract ex
 bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/detect-ecosystems.sh
 ```
 
-Emits `{repo, ci_workflow, ecosystems{}, present[], needs_lockfile_sync[], detect_failures[]}`.
-Evidence is tracked repo files only, never what is installed locally.
+Emits `{repo, ci_workflow, ecosystems{}, present[], needs_lockfile_sync[], vendored_excluded{},
+detect_failures[]}`. Evidence is tracked repo files only, never what is installed locally.
 
 `needs_lockfile_sync` is the field that decides whether this repo's Dependabot PRs can ever merge.
 Read §3 before skipping it.
+
+**A vendored example manifest is not a project.** Scaffolder templates, test fixtures and sample
+projects commit real-looking manifests, and an unfiltered path match counts them as evidence: a
+scaffolding `templates/package.json` whose fields are literally `{{PROJECT_ID}}` once made this
+probe report `npm: detected` on a repo with no npm project at all. `dependabot.yml` then gets an
+ecosystem block for a directory that is not a project, and Dependabot either opens PRs against a
+placeholder or silently does nothing — the render is otherwise correct, so nothing surfaces the
+mistake. The probe therefore drops these paths from the corpus **before** any ecosystem test runs:
+
+```text
+(^|/)(templates?|fixtures?|__fixtures__|testdata|test-?data|examples?|node_modules)(/|$)
+```
+
+Two properties to preserve if you touch it:
+
+- **Exclude by directory NAME, never by depth.** That is what keeps the `(^|/)` anchoring intact —
+  `packages/web/package.json` is still detected (the workspaces monorepos in this org depend on
+  it) while `templates/package.json` and `packages/web/__fixtures__/package.json` are not.
+- **Path convention beats content-sniffing.** A fixture manifest can be perfectly valid JSON and
+  still not be a project, so parsing it would not help. The assumption this rests on: anything
+  genuinely built from those directories also has a real manifest outside them. A repo that
+  violates it — a real app living only under `examples/` — needs the ecosystem added by hand.
+
+`vendored_excluded` reports `{count, pattern}` so the filter is visible rather than silent; a
+detection that quietly drops files is the same class of problem as the one it fixes. When a count
+looks wrong, list what went: `git ls-files | grep -E '<pattern>'`.
 
 ## 2. Confirm the merge gate
 
