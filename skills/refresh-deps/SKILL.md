@@ -16,7 +16,7 @@ description: >
 # Refresh Sassy Dog Deps
 
 Generator/refresher for a repo's dependency automation, in the same family as
-`setup-config` and `refresh-hooks`: detect the stack, render from templates,
+`setup-config` and `setup-hooks`: detect the stack, render from templates,
 reconcile only what this generator owns.
 
 It renders up to three things:
@@ -76,7 +76,7 @@ Classify into exactly one:
 
 Substitute `{{FACT}}` values and delete the `# {{IF:FLAG}}` / `# {{ENDIF}}` blocks that do not
 apply. Rendering only ever DELETES lines, so every template is valid YAML as-is and every render is
-valid by construction — the same guarantee `refresh-hooks` relies on. Never hand-edit a
+valid by construction — the same guarantee `setup-hooks` relies on. Never hand-edit a
 rendered file to fix a bug; fix the template and re-render.
 
 Facts: `{{RUNNER}}`, `{{APP_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the release

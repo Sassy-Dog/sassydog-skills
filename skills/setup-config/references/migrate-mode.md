@@ -182,7 +182,7 @@ the renamed skills.
 
 ## Step 4 — `.claude/settings.json`
 
-Merge, never overwrite. `refresh-hooks` may already own a hooks entry in the same file.
+Merge, never overwrite. `setup-hooks` may already own a hooks entry in the same file.
 
 ```json
 {
