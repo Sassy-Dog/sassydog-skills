@@ -1,4 +1,4 @@
-# TEMPLATE: lockfile-sync-pod · version 2
+# TEMPLATE: lockfile-sync-pod · version 3
 # Rendered by sassy-dog:refresh-deps for repos where
 # detect-ecosystems.sh reports cocoapods with lockfile_risk (a tracked Podfile).
 #
@@ -30,7 +30,7 @@
 #   {{FLUTTER_VERSION}}  → keep in lockstep with the release workflow
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-pod | template-version: 2
+# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-pod | template-version: 3
 #
 # Refresh pubspec.lock + Podfile.lock on Dependabot pub PRs — the macOS twin of
 # dependabot-bun-lockfile.yml.
@@ -81,7 +81,7 @@ jobs:
           app-id: ${{ secrets.PLATFORM_WRITER_APP_ID }}
           private-key: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.PR_HEAD_REF }}
           repository: ${{ env.PR_HEAD_REPO }}
