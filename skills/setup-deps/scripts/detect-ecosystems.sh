@@ -22,6 +22,20 @@
 # pathspec like 'package.json' matches only the repo root, which would silently
 # report "no npm" for every workspaces monorepo in the org. Anchor with (^|/).
 #
+# A VENDORED EXAMPLE MANIFEST IS NOT A PROJECT. Scaffolder templates, test
+# fixtures and sample projects commit real-looking manifests (a scaffolding
+# `templates/package.json` whose fields are literally {{PROJECT_ID}} once made
+# this probe report npm on a repo with no npm project at all), and Dependabot
+# then either opens PRs against a placeholder or silently does nothing. So the
+# corpus is filtered by EXCLUDE_RE before any ecosystem test runs. Excluding by
+# DIRECTORY NAME, not by depth, is what preserves the anchoring property above:
+# packages/web/package.json still counts, templates/package.json does not.
+# Path convention beats content-sniffing — a fixture manifest can be perfectly
+# valid JSON and still not be a project, so parsing would not help. The
+# assumption: anything genuinely built from those directories also has a real
+# manifest outside them. The drop count is reported (vendored_excluded) so the
+# filter is visible rather than silent.
+#
 # Usage: detect-ecosystems.sh   (run from anywhere inside the target repo)
 # Exit:  0 ok · 1 jq missing or not a git repo
 set -uo pipefail
@@ -30,7 +44,13 @@ command -v jq >/dev/null 2>&1 || { echo "detect-ecosystems: jq not on PATH" >&2;
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "detect-ecosystems: not in a git repo" >&2; exit 1; }
 cd "$ROOT" || exit 1
 
-FILES="$(git ls-files 2>/dev/null)" || { echo "detect-ecosystems: git ls-files failed" >&2; exit 1; }
+ALL_FILES="$(git ls-files 2>/dev/null)" || { echo "detect-ecosystems: git ls-files failed" >&2; exit 1; }
+
+EXCLUDE_RE='(^|/)(templates?|fixtures?|__fixtures__|testdata|test-?data|examples?|node_modules)(/|$)'
+FILES="$(grep -Ev "$EXCLUDE_RE" <<<"$ALL_FILES")"
+excluded="$(grep -E "$EXCLUDE_RE" <<<"$ALL_FILES")"
+excluded_count=0
+[ -n "$excluded" ] && excluded_count="$(grep -c '' <<<"$excluded")"
 
 failures=()
 note() { failures+=("$1"); }
@@ -44,7 +64,8 @@ add() {
 }
 
 # has <path-regex> — anchored at a path segment boundary, so it finds nested
-# manifests in monorepos as well as root ones.
+# manifests in monorepos as well as root ones. Runs over the vendored-filtered
+# FILES, never ALL_FILES.
 #
 # Herestring, NOT `printf ... | grep -q`. Under `set -o pipefail`, `grep -q`
 # exits on the first match, the writer takes SIGPIPE, and the pipeline reports
@@ -175,6 +196,8 @@ fails_json="$(printf '%s\n' "${failures[@]+"${failures[@]}"}" | jq -Rs 'split("\
 printf '%s' "$results" | jq -s \
     --arg repo "$repo_slug" \
     --arg ci "$ci_workflow" \
+    --arg excl_re "$EXCLUDE_RE" \
+    --argjson excl_n "$excluded_count" \
     --argjson fails "$fails_json" \
     'add | {
         repo: $repo,
@@ -182,5 +205,6 @@ printf '%s' "$results" | jq -s \
         ecosystems: .,
         present: [ to_entries[] | select(.value.detected) | .key ],
         needs_lockfile_sync: [ to_entries[] | select(.value.detected and .value.lockfile_risk) | .key ],
+        vendored_excluded: { count: $excl_n, pattern: $excl_re },
         detect_failures: $fails
      }'
