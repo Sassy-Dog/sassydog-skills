@@ -8,9 +8,24 @@
 #
 # Gates, in CI order:
 #   1. shellcheck -S warning over every tracked *.sh
-#   2. frontmatter sanity (scripts/check-frontmatter.sh)
+#   2. frontmatter sanity (scripts/check-frontmatter.sh) — two layers. LOADER
+#      requirements on every tracked skill/agent file: opening `---` on line 1,
+#      `name`/`description` present, `name` matching the directory (skills) or
+#      filename (agents). AGENT SKILLS SPEC constraints on `SKILL.md` ONLY
+#      (issue #118): `description` <= 1024 characters, `name` <= 64 characters
+#      with charset and hyphen rules, and a strict frontmatter key allowlist
+#      (name, description, license, compatibility, allowed-tools, metadata)
+#      whose unknown keys HARD-fail, matching what `gh skill publish` rejects.
+#      `agents/*.md` are deliberately exempt from the spec layer — an agent is
+#      not a skill and legitimately carries `color:`.
 #   3. no bare positional tokens in Skill-args substitution surfaces (issue #39)
-#   4. no legacy 'create-dev-workflows' residue outside sanctioned files
+#   4. no legacy name residue outside the per-name sanctioned back-compat
+#      files, in three groups (all enforced under this one gate): the renamed
+#      generator family — 'create-dev-workflows', 'refresh-sassydog-',
+#      'refresh-skills', 'refresh-hooks', 'refresh-deps' (issue #120); the
+#      plugin and marketplace renames — 'ai-agent-skills', 'sassy-dog-skills'
+#      (issue #71); and the workflow-skill naming sweep — 'plate-it',
+#      'groom-it', 'drain-it', 'clean-it'
 #   5. plugin manifests are valid JSON, the plugin version is CalVer
 #      (YYYY.M.P — the one-way ratchet, docs/VERSIONING.md), and any
 #      marketplace.json plugins[].version equals it (issue #31)
