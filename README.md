@@ -16,6 +16,7 @@ Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI 
 | `sassy-dog` | `testflight` | TestFlight / App Store Connect API — builds, testers, feedback |
 | `sassy-dog` | `assess-it` | Multi-agent repository audit → deduped, PR-sized GitHub Issues under a tracking Epic |
 | `sassy-dog` | `recap` | Session wrap-up report — work completed, what surfaced, issues to file, immediate next steps |
+| `sassy-dog` | `setup-repo` | Orchestrator: owns the broad "set up this repo" intent — runs `setup-config` → `setup-hooks` → `setup-deps` strictly in sequence behind one combined plan gate, and reports what ran, what was skipped, and why |
 | `sassy-dog` | `setup-config` | Generator/refresher: writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow-skill config plus its `.claude/settings.json` plugin declaration |
 | `sassy-dog` | `setup-hooks` | Generator/refresher: renders a repo's stack-specific Claude Code hooks (`.claude/hooks/sassydog-*.sh` + settings.json wiring) from detection — format-on-edit, lint-findings-fed-back; re-runnable as the stack evolves |
 | `sassy-dog` | `setup-deps` | Generator/refresher: renders a repo's `.github/dependabot.yml` (grouped, per detected ecosystem) plus its dependency automation workflows — auto-merge, `bun.lock` sync, pod lockfile sync — from stack detection; re-runnable as the stack evolves |
@@ -75,6 +76,15 @@ plus `bun.lock` / `Podfile.lock` sync where Dependabot cannot rewrite the lockfi
 rule applies: the matcher accepts every producer name this generator has ever emitted, in either
 marker namespace, normalising to the current form on write, while a file with no marker at all is
 reported as hand-written and never overwritten.
+
+`setup-repo` sits above all three as the umbrella entry point, and owns the broad *"set up this
+repo"* intent so nobody reaches for one generator and silently gets a third of a setup. It holds no
+generation logic — it picks which generators apply, prints one combined plan of every file they
+would touch, runs them **strictly in sequence** (`setup-config` → `setup-hooks` → `setup-deps`), and
+reports what ran and what was skipped. The order is load-bearing rather than cosmetic: the first two
+both write `.claude/settings.json` (the marketplace/plugin declaration and the `PostToolUse` entry),
+each merging surgically into its own keys, so sequential runs compose while a concurrent or
+last-write-wins run drops one of the two with no error anywhere.
 
 ### Review agents
 
