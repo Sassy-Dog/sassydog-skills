@@ -27,18 +27,18 @@ Anything that smells undispatchable gets bounced back, never patched up inline.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/dispatch-ready.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`,
-`merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:refresh-skills` →
+`merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:setup-config` →
 `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, STOP. Dispatch-ready dispatches sub-agents and merges PRs unattended, on a
 loop — running it against an unconfigured repo means guessing a concurrency cap and skipping
 migration serialization while nobody is watching. Tell the user to run
-`sassy-dog:refresh-skills` first.
+`sassy-dog:setup-config` first.
 
 **Before the generic message, check for a stranded pre-rename config**: if
 `.claude/sassy-dog/drain-it.md` exists, this repo is configured but predates the
 `drain-it` → `dispatch-ready` rename. Say exactly that, and route to
-`sassy-dog:refresh-skills` (update mode) — it performs the config rename. Still STOP; never
+`sassy-dog:setup-config` (update mode) — it performs the config rename. Still STOP; never
 read the old filename directly.
 
 ### Offer to set this repo up
@@ -55,7 +55,7 @@ Then offer to fix it — this is the next step, so ask now:
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:setup-config`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

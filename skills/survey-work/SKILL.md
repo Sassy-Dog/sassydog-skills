@@ -24,7 +24,7 @@ Synthesize everything we might tackle into one prioritized plate.
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
 `write_policy`, and the optional `sentry`, `board`, `testflight`, `mobile`, `posthog`, and
-`secret_bootstrap` blocks. Contract: `sassy-dog:refresh-skills` →
+`secret_bootstrap` blocks. Contract: `sassy-dog:setup-config` →
 `references/config-contract.md`.
 
 **Write posture is decided here.** `write_policy: read-only` (or absent, or `NO_CONFIG`) means this
@@ -35,7 +35,7 @@ skill NEVER files issues or mutates anything. Only `write_policy: gated` unlocks
 **First check for a stranded pre-rename config**: if `.claude/sassy-dog/plate-it.md` exists, this
 repo is configured but predates the `plate-it` → `survey-work` rename. Do NOT run the degraded
 flow below over a repo that actually has a rich config under the old name — say exactly that,
-route to `sassy-dog:refresh-skills` (update mode, it performs the config rename), and stop.
+route to `sassy-dog:setup-config` (update mode, it performs the config rename), and stop.
 Never read the old filename directly.
 
 Otherwise, **run EXACTLY these three surfaces and nothing else:**
@@ -304,7 +304,7 @@ Apply any `## extra-guardrails` section from config on top of these.
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:setup-config`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

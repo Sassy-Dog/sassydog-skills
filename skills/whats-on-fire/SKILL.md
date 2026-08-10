@@ -129,7 +129,7 @@ Assemble from data already pulled, plus two local comparisons:
   itself is a plugin skill present everywhere, so directory existence proves nothing; the **config**
   is what makes it repo-aware. An unconfigured repo still runs `survey-work`, just degraded. A repo
   carrying only the legacy `.claude/sassy-dog/plate-it.md` is a **different** row: "config predates
-  the survey-work rename" — it has a tuned config, it just needs `refresh-skills` update mode; never
+  the survey-work rename" — it has a tuned config, it just needs `setup-config` update mode; never
   report it as missing.
 
 ## 3. Roster and rollup

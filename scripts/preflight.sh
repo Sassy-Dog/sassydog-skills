@@ -74,7 +74,7 @@ fi
 # nothing makes `git ls-files` emit no paths, so the guard would still pass
 # while silently covering nothing — which is exactly what a rename of the
 # generator directory used to cause. Fail loudly instead.
-POSITIONAL_TEMPLATE_GLOB='skills/refresh-skills/references/templates/*'
+POSITIONAL_TEMPLATE_GLOB='skills/setup-config/references/templates/*'
 if [ -z "$(git ls-files "$POSITIONAL_TEMPLATE_GLOB")" ]; then
     failed "positional-token guard — template pathspec '$POSITIONAL_TEMPLATE_GLOB' matched no tracked files (renamed or moved? the guard would silently cover nothing)"
 else
@@ -88,17 +88,20 @@ else
 fi
 
 # --- 4. no legacy skill-name residue -----------------------------------------
-# The generator has been renamed twice: create-dev-workflows -> (0.9.0)
-# refresh-skills -> refresh-skills. Both legacy names may appear only
-# in the sanctioned backward-compat mentions — migrate mode still has to
-# RECOGNISE renders produced by the older producers. Anything else is a stale
-# reference that would confuse a render or send a reader to a dead path.
+# The config generator has been renamed three times:
+#   create-dev-workflows -> refresh-sassydog-skills (0.9.0)
+#   refresh-sassydog-skills -> refresh-skills (2026.7.22)
+#   refresh-skills -> setup-config (issue #121)
+# This loop guards the two OLDEST names; they may appear only in the
+# sanctioned backward-compat mentions — migrate mode still has to RECOGNISE
+# renders produced by the older producers. Anything else is a stale reference
+# that would confuse a render or send a reader to a dead path.
 legacy_residue=0
 for legacy in 'create-dev-workflows' 'refresh-sassydog-'; do
     if git grep -l "$legacy" -- \
-        ':!skills/refresh-skills/references/update-mode.md' \
-        ':!skills/refresh-skills/references/migrate-mode.md' \
-        ':!skills/refresh-skills/SKILL.md' \
+        ':!skills/setup-config/references/update-mode.md' \
+        ':!skills/setup-config/references/migrate-mode.md' \
+        ':!skills/setup-config/SKILL.md' \
         ':!skills/refresh-deps/SKILL.md' \
         ':!skills/refresh-hooks/SKILL.md' \
         ':!CLAUDE.md' \
@@ -143,7 +146,7 @@ fi
 # appear ONLY where it is still load-bearing:
 #   - the renamed skill's own SKILL.md — legacy trigger phrases, the
 #     "Formerly" note, and the stranded-pre-rename-config detection
-#   - skills/refresh-skills/SKILL.md + references/{migrate,update}-mode.md —
+#   - skills/setup-config/SKILL.md + references/{migrate,update}-mode.md —
 #     the rename map and legacy-artifact recognition (generated dirs and
 #     pre-rename config filenames keep their old names in consumer repos)
 #   - skills/whats-on-fire/SKILL.md — the blind-spot probe distinguishes a
@@ -156,9 +159,9 @@ for legacy in 'plate-it' 'groom-it' 'drain-it' 'clean-it'; do
         ':!skills/groom-backlog/SKILL.md' \
         ':!skills/dispatch-ready/SKILL.md' \
         ':!skills/tidy-repo/SKILL.md' \
-        ':!skills/refresh-skills/SKILL.md' \
-        ':!skills/refresh-skills/references/migrate-mode.md' \
-        ':!skills/refresh-skills/references/update-mode.md' \
+        ':!skills/setup-config/SKILL.md' \
+        ':!skills/setup-config/references/migrate-mode.md' \
+        ':!skills/setup-config/references/update-mode.md' \
         ':!skills/whats-on-fire/SKILL.md' \
         ':!README.md' \
         ':!scripts/preflight.sh'; then

@@ -1,18 +1,19 @@
 ---
-name: refresh-skills
+name: setup-config
 description: >
-  This skill should be used when the user asks to "refresh the sassydog skills", "refresh the
-  project workflow skills", "refresh the dev workflow skills", "set up dev workflow skills",
-  "configure survey-work for this repo", "configure plate-it for this repo", "set up the workflow
-  skills here", "bootstrap project
-  workflow skills", "update the project workflow skills", "re-sync this repo's workflow config",
-  "migrate this repo to the new workflow skills", "move the workflow skills to config", or "adopt
-  the legacy plate/get/send skills". Writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow
-  config plus its `.claude/settings.json` plugin declaration, and migrates repos still carrying
-  older generated skills under `.claude/skills/`. Run from inside the target repository.
+  This skill should be used when the user asks to "set up the config for this repo", "set up this
+  repo's sassy-dog config", "configure this repo's workflow skills", "configure survey-work for
+  this repo", "configure send-it here", "set up the workflow config", "bootstrap the sassy-dog
+  config", "refresh this repo's sassy-dog config", "re-sync this repo's workflow config", "update
+  the workflow config", "migrate this repo to config-based workflow skills", "move the workflow
+  skills to config", "adopt the legacy hand-written workflow skills", or "declare the sassy-dog
+  plugin in this repo's settings". Writes and re-syncs a repo's `.claude/sassy-dog/*.md` workflow
+  config plus its `.claude/settings.json` marketplace + plugin declaration, and migrates repos
+  still carrying older generated skills under `.claude/skills/`. Run from inside the target
+  repository.
 ---
 
-# Refresh Skills
+# Setup Config
 
 Configuration generator for the workflow family. The six skills themselves — `survey-work`,
 `groom-backlog`, `take-it`, `dispatch-ready`, `send-it`, `tidy-repo` — ship generically in this
@@ -87,11 +88,16 @@ With local and remote in agreement, pick exactly one mode:
 | None of the above | **create** (Phase 6) |
 
 **Marker recognition accepts every producer name.** Match on the `generated-by:` prefix and accept
-`refresh-skills` (current), `refresh-sassydog-skills` (plugin 0.9.0–2026.7.21), and
-`create-dev-workflows` (≤ 0.8.1). Match it **anywhere in the file** — older renders put it on line 1,
-where the loader could not parse the frontmatter, and hand-fixes moved it. A repo whose marker is
-not recognised falls through to adopt or create mode and its config is silently lost, so this
-matcher is load-bearing.
+`refresh-skills` (plugin 2026.7.22 until this skill became `setup-config`),
+`refresh-sassydog-skills` (plugin 0.9.0–2026.7.21), and `create-dev-workflows` (≤ 0.8.1). Match it
+**anywhere in the file** — older renders put it on line 1, where the loader could not parse the
+frontmatter, and hand-fixes moved it. A repo whose marker is not recognised falls through to adopt
+or create mode and its config is silently lost, so this matcher is load-bearing.
+
+`setup-config` is deliberately **absent** from that list, and must stay absent. The list is frozen
+history: it matches only the superseded generated-skills path (`.claude/skills/<name>/SKILL.md`),
+and the `.claude/sassy-dog/*.md` config this skill writes carries **no** `generated-by:` marker at
+all. A `setup-config` marker has never existed to recognise.
 
 ## Phase 1 — detect
 

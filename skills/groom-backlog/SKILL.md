@@ -26,11 +26,11 @@ agent with zero conversation context.
 !`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/groom-backlog.md" 2>/dev/null || echo "NO_CONFIG"`
 
 Frontmatter supplies `gotcha_summary` and the optional `board` and `stacked_prs` blocks. Contract:
-`sassy-dog:refresh-skills` → `references/config-contract.md`.
+`sassy-dog:setup-config` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, first check for a stranded pre-rename config: if
 `.claude/sassy-dog/groom-it.md` exists, this repo is configured but predates the
-`groom-it` → `groom-backlog` rename — say exactly that, route to `sassy-dog:refresh-skills`
+`groom-it` → `groom-backlog` rename — say exactly that, route to `sassy-dog:setup-config`
 (update mode, it performs the config rename), and stop rather than running degraded. Never read
 the old filename directly.
 
@@ -197,7 +197,7 @@ Apply any `## extra-rubric` section from config as additional Ready tests.
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:setup-config`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

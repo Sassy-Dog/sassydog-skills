@@ -4,7 +4,7 @@ description: >
   Ship a PR end-to-end — worktree audit, freshness gates, pre-flight CI guardrails,
   template-compliant PR body, commit, push, watch checks, merge, clean up. Use when the user says
   "send it", "ship it", "open the PR", "create a PR", or asks to merge a branch. Reads the current
-  repo's settings from `.claude/sassy-dog/send-it.md`; run `refresh-skills` if that file
+  repo's settings from `.claude/sassy-dog/send-it.md`; run `setup-config` if that file
   is missing.
 ---
 
@@ -19,7 +19,7 @@ commit/push → watch + merge (delegated to `sassy-dog:pr-shepherd`).
 
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
 `merge_queue`, and the optional `migrations`, `codegen`, `review_agent`, and `stacked_prs` blocks.
-Contract: `sassy-dog:refresh-skills` → `references/config-contract.md`.
+Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
 
 Repo slug and default branch are **derived, never configured**:
 
@@ -35,7 +35,7 @@ Run §2 — the worktree audit is universal and never skipped. Then **stop befor
 > No `.claude/sassy-dog/send-it.md` in this repo. I can audit the worktree and draft the commit,
 > but I don't know this repo's pre-flight commands or PR template. If this repo has a project-level
 > `send-it` under `.claude/skills/`, use that instead. Otherwise: tell me the pre-flight command, or
-> run `sassy-dog:refresh-skills`.
+> run `sassy-dog:setup-config`.
 
 ### Offer to set this repo up
 
@@ -51,7 +51,7 @@ Then offer to fix it — this is the next step, so ask now:
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:setup-config`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 
