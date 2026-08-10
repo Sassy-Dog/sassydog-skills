@@ -20,12 +20,13 @@ cd "$ROOT" || exit 1
 failures=()
 note() { failures+=("$1"); }
 
-# tool <name> <detected 0/1> <why>
+# tool <name> <detected 0/1> <why> [extra-json-object]
 results=""
 add() {
-    local name="$1" det="$2" why="$3"
-    results+=$(jq -cn --arg n "$name" --argjson d "$det" --arg w "$why" \
-        '{($n): {detected: ($d == 1), why: $w}}')$'\n'
+    local name="$1" det="$2" why="$3" extra="${4:-}"
+    [ -n "$extra" ] || extra='{}'
+    results+=$(jq -cn --arg n "$name" --argjson d "$det" --arg w "$why" --argjson e "$extra" \
+        '{($n): ({detected: ($d == 1), why: $w} + $e)}')$'\n'
 }
 
 has_tracked() { git ls-files "$1" | head -1 | grep -q .; }
@@ -65,7 +66,59 @@ if [ -f .markdownlint-cli2.jsonc ] || [ -f .markdownlint-cli2.yaml ] || [ -f .ma
 else
     why="no markdownlint config"
 fi
-add markdownlint "$det" "$why"
+
+# markdownlint version pin: the hook must lint with the SAME markdownlint-cli2
+# the repo's CI enforces. An unpinned `npx -y markdownlint-cli2` resolves to
+# LATEST at hook time, so a repo whose CI pins an older release gets a hook
+# that blocks on rules CI does not run (measured: CI 0.18.1 vs hook 0.23.2,
+# MD060 flagging a README CI calls clean). Precedence: an explicit
+# markdownlint-cli2@<spec> in .github/workflows/*, then in a shell script those
+# workflows invoke (one hop — the common "CI calls scripts/preflight.sh"
+# shape), then Makefile/justfile/package.json, then the package.json dependency
+# range. Empty pin => the render drops the blocking half and is fix-only.
+pin_spec_in() {  # <file> -> prints the pinned spec (version or range), or nothing
+    local f="$1" hit
+    [ -f "$f" ] || return 1
+    hit=$(grep -ohE 'markdownlint-cli2@[0-9A-Za-z.^~><=*+|-]+' "$f" 2>/dev/null | head -1)
+    [ -n "$hit" ] || return 1
+    printf '%s' "${hit#markdownlint-cli2@}"
+}
+
+mdl_pin=""; mdl_pin_source=""
+scan=()
+for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+    [ -f "$f" ] && scan+=("$f")
+done
+if [ ${#scan[@]} -gt 0 ]; then
+    # one hop: the shell scripts those workflows invoke
+    while IFS= read -r ref; do
+        ref="${ref#./}"
+        [ -n "$ref" ] && [ -f "$ref" ] && scan+=("$ref")
+    done < <(grep -ohE '[A-Za-z0-9_./-]+\.sh' "${scan[@]}" 2>/dev/null | sort -u)
+fi
+for f in Makefile makefile GNUmakefile justfile Justfile .justfile package.json; do
+    [ -f "$f" ] && scan+=("$f")
+done
+for f in "${scan[@]+"${scan[@]}"}"; do
+    if spec=$(pin_spec_in "$f"); then
+        mdl_pin="$spec"; mdl_pin_source="$f"
+        break
+    fi
+done
+if [ -z "$mdl_pin" ] && [ -f package.json ]; then
+    spec=$(jq -r '(.devDependencies["markdownlint-cli2"] // .dependencies["markdownlint-cli2"]) // empty' package.json 2>/dev/null)
+    if [ -n "$spec" ]; then mdl_pin="$spec"; mdl_pin_source="package.json (dependency range)"; fi
+fi
+if [ "$det" = 1 ]; then
+    if [ -n "$mdl_pin" ]; then
+        why="$why + pin markdownlint-cli2@$mdl_pin from $mdl_pin_source"
+    else
+        why="$why + NO version pin discovered — render fix-only (blocking half omitted)"
+        note "markdownlint: no version pin found in .github/workflows/*, CI shell scripts, Makefile, justfile or package.json — the hook renders fix-only so it cannot block on rules CI does not run"
+    fi
+fi
+add markdownlint "$det" "$why" \
+    "$(jq -cn --arg p "$mdl_pin" --arg s "$mdl_pin_source" '{pin: $p, pin_source: $s}')"
 
 # --- shellcheck: tracked *.sh (no config file convention — presence of shell
 #     scripts IS the evidence; CI repos that shellcheck already prove intent) --

@@ -81,10 +81,12 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-hooks/scripts/detect-hook-stack.sh
 ```
 
 It emits one JSON object — per-tool `detected` + `why` (ruff, prettier, markdownlint, shellcheck,
-dart, rustfmt, gofmt, dotnet-format) plus `detect_failures`. The probe table (what counts as
-evidence per tool, and the traps) is `references/detection.md`. Detection keys on **repo config
-presence** (e.g. a `[tool.ruff]` section, a `.prettierrc*`, a `.markdownlint-cli2.jsonc`), not on
-what happens to be installed on this machine — the render must hold on a colleague's machine too.
+dart, rustfmt, gofmt, dotnet-format) plus `detect_failures`. `tools.markdownlint` carries two extra
+fields, `pin` and `pin_source` — the markdownlint-cli2 version the repo's CI enforces, and where it
+was found. The probe table (what counts as evidence per tool, and the traps) is
+`references/detection.md`. Detection keys on **repo config presence** (e.g. a `[tool.ruff]` section,
+a `.prettierrc*`, a `.markdownlint-cli2.jsonc`), not on what happens to be installed on this
+machine — the render must hold on a colleague's machine too.
 
 ## Phase 2 — interview (short)
 
@@ -106,6 +108,24 @@ tools), strip the marker comment lines, keep the `generated-by` header — norma
 shellcheck-clean bash with every block present — rendering only deletes blocks, so the render is
 valid by construction.
 
+**The markdownlint route takes the one substitution, and one conditional inside a conditional.**
+`npx -y markdownlint-cli2` resolves to **latest at hook time**, so an unpinned render blocks on
+rules CI does not run — the fastest way to teach the user to ignore the exit-2 signal that makes
+this hook worth having:
+
+- **`tools.markdownlint.pin` non-empty** → replace the quoted `markdownlint-cli2` token with
+  `markdownlint-cli2@<pin>` on **both** invocations (the `--fix` pass and the blocking re-check),
+  and keep the nested `# {{IF:MARKDOWNLINT_BLOCKING}} ... # {{ENDIF:MARKDOWNLINT_BLOCKING}}` block.
+- **`pin` empty** → delete that nested block. The route renders **fix-only**: it still fixes
+  silently, it just cannot block. Fixing silently is always safe; blocking on rules CI does not run
+  is not. **Say this in the preview** — name it as a deliberate downgrade and tell the user that
+  pinning markdownlint-cli2 in CI (workflow, `Makefile`/`justfile`, or `package.json`) earns the
+  blocking half back on the next refresh.
+
+Never introduce a `{{...}}` placeholder into executable shell for the version — braces there trip
+SC1083 and break the lint-clean-as-is invariant. Prettier is the deliberate contrast and needs no
+equivalent: `npx --no-install` makes the repo's own lockfile its pin, so leave it exactly as it is.
+
 Then compose the settings change per `references/settings-merge.md` (add the owned entry if
 missing; in refresh mode also remove owned entries whose tool set became empty).
 
@@ -123,7 +143,11 @@ execute bit on the script.
    ```
 
 3. Validate the settings file still parses: `jq -e . .claude/settings.json`.
-4. Remind: hooks load on the next session in that repo (settings changes are not hot-reloaded).
+4. If the markdownlint route was rendered, confirm the version the hook will run matches CI's —
+   `grep -o 'markdownlint-cli2[^"]*' .claude/hooks/sassydog-post-edit.sh` against the probe's
+   `pin_source`. A pinned render must show the pin on both invocations; a fix-only render must show
+   no blocking re-check at all. Nothing else in this flow catches a drifted version.
+5. Remind: hooks load on the next session in that repo (settings changes are not hot-reloaded).
 
 ## Guardrails
 

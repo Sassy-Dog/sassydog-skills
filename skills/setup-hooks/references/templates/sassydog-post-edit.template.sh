@@ -16,6 +16,22 @@
 # present this file is valid bash that passes lint clean, so any render (block
 # deletion only) is valid by construction. Hand-edits to a rendered copy are
 # overwritten on refresh.
+#
+# The MARKDOWNLINT block carries the one nested block, closed by a LABELLED
+# marker: `# {{IF:MARKDOWNLINT_BLOCKING}} ... # {{ENDIF:MARKDOWNLINT_BLOCKING}}`.
+# Every unlabelled `# {{ENDIF}}` closes the nearest preceding tool block. Keep
+# the nested block only when detection discovered a markdownlint-cli2 version
+# pin (`tools.markdownlint.pin`); with no pin the route renders FIX-ONLY,
+# because fixing silently is always safe while blocking on rules CI does not
+# run is not.
+#
+# That same block also takes the ONE textual substitution in this template:
+# replace the quoted `markdownlint-cli2` package token with the discovered pin
+# (`"markdownlint-cli2@0.18.1"`) on BOTH invocations. The token is a bare,
+# quoted package name rather than a `{{...}}` placeholder on purpose — braces
+# inside executable shell trip SC1083 and would break the lint-clean-as-is
+# invariant above; the quotes keep a range spec containing shell metacharacters
+# (`>=0.18.1`) safe once substituted.
 set -uo pipefail
 
 payload=$(cat)
@@ -50,10 +66,12 @@ case "$file" in
 # {{IF:MARKDOWNLINT}}
     *.md)
         command -v npx >/dev/null 2>&1 || exit 0
-        npx -y markdownlint-cli2 --fix "$file" >/dev/null 2>&1 || true
-        if ! out=$(npx -y markdownlint-cli2 "$file" 2>&1); then
+        npx -y "markdownlint-cli2" --fix "$file" >/dev/null 2>&1 || true
+# {{IF:MARKDOWNLINT_BLOCKING}}
+        if ! out=$(npx -y "markdownlint-cli2" "$file" 2>&1); then
             lint_fail "markdownlint (unfixable)" "$(echo "$out" | grep -v '^npm')"
         fi
+# {{ENDIF:MARKDOWNLINT_BLOCKING}}
         ;;
 # {{ENDIF}}
 # {{IF:SHELLCHECK}}
