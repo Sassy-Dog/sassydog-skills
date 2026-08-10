@@ -8,7 +8,7 @@ ship one implementation each in the plugin and read their per-repo behavior from
 ```
 
 One file per skill. Each file is YAML frontmatter (facts and toggles) followed by `##` sections
-(freeform prose). This document is the source of truth for that format; `refresh-skills`
+(freeform prose). This document is the source of truth for that format; `setup-config`
 writes these files and the six skills read them.
 
 ## Governing principle: configure only what cannot be derived
@@ -228,7 +228,7 @@ a git repo regardless. The command is safe outside a repo — it yields `NO_CONF
 
 **`NO_CONFIG` is a first-class state, not an error.** A skill that finds no config must derive what
 it safely can, run in its most conservative mode, and tell the user to run
-`sassy-dog:refresh-skills`.
+`sassy-dog:setup-config`.
 
 ### The no-invention rule
 

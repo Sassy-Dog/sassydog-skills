@@ -79,9 +79,13 @@ For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>
 When identifying a generated skill for migration, match the `generated-by:` marker **anywhere in
 the file** and accept **every** producer name:
 
-- `refresh-skills` — current
+- `refresh-skills` — plugin 2026.7.22 until this skill was renamed `setup-config`
 - `refresh-sassydog-skills` — plugin 0.9.0 through 2026.7.21
 - `create-dev-workflows` — plugin ≤ 0.8.1
+
+This list is frozen history and takes no new entries. `setup-config` writes only
+`.claude/sassy-dog/*.md`, which carries no `generated-by:` marker, so there is no `setup-config`
+marker for this matcher to ever see.
 
 Older renders placed the marker on line 1, a layout the loader cannot parse, and hand-fixes moved
 it. A repo whose marker is not recognised falls through to adopt or create mode, and its extracted

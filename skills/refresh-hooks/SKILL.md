@@ -14,7 +14,7 @@ description: >
 
 Generator for **per-repo Claude Code hooks**: inspect the repo's actual stack, render a
 formatter/linter dispatcher tailored to it, wire it into `.claude/settings.json`, and reconcile all
-of it on every re-run. The sibling of `refresh-skills` — same philosophy: the plugin ships
+of it on every re-run. The sibling of `setup-config` — same philosophy: the plugin ships
 the generator, the repo owns a generated, refreshable artifact.
 
 Why hooks and not instructions: formatting/lint feedback belongs at the harness layer, firing on

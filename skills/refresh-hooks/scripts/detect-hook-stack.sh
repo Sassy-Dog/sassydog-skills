@@ -2,7 +2,7 @@
 # detect-hook-stack.sh — read-only probe: which formatter/linter tools does THIS
 # repo's configuration call for? Emits one JSON object; every probe degrades to
 # detected:false and appends to detect_failures rather than aborting (same
-# contract as refresh-skills' detect-capabilities.sh).
+# contract as setup-config' detect-capabilities.sh).
 #
 # Evidence rule: a tool counts as detected only on REPO EVIDENCE (config file,
 # manifest section, tracked file types) — never on what happens to be installed

@@ -16,7 +16,7 @@ description: >
 # Refresh Sassy Dog Deps
 
 Generator/refresher for a repo's dependency automation, in the same family as
-`refresh-skills` and `refresh-hooks`: detect the stack, render from templates,
+`setup-config` and `refresh-hooks`: detect the stack, render from templates,
 reconcile only what this generator owns.
 
 It renders up to three things:

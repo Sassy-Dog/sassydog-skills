@@ -6,7 +6,7 @@ description: >
   remove stale worktrees, delete merged-PR branches local + remote. Use when the user says "clean
   it", "clean up", "tidy the repo", "tidy up", "tidy it", "clean branches", or asks to remove
   stale worktrees/branches/stashes. Reads the current repo's settings from
-  `.claude/sassy-dog/tidy-repo.md`; run `refresh-skills` if that file is missing.
+  `.claude/sassy-dog/tidy-repo.md`; run `setup-config` if that file is missing.
 ---
 
 # Tidy-Repo
@@ -40,11 +40,11 @@ gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge \
 The block above is this repo's `.claude/sassy-dog/tidy-repo.md`, inlined at load time. Its
 frontmatter carries the sweep policy — `dep_version_globs`, `noise_allowlist`, `never_discard`,
 optional `claim_label` — and its `##` sections carry repo-specific prose. The contract is
-`sassy-dog:refresh-skills` → `references/config-contract.md`.
+`sassy-dog:setup-config` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, first check for a stranded pre-rename config: if
 `.claude/sassy-dog/clean-it.md` exists, this repo is configured but predates the
-`clean-it` → `tidy-repo` rename — say exactly that, route to `sassy-dog:refresh-skills`
+`clean-it` → `tidy-repo` rename — say exactly that, route to `sassy-dog:setup-config`
 (update mode, it performs the config rename), and stop rather than running degraded. Never read
 the old filename directly.
 
@@ -122,7 +122,7 @@ Apply any `## extra-guardrails` section from the config on top of these.
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:setup-config`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 

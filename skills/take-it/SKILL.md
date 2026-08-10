@@ -21,7 +21,7 @@ does not re-prioritize.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
 and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs` blocks. Contract:
-`sassy-dog:refresh-skills` → `references/config-contract.md`.
+`sassy-dog:setup-config` → `references/config-contract.md`.
 
 `stack_summary` (the repo's tech stack, always present) and `stacked_prs` (stacked pull requests,
 usually absent) are unrelated despite the shared word.
@@ -37,7 +37,7 @@ gh repo view --json nameWithOwner,defaultBranchRef \
 summary or pre-flight commands produces low-quality PRs, so **stop and say so** rather than
 guessing. This is the one workflow skill where `NO_CONFIG` blocks: everything it does is
 outward-facing and hard to unwind. Tell the user to run
-`sassy-dog:refresh-skills` first.
+`sassy-dog:setup-config` first.
 
 ### Offer to set this repo up
 
@@ -53,7 +53,7 @@ Then offer to fix it — this is the next step, so ask now:
 Naming which path applies matters: one of them ends in deleting a file the user may not know is
 there.
 
-On yes, delegate to `sassy-dog:refresh-skills`. **Never write config yourself** — the
+On yes, delegate to `sassy-dog:setup-config`. **Never write config yourself** — the
 refresher owns the contract, and a skill that writes its own forks the format the moment the
 contract moves.
 
