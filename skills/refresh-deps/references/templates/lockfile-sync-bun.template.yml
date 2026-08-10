@@ -1,4 +1,4 @@
-# TEMPLATE: lockfile-sync-bun · version 4
+# TEMPLATE: lockfile-sync-bun · version 5
 # LEGACY FALLBACK — not the default for bun repos anymore. Dependabot's native
 # `bun` ecosystem (GA 2025-02) reads and rewrites the text bun.lock itself
 # (bun >= 1.1.39): the default render for a bun repo is the bun block in
@@ -15,7 +15,7 @@
 #   {{RUNNER}}  → runs-on value (default: [self-hosted, linux, sassy-dog])
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-bun | template-version: 4
+# generated-by: sassy-dog:refresh-deps | template: lockfile-sync-bun | template-version: 5
 #
 # Refresh bun.lock on Dependabot npm PRs (the LEGACY npm + sync pairing —
 # native `bun` is the default for bun repos; see the render conditions above).
@@ -73,14 +73,14 @@ jobs:
           app-id: ${{ secrets.PLATFORM_WRITER_APP_ID }}
           private-key: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.PR_HEAD_REF }}
           repository: ${{ env.PR_HEAD_REPO }}
           token: ${{ steps.app_token.outputs.token }}
           fetch-depth: 0
 
-      # Guarded, because {{RUNNER}} defaults to the self-hosted fleet where bun
+      # Guarded, because this job defaults to the self-hosted fleet, where bun
       # is already on the image WITH A WARM GLOBAL INSTALL CACHE. Installing bun
       # here anyway replaces it with a fresh binary whose cache is empty, and
       # `bun install` falls back from hardlinking to copying every package.
@@ -93,14 +93,14 @@ jobs:
       # never amortises either: this is `pull_request_target` on a Dependabot
       # PR, whose restricted token cannot write the Actions cache
       # ("Cache reservation failed: cache write denied: token has no writable
-      # scopes"), so every run pays full price. `_ci-jobs.yml` already skips
-      # setup-bun on self-hosted for exactly this reason.
+      # scopes"), so every run pays full price. A repo's own CI workflow
+      # typically skips setup-bun on self-hosted for exactly this reason.
       #
-      # `runner.environment` (github-hosted | self-hosted) rather than a
-      # {{IF:}} block: rendering only ever DELETES lines, so it cannot ADD this
-      # guard for a self-hosted render — and a runtime check stays correct if a
-      # repo overrides {{RUNNER}} to a GitHub-hosted label, where setup-bun IS
-      # required.
+      # `runner.environment` (github-hosted | self-hosted) rather than an
+      # IF-block: rendering only ever DELETES lines, so a block cannot ADD this
+      # guard on a self-hosted render — and a runtime check stays correct when a
+      # repo overrides the runner fact to a GitHub-hosted label, where setup-bun
+      # IS required.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         if: ${{ runner.environment != 'self-hosted' }}
 
