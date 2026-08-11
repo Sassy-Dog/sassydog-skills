@@ -11,9 +11,10 @@
 # again. Under a merge queue, the enqueue keeps the merge itself server-side
 # and kill-proof; this adds resilient enqueue + confirmation + teardown.
 #
-# One step per run: mergeable check → red/pending gate → enqueue via GraphQL
-# enqueuePullRequest (or `--direct` squash-merge) → GraphQL isInMergeQueue
-# confirmation → teardown + ff-only default-branch reconcile.
+# One step per run: mergeable check → red/pending gate → staleness gate
+# (`--direct` only) → enqueue via GraphQL enqueuePullRequest (or `--direct`
+# squash-merge) → GraphQL isInMergeQueue confirmation → teardown + ff-only
+# default-branch reconcile.
 #
 # Usage:
 #   merge-shepherd.sh <pr> [--repo owner/name] [--worktree <path>] [--direct]
@@ -33,7 +34,8 @@
 #   ISOLATION_BRANCH_PREFIX   prefix of the Agent runtime's isolation branches
 #                    (default "worktree-agent-") — same contract as teardown.sh
 #
-# Exit codes: 0 merged(+teardown) · 10 enqueued · 11 waiting/in-flight (re-run)
+# Exit codes: 0 merged(+teardown) · 10 enqueued · 11 waiting/in-flight, or a
+#             stale branch that was just updated (re-run)
 #             · 20 red checks · 21 no checks reported where CI is expected
 #             (re-run) · 22 conflicting · 23 blocked by a lower stack layer
 #             (re-run) · 24 stacked under a merge queue (needs a human)
@@ -63,6 +65,21 @@
 # has no CI, so the gate asks whether THIS repo runs CI on pull requests at all
 # (`actions/runs?event=pull_request` total_count) and only refuses when it
 # does. Override with --allow-no-checks.
+#
+# STALE-BRANCH TRAP (--direct only): CLEAN means "no textual conflict" and
+# nothing more — it is NOT evidence CI ran against the current base. A PR whose
+# checks went green days ago still reports CLEAN while many merges stale, and
+# merging it reddens the default branch on the spot. "Require branches to be up
+# to date before merging" is a SEPARATE branch-protection setting from "require
+# status checks" and is off by default, so required checks alone do not cover
+# this; repos without protection at all have nothing. A merge queue DOES cover
+# it (the queue rebuilds each entry against the current base), so the gate runs
+# on the direct path only. behind_by() answers it with one compare call — no
+# checkout, stateless. Behind the base -> `gh pr update-branch` + exit 11: the
+# checks re-run against the new base and the next invocation merges. An UNKNOWN
+# behind-count proceeds rather than stalling a healthy merge — unlike the
+# empty-rollup and stack gates, the failure mode here is a re-run, and the
+# update-branch write is the recovery, so a probe outage must not wedge it.
 #
 # STACKED PRs: a middle layer of a stack reads green + MERGEABLE + CLEAN
 # exactly like an ordinary PR, so without a gate this writer would merge layer
@@ -197,6 +214,22 @@ repo_runs_pr_ci() {
   esac
 }
 
+# How far behind the base is this PR's head? (see STALE-BRANCH TRAP above)
+# Prints the commit count, or NOTHING when the answer is unknown — a failed
+# GraphQL/compare call is never an error here, because the caller proceeds on
+# unknown rather than stalling a healthy merge. Deliberately the opposite
+# default from repo_runs_pr_ci: there, unknown blocks; here, unknown proceeds.
+behind_by() { # -> commits the PR head is behind the base, "" if unknown
+  local sha
+  sha=$(gh api graphql \
+    -f query='query($owner:String!,$name:String!,$pr:Int!){
+        repository(owner:$owner,name:$name){pullRequest(number:$pr){headRefOid}}}' \
+    -f owner="$OWNER" -f name="$NAME" -F pr="$PR" \
+    --jq '.data.repository.pullRequest.headRefOid' 2>/dev/null) || return 0
+  [ -z "$sha" ] && return 0
+  gh api "repos/$OWNER/$NAME/compare/$BRANCH...$sha" --jq '.behind_by' 2>/dev/null || true
+}
+
 # Prevention (issue #26): the Agent runtime checks each worktree out on a
 # worktree-agent-<id> isolation branch. The PR merges from the agent's FEATURE
 # branch, so the isolation branch never gets an upstream — never [gone], never
@@ -285,7 +318,7 @@ stack_gate() {
 }
 
 advance() { # one idempotent step against live state
-  local st ms inq fails pend total grc
+  local st ms inq fails pend total grc bb
   read -r st ms inq <<<"$(pr_state)"
   [ -z "$st" ] && { echo "state unavailable (transient) — retry later"; return 11; }
   case "$st" in
@@ -321,6 +354,19 @@ advance() { # one idempotent step against live state
   fi
   if [ "$ms" = CLEAN ] && [ "${pend:-1}" -eq 0 ]; then
     if [ "$DIRECT" = 1 ]; then
+      # Staleness gate — DIRECT ONLY. A merge queue rebuilds each entry against
+      # the current base, so queue mode reaches enqueue untouched. Unknown
+      # (empty) proceeds; only a known non-zero behind-count stops the merge.
+      bb="$(behind_by)"
+      if [ -n "$bb" ] && [ "$bb" -gt 0 ] 2>/dev/null; then
+        echo "STALE — $bb commit(s) behind $BRANCH (CLEAN only means no textual conflict)"
+        if bash "$GH_RETRY" -- pr update-branch "$PR" --repo "$REPO" >/dev/null 2>&1; then
+          echo "  branch updated — checks re-run against $BRANCH; re-run to merge"
+        else
+          echo "  update-branch failed — update it by hand, then re-run" >&2
+        fi
+        return 11
+      fi
       echo "CLEAN — direct merge (--squash --delete-branch)"
       bash "$GH_RETRY" -- pr merge "$PR" --repo "$REPO" --squash --delete-branch >/dev/null \
         || echo "  merge call failed (checking whether it took anyway)" >&2
