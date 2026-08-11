@@ -39,8 +39,12 @@
 #      check), and issue-claim.sh's label reconcile still CORRECTS a drifted
 #      label instead of silently skipping it (issue #161). Definitions and a
 #      mock gh only: no repo, no network.
-#   9. markdownlint (pinned markdownlint-cli2 version)
-#  10. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#   9. label-migrate tests (scripts/test-label-migrate.sh) — align-labels.sh's
+#      relabel-then-delete migrate mode cannot delete a label whose relabel has
+#      not been verified by re-query (issue #163). Mock gh only; the MODE
+#      itself is never run in CI, because it mutates other repos' issues.
+#  10. markdownlint (pinned markdownlint-cli2 version)
+#  11. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -310,7 +314,20 @@ else
     failed "label-taxonomy tests (scripts/test-label-taxonomy.sh)"
 fi
 
-# --- 9. markdownlint ---------------------------------------------------------
+# --- 9. label-migrate tests ----------------------------------------------------
+# Same rule as gate 8, one notch more dangerous: align-labels.sh's migrate mode
+# DELETES labels in other repos, and a delete strips the label from every issue
+# carrying it unrecoverably. So CI runs the mode's PROOF, never the mode — a
+# mock gh that records writes, plus a source-level invariant (one delete call
+# site, inside the gate, downstream of the re-query) and a mutation that
+# neuters the gate to show the withheld delete was withheld BY it (issue #163).
+if bash scripts/test-label-migrate.sh; then
+    pass "label-migrate tests (scripts/test-label-migrate.sh)"
+else
+    failed "label-migrate tests (scripts/test-label-migrate.sh)"
+fi
+
+# --- 10. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -325,7 +342,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 10. actionlint (best-effort locally; CI runs its own dockerized step) ---
+# --- 11. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then

@@ -22,14 +22,44 @@
 # Dependabot's per-ecosystem labels (`javascript`, `github_actions`, `rust`,
 # `dart`, …) are auto-created and correctly differ per repo. Not our business.
 #
-# SCOPE: this script only ensures the canonical labels EXIST with canonical
-# definitions. It never deletes a label, never relabels an issue, and never
-# maps a repo's one-off labels onto the canonical set — deleting a label strips
-# it from every issue carrying it, unrecoverably, so that migration is a
-# separate, human-reviewed job.
+# SCOPE — two passes, and only one of them can ever destroy anything:
+#
+#   ALIGN (the default pass). Ensures the canonical labels EXIST with canonical
+#   definitions. It never deletes a label and never touches an issue.
+#
+#   MIGRATE (--migrate <file>, issue #163). Folds a repo's one-off labels onto
+#   the canonical set: add the new label to every issue carrying the old one,
+#   then delete the old label. Deleting a label strips it from every issue
+#   carrying it, UNRECOVERABLY — so relabel comes first, delete second, and
+#   that ordering is enforced structurally rather than by convention. See THE
+#   DELETE GATE below. Mappings are data (a file), never a flag per mapping.
+#
+# THE DELETE GATE. `gh label delete` has exactly ONE call site in this script:
+# inside migrate_delete_gate(). That function's own body issues a FRESH
+# `gh issue list` for the old label and returns without deleting on every path
+# that is not "zero issues still carry the old label without the new one". The
+# relabel loop's counters are not an input to it and are never consulted — the
+# migration's own success message is not evidence. A delete is therefore
+# unreachable except through a re-query performed immediately before it, in the
+# same function body, so a `set -e` gap, a stray `|| true`, or a reordering
+# elsewhere in the script cannot route around it. scripts/test-label-migrate.sh
+# asserts that single-call-site invariant against this file's source, and
+# proves the gate is load-bearing by neutering it and watching the withheld
+# delete fire.
+#
+# What migrate mode deliberately does NOT do:
+#   * delete a label that has no mapping. Every delete here is the tail of a
+#     verified relabel; a label with no target has signal to lose and no
+#     evidence to gate on, so it stays a human decision (issue #159).
+#   * relabel pull requests. The migration is about issue signal and
+#     `gh issue list` excludes PRs, so a PR carrying a migrated-away label
+#     loses it when the label is deleted. Known, accepted, and small.
+#   * create a target label. A mapping whose TARGET is absent from the repo is
+#     held back rather than invented — run the align pass first.
 #
 # Usage:
 #   align-labels.sh [--repo owner/name] [--dry-run | --check | --collisions]
+#   align-labels.sh [--repo owner/name] --migrate <file> [--dry-run]
 #
 #   --repo       target repo; defaults to the current repo via `gh repo view`.
 #   --dry-run    preview: report what would change, write nothing. Exit 0.
@@ -40,11 +70,31 @@
 #                dev-workflow taxonomy and exits 3 if any pair is closer than
 #                CROSS_SET_MIN_DE. Definitions only: no repo, no gh, no
 #                network — the form scripts/preflight.sh gates CI on.
+#   --migrate    run the MIGRATE pass over the old -> new mappings in <file>
+#                ("-" reads stdin). Mutually exclusive with --check and
+#                --collisions. Combine with --dry-run for a full preview.
+#
+# Mapping file format — one mapping per line, `<repo>|<old>|<new>`:
+#
+#     # comments and blank lines are ignored; field whitespace is trimmed
+#     Sassy-Dog/velovate|priority:p1|sev:critical
+#     Sassy-Dog/qr-ninja|supply-chain|security
+#
+#   One file describes the whole plan and each run processes only the lines
+#   whose repo matches the resolved --repo, so the same file drives all 14
+#   repos. The WHOLE file is validated before any network call: a mapping
+#   touching a reserved dev-workflow label, a duplicated source, a chained
+#   mapping (a -> b alongside b -> c in one repo, where the result depends on
+#   evaluation order), old == new, or a malformed line each exit 64.
 #
 # Env: DRY_RUN=1 equivalent to --dry-run. REPO honored if --repo absent.
+#      ISSUE_LIMIT overrides the per-mapping issue-read ceiling (default 1000).
 #
-# Output: one JSON line per canonical label on stdout:
+# Output: one JSON line per canonical label on stdout for the align pass:
 #   {"label":"security","action":"ok|create|update|would-create|would-update|failed","detail":"..."}
+# and one JSON line per mapping for the migrate pass:
+#   {"mapping":"old -> new","old":"..","new":"..","relabeled":N,
+#    "action":"migrated|would-migrate|already-migrated|held-back|blocked|failed","detail":"..."}
 # Human-readable summary goes to stderr.
 #
 # Exit codes:
@@ -53,10 +103,16 @@
 #   2  — at least one write failed (the pass CONTINUES past failures)
 #   3  — --check: drift found (nothing was written), or a cross-set colour
 #        collision; --collisions: a cross-set colour collision
-#   64 — usage error
+#   4  — --migrate: at least one mapping was HELD BACK — its old label was not
+#        deleted. Outranks 2, because a partial relabel usually produces both
+#        and the withheld delete is the outcome an operator must act on; the
+#        failing writes are still listed on stderr and in the JSON either way.
+#   64 — usage error, or an invalid mapping file (refused before any network
+#        call)
 #
-# Idempotent by construction: a second run against an aligned repo finds every
-# label already matching and issues no gh write at all.
+# Idempotent by construction: a second align run against an aligned repo finds
+# every label already matching and issues no gh write at all, and a second
+# migrate run finds every old label already gone and issues none either.
 #
 # COLOURS ARE LORE — three sit deliberately off their modal palette value so
 # chips stay distinguishable, and re-"tidying" them reintroduces a collision:
@@ -114,12 +170,21 @@ RESERVED_LABELS=(ready in-progress blocked sentry-escalation)
 # one issue is optional. The shipped sets measure 24.4 apart at their tightest.
 CROSS_SET_MIN_DE=10
 
+# Per-mapping issue-read ceiling for the migrate pass. A TRUNCATED read would
+# UNDERCOUNT the issues still carrying the old label, and an undercount is
+# exactly what would let a delete through the gate — so hitting the ceiling is
+# treated as a failed read, never as "nothing left".
+ISSUE_LIMIT="${ISSUE_LIMIT:-1000}"
+
 usage() {
     cat >&2 <<'EOF'
 usage: align-labels.sh [--repo owner/name] [--dry-run | --check | --collisions]
+       align-labels.sh [--repo owner/name] --migrate <file> [--dry-run]
        --dry-run    preview only, never writes, always exit 0
        --check      read-only drift report, exit 3 if the repo is out of alignment
        --collisions cross-set colour check only (no repo, no network), exit 3 on a hit
+       --migrate    relabel-then-delete over the old|new mappings in <file>
+                    ("-" reads stdin); one `<repo>|<old>|<new>` per line
 EOF
     exit 64
 }
@@ -128,6 +193,7 @@ REPO="${REPO:-}"
 dry_run="${DRY_RUN:-0}"
 check_only=0
 collisions_only=0
+migrate_file=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -135,10 +201,18 @@ while [[ $# -gt 0 ]]; do
         --dry-run)    dry_run=1; shift ;;
         --check)      check_only=1; dry_run=1; shift ;;
         --collisions) collisions_only=1; shift ;;
+        --migrate)
+            [[ $# -ge 2 ]] || { echo "align-labels: --migrate needs a mapping file" >&2; usage; }
+            migrate_file="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) echo "align-labels: unknown arg: $1" >&2; usage ;;
     esac
 done
+
+if [[ -n "$migrate_file" && ( "$check_only" == "1" || "$collisions_only" == "1" ) ]]; then
+    echo "align-labels: --migrate cannot be combined with --check or --collisions" >&2
+    usage
+fi
 
 # Guardrail, enforced rather than documented: the dev-workflow labels are not
 # ours to define.
@@ -152,6 +226,100 @@ for spec in "${CANONICAL_LABELS[@]}"; do
         fi
     done
 done
+
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# --- the migration plan: parsed and fully validated BEFORE any network call ---
+# `<repo>|<old>|<new>` per line. Everything that can be judged from the file
+# alone is judged here, at startup, so a bad plan costs zero writes: a mapping
+# is either refused before the first `gh` invocation or it is safe to attempt.
+#
+# The reserved check covers EVERY line, not just this repo's. A dev-workflow
+# label in any line of the plan is a bug in the plan, and finding it only when
+# the run reaches that repo is finding it after 13 other repos have been
+# mutated.
+MIGRATE_SPECS=()
+map_reject() {  # $1=line number, $2=reason
+    echo "align-labels: mapping file $migrate_file line $1: $2" >&2
+    exit 64
+}
+
+parse_migrate_map() {
+    local file="$1" line lineno=0 repo old new extra key
+    local sources="" targets="" reserved
+
+    [[ "$file" == "-" ]] && file="/dev/stdin"
+    if [[ ! -r "$file" ]]; then
+        echo "align-labels: cannot read mapping file: $migrate_file" >&2
+        exit 64
+    fi
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        lineno=$((lineno + 1))
+        line="${line#"${line%%[![:space:]]*}"}"   # ltrim
+        line="${line%"${line##*[![:space:]]}"}"   # rtrim
+        [[ -z "$line" ]] && continue
+        [[ "${line:0:1}" == "#" ]] && continue
+
+        IFS='|' read -r repo old new extra <<<"$line"
+        [[ -n "$extra" ]] && map_reject "$lineno" "expected 3 fields (<repo>|<old>|<new>), got more"
+        repo="${repo#"${repo%%[![:space:]]*}"}"; repo="${repo%"${repo##*[![:space:]]}"}"
+        old="${old#"${old%%[![:space:]]*}"}";    old="${old%"${old##*[![:space:]]}"}"
+        new="${new#"${new%%[![:space:]]*}"}";    new="${new%"${new##*[![:space:]]}"}"
+
+        [[ -z "$repo" || -z "$old" || -z "$new" ]] &&
+            map_reject "$lineno" "expected 3 non-empty fields (<repo>|<old>|<new>), got: $line"
+        [[ "$repo" == */* ]] ||
+            map_reject "$lineno" "'$repo' is not an owner/name repo slug"
+        [[ "$(lower "$old")" == "$(lower "$new")" ]] &&
+            map_reject "$lineno" "old and new are the same label ('$old')"
+
+        for reserved in "${RESERVED_LABELS[@]}"; do
+            if [[ "$(lower "$old")" == "$reserved" || "$(lower "$new")" == "$reserved" ]]; then
+                echo "align-labels: mapping file $migrate_file line $lineno: '$reserved' belongs to the" >&2
+                echo "  dev-workflow taxonomy owned by skills/github-issues/scripts/issue-claim.sh." >&2
+                echo "  The two taxonomies are disjoint and single-sourced: migrating a label into or" >&2
+                echo "  out of that set is not this script's to do. Refused before any network call." >&2
+                exit 64
+            fi
+        done
+
+        key="$(lower "$repo")|$(lower "$old")"
+        if printf '%s' "$sources" | grep -Fqx "$key"; then
+            map_reject "$lineno" "'$old' is already mapped for $repo — one source, one target"
+        fi
+        sources+="$key"$'\n'
+        targets+="$(lower "$repo")|$(lower "$new")"$'\n'
+        MIGRATE_SPECS+=("$repo|$old|$new")
+    done <"$file"
+
+    # Chained mappings (a -> b alongside b -> c in one repo) make the outcome
+    # depend on evaluation order, and one of the two deletes would run against
+    # a label the other still needs. Refuse the plan rather than pick an order.
+    local spec s_repo s_old s_new
+    [[ "${#MIGRATE_SPECS[@]}" -eq 0 ]] && return 0
+    for spec in "${MIGRATE_SPECS[@]}"; do
+        IFS='|' read -r s_repo s_old s_new <<<"$spec"
+        if printf '%s' "$sources" | grep -Fqx "$(lower "$s_repo")|$(lower "$s_new")"; then
+            echo "align-labels: mapping file $migrate_file: chained mapping in $s_repo — '$s_old' -> '$s_new'" >&2
+            echo "  while '$s_new' is itself mapped away. The result would depend on evaluation order." >&2
+            exit 64
+        fi
+        if printf '%s' "$targets" | grep -Fqx "$(lower "$s_repo")|$(lower "$s_old")"; then
+            echo "align-labels: mapping file $migrate_file: chained mapping in $s_repo — '$s_old' is both a" >&2
+            echo "  migration source and another mapping's target. The result would depend on order." >&2
+            exit 64
+        fi
+    done
+}
+
+if [[ -n "$migrate_file" ]]; then
+    parse_migrate_map "$migrate_file"
+    if [[ "${#MIGRATE_SPECS[@]}" -eq 0 ]]; then
+        echo "align-labels: mapping file $migrate_file contains no mappings" >&2
+        exit 64
+    fi
+fi
 
 # Paths are resolved relative to this script so they hold wherever the plugin
 # is installed. Hoisted above the tooling checks because --collisions needs the
@@ -347,6 +515,217 @@ fi
 emit() {  # $1=label $2=action $3=detail
     jq -cn --arg l "$1" --arg a "$2" --arg d "$3" '{label:$l, action:$a, detail:$d}'
 }
+
+emit_map() {  # $1=old $2=new $3=action $4=relabeled-count $5=detail
+    jq -cn --arg o "$1" --arg n "$2" --arg a "$3" --argjson r "$4" --arg d "$5" \
+        '{mapping: ($o + " -> " + $n), old: $o, new: $n, relabeled: $r, action: $a, detail: $d}'
+}
+
+# The exact stored name of label $1 in $REPO (GitHub label names are
+# case-insensitive for uniqueness but case-preserving on the wire), or empty
+# when the repo does not carry it. Read from the one label list this pass
+# already made.
+label_actual() {
+    jq -r --arg n "$1" \
+        'map(select((.name | ascii_downcase) == ($n | ascii_downcase)))[0].name // empty' \
+        <<<"$existing"
+}
+
+# Issue numbers in $REPO carrying $1 but NOT $2, one per line, empty when none.
+# `--state all` deliberately: deleting a label strips it from closed issues
+# too, so a closed issue's signal is just as lost as an open one's.
+#
+# Returns 1 when the read failed, 2 when it hit ISSUE_LIMIT. Both are failures
+# and the ceiling especially so — a truncated list is a SHORTER list, and a
+# shorter list is exactly what a delete gate would misread as progress.
+migrate_unmigrated_issues() {
+    local old="$1" new="$2" payload n
+    payload=$(gh issue list --repo "$REPO" --label "$old" --state all \
+        --limit "$ISSUE_LIMIT" --json number,labels 2>/dev/null) || return 1
+    n=$(jq 'length' <<<"$payload" 2>/dev/null) || return 1
+    [[ "$n" =~ ^[0-9]+$ ]] || return 1
+    [[ "$n" -ge "$ISSUE_LIMIT" ]] && return 2
+    jq -r --arg new "$new" \
+        '.[] | select([.labels[].name] | index($new) | not) | .number' <<<"$payload" 2>/dev/null
+}
+
+# ==============================================================================
+#  THE DELETE GATE — the only call site of `gh label delete` in this script.
+# ==============================================================================
+# Relabel first, delete second is not a comment here, it is the control flow.
+# Every path into a label deletion runs through this function, and this
+# function's FIRST substantive act is a fresh re-query of the repo. The relabel
+# loop's counters are not a parameter and are never read: the migration's own
+# success message is not evidence. Every non-zero return leaves the old label
+# in place, and "the re-query itself failed" is one of them — unknown is not
+# verified.
+#
+# Returns: 0 verified and deleted · 10 re-query failed · 12 relabel incomplete
+#          13 verified but the delete call failed · 20 reached during a dry run
+GATE_DETAIL=""
+migrate_delete_gate() {
+    local old="$1" new="$2" still err n rc=0
+    GATE_DETAIL=""
+
+    # Asserted, not assumed: a preview must never reach the one place that can
+    # delete a label. The migrate loop also skips the gate entirely in dry-run.
+    if [[ "$dry_run" == "1" ]]; then
+        GATE_DETAIL="INTERNAL: delete gate reached during a dry run — refused"
+        return 20
+    fi
+
+    still=$(migrate_unmigrated_issues "$old" "$new") || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        GATE_DETAIL="post-relabel re-query failed (rc=$rc) — NOT verified, delete withheld"
+        return 10
+    fi
+    if [[ -n "$still" ]]; then
+        n=$(printf '%s\n' "$still" | wc -l | tr -d ' ')
+        GATE_DETAIL="re-query found $n issue(s) still carrying '$old' without '$new' — RELABEL INCOMPLETE, delete withheld"
+        return 12
+    fi
+
+    # The single call site. scripts/test-label-migrate.sh counts the literal
+    # phrase below across every non-comment line of this file and requires the
+    # count to be 1 and to sit inside this function — so keep that phrase out
+    # of message strings, and put any new deletion behind this gate.
+    if err=$(ghw label delete "$old" --repo "$REPO" --yes 2>&1 >/dev/null); then
+        GATE_DETAIL="re-query verified 0 issues still carrying '$old'; the label was removed"
+        return 0
+    fi
+    GATE_DETAIL="verified, but removing '$old' failed: $(printf '%s' "$err" | grep -v '^\[gh-retry\]' | head -1)"
+    return 13
+}
+
+# --- the migrate pass ---------------------------------------------------------
+if [[ -n "$migrate_file" ]]; then
+    n_considered=0
+    n_migrated=0
+    n_already=0
+    n_would=0
+    n_relabeled=0
+    n_write_failed=0
+    n_held=0
+    HELD=""
+
+    hold() {  # $1=old $2=new $3=reason
+        HELD+="  $1 -> $2: $3"$'\n'
+        n_held=$((n_held + 1))
+    }
+
+    for spec in "${MIGRATE_SPECS[@]}"; do
+        IFS='|' read -r m_repo old new <<<"$spec"
+        [[ "$(lower "$m_repo")" == "$(lower "$REPO")" ]] || continue
+        n_considered=$((n_considered + 1))
+
+        old_actual=$(label_actual "$old")
+        new_actual=$(label_actual "$new")
+
+        # Already migrated: the old label is gone, so nothing carries it and
+        # there is nothing to delete. This is what makes a re-run a true no-op
+        # — no issue read, no write, for any mapping that already landed.
+        if [[ -z "$old_actual" ]]; then
+            emit_map "$old" "$new" "already-migrated" 0 \
+                "'$old' is not present in $REPO — nothing to relabel, nothing to delete"
+            n_already=$((n_already + 1))
+            continue
+        fi
+
+        if [[ -z "$new_actual" ]]; then
+            reason="target label '$new' does not exist in $REPO — run the align pass first (align-labels.sh --repo $REPO)"
+            emit_map "$old" "$new" "blocked" 0 "$reason"
+            hold "$old" "$new" "$reason"
+            continue
+        fi
+
+        rc=0
+        pending=$(migrate_unmigrated_issues "$old_actual" "$new_actual") || rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            if [[ "$rc" -eq 2 ]]; then
+                reason="issue read hit the ceiling of $ISSUE_LIMIT — a truncated read undercounts; raise ISSUE_LIMIT"
+            else
+                reason="could not list the issues carrying '$old_actual'"
+            fi
+            emit_map "$old" "$new" "failed" 0 "$reason"
+            hold "$old" "$new" "$reason"
+            continue
+        fi
+
+        if [[ -n "$pending" ]]; then
+            n_pending=$(printf '%s\n' "$pending" | wc -l | tr -d ' ')
+        else
+            n_pending=0
+        fi
+
+        if [[ "$dry_run" == "1" ]]; then
+            if [[ "$n_pending" -gt 0 ]]; then
+                issues_csv=$(printf '%s' "$pending" | tr '\n' ',' | sed 's/,$//')
+                detail="would add '$new_actual' to $n_pending issue(s) [#${issues_csv//,/, #}], then re-query and delete '$old_actual' ONLY if 0 still carry it"
+            else
+                detail="no issue carries '$old_actual' without '$new_actual'; would re-query and then delete '$old_actual'"
+            fi
+            emit_map "$old" "$new" "would-migrate" "$n_pending" "$detail"
+            n_would=$((n_would + 1))
+            n_relabeled=$((n_relabeled + n_pending))
+            continue
+        fi
+
+        added=0
+        edit_failed=0
+        while IFS= read -r num; do
+            [[ -z "$num" ]] && continue
+            if err=$(ghw issue edit "$num" --repo "$REPO" --add-label "$new_actual" 2>&1 >/dev/null); then
+                added=$((added + 1))
+            else
+                edit_failed=$((edit_failed + 1))
+                echo "align-labels: issue #$num: could not add '$new_actual': $(printf '%s' "$err" | grep -v '^\[gh-retry\]' | head -1)" >&2
+            fi
+        done <<<"$pending"
+        n_relabeled=$((n_relabeled + added))
+        n_write_failed=$((n_write_failed + edit_failed))
+
+        gate_rc=0
+        migrate_delete_gate "$old_actual" "$new_actual" || gate_rc=$?
+        if [[ "$gate_rc" -eq 0 ]]; then
+            emit_map "$old" "$new" "migrated" "$added" "$GATE_DETAIL"
+            n_migrated=$((n_migrated + 1))
+        else
+            emit_map "$old" "$new" "held-back" "$added" "$GATE_DETAIL"
+            hold "$old" "$new" "$GATE_DETAIL"
+        fi
+    done
+
+    if [[ "$dry_run" == "1" ]]; then mode="migrate dry-run"; else mode="migrate"; fi
+
+    # A plan that targets no mapping at this repo is a legitimate outcome when
+    # one file drives every repo — but it is also what a typo'd slug looks
+    # like, so say which repos the file DOES target rather than exiting quietly.
+    if [[ "$n_considered" -eq 0 ]]; then
+        echo "align-labels: $REPO [$mode] — no mapping in $migrate_file targets $REPO; no issue was read and nothing was written." >&2
+        echo "  the file targets: $(printf '%s\n' "${MIGRATE_SPECS[@]}" | cut -d'|' -f1 | sort -u | tr '\n' ' ')" >&2
+        exit 0
+    fi
+
+    if [[ "$dry_run" == "1" ]]; then
+        echo "align-labels: $REPO [$mode] — $n_considered mapping(s): $n_would to migrate, $n_already already migrated, $n_held cannot run; $n_relabeled issue relabel(s) previewed (no writes)" >&2
+        if [[ "$n_held" -gt 0 ]]; then
+            echo "align-labels: MAPPINGS THAT CANNOT RUN AS PLANNED (no delete would be attempted):" >&2
+            printf '%s' "$HELD" >&2
+        fi
+        exit 0
+    fi
+
+    echo "align-labels: $REPO [$mode] — $n_considered mapping(s): $n_migrated migrated, $n_already already migrated, $n_held held back; $n_relabeled issue relabel(s), $n_write_failed write failure(s)" >&2
+    if [[ "$n_held" -gt 0 ]]; then
+        echo "align-labels: MAPPINGS HELD BACK — the old label was NOT deleted:" >&2
+        printf '%s' "$HELD" >&2
+        echo "  Fix the cause and re-run: the relabels already applied are idempotent, so a" >&2
+        echo "  re-run only touches what is still outstanding." >&2
+        exit 4
+    fi
+    [[ "$n_write_failed" -gt 0 ]] && exit 2
+    exit 0
+fi
 
 n_ok=0
 n_create=0
