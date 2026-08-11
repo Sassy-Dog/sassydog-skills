@@ -9,8 +9,17 @@ assembled from them; this recipe keeps all of that and skips only what is genuin
 This is a promotion, not an invention. The 2026-08-08 verification run (session
 `cse_01TtAVPyUMLKmAk4h1ZXd2t9`) improvised exactly this shape — 14 active repos discovered via
 list-repos, each attached with `add_repo`, per-repo pulls fanned out to 5 parallel subagents, the
-Dependabot gap named on the coverage line — at subagent cost and with per-run variance. Follow this
-recipe instead of re-deriving it per run.
+Dependabot gap named on the coverage line — at subagent cost and with per-run variance. That
+variance is not inherent to the shape and is no longer unexplained: three later runs failed in
+three specific ways — GitHub's secondary rate limit, subagents clobbering each other's scratchpad
+files, and whole-file fetches blowing the token ceiling — all traceable to an unbounded fan-out.
+**"Bounding the fan-out" below turns each of them into a rule; follow the whole recipe, bounds
+included, instead of re-deriving it per run.**
+
+This recipe is shared. `whats-behind` follows it too — its `pull-version-drift.sh` walks local
+checkouts a cloud session does not have, so a cloud currency audit rebuilds the roster and the
+per-repo reads from the same MCP capabilities. Read every rule below as applying to a currency
+audit as much as to a fire sweep; where the two diverge, the divergence is called out.
 
 The scripts stay the primary path: whenever `gh` IS on PATH, run them. #98 tracks provisioning `gh`
 into the cloud environment; once that lands, this recipe becomes the degraded path rather than the
@@ -27,8 +36,13 @@ session resolve them. The capabilities this recipe needs:
 - **Widen repo scope** — `add_repo` in current sessions. GitHub MCP tools typically start scoped to
   the repo the session opened in (the verification run started scoped to `sassydog-skills` alone);
   every other repo must be attached before its PRs, issues, or runs can be read.
-- **List or search pull requests** and **issues** — per repo, or org-wide if the server offers it.
-- **List workflow runs** — per repo.
+- **List or search pull requests** and **issues** — org-wide where the server offers it, per repo
+  only as the fallback. Prefer the org-wide form; "Bounding the fan-out" explains why.
+- **List workflow runs** — per repo. No org-wide form exists, so this is what the fan-out is for.
+- **Search code** — how the currency audit (`whats-behind`) reads `uses:`, `runs-on:`, and
+  toolchain pins without fetching whole workflow files. If the server offers no code search, fall
+  back to a narrowly scoped file-contents read per "Read fields, not files" — never a directory
+  fetch, never a whole-repo crawl.
 
 No GitHub MCP server connected at all → there is no fallback to the fallback: all of section 2B is
 `skipped — <reason>` per section 1. Never turn "could not check" into silence.
@@ -41,23 +55,110 @@ No GitHub MCP server connected at all → there is no fallback to the fallback: 
 2. **Widen scope.** Attach each active repo with the scope-widening tool before any per-repo pull.
    Skipping this step does not fail loudly — an unattached repo simply comes back empty, which
    reads as "healthy" and is exactly the silent gap this skill exists to prevent.
-3. **Fan out.** The per-repo pulls are chatty — dozens of raw workflow-run payloads would swamp the
-   coordinating context. Dispatch parallel subagents, each owning a batch of repos (the
-   verification run used 5 across 14 repos), each returning ONLY the compact per-repo JSON mapped
-   below. Issue the batch in a single message with multiple Agent calls.
+3. **Fan out — bounded.** The per-repo pulls are chatty — dozens of raw workflow-run payloads would
+   swamp the coordinating context. Dispatch parallel subagents, each owning a batch of repos, each
+   returning ONLY the compact per-repo JSON mapped below and each writing to its own distinct
+   scratchpad path. Issue the batch in a single message with multiple Agent calls, **at most 3 in
+   flight at once**. Read "Bounding the fan-out" before dispatching: the caps on concurrency, the
+   distinct output paths, and the read-fields-not-files rule are what keep this step from costing
+   more than it saves.
 4. **Reassemble.** Merge the subagent outputs into the same two JSON shapes the scripts emit, so
-   sections 3–5 consume the report identically. A surface a subagent could not pull degrades the
-   way the scripts degrade: empty list plus a named entry in `partial` / on the sources line —
-   never a hole.
+   sections 3–5 consume the report identically. Read each batch back from its own distinct path —
+   never a shared filename. A surface a subagent could not pull degrades the way the scripts
+   degrade: empty list plus a named entry in `partial` / on the sources line — never a hole.
+
+## Bounding the fan-out
+
+Keep the fan-out — it is what lets an org-wide sweep finish inside a routine window. But an
+unbounded fan-out has now cost three production runs more than it saved. Each rule below exists
+because a run failed without it.
+
+### Cap concurrency at 3 subagents, and stay sequential inside a batch
+
+At most **3 subagents in flight at once**. If there are more repos than that divides evenly, give
+each subagent a longer list — never add a fourth agent. Inside a batch, pull repos one at a time:
+no nested fan-out, no burst of one concurrent call per repo.
+
+The 2026-08-10 weekly run fanned 5 subagents across ~9 repos and issued concurrent per-repo PR
+searches. GitHub answered with its secondary rate limit:
+
+```text
+403 You have exceeded a secondary rate limit... [retry after 57s]
+```
+
+It recurred on nearly every repo in the batch. Recovery cost roughly **8 minutes of wall clock
+across four backoffs** — more than querying every repo sequentially would have taken end to end —
+and one subagent gave up mid-task and returned incomplete, so the coordinator re-did that work
+itself, sequentially. **Backoff costs more than sequencing.** Secondary limits fire on concurrent
+bursts against the same endpoint rather than on total volume, so the lever is fewer simultaneous
+calls, not fewer repos.
+
+Two consequences worth stating outright:
+
+- **On the first 403, stop re-firing the burst.** Finish the remaining repos sequentially in the
+  coordinator instead of sleeping and re-dispatching the same shape — parallel retry is what turns
+  one 57-second wait into four. A rate-limited run that finished sequentially is a success; a
+  subagent that returned incomplete is a `partial` entry, never a silent gap.
+- **Prefer one batched query over N per-repo calls** wherever the server offers it (an org-wide
+  open-PR or open-issue search beats a per-repo list in the fan-out). Batching is the single
+  largest reduction in burst pressure available here, and it shrinks the fan-out's job to the
+  surfaces that genuinely have no org-wide form — chiefly per-repo workflow runs.
+
+### Give every subagent a distinct output path
+
+When subagents write to the session scratchpad, the coordinator MUST hand each one an explicit,
+distinct filename keyed by its batch index — `fanout-batch-1.json`, `fanout-batch-2.json`, … — and
+reassemble from those exact paths. Never let a subagent choose its own filename, and never let two
+of them be handed a generic one.
+
+The 2026-08-11 daily run dispatched 5 subagents into one shared scratchpad directory; several wrote
+the same generic name (`final.json`) and raced. One agent found its output file overwritten mid-run
+with unrelated content. The figures in that report survived only because the agent noticed and
+recovered — the design did nothing to prevent it. The deeper cost is interpretive: clobbered output
+is indistinguishable from a subagent returning wrong data, so a mundane filename collision becomes
+an unanswerable question about the report's provenance. Distinct paths remove the ambiguity
+outright.
+
+If a subagent reports that its output file changed underneath it, treat that as a fan-out defect:
+name the affected surface in `partial` and re-pull that batch rather than trusting either version.
+
+### Read fields, not files
+
+Pull the smallest thing that answers the question. Workflow and manifest files in this org are
+large — `tailoredtip/release.yml` alone is 1,417 lines, and monorepo workflows in `platform` and
+`velovate` are comparable — and a whole-file fetch simply fails:
+
+```text
+Error: result (135,933 characters) exceeds maximum allowed tokens. Output has been saved to ...
+```
+
+Three fetches blew the ceiling in the 2026-08-11 weekly run, at 65,953 / 101,018 / 135,933
+characters, each forcing a detour through the saved temp file plus ad-hoc `jq`/`python3` extraction
+before the run could continue.
+
+Neither consumer of this recipe needs whole files. The fire sweep needs workflow *run* metadata,
+which the workflow-runs capability returns without touching file contents at all. The currency
+audit needs only `uses:` pins, `runs-on:` labels, and toolchain version pins. So:
+
+- **Search for the field, don't fetch the file.** A code-search capability scoped to the token and
+  path (`uses:` or `runs-on:` under `.github/workflows`) answers the currency questions in one
+  call per org, not one fetch per workflow.
+- **When a file genuinely must be fetched, request the narrowest form the server offers** — a
+  single explicit path, never a directory; a line range where supported.
+- **When a fetch does exceed the ceiling, do not re-fetch and do not retry the same call.** The
+  tool has already written the full result to a file; grep that file for the fields you need. The
+  detour is recoverable, but it is a detour — the retry is what wastes the window.
+- **Never read a file to enumerate repos, PRs, issues, or runs.** Those come from the list and
+  search capabilities above, already compact.
 
 ## Field map — `pull-org-github.sh` equivalent
 
 | Script field | MCP equivalent |
 |---|---|
 | `repos[]` — `name`, `archived`, `pushed_at`, `default_branch` | List-repositories capability for the org; read the same four attributes. |
-| `prs[]` — `repo`, `number`, `title`, `url`, `draft`, `author` | Open-PR search or list across the active repos (org-wide search if available, else per-repo inside the fan-out). |
+| `prs[]` — `repo`, `number`, `title`, `url`, `draft`, `author` | ONE org-wide open-PR search where the server offers it; per-repo listing inside the fan-out only as the fallback. The batched form is the primary defence against the secondary rate limit — see "Bounding the fan-out". |
 | `prs[].idle_days`, `prs[].age_days` | Not served by any tool — compute `floor((now - updated_at) / 86400)` and the same from `created_at`. Whole days, floored, so every consumer ranks on the same clock. |
-| `issues[]` — `repo`, `number`, `title`, `url`, `labels`, `idle_days` | Open-issue search or list, same scoping; flatten `labels` to names; compute `idle_days` as above. |
+| `issues[]` — `repo`, `number`, `title`, `url`, `labels`, `idle_days` | Open-issue search or list, same scoping and the same batched-first preference; flatten `labels` to names; compute `idle_days` as above. |
 | `partial[]` | Any surface whose pull failed: emit the empty list and name the surface, exactly as the script does. |
 
 Carry the script's two load-bearing invariants (its header explains both):
@@ -71,7 +172,10 @@ Carry the script's two load-bearing invariants (its header explains both):
 ## Field map — `pull-repo-signals.sh` equivalent
 
 Per active repo, from the workflow-runs capability: sample the most recent ~25 runs (the script's
-`RUN_LIMIT`), then reduce over **completed** runs only.
+`RUN_LIMIT`), then reduce over **completed** runs only. This is the one surface with no org-wide
+batched form, so it is the fan-out's real job — keep it to 3 subagents in flight, one repo at a
+time inside each. Every field here comes from run metadata; **never open a workflow file to
+populate this table** (the token ceiling is why — see "Read fields, not files").
 
 | Script field | MCP equivalent |
 |---|---|
