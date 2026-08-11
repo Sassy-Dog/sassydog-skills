@@ -51,7 +51,14 @@ Cluster surviving findings so each cluster is one coherent PR (e.g. "harden GitH
 ### Phase 4 — Preview, then file
 
 1. **Print the full preview**: the Epic (exec summary + scores) and every child issue (title, body, labels, and its dedupe decision). Ask the user to approve, edit, or cancel. **File nothing yet.**
-2. On approval, follow **`references/github-issue-ops.md`**: ensure labels exist idempotently, re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
+2. On approval, **align the target repo's labels first** — the engineering-dimension + severity taxonomy is owned by one script in this plugin, and this skill invokes it rather than carrying a copy (issue #167). The path below is resolved when this skill loads; pass it on as `ALIGN=<that path>` to anything that needs it, because `references/*.md` are read raw and never get the substitution:
+
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo "$REPO" --dry-run   # preview drift, writes nothing
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo "$REPO"             # create missing + correct drifted
+   ```
+
+3. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
 
 ### Phase 5 — Report
 
@@ -61,7 +68,7 @@ Print the Epic URL, the child issue list, and the executive summary.
 
 - **`assessment-rubric.md`** — the 15 assessment areas, scoring (1–10 health/security/DX/maintainability), severity & likelihood definitions, and the executive-summary format. Review agents consult their section; you use it for the Epic summary.
 - **`orchestration.md`** — agent→domain map, per-agent scope, the finding output schema, and the adversarial-review / dedupe / grouping logic.
-- **`references/github-issue-ops.md`** — label taxonomy, child-issue & Epic body templates, and exact `gh`/`gh api` commands for dedupe, labels, issue creation, and native sub-issue linking.
+- **`references/github-issue-ops.md`** — label *routing* (which dimension label a finding gets; the taxonomy itself is owned by `scripts/align-labels.sh`, never copied), child-issue & Epic body templates, and exact `gh`/`gh api` commands for dedupe, issue creation, and native sub-issue linking.
 
 ## Red Flags — STOP
 
@@ -69,3 +76,4 @@ Print the Epic URL, the child issue list, and the executive summary.
 - About to create issues without showing the preview first → STOP, preview and get approval.
 - A finding that's "best practice" with no concrete harm in *this* repo → that's cargo-cult; drop it.
 - Skipped the dedupe index fetch → you will create duplicates. Fetch it in Phase 0.
+- About to type a `gh label create` with a colour in it → STOP. Run `align-labels.sh` (Phase 4). A hardcoded hex here is a second copy of the taxonomy, and the last one silently painted stale colours into every repo this skill audited.

@@ -121,6 +121,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --check  
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --dry-run   # same pass, always exit 0
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name>             # create missing + correct drifted
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --collisions                    # cross-set colour check only, no repo
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh taxonomy                        # the table as data, no repo
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate <plan> --dry-run
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate <plan>
 ```
@@ -130,6 +131,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate
 - **`--migrate <plan>` folds a repo's one-off labels onto the canonical set: relabel first, delete second, structurally.** `<plan>` is data — one `<repo>|<old>|<new>` per line, `#` comments allowed, `-` reads stdin — so one file drives every repo and each run processes only the lines matching `--repo`. Deleting a label strips it from every issue carrying it, unrecoverably, so `gh label delete` has exactly ONE call site in the script, inside `migrate_delete_gate()`, whose own body re-queries GitHub immediately above it and withholds the delete on every path that is not "zero issues still carry the old label" — a failed or truncated re-query included, because unknown is not verified. Held-back mappings are named on stderr and exit 4. Run `--dry-run` first and read it: the preview names every issue it would relabel and every label it would then gate a delete on. Targets are never invented — run the align pass first — and a mapping touching `ready` / `in-progress` / `blocked` / `sentry-escalation` is refused (exit 64) before any network call, because those belong to the other taxonomy.
 - Three colors sit deliberately off their modal palette value so chips stay distinguishable (`security`, `tech-debt`, `epic`), and `infra`'s was picked by measured perceptual distance. The script header records which collision each one escaped; don't "tidy" them back.
 - **Cross-set check.** Each taxonomy used to validate only against itself, which is how four pairs reached ΔE 0. `--collisions` scores every (dev-workflow × canonical) pair with CIEDE2000 and fails below ΔE 10; `--check` runs it too and folds a hit into its exit 3. It reads the dev-workflow colors from `issue-claim.sh taxonomy` rather than copying them — a shared *check*, never a shared *table*.
+- **`taxonomy` is the mirror of that emitter**: `name|color|description` per canonical label, no gh, no jq, no repo, no network. A consumer that needs the table as *data* reads it here; one that needs it *applied* runs the align pass. Neither transcribes it — `assess-it` did, froze at the pre-#158 colours, and painted a collision into every repo it audited (issue #167). Gate 8 of `scripts/preflight.sh` now fails on any taxonomy colour that appears outside its home.
 
 ## Bundled scripts
 

@@ -27,6 +27,16 @@
 #      the doc table and the `--ensure-label` spec are copies of values whose
 #      home is issue-claim.sh, and a copy that drifts is how the wrong colour
 #      gets pasted into the next call.
+#   5. NO THIRD TAXONOMY EXISTS (issue #167). The cross-set check in 3 knows
+#      exactly two tables, so a copy living anywhere else is outside its field
+#      of view — assess-it carried one, frozen at the pre-#158 colours, and
+#      #158's recolouring of `tech-debt` landed on the value that stale copy
+#      still gave `infra`: a collision created inside a file #158 never saw.
+#      Every colour from both emitters is therefore searched for across all
+#      tracked files, and any hit outside that colour's own home (plus the
+#      per-taxonomy allowlist, each entry justified) is a fork. The same
+#      matcher is first pointed AT each home, so a pattern that matches
+#      nothing fails loudly instead of reporting a clean tree.
 #
 # The mock replaces `gh` only; `jq` is real, and the mock feeds it real JSON so
 # the `--jq` expressions in the scripts under test are genuinely exercised.
@@ -319,6 +329,71 @@ if ! grep -Fq -- "--ensure-label \"sentry-escalation:$sentry_color:$sentry_desc\
     doc_drift=1
 fi
 [ "$doc_drift" -eq 0 ] && ok "SKILL.md quotes all four colours exactly as the script defines them"
+
+# --- 7. no THIRD taxonomy anywhere in the tree (issue #167) ------------------
+# --collisions scores dev-workflow x canonical: it knows exactly two taxonomies,
+# so a third copy in a skill or reference doc is invisible to it. That is not
+# hypothetical — assess-it's references/github-issue-ops.md carried a full
+# transcription frozen at the pre-#158 colours, and #158 recolouring `tech-debt`
+# created an `infra`/`tech-debt` collision inside a file #158 never saw. Neither
+# --collisions nor the doc check above would have caught it.
+#
+# So the enumeration is by VALUE, over every tracked file: a taxonomy colour is
+# a fork wherever it appears outside its own home. A copy is a copy at the
+# moment it is written — it starts out matching — so this fires at birth, not
+# only once it has drifted. Word-boundary fixed-string match, so a hex sitting
+# inside a longer token (a commit SHA) is not a hit.
+#
+# The allowlists are per-taxonomy and each entry states why it holds a value it
+# does not own.
+canon_allow=(
+    ':!scripts/align-labels.sh'          # the home of these 14 values
+    ':!scripts/test-label-taxonomy.sh'   # this file: mock seeds + expected values
+    ':!scripts/test-label-migrate.sh'    # mock-repo seeds for the migrate gate
+)
+dw_allow=(
+    ':!skills/github-issues/scripts/issue-claim.sh'  # the home of these 4 values
+    ':!skills/github-issues/SKILL.md'                # documented table — asserted equal in 6 above
+    ':!scripts/test-label-taxonomy.sh'
+    ':!scripts/test-label-migrate.sh'
+)
+forked=0
+n_colors=0
+found_home=0
+check_no_copy() {  # $1=set label, $2=its home path; remaining args = pathspec exclusions
+    local set_name="$1" home="$2"; shift 2
+    local name color hits
+    while IFS='|' read -r name color _; do
+        [ -z "$color" ] && continue
+        n_colors=$((n_colors + 1))
+        # Vacuity check first: the same matcher, unrestricted, MUST find the
+        # colour in its own home. A guard whose pattern silently matches
+        # nothing (bad flags, bad quoting, a stale emitter) would otherwise
+        # report "no copies" forever — the exact silent-pass shape #161 and
+        # #167 were both born from.
+        if git grep -lwiF -e "$color" -- "$home" >/dev/null 2>&1; then
+            found_home=$((found_home + 1))
+        else
+            bad "$set_name colour $color ($name) is not found in its own home $home — the copy guard's matcher is broken, not clean"
+            forked=1
+        fi
+        hits=$(git grep -lwiF -e "$color" -- "$@" 2>/dev/null)
+        if [ -n "$hits" ]; then
+            bad "$set_name colour $color ($name) also appears in: $(echo "$hits" | tr '\n' ' ')— that is a second copy of the taxonomy (issue #167)"
+            forked=1
+        fi
+    done
+}
+check_no_copy "canonical" "$ALIGN" "${canon_allow[@]}" < <(bash "$ALIGN" taxonomy)
+check_no_copy "dev-workflow" "$CLAIM" "${dw_allow[@]}" < <(bash "$CLAIM" taxonomy)
+# A guard that scored nothing would also report "no copies". Both emitters must
+# have produced their rows: 18 shipped today (14 canonical + 4 dev-workflow),
+# and the set may grow but never silently shrink to zero.
+if [ "$forked" -eq 0 ] && [ "$n_colors" -ge 18 ] && [ "$found_home" -eq "$n_colors" ]; then
+    ok "all $n_colors taxonomy colours live only in their own home (14 canonical + 4 dev-workflow)"
+elif [ "$forked" -eq 0 ]; then
+    bad "the copy guard scored only $n_colors colours ($found_home located at home) — fewer than the 18 shipped; did an emitter truncate?"
+fi
 
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then

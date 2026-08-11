@@ -36,9 +36,12 @@
 #      artifacts committed under scripts/fixtures/legacy-markers/ (issue #133)
 #   8. label-taxonomy tests (scripts/test-label-taxonomy.sh) — the two label
 #      taxonomies stay disjoint AND perceptually separated (cross-set CIEDE2000
-#      check), and issue-claim.sh's label reconcile still CORRECTS a drifted
-#      label instead of silently skipping it (issue #161). Definitions and a
-#      mock gh only: no repo, no network.
+#      check), issue-claim.sh's label reconcile still CORRECTS a drifted label
+#      instead of silently skipping it (issue #161), and there is no THIRD copy
+#      of either table: every colour from both emitters is searched for across
+#      the tracked tree and any hit outside its own home fails (issue #167 —
+#      the cross-set check scores two taxonomies, so a copy anywhere else is
+#      invisible to it). Definitions and a mock gh only: no repo, no network.
 #   9. label-migrate tests (scripts/test-label-migrate.sh) — align-labels.sh's
 #      relabel-then-delete migrate mode cannot delete a label whose relabel has
 #      not been verified by re-query (issue #163). Mock gh only; the MODE
