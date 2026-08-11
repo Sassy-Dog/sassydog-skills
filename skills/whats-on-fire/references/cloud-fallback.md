@@ -196,7 +196,7 @@ Render it exactly as `skipped — no gh CLI (Dependabot API unreachable)`, named
 sources line per sections 1 and 5:
 
 ```markdown
-_Sources: Sentry · Sentry crons · GitHub (MCP fallback) · Dependabot skipped — no gh CLI (Dependabot API unreachable)_
+_Load: <plugin|fallback (degraded)> · Sources: Sentry · Sentry crons · GitHub (MCP fallback) · Dependabot skipped — no gh CLI (Dependabot API unreachable)_
 ```
 
 Do NOT approximate it. The PR capability can see Dependabot's open fix PRs, which makes a partial
