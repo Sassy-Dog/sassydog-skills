@@ -41,6 +41,21 @@ must re-verify every configured fact against live state**, not copy it forward f
 render. `merge_queue` in particular should be checked via the `mergeQueue(branch:)` GraphQL field
 rather than asked about or inherited.
 
+**Re-verification is not adoption.** Live state tells you which merge methods the repo *allows*;
+config records the one the repo *intends*. Those are different claims, and the allowed set being a
+hard constraint does not make it the right answer. A repo can depend downstream on the intended
+method — a build number taken from `git rev-list --count HEAD` increments by exactly 1 per merged PR
+only while history stays linear squash-merges, so switching to merge commits corrupts version
+ordering with no error anywhere. A refresh that derived the allowed set and picked from it would
+make exactly that switch, silently, the day someone enabled merge commits.
+
+> **Derive what is *allowed*. Keep what is *intended*. Stop when they disagree.**
+
+Where a repo states an intended method — in this config, in `docs/`, or in its own skills — and
+live state no longer permits it, that disagreement is a **stop and surface**: report both sides and
+let the user decide which one is wrong. It is never an automatic rewrite of the configured value,
+and never a silent adaptation to whatever happens to be allowed today.
+
 ## Governing principle: presence is the toggle
 
 The old templates carried paired state — an `IF:SENTRY` flag *and* `{{SENTRY_ORG}}`/`{{SENTRY_PROJECTS}}`
@@ -58,7 +73,9 @@ holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_boot
 
 Two keys are genuine scalars rather than blocks, because they carry no sub-facts:
 
-- `merge_queue: true|false` — merge queue vs. direct squash-merge
+- `merge_queue: true|false` — merge queue vs. direct squash-merge. It carries **intent**, not an
+  observation: a refresh re-verifies it against `mergeQueue(branch:)`, but a live state that
+  contradicts the configured value is surfaced to the user rather than written over it
 - `write_policy: read-only|gated` — whether `survey-work` may file issues under its Sentry gate
 
 ## Shared blocks
