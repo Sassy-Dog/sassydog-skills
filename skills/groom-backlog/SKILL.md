@@ -45,8 +45,9 @@ both reversible. Do not assume a board exists — a board with no config block i
 
 **With `board:` configured** — the board is authoritative. Snapshot via
 `sassy-dog:github-issues` (`board-snapshot.sh`, using `board.number` and `board.owner`).
-Candidates are every open issue in **Backlog** or with **no status**; open issues missing from the
-board get added to it.
+Candidates are every open issue in **Backlog** or with **no status** — *open* established by the
+reconcile join below, never assumed from the card. Open issues missing from the board are handled
+there too (drift class 4); they are not added unilaterally.
 
 **Without a board** — open issues are the backlog and the `ready` label is Ready:
 
@@ -65,6 +66,61 @@ stale promises break dispatch-ready.
 
 Read each candidate IN FULL — `gh issue view N --comments` — scope often lives in follow-up
 comments.
+
+### Reconcile the board against issue state (board mode only)
+
+**Skip this pass entirely without a `board:` block** — a boardless repo has no columns to reconcile,
+and label drift is a separate question that is not in scope here.
+
+Re-validation above asks *"is this still dispatchable?"*. This asks *"does this card still tell the
+truth?"* — because the snapshot carries `status` but no issue **state**, so a column can assert
+something its issue flatly contradicts. GitHub's built-in workflow only moves a card when a merged
+PR closes the issue via `Closes #N`; an issue closed by hand — an epic, a duplicate, a won't-fix —
+is never the target of such a line, so its card never moves and nothing else catches it.
+
+One extra read closes the gap. Join it to the snapshot by issue number:
+
+```bash
+gh issue list --state all --limit 500 --json number,state,assignees
+```
+
+Raise the limit if the result comes back at the ceiling — a truncated join silently reports "no
+drift", which is the failure this pass exists to end.
+
+| # | Drift | Detection | Fix (on confirmation) |
+| --- | --- | --- | --- |
+| 1 | Closed issue, card in a non-Done column | `state == CLOSED` and `status != Done` | move card → **Done** |
+| 2 | Open issue, card in **Done** | `state == OPEN` and `status == Done` | move card → **Backlog**, or **Ready** if it passes §3 this run |
+| 3 | Card claimed (**In progress** / **In review**) with no assignee and no open PR | board `status` vs `assignees`, plus `gh issue view N --json assignees,closedByPullRequestsReferences` | move card → **Ready** or **Backlog**; the claim is stale |
+| 4 | Open issue absent from the board | `gh issue list` minus the snapshot's items | add to board → **Backlog** |
+
+Class 1 also constrains §2's candidate list: **a closed issue is never a grooming candidate.** Its
+card sitting in Backlog *is* the drift — route it here, and never refine, promote, or report it as
+work. Class 2's direction is the quieter one: a reopened issue stranded in Done vanishes from
+planning entirely, because Done is the column nobody reads.
+
+`closedByPullRequestsReferences` only sees PRs that wrote a closing keyword, so a branch in flight
+under a PR with no `Closes #N` line reads as "no open PR". That is exactly why class 3 asks.
+
+**Report always; act only on explicit confirmation.** Print the drift as one itemised list — issue ·
+current column · issue state · proposed move — on *every* run, including runs where you change
+nothing. Then:
+
+- **Class 1** is safe and mechanical; it may be confirmed as a group.
+- **Classes 2 and 3** carry judgement the board cannot answer — was the reopen deliberate? is that
+  claim stalled or merely slow? — so confirm them **item by item** and never infer the answer.
+- **Class 4** may be confirmed as a group, but show every issue number before asking.
+
+Partial approval is the normal case: apply exactly what was confirmed, leave everything else
+untouched, and carry each declined item into the §6 report so the drift stays named rather than
+quietly dropped.
+
+**Mutations go through `sassy-dog:github-issues`** (`references/board-graphql.md`) — card moves via
+its `## Moving cards` recipe, board adds via `## Adding an issue to a board`. Wrap every mutating
+call in `skills/pr-shepherd/scripts/gh-retry.sh`, as that reference mandates; the Projects GraphQL
+endpoint flakes. Never hand-roll the GraphQL here. A move whose retries exhaust (exit 124), or one
+whose card has since vanished, is recorded as `failed` and reported — not retried by hand, and not
+fatal to the grooming run.
 
 ## 3. The dispatchability rubric
 
@@ -166,13 +222,29 @@ Never a silent strip.
 Every promoted issue carries its `touches:` line from rubric #8.
 
 Final table: issue · verdict (**Ready** / needs-decision / split → children / parked:
-awaiting-user / parked: reason) · what changed. End with the decisions awaiting the user, if any.
+awaiting-user / parked: reason) · what changed.
+
+**With `board:`, add one board line** stating the board's end state rather than only the Ready
+count:
+
+```text
+board reconcile: 3 moved (class 1×2, class 4×1) · 2 declined · 1 failed
+```
+
+Name every declined and failed item by issue number and drift class, so declining a fix leaves the
+drift recorded instead of forgotten. Write `board reconcile: no drift` when the §2 pass found none.
+**Never omit the line** — silence reads as "the board is fine", which is the assertion this whole
+pass exists to stop making by accident.
+
+End with the decisions awaiting the user, if any.
 
 ## Guardrails
 
 - Never file new issues outside the §5 epic-split gate; synthesis of brand-new work is survey-work's
   job.
-- Never close issues, never delete content — the original ask survives as a quote.
+- Never close issues, and never delete content — the original ask always survives as a quote.
+  Board **card state** may be reconciled, but only from the reconcile step and only on explicit
+  user confirmation — never silently, and never in bulk without the list being shown first.
 - Never promote with an unresolved decision "because the default is obvious" — the default goes to
   the user first.
 - Never write a `stack:` line unprompted, and never write one at all without a `stacked_prs:` block.
