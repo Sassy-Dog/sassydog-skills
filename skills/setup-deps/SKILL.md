@@ -106,6 +106,23 @@ gh api "repos/${REPO}/branches/${BRANCH}/protection" --jq '.required_status_chec
 gh api "repos/${REPO}/rulesets" --jq '.[] | select(.enforcement=="active") | .name'
 ```
 
+**Read the HTTP status, not the empty stdout — the protection probe has three outcomes, not two.**
+A failed `gh api` prints the code on stderr (`gh: Branch not protected (HTTP 404)`); when a wrapper
+swallows that line, force the status into view by re-running the same call with `--include` and
+taking the first line of output.
+
+| Response | Means | What it changes about the advice |
+| --- | --- | --- |
+| `200` | Legacy branch protection exists | read the required contexts off the response |
+| `404` | No *legacy* protection — a ruleset may still gate the branch | ask the rulesets probe before concluding anything |
+| `403` | The plan does not offer protection **at all** | there is nothing to enable; stop recommending a gate |
+
+`403` is what a **private repo on a free personal account** returns, and it comes back from *both*
+probes — branch protection and rulesets alike require GitHub Pro or a public repo. Never fold it
+into `404`: `404` means "you could enable this", `403` means "you cannot, so this skill's refusal to
+render the auto-merge workflow is the only enforcement there will ever be." Reported as a `404`, it
+turns into advice the account cannot act on.
+
 Classify into exactly one:
 
 - **merge queue** → render the `MERGE_QUEUE` arm (plain `--auto`, no method flag).
@@ -114,6 +131,10 @@ Classify into exactly one:
 - **no gate at all** → **do not render the auto-merge workflow.** Render `dependabot.yml` and the
   lockfile-sync workflows only, and tell the user the repo needs a gate first. With no required
   check, `--auto` merges immediately and the review gate is imaginary.
+  **`403` lands in this arm too, but for the opposite reason** — not "has not enabled a gate" but
+  "cannot". Same behaviour, different report: say the plan offers no gate at all, that the missing
+  auto-merge workflow is therefore permanent rather than pending, and that reviewing Dependabot PRs
+  by hand is the enforcement. Do not hand that repo an "enable a required check first" follow-up.
 
 ## 3. Render
 
