@@ -65,7 +65,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/file-or-link-issue.sh \
   --marker "sentry-source: PROJ-123" \
   --title "<title>" --body-file /tmp/body.md \
   --labels "bug,sentry-escalation" \
-  --ensure-label "sentry-escalation:B60205:Auto-filed from a Sentry hit" \
+  --ensure-label "sentry-escalation:9c846b:Auto-filed from a Sentry hit" \
   --project-id PVT_xxx --status-field-id PVTSSF_xxx --status-option-id <backlog-id> \
   --dry-run
 ```
@@ -79,29 +79,38 @@ The org label taxonomy has **two canonical homes, disjoint by design.** Neither 
 | Subset | Canonical home | Written |
 |--------|----------------|---------|
 | dev-workflow **state**: `ready`, `in-progress`, `blocked` | `scripts/issue-claim.sh` (this skill) | ensure-created at the claim/promote/block transition that needs it |
-| signal escalation: `sentry-escalation` | `scripts/file-or-link-issue.sh --ensure-label` | ensure-created when an auto-filed issue carries it |
+| signal escalation: `sentry-escalation` | value in `scripts/issue-claim.sh`'s table | written by `scripts/file-or-link-issue.sh --ensure-label`, whose caller quotes that row |
 | engineering **dimensions + severity** (10 + 4) | `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh` | applied repo-wide, ambient classification (below) |
 
 Dependabot's per-ecosystem labels (`javascript`, `github_actions`, `rust`, `dart`, …) are auto-created and correctly differ per repo — no script here touches them.
 
-`scripts/issue-claim.sh` is the canonical home of the boardless dev-workflow label taxonomy — those labels, their colors, and their descriptions are defined in the script, nowhere else:
+`scripts/issue-claim.sh` is the canonical home of the boardless dev-workflow label taxonomy — those labels, their colors, and their descriptions are defined in the script, nowhere else. Read them from the script itself with `issue-claim.sh taxonomy` (emits `name|color|description`, needs no gh/jq/repo); the table below is the same data for humans:
 
 | Label | Color | Meaning |
 |-------|-------|---------|
-| `ready` | `0E8A16` | Dispatchable: a cold worktree agent could ship this (groom-backlog promoted) |
-| `in-progress` | `1D76DB` | Claimed by a take-it/dispatch-ready loop |
-| `blocked` | `B60205` | Needs a human decision before it can be dispatched (dispatch-ready demoted) |
+| `ready` | `38fa99` | Dispatchable: a cold worktree agent could ship this (groom-backlog promoted) |
+| `in-progress` | `190132` | Claimed by a take-it/dispatch-ready loop |
+| `blocked` | `52363d` | Needs a human decision before it can be dispatched (dispatch-ready demoted) |
+| `sentry-escalation` | `9c846b` | Auto-filed from a Sentry hit |
+
+**The colors are measured, not chosen.** All four used to share a hex exactly with a canonical label from the other taxonomy (`ready`/`sev:low`, `in-progress`/`architecture`, `blocked`/`sev:critical`, `sentry-escalation`/`sev:critical`) — ΔE 0, on issues that carry one label from each set. The replacements are the maximum-separation point of a CIEDE2000 sweep over the union of both taxonomies; `align-labels.sh --collisions` now gates the pair. Don't nudge them toward a palette default.
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh \
   <claim|release|block|promote|demote> <N> [N ...] \
   [--repo <owner/name>] [--comment "why"] [--force] [--dry-run]
+
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh \
+  sync-labels [--repo <owner/name>] [--dry-run]      # reconcile the 4 labels, touch no issue
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh taxonomy
 ```
 
 - `claim` — assignee @me + `in-progress`, strips `ready`; **skips issues already assigned to someone else** (double-pick guard; `--force` overrides).
 - `release` — strips `in-progress` (post-merge: `Closes #N` closes the issue but never strips labels).
 - `block` / `demote` — **require `--comment`**; a demotion without a reason is a silent failure for the next human.
-- Every label is ensure-created (idempotent) before use; mutations route through pr-shepherd's `gh-retry.sh`; one JSON line per issue on stdout; batch continues past per-issue failures (exit 2 if any hard-failed).
+- Every label is reconciled before use: created when absent, **corrected when its color or description has drifted**, untouched when it already matches. A colour change therefore reaches repos that already carry the label — it used to be `gh label create || true`, which fails on an existing label and silently left every onboarded repo on the old colour forever.
+- `sync-labels` does that reconcile for all four labels in one pass without touching an issue — the entry point for propagating a taxonomy change to a repo that isn't currently transitioning anything. `--dry-run` previews.
+- Mutations route through pr-shepherd's `gh-retry.sh`; one JSON line per issue on stdout (`sync-labels` emits one per label); batch continues past per-issue failures (exit 2 if any hard-failed). A label reconcile that fails never fails the claim, but it is always announced on stderr.
 
 ## Writes: canonical dimension + severity labels
 
@@ -111,11 +120,13 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh \
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --check     # drift report, exit 3 if drifted, no writes
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --dry-run   # same pass, always exit 0
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name>             # create missing + correct drifted
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --collisions                    # cross-set colour check only, no repo
 ```
 
 - Idempotent: it creates what is absent and corrects color/description/case drift, so an already-aligned repo issues zero writes. One JSON line per label on stdout, summary on stderr.
 - **Never deletes a label and never relabels an issue.** Deleting a label strips it from every issue carrying it, unrecoverably — mapping a repo's one-off labels onto the canonical set is a separate, human-reviewed job.
 - Three colors sit deliberately off their modal palette value so chips stay distinguishable (`security`, `tech-debt`, `epic`), and `infra`'s was picked by measured perceptual distance. The script header records which collision each one escaped; don't "tidy" them back.
+- **Cross-set check.** Each taxonomy used to validate only against itself, which is how four pairs reached ΔE 0. `--collisions` scores every (dev-workflow × canonical) pair with CIEDE2000 and fails below ΔE 10; `--check` runs it too and folds a hit into its exit 3. It reads the dev-workflow colors from `issue-claim.sh taxonomy` rather than copying them — a shared *check*, never a shared *table*.
 
 ## Bundled scripts
 
@@ -125,7 +136,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name>          
 | `scripts/queue-snapshot.sh` | Boardless fill/drain queue read: ready/in-flight/blocked buckets + parsed `touches:` and `Depends on #N` body contracts. Read-only. Exit 10 skip convention. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
-| `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote). Owns the dev-workflow half of the label taxonomy; ensure-label built in; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
+| `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote), plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
 
 Not bundled here but paired with it: `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh` owns the dimension + severity half. It lives at the plugin root because it aligns a whole repo rather than serving one issue-flow call.
 
