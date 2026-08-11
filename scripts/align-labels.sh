@@ -9,7 +9,12 @@
 #
 #   1. This script — engineering dimensions + severity. Ambient classification:
 #      what an issue is ABOUT and how bad it is. Long-lived, repo-wide, applied
-#      by humans and by assess-it.
+#      by humans and by assess-it. assess-it INVOKES this script against the
+#      repo it is auditing (skills/assess-it/SKILL.md phase 4); it used to carry
+#      its own transcription of the table, which froze at the pre-#158 colours
+#      and re-created the very collision #158 removed, in every repo it audited
+#      (issue #167). A consumer of this taxonomy runs this script or reads
+#      `taxonomy` — it never copies the rows.
 #   2. skills/github-issues/scripts/issue-claim.sh (plus the --ensure-label of
 #      file-or-link-issue.sh) — the dev-workflow STATE labels `ready`,
 #      `in-progress`, `blocked`, `sentry-escalation`. Those are ensure-created
@@ -60,7 +65,13 @@
 # Usage:
 #   align-labels.sh [--repo owner/name] [--dry-run | --check | --collisions]
 #   align-labels.sh [--repo owner/name] --migrate <file> [--dry-run]
+#   align-labels.sh taxonomy
 #
+#   taxonomy     print the table as `name|color|description` lines and exit.
+#                Needs no gh, no jq and no repo: it is how OTHER tools read this
+#                taxonomy without forking a second copy of the values — the
+#                mirror of issue-claim.sh's `taxonomy`, which this script's
+#                cross-set check already consumes (issue #167).
 #   --repo       target repo; defaults to the current repo via `gh repo view`.
 #   --dry-run    preview: report what would change, write nothing. Exit 0.
 #   --check      drift report: same read-only pass, but exit 3 when the repo is
@@ -180,6 +191,8 @@ usage() {
     cat >&2 <<'EOF'
 usage: align-labels.sh [--repo owner/name] [--dry-run | --check | --collisions]
        align-labels.sh [--repo owner/name] --migrate <file> [--dry-run]
+       align-labels.sh taxonomy
+       taxonomy     print `name|color|description` per canonical label and exit
        --dry-run    preview only, never writes, always exit 0
        --check      read-only drift report, exit 3 if the repo is out of alignment
        --collisions cross-set colour check only (no repo, no network), exit 3 on a hit
@@ -188,6 +201,22 @@ usage: align-labels.sh [--repo owner/name] [--dry-run | --check | --collisions]
 EOF
     exit 64
 }
+
+print_taxonomy() { printf '%s\n' "${CANONICAL_LABELS[@]}"; }
+
+# Data only: no tooling, no repo, no network. Kept ahead of every check below
+# so a consumer can read the taxonomy from a bare checkout — the same contract
+# as issue-claim.sh's `taxonomy`, which this script's own cross-set check
+# consumes. A consumer that needs the table as DATA reads it here; one that
+# needs it APPLIED runs the align pass. Neither one transcribes it (issue #167).
+if [[ "${1:-}" == "taxonomy" ]]; then
+    if [[ $# -ne 1 ]]; then
+        echo "align-labels: taxonomy takes no other arguments" >&2
+        usage
+    fi
+    print_taxonomy
+    exit 0
+fi
 
 REPO="${REPO:-}"
 dry_run="${DRY_RUN:-0}"

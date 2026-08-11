@@ -23,27 +23,43 @@ gh issue comment <N> --repo "$REPO" \
   --body "Re-surfaced by codebase assessment ($(date +%F)). Still open; evidence: <file:line>."
 ```
 
-## 2. Labels (idempotent — safe to re-run)
+## 2. Labels — delegated to the taxonomy's owner (this file defines none)
+
+The engineering-dimension + severity taxonomy has exactly **one** home: `scripts/align-labels.sh` at the plugin root. Run it against the target repo; never transcribe its table here.
+
+This file used to carry its own `ensure_label` copy. It froze at the pre-#158 colours, so four labels drifted (`epic`, `security`, `tech-debt`, `infra`) and `infra` ended up wearing `tech-debt`'s colour — a collision **created by a change to the canonical table, in a copy that table did not know existed** (issue #167). The copy was the defect; a re-transcription with today's hexes would simply restart the clock.
+
+**Path resolution — verified, not assumed.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` when the skill loads; it is **not** substituted into this file (reference docs are read raw) and it is **not** an environment variable in the shell. So take the resolved absolute path from **SKILL.md Phase 4**, which prints it, or derive it from this skill's announced base directory (`<base>/../../scripts/align-labels.sh` — the script sits at the plugin root's `scripts/`, alongside `skills/`, and ships in the installed plugin tree).
 
 ```bash
-ensure_label() { gh label create "$1" --repo "$REPO" --color "$2" --description "$3" 2>/dev/null || true; }
+ALIGN=<path from SKILL.md Phase 4>
 
-ensure_label assessment    5319e7 "Filed by assess-it"
-ensure_label epic          0e8a16 "Tracking epic"
-ensure_label architecture  1d76db "Architecture & structure"
-ensure_label security      b60205 "Security / supply chain"
-ensure_label tech-debt     fbca04 "Technical debt"
-ensure_label testing       0052cc "Testing & quality"
-ensure_label ci-cd         006b75 "CI/CD & release"
-ensure_label infra         c5def5 "Infrastructure & platform"
-ensure_label dx            bfdadc "Developer experience"
-ensure_label dependencies  d4c5f9 "Dependencies & supply chain"
-ensure_label observability fef2c0 "Observability & ops"
-ensure_label sev:critical  b60205 "Critical severity"
-ensure_label sev:high      d93f0b "High severity"
-ensure_label sev:medium    fbca04 "Medium severity"
-ensure_label sev:low       0e8a16 "Low severity"
+bash "$ALIGN" --repo "$REPO" --dry-run   # preview: what is missing or drifted, writes nothing
+bash "$ALIGN" --repo "$REPO"             # apply: create what is missing, correct what has drifted
+bash "$ALIGN" taxonomy                   # the table as data: name|color|description per line
 ```
+
+The align pass is idempotent and — unlike the old `gh label create … || true` — it **corrects** a label whose colour or description has drifted instead of silently skipping it. One JSON line per label on stdout (`ok|create|update|failed`), summary on stderr. It never deletes a label and never touches an issue. A failure here is reportable, not fatal: file the issues, and tell the user which labels could not be aligned.
+
+### Which label goes on a finding (routing, not definition)
+
+Names only — colours and descriptions come from the script above.
+
+| Finding source | Dimension label |
+| --- | --- |
+| `architecture-reviewer` | `architecture` |
+| `code-quality-reviewer` | `tech-debt` |
+| `security-reviewer` | `security` |
+| `dependency-supply-chain-reviewer` | `security` |
+| `testing-reviewer` | `testing` |
+| `cicd-release-reviewer` | `ci-cd` |
+| `infra-platform-reviewer` | `infra` |
+| `observability-ops-reviewer` | `observability` |
+| `dx-docs-reviewer` | `dx` |
+
+Every issue also carries `assessment`; each child carries `sev:<critical|high|medium|low>` from its severity; the Epic carries `epic`.
+
+**There is no `dependencies` label, and assess-it must not create one** (decided 2026-08-11, issue #167). Dependabot auto-creates `dependencies` in every repo it runs in, with its own colour, and that name is already forked three ways across the org precisely because whichever system reaches a repo first owns the colour forever. Supply-chain findings map to `security` — the same mapping the canonical set already uses. Leave Dependabot's label alone.
 
 ## 3. Child issue body template
 
@@ -123,7 +139,7 @@ If `POST .../sub_issues` returns 404/403 (older GHES, missing scope), fall back 
 
 ## Order of operations (Phase 4, after approval)
 
-1. `ensure_label` for every label used.
+1. Align the labels: `bash "$ALIGN" --repo "$REPO"` (section 2 — the taxonomy's owner, never a copy of its table).
 2. For each PR-sized cluster: re-check dedupe → create child issue → collect `CHILD_NUM`.
 3. Create the Epic with the executive report + child list.
 4. Link every child as a sub-issue (or task-list fallback).
