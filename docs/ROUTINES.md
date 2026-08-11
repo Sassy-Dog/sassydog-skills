@@ -80,6 +80,46 @@ A missing log is not a passing check. The routine that produced no report at all
 reminder: absence of a signal and a healthy signal are different states, and only one of them is
 good news.
 
+## Ruled out: the published artifact is not the fault (#162)
+
+When a load gap turns up, the first instinct is to suspect the plugin — a bad manifest, a rename that
+broke a path, a skill the publisher would refuse. **That was tested directly on 2026-08-11 and it is
+not the cause.** Do not re-run this bisect; re-run the *install*, below, only if the manifest has
+changed since.
+
+Both sides of the suspected regression boundary install cleanly, tested through the same harness with
+each tree exported by `git archive` into a throwaway
+`CLAUDE_CONFIG_DIR` sandbox:
+
+| Version | Commit | `marketplace add` | `install` | Inventory |
+| --- | --- | --- | --- | --- |
+| `2026.8.33` (pre-rename) | `15d60ee` | exit 0 | exit 0 | 20 skills, 9 agents |
+| `2026.8.41` (post-rename) | `b5e0681` | exit 0 | exit 0 | 21 skills, 9 agents |
+
+A clean `claude plugin marketplace add Sassy-Dog/sassydog-skills` + `claude plugin install` against
+the real GitHub marketplace at `main` also succeeds, and resolves the full inventory — including both
+skills the routines invoke. The 20→21 delta is exactly epic #120 (`refresh-*` → `setup-*`, plus
+`setup-repo`), not a loss.
+
+**The local cache stalling at `2026.8.33` is a coincidence, not a signal.** There is no marketplace
+auto-refresh — `lastUpdated` across registered marketplaces is scattered over months, each stamp a
+manual action. `sassydog-skills` last refreshed 2026-08-09, a day *before* the rename commits landed,
+so it never saw a post-rename version to reject. It is stale because nobody ran
+`claude plugin update`.
+
+So a degraded run points at **cloud-side resolution**, not at the artifact. What that leaves open, and
+the constraint that makes it hard to test from a worktree:
+
+- The session-start auto-install path (a cloud session installing repo-declared plugins from
+  `extraKnownMarketplaces`) **cannot be exercised locally in isolation** — a throwaway
+  `CLAUDE_CONFIG_DIR` has no credentials and exits `Not logged in`, and testing against the real
+  config mutates the install being used as evidence.
+- This repo is `INTERNAL`. An unauthenticated fetch of it is refused (`404` from the API, `401` from
+  git smart-http), so a cloud VM must present working credentials to clone the marketplace at all —
+  and per #98 cloud GitHub access is org-App-gate-proxied. **A missing-credentials story only explains
+  a regression if something changed cloud-side**, since it would equally have blocked the runs that
+  did load. Check token/gate changes in the window before accepting it.
+
 ## What the in-report field is for
 
 The `Load:` field is not redundant with this check — it covers the case nobody is investigating.
