@@ -183,10 +183,23 @@ Render inline as markdown. Two anti-verbosity rules are non-negotiable: (1) empt
 single token on the consolidated `✓ Clean today:` line, never their own section; (2) within a
 section, skip empty tiers. Recommendations go LAST.
 
+**`Load:` is a REQUIRED field on the sources line — always rendered, never dropped**, and the
+anti-verbosity rules above do not apply to it: it has no empty state to collapse. Its value is
+`plugin` when this skill ran as `sassy-dog:whats-on-fire`, and `fallback (degraded)` when this body
+was read from `skills/whats-on-fire/SKILL.md` because the plugin skill was not among the session's
+available skills (the routine fallback clause in `CLAUDE.md`). It is a field rather than a sentence
+for one reason: a missing sentence reads as a healthy run, while an empty slot reads as broken — on
+2026-08-11 a degraded run silently omitted its degraded note and delivered an otherwise complete,
+authoritative report (#146). It is distinct from the skips that follow it on the same line: those
+say a *surface* could not be pulled, this says the *skill body* itself came from the fallback path.
+The field is still this run's own claim about itself, so it is never the authority: **where the
+report and the run log disagree, the run log wins** — settle it with the out-of-band check in
+`docs/ROUTINES.md`.
+
 ```markdown
 # What's on fire (YYYY-MM-DD)
 
-_Sources: <pulled, with any "skipped — reason">_
+_Load: <plugin|fallback (degraded)> · Sources: <pulled, with any "skipped — reason">_
 
 ✓ Clean today: <surface> · <surface> · ...
 
