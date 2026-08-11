@@ -12,7 +12,7 @@ description: >
 
 # GitHub Issues
 
-Issue and ProjectV2 board operations for any GitHub repo: board snapshots, backlog reads, stale-issue detection, idempotent dedupe-then-file issue creation, and the fill/drain label-state transitions. Reads are free; **there are exactly two write paths — `scripts/file-or-link-issue.sh` (issue creation, preview-then-confirm) and `scripts/issue-claim.sh` (label-state transitions, dry-runnable).**
+Issue and ProjectV2 board operations for any GitHub repo: board snapshots, backlog reads, stale-issue detection, idempotent dedupe-then-file issue creation, and the fill/drain label-state transitions. Reads are free; **this skill bundles exactly two write paths — `scripts/file-or-link-issue.sh` (issue creation, preview-then-confirm) and `scripts/issue-claim.sh` (label-state transitions, dry-runnable)** — plus one it points at, `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh`, which owns the engineering-dimension and severity half of the label taxonomy.
 
 ## Reads
 
@@ -74,7 +74,17 @@ Output actions: `filed` / `already-linked` / `filed-no-board` / `would-file`. Bo
 
 ## Writes: label-state transitions (fill/drain claims)
 
-`scripts/issue-claim.sh` is the canonical home of the boardless dev-workflow label taxonomy — the labels, their colors, and their descriptions are defined in the script, nowhere else:
+The org label taxonomy has **two canonical homes, disjoint by design.** Neither script defines the other's labels — two homes for one label is precisely the drift both exist to prevent:
+
+| Subset | Canonical home | Written |
+|--------|----------------|---------|
+| dev-workflow **state**: `ready`, `in-progress`, `blocked` | `scripts/issue-claim.sh` (this skill) | ensure-created at the claim/promote/block transition that needs it |
+| signal escalation: `sentry-escalation` | `scripts/file-or-link-issue.sh --ensure-label` | ensure-created when an auto-filed issue carries it |
+| engineering **dimensions + severity** (10 + 4) | `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh` | applied repo-wide, ambient classification (below) |
+
+Dependabot's per-ecosystem labels (`javascript`, `github_actions`, `rust`, `dart`, …) are auto-created and correctly differ per repo — no script here touches them.
+
+`scripts/issue-claim.sh` is the canonical home of the boardless dev-workflow label taxonomy — those labels, their colors, and their descriptions are defined in the script, nowhere else:
 
 | Label | Color | Meaning |
 |-------|-------|---------|
@@ -93,6 +103,20 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh \
 - `block` / `demote` — **require `--comment`**; a demotion without a reason is a silent failure for the next human.
 - Every label is ensure-created (idempotent) before use; mutations route through pr-shepherd's `gh-retry.sh`; one JSON line per issue on stdout; batch continues past per-issue failures (exit 2 if any hard-failed).
 
+## Writes: canonical dimension + severity labels
+
+`${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh` — plugin root, **not** this skill's `scripts/` — is the canonical home of the other half: the 10 engineering dimensions (`architecture` `assessment` `ci-cd` `dx` `infra` `observability` `security` `tech-debt` `testing` `epic`) and the 4 severities (`sev:critical` `sev:high` `sev:medium` `sev:low`). Colors and descriptions live in that script's table and are deliberately **not** mirrored here — a second copy is the drift the table exists to prevent. Read them with `--check`.
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --check     # drift report, exit 3 if drifted, no writes
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --dry-run   # same pass, always exit 0
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name>             # create missing + correct drifted
+```
+
+- Idempotent: it creates what is absent and corrects color/description/case drift, so an already-aligned repo issues zero writes. One JSON line per label on stdout, summary on stderr.
+- **Never deletes a label and never relabels an issue.** Deleting a label strips it from every issue carrying it, unrecoverably — mapping a repo's one-off labels onto the canonical set is a separate, human-reviewed job.
+- Three colors sit deliberately off their modal palette value so chips stay distinguishable (`security`, `tech-debt`, `epic`), and `infra`'s was picked by measured perceptual distance. The script header records which collision each one escaped; don't "tidy" them back.
+
 ## Bundled scripts
 
 | Script | Purpose |
@@ -101,11 +125,14 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh \
 | `scripts/queue-snapshot.sh` | Boardless fill/drain queue read: ready/in-flight/blocked buckets + parsed `touches:` and `Depends on #N` body contracts. Read-only. Exit 10 skip convention. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
-| `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote). Owns the label taxonomy; ensure-label built in; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
+| `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote). Owns the dev-workflow half of the label taxonomy; ensure-label built in; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
+
+Not bundled here but paired with it: `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh` owns the dimension + severity half. It lives at the plugin root because it aligns a whole repo rather than serving one issue-flow call.
 
 ## Guardrails
 
 - Never `gh issue create` directly when filing from an automated signal — route through `file-or-link-issue.sh` so idempotency and markers can't drift.
 - Never hand-roll `gh label create` or claim-label `gh issue edit` calls in a fill/drain flow — route through `issue-claim.sh` so the taxonomy (names, colors, descriptions, the double-pick guard) can't drift.
+- Never hand-roll the dimension/severity labels either — route through `align-labels.sh`, and never define a label in both scripts: one label, one home.
 - Mutating board calls go through pr-shepherd's `gh-retry.sh` (Projects GraphQL flakes); board claims are best-effort, never a hard failure.
 - Signal escalated on an existing issue → comment on it, don't re-file.
