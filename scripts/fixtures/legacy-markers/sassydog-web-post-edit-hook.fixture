@@ -1,0 +1,44 @@
+# fixture-source-repo: Sassy-Dog/sassydog-web
+# fixture-source-path: .claude/hooks/sassydog-post-edit.sh
+# fixture-fetched: 2026-08-11
+# fixture-blob-sha: f49d9dae76aa959f85139233c68b745995961766
+# fixture-matcher: hooks
+# fixture-expect: owned
+# fixture-note: current namespace paired with the superseded producer name (plugin <= 2026.8.37)
+# ---8<--- verbatim upstream bytes below this line; everything above is fixture metadata
+#!/usr/bin/env bash
+# generated-by: sassy-dog:refresh-hooks | template: sassydog-post-edit | template-version: 1
+#
+# PostToolUse (Edit|Write) formatter/linter dispatcher. Reads the hook event
+# JSON on stdin, extracts the edited file's path, routes by extension.
+#
+# Contract:
+#   - formatters fix in place, silently                    -> exit 0
+#   - linters with UNFIXABLE findings print them to stderr -> exit 2
+#     (the harness feeds stderr back to Claude for an immediate fix)
+#   - anything unexpected (no path, missing tool, no route) -> exit 0, never block
+set -uo pipefail
+
+payload=$(cat)
+file=$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+[ -z "$file" ] && exit 0
+[ -f "$file" ] || exit 0
+
+lint_fail() {  # $1 = tool label, $2 = findings
+    {
+        echo "$1 findings in $file (fix these now):"
+        echo "$2" | head -20
+    } >&2
+    exit 2
+}
+
+case "$file" in
+    *.sh)
+        command -v shellcheck >/dev/null 2>&1 || exit 0
+        if ! out=$(shellcheck -S warning "$file" 2>&1); then
+            lint_fail "shellcheck" "$out"
+        fi
+        ;;
+esac
+
+exit 0

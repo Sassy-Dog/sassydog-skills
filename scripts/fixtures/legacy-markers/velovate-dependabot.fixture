@@ -1,0 +1,460 @@
+# fixture-source-repo: Sassy-Dog/velovate
+# fixture-source-path: .github/dependabot.yml
+# fixture-fetched: 2026-08-11
+# fixture-blob-sha: e1006e0d332d2a11754fb1286cb187922d0df879
+# fixture-matcher: deps
+# fixture-expect: hand-written
+# fixture-note: NEGATIVE CONTROL. Carries no generated-by marker at all - hand-written, never generator-owned. Sassy-Dog/qr-ninja and Sassy-Dog/devcanopy carry the same unmarked shape (probed 2026-08-11), so three consumers have Dependabot config setup-deps must report-and-skip. That is the contract working, not a defect - a rollout run should expect no reconcile there.
+# ---8<--- verbatim upstream bytes below this line; everything above is fixture metadata
+# Dependabot config (#674).
+#
+# Conventions:
+# - Weekly cadence, Monday morning MT — enough signal without flooding.
+# - max 5 open PRs per ecosystem (effectively a ceiling — the group
+#   below collapses every version update into a single PR per ecosystem).
+# - One bundled "all-updates" group per ecosystem covering major + minor +
+#   patch. CI is the gate: if the bundle is green, one merge moves
+#   everything; if it's red, the offending package is named in the
+#   failure and we triage from there. Reviewer doesn't have to babysit
+#   N independent bump PRs.
+# - Security updates are NOT grouped — each CVE gets its own PR so a
+#   critical fix can ship without waiting for the bundle.
+# - Labels match what we already filter against (security, follow-up,
+#   developer-experience).
+#
+# What this does NOT cover:
+# - bun.lock at the workspace root — Dependabot handles `package.json`
+#   files and the bun lockfile is updated transitively. If we hit cases
+#   where Dependabot misses a transitive bump, swap to Renovate (which
+#   has first-class bun.lock support).
+
+version: 2
+updates:
+  # ---------- npm / bun (web + libs + e2e) ----------
+  - package-ecosystem: "npm"
+    directory: "/"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+    ignore:
+      # ESLint 10 changed the rule context API (contextOrFilename.getFilename
+      # is no longer a function). eslint-plugin-react@7.37.5 (latest) hasn't
+      # been updated to the new API and breaks at lint time:
+      #   "TypeError: Error while loading rule 'react/display-name':
+      #    contextOrFilename.getFilename is not a function"
+      # Pin ESLint at 9.x until eslint-plugin-react ships a 10-compatible
+      # release. Remove these ignores together when that lands.
+      # Scoped to MAJOR only so 9.x minor/patch + security updates still
+      # surface (an untyped blanket ignore would suppress 9.x CVE fixes).
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      # Major bumps deferred — each needs a dedicated PR with code changes.
+      # PR #791 surfaced these; tracking individually:
+      #  * @graphql-codegen/cli 7 shipped in #1725; the client-preset migration
+      #    epic (#1804) completed in #1810 (WS5) — `typescript-operations` +
+      #    `typescript-react-apollo` were dropped from codegen.ts and the
+      #    remaining `@graphql-codegen/typescript` + `@graphql-codegen/introspection`
+      #    plugins advanced to their latest majors. With the operations plugin
+      #    gone there's no TS2300 collision, so those plugin major-ignores were
+      #    REMOVED here (majors now flow via Dependabot).
+      #  (eslint-plugin-playwright 2, @types/node 25, vite-plugin-dts 5
+      #   shipped together in #1728.)
+      #  * @vitejs/plugin-react 6 was in #1728's batch but DROPPED: v6 removed
+      #    the Babel transform pipeline (oxc-only by default; no `babel` option),
+      #    so `react({ babel: { plugins: ['@lingui/babel-plugin-lingui-macro'] }})`
+      #    in apps/web/vite.config.ts is silently ignored → the lingui macro is
+      #    never compiled → runtime "macro executed outside the context of
+      #    compilation" crash → white screen → Clerk never loads (e2e auth setup
+      #    fails). Migrating needs @rolldown/plugin-babel + @babel/core (or a
+      #    switch to plugin-react-swc + @lingui/swc-plugin) — a dedicated PR.
+      #
+      # PR #800 surfaced 3 more majors that #799 didn't catch — opened in
+      # parallel with #799 and CI never fired (BLOCKED, empty rollup).
+      # Same rationale: each needs its own PR.
+      #  (prettier 2 → 3 shipped in #1729 — the repo-wide reformat is done, so
+      #   that major-ignore was removed; prettier majors now flow via Dependabot.)
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      # graphql 17 / @graphql-codegen/client-preset 6 are held together.
+      # graphql 17.0.1's parser emits `directives: undefined` (was `[]`) on
+      # directive-less AST nodes; every *stable* `@graphql-codegen` plugin
+      # (incl. latest visitor-plugin-common@7.1.0) does
+      # `node.directives.find(...)` / `[...spread.directives]` and crashes →
+      # codegen yields zero artifacts → the codegen-freshness gate is
+      # unsatisfiable. graphql-17 AST support is alpha-only. Scoped to MAJOR
+      # so graphql 16.x minor/patch + security updates still surface. Remove
+      # BOTH ignores once graphql-codegen ships a stable release that lifts
+      # the `graphql ^17` peer cap.
+      - dependency-name: "graphql"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@graphql-codegen/client-preset"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 is the native (Go) compiler rewrite: it REMOVES the
+      # JavaScript Compiler API, which the toolchain still depends on.
+      # PR #1994 (6.0.3 → 7.0.2) proved it unmergeable on two independent
+      # upstream tools:
+      #   - @typescript-eslint/typescript-estree crashes reaching into the
+      #     removed API ("Cannot read properties of undefined (reading
+      #     'Cjs')") → all linting dies.
+      #   - vite-plugin-dts (libs/brand build) errors: "The installed
+      #     typescript package does not provide the JavaScript Compiler API
+      #     (this happens with TypeScript 7+)" and wants the
+      #     @typescript/typescript6 shim.
+      # Forcing it would mean canary typescript-eslint + a compiler shim on
+      # main for a routine bump. Scoped to MAJOR so 6.x minor/patch +
+      # security still flow. Remove when typescript-eslint and vite-plugin-dts
+      # ship stable TS7 support.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(web)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/apps/web-e2e"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(e2e)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/libs/brand"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(brand)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  # ---------- NuGet (.NET API) ----------
+  # The previous config pointed at directory: "/apps/api", but no .csproj or
+  # .sln lives directly there — projects are in per-tier subfolders
+  # (Velovate.Api/, Velovate.Domain/, …) and velovate.sln is at the repo root.
+  # Dependabot does NOT recurse, so that lane discovered zero manifests and
+  # produced zero PRs (the API auth stack froze at the Jan 2026 patch). The
+  # `directories:` (plural) key lets one lane enumerate explicit project dirs;
+  # we list every csproj folder velovate.sln references under apps/api/ so the
+  # bundle covers all tiers (Api/Jobs/Workers ship from separate Dockerfiles
+  # and must stay monoversioned — see #1631).
+  - package-ecosystem: "nuget"
+    rebase-strategy: "disabled"  # see npm block comment — queue churn
+    directories:
+      - "/apps/api/Velovate.Api"
+      - "/apps/api/Velovate.Api.Tests"
+      - "/apps/api/Velovate.Api.IntegrationTests"
+      - "/apps/api/Velovate.Application"
+      - "/apps/api/Velovate.Contracts"
+      - "/apps/api/Velovate.Domain"
+      - "/apps/api/Velovate.Integrations"
+      - "/apps/api/Velovate.Jobs"
+      - "/apps/api/Velovate.Sync"
+      - "/apps/api/Velovate.Workers"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(api/deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+    ignore:
+      # HotChocolate 15 → 16 is a full-major migration with its own dedicated
+      # PR (#1631) — the API is on 15.1.16 while the CLI's StrawberryShake is
+      # already 16. Suppress HC MAJOR bumps only; 15.x minor/patch + security
+      # updates still flow through the bundle. Remove when the HC 16 migration
+      # lands and the api/cli GraphQL stacks are realigned.
+      - dependency-name: "HotChocolate.*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "nuget"
+    rebase-strategy: "disabled"  # see npm block comment — queue churn
+    directories:
+      - "/apps/cli/Velovate.Cli"
+      - "/apps/cli/Velovate.Cli.Tests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(cli/deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  # ---------- pub (Flutter mobile + brand_flutter) ----------
+  - package-ecosystem: "pub"
+    directory: "/apps/mobile"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(mobile/deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+    ignore:
+      # clerk_flutter 0.0.15-beta is broken upstream — it ships without its
+      # own generated/clerk_sdk_localizations.dart file, so compilation fails
+      # (`Type 'ClerkSdkLocalizations' not found`). clerk_auth 0.0.15-beta is
+      # its sibling SDK and ships type changes (handleError signature,
+      # ClerkErrorCode enum) that don't compile against an unmatched peer.
+      #
+      # 0.0.16-beta ships the missing localization file and the pair compiles
+      # cleanly — #712 unpinned the pubspec to ^0.0.16-beta. The ignore is now
+      # scoped to the broken 0.0.15-beta ONLY so Dependabot resumes tracking
+      # the pair for future bumps (≥0.0.16-beta) and security updates. A
+      # blanket or 0.0.16-inclusive ignore would suppress the very version we
+      # ship plus all legitimate future bumps.
+      - dependency-name: "clerk_flutter"
+        versions: ["0.0.15-beta"]
+      - dependency-name: "clerk_auth"
+        versions: ["0.0.15-beta"]
+      # intl is pinned EXACTLY (0.20.2) by flutter_localizations in the
+      # Flutter SDK we ship (3.44.x), so ANY intl bump fails version solving
+      # for velovate_mobile — PR #1971 was the unmergeable canary. The same
+      # ignore exists in the /libs/brand_flutter lane (path dep of mobile,
+      # hits the identical wall transitively). Unlike the scoped ignores
+      # above, this one is a blanket dependency-name ignore — it suppresses
+      # intl security updates too, which is acceptable ONLY because a
+      # security bump would be equally unsolvable against the exact SDK pin
+      # (nothing actionable is lost). Remove BOTH ignores and take the bump
+      # when a Flutter upgrade advances the SDK's intl pin past 0.20.2
+      # (check: flutter_localizations' pubspec in the pinned SDK).
+      - dependency-name: "intl"
+
+  - package-ecosystem: "pub"
+    directory: "/libs/brand_flutter"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(brand_flutter/deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+    ignore:
+      # See the intl ignore in the /apps/mobile lane above: the Flutter SDK's
+      # flutter_localizations pins intl EXACTLY at 0.20.2, and brand_flutter
+      # is a path dep of velovate_mobile, so bumping intl here breaks the
+      # app's version solving (PR #1971). Remove together with the mobile-lane
+      # ignore when the SDK's intl pin advances.
+      - dependency-name: "intl"
+
+  # libs/maps is a path dependency of apps/mobile, so its caret caps
+  # (mapbox_maps_flutter ^2.23.0, sentry_flutter ^9.19.0) participate in the
+  # app's version resolution. Without coverage here, a sentry_flutter 10 /
+  # mapbox 3 bump to apps/mobile/pubspec.yaml would fail resolution against
+  # these unvisited caps. mapbox is delicate (pins MapboxMaps exact on iOS),
+  # which makes a visible automated bump path more valuable, not less.
+  - package-ecosystem: "pub"
+    directory: "/libs/maps"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(maps/deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  # Custom-lint tooling package (analyzer ^8.0.0, custom_lint_builder ^0.8.1).
+  # Previously uncovered; bumps to the analyzer toolchain otherwise drift.
+  - package-ecosystem: "pub"
+    directory: "/apps/mobile/tools/velovate_lints"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(lints/deps)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  # ---------- Gradle (Flutter Android native wrapper) ----------
+  # apps/mobile/android is the native Android project Flutter's build wraps —
+  # settings.gradle.kts + build.gradle.kts + app/build.gradle.kts live here.
+  # The pub lanes above cover the Dart/Flutter package graph but have no
+  # visibility into the native AGP/Kotlin/Google-Services toolchain those
+  # files pin; this lane is the only automated path for that half. Version +
+  # security groups (not the all-updates bundle used elsewhere in this file)
+  # with semver-major held for a human — AGP/Kotlin majors are toolchain
+  # migrations, not routine bumps. (sassydog-skills#56 / #2120)
+  - package-ecosystem: "gradle"
+    directory: "/apps/mobile/android"
+    rebase-strategy: "disabled"  # see npm block comment — queue churn
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(mobile/android/deps)"
+    groups:
+      gradle-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      gradle-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    ignore:
+      # Majors are held for a human. Security majors still arrive separately —
+      # security updates deliberately bypass version-update ignore rules.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ---------- Docker (.NET base images) ----------
+  # The three API-tier Dockerfiles pin their `FROM mcr.microsoft.com/dotnet/*`
+  # bases to tag+digest (sdk:10.0@sha256:… / aspnet:10.0@sha256:…) so BuildKit
+  # trusts the locally cached layers and skips the live MCR anonymous-token
+  # round-trip that gets per-IP throttled (429→401) and ejects merge-queue PRs
+  # (#1791, cross-repo origin Sassy-Dog/platform#291). Dependabot's docker
+  # ecosystem reads the `@sha256:` digest on each FROM and opens a bump PR when
+  # the upstream 10.0 tag re-points (.NET monthly patch). All three tiers ship
+  # from separate Dockerfiles but MUST stay monoversioned (#1631), so the
+  # `directories:` (plural) key bundles them into one PR — a single green merge
+  # bumps Api/Jobs/Workers in lockstep instead of three drifting PRs.
+  # Manual bump path if Dependabot ever misses it: re-resolve the manifest-list
+  # digest with
+  #   curl -sI -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
+  #     https://mcr.microsoft.com/v2/dotnet/<sdk|aspnet>/manifests/10.0 \
+  #     | grep -i docker-content-digest
+  # and update the FROM lines in all three Dockerfiles.
+  - package-ecosystem: "docker"
+    rebase-strategy: "disabled"  # see npm block comment — queue churn
+    directories:
+      - "/apps/api/Velovate.Api"
+      - "/apps/api/Velovate.Jobs"
+      - "/apps/api/Velovate.Workers"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(api/docker)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+
+  # ---------- GitHub Actions ----------
+  # Picks up version pins on every uses: clause across .github/workflows/
+  # and any composite actions. Catches stale actions that otherwise drift
+  # for years (we've already had cache-key + checkout pin issues this year).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    # Merge queue tests against latest main; dependabot auto-rebase only
+    # churns the queue (force-push ejects queued entries). Disabled repo-wide.
+    rebase-strategy: "disabled"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Denver"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "developer-experience"]
+    commit-message:
+      prefix: "chore(actions)"
+    groups:
+      all-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
