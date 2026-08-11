@@ -188,12 +188,29 @@ git push -u origin wip/recover-stash-N            # surface as a draft PR if use
 
 ## 4. Sweep untracked-file noise
 
-Untracked files (`??`) have NO git history — once `rm`'d they're gone. Conservative defaults. Run in
-the root checkout AND each remaining worktree:
+Untracked (`??`) **and gitignored (`!!`)** files have NO git history — once `rm`'d they're gone.
+Conservative defaults. Enumerate with `git clean`'s dry run in the root checkout AND each remaining
+worktree:
 
 ```bash
-git ls-files --others --exclude-standard
+git clean -ndx    # -n dry run, -d include directories, -x include gitignored
 ```
+
+Each line reads `Would remove <path>`. **`-x` is the whole point** — `git ls-files --others
+--exclude-standard` cannot see gitignored paths, so it structurally never returns `node_modules/`,
+`tmp/`, or `scratch/`, and a sweep built on it announces success having removed nothing.
+
+`-d` collapses each fully-untracked directory to its **outermost** entry: `node_modules/` rather
+than every file under it, but also `e2e/` rather than the `e2e/out/results/` you cared about. A
+collapsed entry can therefore bundle mixed contents — re-run `git clean -ndx` inside it to expand,
+and never auto-discard a directory just because something under it matches the allowlist.
+
+**Enumerate with `git clean -ndx`; remove with specific-path `rm`.** Do **not** "simplify" this to
+`git clean -fdx -e <pattern>`: `-e` takes gitignore-style patterns, so an unanchored `-e results/`
+matches `results/` at *every* depth — including `e2e/out/results/` — which shields the child and
+therefore silently spares a parent that is on the discard list. (Anchored `-e /results/` protects
+only the root copy, but the removal step here stays explicit `rm` per path so nothing hinges on
+getting that anchoring right.)
 
 ### Auto-discard (no confirmation)
 
@@ -203,10 +220,20 @@ Universal noise allowlist, plus the caller's **noise allowlist** input:
 - `*.swp`, `*.swo`, `*~`, `*.bak` (editor backups)
 - `**/tmp/`, `**/scratch/`, `**/.tmp/`, `**/node_modules/`
 
-Remove with `rm` and announce: `discarded <path> — <pattern>`.
+Before removing any enumerated path, apply these two gates in order:
 
-> **Never auto-discard anything in the never-discard list** (e.g. `.env.local`) — gitignored but
-> precious (Neon branch URL, Vercel Blob token, OIDC). It's not noise; leave it.
+1. **Never-discard list wins over every allowlist entry.** With `-x` in play this guard is
+   load-bearing rather than theoretical: the old enumeration could not see gitignored files, so
+   nothing it returned could have been on the list. Now `.env.local` and friends — gitignored but
+   precious (Neon branch URL, Vercel Blob token, OIDC) — really do show up. Skip them and say so:
+   `kept <path> — never-discard`.
+2. **An unlisted file is not an allowlisted one.** Only paths matching a pattern above (or the
+   caller's noise allowlist) may go without confirmation; everything else `-x` newly surfaced —
+   build output, caches, local tool state — gets enumerated and taken to the Ask prompt, not
+   discarded by analogy. A live worktree checkout sitting under a gitignored path (e.g.
+   `.claude/worktrees/`) is never sweep material either; step 5 owns those.
+
+Then remove with `rm` and announce: `discarded <path> — <pattern>`.
 
 ### Ask
 
@@ -330,13 +357,19 @@ Ask if the issue is genuinely open with no merged PR (work may truly be in-fligh
 ## 9. Final verification
 
 ```bash
-git branch -vv                            # only the default branch
-git worktree list                         # only the root worktree
-git stash list                            # empty OR only kept "ask" stashes
-git ls-files --others --exclude-standard  # empty OR only kept "ask" files (+ never-discard entries)
+git branch -vv        # only the default branch
+git worktree list     # only the root worktree
+git stash list        # empty OR only kept "ask" stashes
+git clean -ndx        # same enumeration step 4 used — see expected residue below
 ```
 
-Anything else is either in-flight (intentional) or got missed — re-run from step 2.
+Verify with the **same `-ndx` enumeration step 4 swept with**, never
+`git ls-files --others --exclude-standard`: a sweep that removed nothing verifies clean under the
+blind command, which is exactly the failure this step exists to catch.
+
+Expected residue from `git clean -ndx`: the never-discard entries, files kept at the Ask prompt, and
+live worktree checkouts under gitignored paths. Anything else is either in-flight (intentional) or
+got missed — re-run from step 2.
 
 ## Guardrails
 
@@ -345,7 +378,7 @@ Anything else is either in-flight (intentional) or got missed — re-run from st
 - **Never delete a `worktree-agent-*` isolation branch whose worktree is still present** — that's a live agent checkout, not debris. Only isolation branches whose worktree is gone are sweep candidates, and unclassifiable ones (not an ancestor, no merged PR) are surfaced, not deleted.
 - **Never `git worktree remove --force` a worktree at a SHA that isn't in the default branch** without confirming — potentially in-flight work.
 - **Never auto-drop a stash referencing an OPEN issue.** Auto-drop is for confidently-shipped or confidently-abandoned work only.
-- **Never auto-discard untracked files outside the allowlist, and never anything in the never-discard list.** Untracked files have no git history; asking too often costs a few prompts, auto-discarding wrong is unrecoverable.
+- **Never auto-discard untracked or gitignored files outside the allowlist, and never anything in the never-discard list.** Neither has git history; asking too often costs a few prompts, auto-discarding wrong is unrecoverable. Enumerate with `git clean -ndx` and remove with specific-path `rm` — never `git clean -fdx -e <pattern>`, whose gitignore-style unanchored patterns match at every depth and silently spare on-list parents.
 - **Issue state alone is not the "work shipped" signal — `closedByPullRequestsReferences` is.** CLOSED + merged PR → shipped (auto-drop). CLOSED + empty PR refs → hand-closed as abandoned (ask if non-trivial).
 - **Dep/version/migration-file stashes only need confirmation when the issue was hand-closed** (no merged closer PR). A merged successor PR means the work shipped — auto-drop is correct.
 - **Never delete the default branch (local or remote).**
