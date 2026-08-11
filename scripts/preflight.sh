@@ -34,8 +34,13 @@
 #      setup-hooks / setup-deps `generated-by:` matchers, extracted from the
 #      shipped SKILL.md files and run against real pre-rename consumer
 #      artifacts committed under scripts/fixtures/legacy-markers/ (issue #133)
-#   8. markdownlint (pinned markdownlint-cli2 version)
-#   9. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#   8. label-taxonomy tests (scripts/test-label-taxonomy.sh) — the two label
+#      taxonomies stay disjoint AND perceptually separated (cross-set CIEDE2000
+#      check), and issue-claim.sh's label reconcile still CORRECTS a drifted
+#      label instead of silently skipping it (issue #161). Definitions and a
+#      mock gh only: no repo, no network.
+#   9. markdownlint (pinned markdownlint-cli2 version)
+#  10. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -294,7 +299,18 @@ else
     failed "ownership-matcher tests (scripts/test-ownership-matchers.sh)"
 fi
 
-# --- 8. markdownlint ---------------------------------------------------------
+# --- 8. label-taxonomy tests ---------------------------------------------------
+# Definitions + a mock gh. #158 deliberately kept align-labels.sh out of CI
+# because it MUTATES other repos — this gate runs neither applying mode, only
+# the cross-set colour check (`--collisions`, which needs no repo and no
+# network) and issue-claim.sh's reconcile logic against a recorded mock.
+if bash scripts/test-label-taxonomy.sh; then
+    pass "label-taxonomy tests (scripts/test-label-taxonomy.sh)"
+else
+    failed "label-taxonomy tests (scripts/test-label-taxonomy.sh)"
+fi
+
+# --- 9. markdownlint ---------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -309,7 +325,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 9. actionlint (best-effort locally; CI runs its own dockerized step) ----
+# --- 10. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then
