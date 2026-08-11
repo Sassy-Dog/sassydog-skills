@@ -30,8 +30,12 @@
 #      (YYYY.M.P — the one-way ratchet, docs/VERSIONING.md), and any
 #      marketplace.json plugins[].version equals it (issue #31)
 #   6. versioning tests (scripts/test-versioning.sh)
-#   7. markdownlint (pinned markdownlint-cli2 version)
-#   8. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#   7. ownership-matcher tests (scripts/test-ownership-matchers.sh) — the
+#      setup-hooks / setup-deps `generated-by:` matchers, extracted from the
+#      shipped SKILL.md files and run against real pre-rename consumer
+#      artifacts committed under scripts/fixtures/legacy-markers/ (issue #133)
+#   8. markdownlint (pinned markdownlint-cli2 version)
+#   9. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -134,19 +138,27 @@ for legacy in 'create-dev-workflows' 'refresh-sassydog-' 'refresh-skills' 'refre
             ) ;;
         refresh-hooks)
             # setup-hooks' generated-by ownership matcher + CLAUDE.md's
-            # statement of it.
+            # statement of it, plus the committed consumer artifacts that
+            # PROVE the matcher still accepts this producer name (issue #133 —
+            # the fixtures are verbatim upstream bytes; sanitising the name out
+            # of them would defeat their entire purpose).
             allow=(
                 ':!skills/setup-hooks/SKILL.md'
                 ':!CLAUDE.md'
                 ':!scripts/preflight.sh'
+                ':!scripts/fixtures/legacy-markers/'
             ) ;;
         refresh-deps)
-            # setup-deps' generated-by ownership matcher.
+            # setup-deps' generated-by ownership matcher + the committed
+            # consumer artifacts proving the matcher accepts it (issue #133).
             allow=(
                 ':!skills/setup-deps/SKILL.md'
                 ':!scripts/preflight.sh'
+                ':!scripts/fixtures/legacy-markers/'
             ) ;;
         *)
+            # 'refresh-sassydog-' also appears verbatim inside the committed
+            # consumer hook fixtures (issue #133).
             allow=(
                 ':!skills/setup-config/references/update-mode.md'
                 ':!skills/setup-config/references/migrate-mode.md'
@@ -155,6 +167,7 @@ for legacy in 'create-dev-workflows' 'refresh-sassydog-' 'refresh-skills' 'refre
                 ':!skills/setup-hooks/SKILL.md'
                 ':!CLAUDE.md'
                 ':!scripts/preflight.sh'
+                ':!scripts/fixtures/legacy-markers/'
             ) ;;
     esac
     if git grep -l "$legacy" -- "${allow[@]}"; then
@@ -177,13 +190,18 @@ done
 #     see issue #122; setup-deps accepts refresh-deps and refresh-sassydog-deps,
 #     see issue #123) — a narrower matcher would silently treat a pre-rename
 #     consumer file as hand-written.
+#   - scripts/fixtures/legacy-markers/ — real consumer artifacts still stamped
+#     with the pre-rename namespace, committed verbatim so the matchers are
+#     proven against a genuine older-plugin file rather than a synthetic
+#     pattern we wrote ourselves (issue #133)
 #   - this script (the guard itself)
 if git grep -l 'ai-agent-skills' -- \
     ':!README.md' \
     ':!CLAUDE.md' \
     ':!skills/setup-deps/SKILL.md' \
     ':!skills/setup-hooks/SKILL.md' \
-    ':!scripts/preflight.sh'; then
+    ':!scripts/preflight.sh' \
+    ':!scripts/fixtures/legacy-markers/'; then
     failed "legacy-name guard — 'ai-agent-skills' outside the sanctioned files (plugin renamed to sassy-dog, issue #71)"
     legacy_residue=1
 fi
@@ -269,7 +287,14 @@ else
     failed "versioning tests (scripts/test-versioning.sh)"
 fi
 
-# --- 7. markdownlint ---------------------------------------------------------
+# --- 7. ownership-matcher tests -----------------------------------------------
+if bash scripts/test-ownership-matchers.sh; then
+    pass "ownership-matcher tests (scripts/test-ownership-matchers.sh)"
+else
+    failed "ownership-matcher tests (scripts/test-ownership-matchers.sh)"
+fi
+
+# --- 8. markdownlint ---------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -284,7 +309,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 8. actionlint (best-effort locally; CI runs its own dockerized step) ----
+# --- 9. actionlint (best-effort locally; CI runs its own dockerized step) ----
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then
