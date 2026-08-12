@@ -19,16 +19,24 @@ permissions:
 
 jobs:
   ci:
-    runs-on: [self-hosted, linux, sassy-dog]
+    # GitHub-hosted, deliberately. This repo is public, `pull_request` fires for
+    # fork PRs, and this job has no actor guard — on a self-hosted runner that
+    # means anyone on the internet can execute code on Sassy Dog infrastructure,
+    # with runner persistence exposing whatever privileged jobs left behind.
+    # An ephemeral hosted runner removes the class outright. Do not move this
+    # back to `[self-hosted, …]` while the repo is public and this trigger is
+    # unguarded.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The self-hosted image ships no shellcheck and runs as non-root `runner`
-      # with no sudo, so it cannot be apt-installed at job time. The release
-      # tarball unpacks into $HOME, which needs no privileges — the same reason
-      # dtolnay/rust-toolchain works on this fleet. Keep the version in step
-      # with the pin documented in scripts/preflight.sh.
-      - name: Install shellcheck (absent from the self-hosted image)
+      # Installed rather than inherited from the image ON PURPOSE: the gate is
+      # shellcheck -S warning, whose findings are version-dependent, so a repo
+      # that inherits whatever the runner image happens to ship can go red on an
+      # image bump nobody made. This pin is the one documented in
+      # scripts/preflight.sh, which is what `bash scripts/preflight.sh` uses
+      # locally — same binary, same findings, both places.
+      - name: Install shellcheck (pinned — do not inherit the image's version)
         env:
           SHELLCHECK_VERSION: v0.10.0
         run: |
@@ -46,14 +54,13 @@ jobs:
       - name: Preflight gates (shellcheck, frontmatter, guards, manifests, markdownlint)
         run: bash scripts/preflight.sh
 
-      # Native binary rather than the dockerized action. `docker` IS installed on
-      # the self-hosted image, but its daemon cannot bind-mount the workspace —
-      # `docker run -v "$PWD:/repo"` fails with
-      #   mkdir /opt/actions-runner: permission denied
-      # because the daemon is rootless and the runner is non-root. Presence of
-      # docker does not imply usable volume mounts on this fleet; prefer a
-      # released binary unpacked into $HOME, same as the shellcheck step above.
-      - name: Install actionlint (docker bind-mounts unavailable on the fleet)
+      # Native binary rather than the dockerized action. Docker with working
+      # bind-mounts IS available on hosted runners, so the original reason for
+      # this (the self-hosted fleet's rootless daemon could not mount the
+      # workspace) no longer applies — but the pinned binary is still the better
+      # choice: no image pull, and the version stays visible next to the pin it
+      # has to agree with. Same rationale as the shellcheck step above.
+      - name: Install actionlint (pinned binary — no image pull needed)
         env:
           ACTIONLINT_VERSION: 1.7.7
         run: |
