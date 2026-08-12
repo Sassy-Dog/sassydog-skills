@@ -4,10 +4,15 @@ Two scheduled cloud routines invoke plugin skills from this repo. Each carries t
 fallback clause required by [`CLAUDE.md`](../CLAUDE.md) so that a plugin-loading gap produces a
 degraded run rather than a silent no-op (#97, #98).
 
-| Routine | Trigger ID | Invokes | Fallback body |
-| --- | --- | --- | --- |
-| daily fire-watch | `trig_01BZd6qJYpoJyKWfzc9MCuyq` | `sassy-dog:whats-on-fire` | `skills/whats-on-fire/SKILL.md` |
-| weekly portfolio currency | `trig_01ABuVDmbF216gCSwcNQczpF` | `sassy-dog:whats-behind` | `skills/whats-behind/SKILL.md` |
+| Routine | Invokes | Fallback body |
+| --- | --- | --- |
+| `daily-fire-watch` | `sassy-dog:whats-on-fire` | `skills/whats-on-fire/SKILL.md` |
+| `weekly-portfolio-currency` | `sassy-dog:whats-behind` | `skills/whats-behind/SKILL.md` |
+
+Routines are keyed by name here rather than by `trig_…` id. Two reasons: this repo is public, and
+ids are **mutable** — the routines API has no delete, so replacing a routine mints a new id and any
+id committed here goes quietly wrong. Resolve the current id by name when you need it, from the
+Routines list in claude.ai or the triggers API.
 
 The routine prompts themselves are untracked config living behind the routines API, outside this
 repo. This doc covers the one thing that *is* durable about a run: its log.
@@ -60,7 +65,8 @@ has to target the first Skill call rather than skimming for anything unusual.
 
 ### The recipe
 
-1. Get the run's session id (`cse_…`) from the routine's run history, keyed by trigger ID above.
+1. Resolve the routine's current trigger id by name (table above), then get the run's session id
+   (`cse_…`) from that routine's run history.
 2. Open that session's log and search it for the literal `Unknown skill: sassy-dog:`. With the log
    saved to a file, that is `grep -n 'Unknown skill: sassy-dog:' <logfile>`.
 3. Confirm the *first* `Skill` tool call in the run either succeeded or produced that error — a hit
@@ -107,18 +113,24 @@ manual action. `sassydog-skills` last refreshed 2026-08-09, a day *before* the r
 so it never saw a post-rename version to reject. It is stale because nobody ran
 `claude plugin update`.
 
-So a degraded run points at **cloud-side resolution**, not at the artifact. What that leaves open, and
-the constraint that makes it hard to test from a worktree:
+So a degraded run pointed at **cloud-side resolution**, not at the artifact. That line of inquiry is
+now **closed** — see [#175](https://github.com/Sassy-Dog/sassydog-skills/issues/175) for the full
+ruled-out table. The short version, because it changes how you read every degraded run below:
 
-- The session-start auto-install path (a cloud session installing repo-declared plugins from
-  `extraKnownMarketplaces`) **cannot be exercised locally in isolation** — a throwaway
-  `CLAUDE_CONFIG_DIR` has no credentials and exits `Not logged in`, and testing against the real
-  config mutates the install being used as evidence.
-- This repo is `INTERNAL`. An unauthenticated fetch of it is refused (`404` from the API, `401` from
-  git smart-http), so a cloud VM must present working credentials to clone the marketplace at all —
-  and per #98 cloud GitHub access is org-App-gate-proxied. **A missing-credentials story only explains
-  a regression if something changed cloud-side**, since it would equally have blocked the runs that
-  did load. Check token/gate changes in the window before accepting it.
+- **There is no supported way to load a plugin skill in a routine session.** The routine-scoped
+  `enabled_plugins` / `extra_marketplaces` fields accept correctly-typed API writes, return HTTP 200,
+  bump `updated_at`, and persist nothing — at `create` as well as `update`. The routine edit UI has no
+  plugins control at all. An account-level plugin install reaches interactive claude.ai sessions only:
+  two verification runs, 20s and 5min after a confirmed install, were both degraded.
+- **A degraded run is therefore the expected state, not an incident.** Do not open an issue for one.
+  The fallback clause is permanent contract, and `Load: fallback (degraded)` on every run is correct
+  output. What still deserves investigation is a run that produces *no* report, or one whose `Load:`
+  field disagrees with its log.
+- **Repo visibility was a real cause, of a different problem.** While this repo was `INTERNAL` the
+  claude.ai account marketplace could not sync it at all (`Marketplace sync failed`), despite the
+  `claude` GitHub App being installed org-wide for **All repositories** and an active SAML session for
+  `Sassy-Dog`. Flipping the repo to `PUBLIC` fixed the sync on the first attempt. Neither SSO nor app
+  scope was ever implicated — do not re-test those.
 
 ## What the in-report field is for
 

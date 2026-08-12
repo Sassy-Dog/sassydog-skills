@@ -147,9 +147,11 @@ ls ~/.claude/plugins/cache/sassydog-skills/sassy-dog/
 
 Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `2026.7.16`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
 
-### Updates freeze at the cached version (SAML error)
+### Updates freeze at the cached version
 
-Plugin install/update does a fresh **SSH** clone of this INTERNAL repo. The SSH key must be SSO-authorized for the `Sassy-Dog` org — on <https://github.com/settings/keys>, use **Configure SSO** on the key. Without it, updates fail with a SAML error or freeze silently at the cached version.
+Re-run the qualified update command above. There is no marketplace auto-refresh unless you opt in, so a cache goes stale simply because nobody refreshed it.
+
+This repo is **public**, so install and update clone it over anonymous HTTPS — no SSH key, no SSO authorization, no SAML step. If you are reading an older note about `Configure SSO` on <https://github.com/settings/keys>, it applied while the repo was `INTERNAL` and no longer does.
 
 ## Repository layout
 
