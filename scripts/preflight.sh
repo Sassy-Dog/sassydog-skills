@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # preflight.sh — this repo's CI gates, runnable locally. CI's `ci` job calls
-# THIS script for every gate except actionlint (which stays a separate
-# dockerized CI step), so the version pins and guard regexes live in exactly
-# one place. Run it before every PR; `--fix` lets markdownlint auto-fix first.
+# THIS script for every gate except actionlint, which CI runs as a separate step
+# from a pinned native binary (ci.yml explains why it is not the dockerized
+# action); this script runs actionlint too when a local binary or docker is
+# available, and reports a skip when neither is.
+#
+# Guard regexes live here and only here. Tool VERSIONS do not: markdownlint-cli2
+# is pinned below, but shellcheck is whatever is on PATH locally versus an exact
+# pin in ci.yml. That gap is real and documented in CONTRIBUTING.md — a local
+# pass on a different shellcheck is not proof of a green build.
+#
+# Run it before every PR; `--fix` lets markdownlint auto-fix first.
 #
 # Usage: bash scripts/preflight.sh [--fix]
 #

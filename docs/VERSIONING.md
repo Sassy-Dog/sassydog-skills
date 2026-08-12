@@ -9,10 +9,11 @@ spec rather than a local fork.
 > (`Sassy Dog/Architecture/Development/Versioning.md`) and its mirror on
 > `Sassy-Dog/platform#397`. Nothing here depends on reading them: this document
 > is self-contained, and `scripts/test-versioning.sh` is the executable copy of
-> every rule it states. Where you want the authority for a rule, read the test. Adopted 2026-07-11 via issue #31. Per spec §9, this doc is
-validated against the scripts at adoption and whenever either changes — the
-validation is automated as `scripts/test-versioning.sh`, run by
-`scripts/preflight.sh` (CI).
+> every rule it states. Where you want the authority for a rule, read the test.
+
+Adopted 2026-07-11 via issue #31. Per spec §9, this doc is validated against the
+scripts at adoption and whenever either changes — the validation is automated as
+`scripts/test-versioning.sh`, run by `scripts/preflight.sh` (CI).
 
 ## Repo classification (spec §7)
 

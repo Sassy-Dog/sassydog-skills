@@ -17,7 +17,7 @@ That shape is the whole threat model. The interesting classes are:
 - **Instruction injection into skill text.** A skill body is read by an agent and followed. Text that causes an agent to exfiltrate secrets, mutate a repository beyond the user's intent, or bypass a documented confirmation step is a vulnerability here, not a documentation bug.
 - **Shell injection or unsafe expansion in bundled scripts.** Everything under `skills/*/scripts/` and `scripts/` runs with the invoking user's privileges. Unquoted expansions, `eval` on untrusted input, and path traversal all qualify.
 - **Weakened destructive-action gates.** Several scripts are deliberately gated — `scripts/align-labels.sh --migrate` deletes labels only through a single call site that re-verifies immediately beforehand, and `skills/github-issues/scripts/file-or-link-issue.sh` is the only issue-creation path. A change that lets a destructive action run without its gate is a security issue even if nothing is exploited yet.
-- **Supply-chain drift in pinned tooling.** CI pins tool versions with checksums where upstream provides them. An unpinned or unverified fetch is in scope.
+- **Supply-chain drift in pinned tooling.** GitHub Actions are pinned to commit SHAs. Tool downloads in CI pin an exact version but are **not** currently checksum-verified — see [#182](https://github.com/Sassy-Dog/sassydog-skills/issues/182), which is tracked and known. A *new* unpinned fetch, or a regression of the SHA pinning, is in scope; the known gap in #182 is not a new finding.
 
 ## What is not in scope
 

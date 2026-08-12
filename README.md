@@ -2,6 +2,10 @@
 
 Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI coding tools.
 
+Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin via the marketplace below; any other agent that can read a Markdown instruction file and run a shell script can use the same `skills/` directory directly — there is nothing Claude-specific in the skill bodies.
+
+**[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Versioning](docs/VERSIONING.md)** · Licensed [Apache-2.0](LICENSE)
+
 ## Plugins
 
 | Plugin | Skills | Description |
