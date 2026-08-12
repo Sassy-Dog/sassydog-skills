@@ -36,9 +36,14 @@
 # here, and it is invisible until the flood arrives.
 #
 # Semver-major is excluded from the routine groups: majors are API breaks that
-# need a human, and dependabot-auto-merge.yml holds them anyway. A major that
-# is ALSO a security fix still comes through as its own security PR — security
-# updates ignore version-update ignore rules, which is the behaviour we want.
+# need a human. That exclusion stands on its own and does NOT assume an
+# auto-merge workflow exists — this generator declines to render one for a repo
+# with no merge gate, and for any PUBLIC repo (its org secrets are
+# private-visibility and cannot resolve there; see setup-deps SKILL.md §2). Where
+# the workflow IS rendered it holds majors too, but that is a second belt, not
+# the reason for this rule. A major that is ALSO a security fix still comes
+# through as its own security PR — security updates ignore version-update ignore
+# rules, which is the behaviour we want.
 #
 # ONE ENTRY PER (ECOSYSTEM, DIRECTORY). Dependabot reads the manifest at
 # `directory:` and does NOT recurse, so a monorepo needs one entry per manifest

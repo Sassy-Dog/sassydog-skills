@@ -25,7 +25,7 @@ It renders up to three things:
 | File | When |
 |---|---|
 | `.github/dependabot.yml` | always — grouped, one entry per (ecosystem, **directory**) |
-| `.github/workflows/dependabot-auto-merge.yml` | when the repo has a merge gate |
+| `.github/workflows/dependabot-auto-merge.yml` | when the repo has a merge gate **AND is not public** — two preconditions, see §2 |
 | `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow. One per bun install root, not one per repo |
 | `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected **and** the app's `ios/Podfile.lock` is tracked (see §3) |
 
@@ -159,6 +159,29 @@ into `404`: `404` means "you could enable this", `403` means "you cannot, so thi
 render the auto-merge workflow is the only enforcement there will ever be." Reported as a `404`, it
 turns into advice the account cannot act on.
 
+### The second precondition: repo visibility
+
+**A merge gate is necessary but NOT sufficient. Probe visibility before classifying — it can veto
+every arm below.**
+
+```bash
+gh repo view "${REPO}" --json visibility --jq .visibility
+```
+
+`public` → **do not render the auto-merge workflow**, whatever the gate says. The workflow mints a
+GitHub App token from org secrets, and org secrets at `private` visibility (= private + internal)
+**exclude public repos** — in the Actions store *and* the Dependabot store alike. Rendered anyway,
+`secrets.*` resolves to the empty string and `create-github-app-token` fails, but not until that
+repo's next Dependabot PR — days or weeks later, as an auth error that looks unrelated to the render
+that caused it. Report the skip and its reason; per this skill's report-and-skip contract, a skipped
+file is a reported outcome, never a silent omission.
+
+Do not reach for a `GITHUB_TOKEN` variant as a consolation prize without testing it first: workflows
+triggered by Dependabot's `pull_request` get a **read-only** `GITHUB_TOKEN` and are served from the
+Dependabot secret store, not Actions, so the naive swap fails for a second, different reason.
+
+The `private`/`internal` case falls through to the gate classification below, unchanged.
+
 Classify into exactly one:
 
 - **merge queue** → render the `MERGE_QUEUE` arm (plain `--auto`, no method flag).
@@ -287,6 +310,8 @@ silently leaving security PRs ungrouped, and the mistake is invisible until the 
 ## Guardrails
 
 - Never render the auto-merge workflow into a repo with no required check.
+- Never render the auto-merge workflow into a **public** repo. Its org secrets are `private`-visibility
+  and cannot resolve there, so the render produces a workflow that fails late and looks unrelated.
 - Never auto-merge semver-major. A green build does not disprove an API break.
 - Never widen the `dependabot[bot]` actor gate on a `pull_request_target` workflow — that gate is
   what keeps contributor code out of a write-capable context.

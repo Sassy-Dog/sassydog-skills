@@ -59,7 +59,16 @@
 #      (issue #172). Needs a 20k-path fixture, because a small one passes
 #      either way; the gate fails loudly if that fixture ever stops tripping
 #      the pre-fix shape. Index-only temp repos: no real repo, no network.
-#  12. markdownlint (pinned markdownlint-cli2 version)
+#  12. auto-merge visibility tests (scripts/test-auto-merge-visibility.sh) —
+#      setup-deps' auto-merge render has TWO preconditions, not one: a merge
+#      gate AND a non-public repo. Its org secrets are `private`-visibility,
+#      which excludes public repos in both the Actions and Dependabot stores, so
+#      a render into one produces a workflow whose `secrets.*` are empty and
+#      which fails weeks later on that repo's next Dependabot PR, as an auth
+#      error that looks unrelated (issue #178). The decision is SKILL.md prose,
+#      not script, so this pins the instruction — same shape as the label-migrate
+#      single-call-site guard. Reads two tracked files: no gh, no network.
+#  13. markdownlint (pinned markdownlint-cli2 version)
 #  13. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
@@ -370,7 +379,19 @@ else
     failed "detect-hook-stack tests (scripts/test-detect-hook-stack.sh)"
 fi
 
-# --- 12. markdownlint --------------------------------------------------------
+# --- 12. auto-merge visibility ----------------------------------------------
+# sassydog-skills went public on 2026-08-12 and its auto-merge workflow was
+# deleted rather than re-credentialed (#177). Without this gate the next
+# setup-deps run would put it straight back: a merge gate is present, and the
+# gate was the only precondition the skill checked. The failure it reintroduces
+# is invisible at render time and surfaces elsewhere, later, looking unrelated.
+if bash scripts/test-auto-merge-visibility.sh; then
+    pass "auto-merge visibility tests (scripts/test-auto-merge-visibility.sh)"
+else
+    failed "auto-merge visibility tests (scripts/test-auto-merge-visibility.sh)"
+fi
+
+# --- 13. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
