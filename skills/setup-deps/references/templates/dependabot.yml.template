@@ -1,12 +1,31 @@
-# TEMPLATE: dependabot.yml · version 2
-# Rendered by sassy-dog:setup-deps from detect-ecosystems.sh.
-#   {{FACT}}   → detected/confirmed value
+# TEMPLATE: dependabot.yml · version 3
+# Rendered by sassy-dog:setup-deps from detect-ecosystems.sh — in practice by
+# scripts/render-dependabot.sh, which implements exactly these three rules.
+#   {{FACT}}                → detected/confirmed value
 #   # {{IF:ECOSYSTEM}} ... # {{ENDIF}}
-#              → keep the block for each detected ecosystem, delete the rest.
-#                Rendering only DELETES lines, so this file is valid as-is.
+#                           → keep the block for each DETECTED ecosystem,
+#                             delete the rest.
+#   # {{FOREACH:DIRECTORY}} ... # {{ENDFOREACH}}
+#                           → emit the enclosed block ONCE PER DIRECTORY that
+#                             ecosystem was detected at, substituting
+#                             {{DIRECTORY}}. Lines inside the IF but outside
+#                             the FOREACH (the explanatory comments) are
+#                             emitted once, ahead of the repeats.
+#
+# v3 (issue #169) drops the "every render is valid by construction" guarantee
+# v2 carried, deliberately and in one direction only: per-(ecosystem,
+# directory) repetition cannot be expressed by deleting lines — velovate needs
+# npm at four directories from one block, tailoredtip bun at two. What replaces
+# it is strictly stronger: scripts/validate-dependabot.sh parses the RENDER and
+# asserts every emitted `directory:` actually holds the manifest it claims. The
+# static guarantee never caught the bug that forced v3, because a v2 render was
+# always perfectly valid YAML — it just pointed at directories with no
+# manifests, and Dependabot answers that by silently doing nothing.
+# (setup-hooks keeps its deletion-only invariant; it has no per-location
+# repetition and needs none.)
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:setup-deps | template: dependabot.yml | template-version: 2
+# generated-by: sassy-dog:setup-deps | template: dependabot.yml | template-version: 3
 #
 # GROUPING IS THE POINT OF THIS FILE. Ungrouped, one vulnerable transitive
 # dependency can open a dozen PRs; across this org that turned 74 alerts into a
@@ -20,15 +39,22 @@
 # need a human, and dependabot-auto-merge.yml holds them anyway. A major that
 # is ALSO a security fix still comes through as its own security PR — security
 # updates ignore version-update ignore rules, which is the behaviour we want.
+#
+# ONE ENTRY PER (ECOSYSTEM, DIRECTORY). Dependabot reads the manifest at
+# `directory:` and does NOT recurse, so a monorepo needs one entry per manifest
+# location — the grouping above is per entry, so per-directory entries stay
+# grouped rather than reverting to a flood.
 
 version: 2
 updates:
 # {{IF:GITHUB_ACTIONS}}
   # Workflow YAML only — no lockfile, so these always apply cleanly. Also feeds
   # SHA-pinning hygiene, since Dependabot rewrites pinned SHAs with a version
-  # comment rather than reverting them to floating tags.
+  # comment rather than reverting them to floating tags. Always "/": Dependabot
+  # scans .github/workflows at the repo root only.
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -39,10 +65,12 @@ updates:
       actions-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:NPM}}
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "npm"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -59,6 +87,7 @@ updates:
       # security updates deliberately bypass version-update ignore rules.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:BUN}}
   # Native bun ecosystem (GA 2025-02): Dependabot reads and rewrites the text
@@ -67,8 +96,9 @@ updates:
   # security updates are not yet supported upstream. The security group is
   # declared anyway (parity with npm): the applies-to trap is identical, and
   # this way coverage lands pre-grouped the day GitHub ships it.
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "bun"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -85,10 +115,16 @@ updates:
       # security updates deliberately bypass version-update ignore rules.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:NUGET}}
+  # One entry per project folder: Dependabot's nuget ecosystem does not
+  # recurse, so a lane pointed at a solution folder that holds no .csproj
+  # discovers nothing and reports nothing (velovate froze its API dependencies
+  # for months exactly that way).
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "nuget"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -100,10 +136,12 @@ updates:
       nuget-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:PUB}}
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "pub"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -115,10 +153,12 @@ updates:
       pub-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:GOMOD}}
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "gomod"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -130,10 +170,15 @@ updates:
       go-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:CARGO}}
+  # One entry per WORKSPACE ROOT, not per crate: a member of a [workspace]
+  # shares the root's Cargo.lock and is not independently updatable, so a lane
+  # per member would open PRs that cannot resolve.
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "cargo"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -145,10 +190,12 @@ updates:
       cargo-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:SWIFT}}
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "swift"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -160,10 +207,15 @@ updates:
       swift-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:GRADLE}}
+  # One entry per BUILD ROOT (the directory holding settings.gradle) — an
+  # app/build.gradle beneath it is a module of the same build, and a lane
+  # pointed at it would duplicate the root's PRs.
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "gradle"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -175,10 +227,12 @@ updates:
       gradle-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:PIP}}
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "pip"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -190,10 +244,12 @@ updates:
       pip-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}
 # {{IF:DOCKER}}
+# {{FOREACH:DIRECTORY}}
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "{{DIRECTORY}}"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -201,4 +257,5 @@ updates:
       docker-security:
         applies-to: security-updates
         patterns: ["*"]
+# {{ENDFOREACH}}
 # {{ENDIF}}

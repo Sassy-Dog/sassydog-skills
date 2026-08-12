@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# test-dependabot-render.sh — proves setup-deps renders a dependabot.yml whose
+# lanes point at the directories a real consumer repo actually has (issue #169).
+#
+# Why this exists: the bug it guards is INVISIBLE in the render. A v2 render was
+# always valid YAML — every lane just said `directory: "/"`, where no manifest
+# lived, and Dependabot answers that by doing nothing and reporting nothing. The
+# repo whose config would have been regressed on the next refresh (tailoredtip:
+# bun /web, bun /scripts, pub /app, gradle /app/android, all stamped with this
+# generator's marker) is therefore the fixture that matters most, and its
+# expected output is not transcribed here — it is EXTRACTED from the committed
+# upstream file under scripts/fixtures/legacy-markers/, whose bytes
+# test-ownership-matchers.sh independently pins to their source blob.
+#
+# Three properties are asserted:
+#
+#   1. The render's (ecosystem, directory) pairs match the fixture's recorded
+#      expectation, for three real consumer layouts — a Flutter+bun monorepo, a
+#      polyglot workspaces monorepo, and a two-workspace cargo repo.
+#   2. validate-dependabot.sh passes on every render: each lane is backed by a
+#      tracked manifest in the directory it names.
+#   3. The pre-fix shape FAILS that validation. A "v2" render of the same repo
+#      (every lane collapsed onto "/") is generated and fed to the validator,
+#      which must reject it — otherwise the check that replaced "valid by
+#      construction" is not actually checking anything.
+#
+# Fixtures: scripts/fixtures/dependabot-render/<repo>.corpus is the repo's
+# tracked path list (with the handful of manifest bodies whose CONTENT decides
+# the derivation), and <repo>.expected the lanes it must produce, with the
+# deliberate differences from that repo's committed config recorded in its
+# header.
+#
+# Wired into scripts/preflight.sh; run directly:
+#   bash scripts/test-dependabot-render.sh
+set -uo pipefail
+export LC_ALL=C
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -z "$REPO_ROOT" ] && { echo "test-dependabot-render: not in a git repo" >&2; exit 1; }
+cd "$REPO_ROOT" || exit 1
+
+command -v jq >/dev/null 2>&1 || { echo "test-dependabot-render: jq not on PATH" >&2; exit 1; }
+
+SCRIPTS="skills/setup-deps/scripts"
+FIXTURES="scripts/fixtures/dependabot-render"
+LEGACY="scripts/fixtures/legacy-markers"
+DELIMITER='^# ---8<---'
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+fail=0
+ok() { echo "  ok    $1" >&2; }
+bad() { echo "  FAIL  $1" >&2; fail=1; }
+
+echo "dependabot-render tests (work: $WORK)" >&2
+
+# Assert the fixture set is non-empty FIRST: a glob that matched nothing would
+# walk zero fixtures and report all-green while covering nothing.
+corpora=$(git ls-files "$FIXTURES/*.corpus")
+if [ -z "$corpora" ]; then
+    bad "fixture set — no tracked *.corpus files under $FIXTURES (moved or renamed? the run would pass while covering nothing)"
+    echo "dependabot-render tests: FAILURES above" >&2
+    exit 1
+fi
+
+# body <file> — everything after the ---8<--- delimiter line.
+body() {
+    local d
+    d=$(grep -n "$DELIMITER" "$1" | head -n1 | cut -d: -f1)
+    [ -n "$d" ] || return 1
+    tail -n +"$((d + 1))" "$1"
+}
+
+# materialize <corpus-body> <dir> — recreate the recorded tree: every path as a
+# file, with content only where the fixture records it (Cargo.toml's
+# [workspace] table is what tells a workspace root from a member).
+materialize() {
+    local src="$1" dest="$2" line path content
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        path="${line%%$'\t'*}"
+        content=""
+        [ "$path" != "$line" ] && content="${line#*$'\t'}"
+        mkdir -p "$dest/$(dirname "$path")"
+        printf '%s\n' "$content" > "$dest/$path"
+        printf '%s\n' "$path"
+    done < "$src"
+}
+
+for corpus in $corpora; do
+    name="$(basename "$corpus" .corpus)"
+    expected="$FIXTURES/$name.expected"
+    tree="$WORK/$name/tree"
+    mkdir -p "$tree"
+
+    if ! body "$corpus" > "$WORK/$name.body"; then
+        bad "$name — corpus has no ---8<--- delimiter"
+        continue
+    fi
+    materialize "$WORK/$name.body" "$tree" > "$WORK/$name.files"
+
+    if [ ! -r "$expected" ]; then
+        bad "$name — no committed $expected"
+        continue
+    fi
+
+    if ! bash "$SCRIPTS/detect-ecosystems.sh" --files-from "$WORK/$name.files" --root "$tree" \
+        > "$WORK/$name.detect.json" 2> "$WORK/$name.detect.err"; then
+        bad "$name — detect-ecosystems.sh failed: $(tail -n1 "$WORK/$name.detect.err")"
+        continue
+    fi
+
+    if ! bash "$SCRIPTS/render-dependabot.sh" --detect-json "$WORK/$name.detect.json" \
+        > "$WORK/$name.yml" 2> "$WORK/$name.render.err"; then
+        bad "$name — render-dependabot.sh failed: $(tail -n1 "$WORK/$name.render.err")"
+        continue
+    fi
+
+    # 1. the lanes the render declares
+    if ! bash "$SCRIPTS/validate-dependabot.sh" "$WORK/$name.yml" --pairs-only \
+        > "$WORK/$name.pairs" 2>/dev/null; then
+        bad "$name — could not extract lanes from the render"
+        continue
+    fi
+    if diff -u <(body "$expected" | sort) <(sort "$WORK/$name.pairs") > "$WORK/$name.diff"; then
+        ok "$name — render matches $expected ($(grep -c . "$WORK/$name.pairs") lanes)"
+    else
+        bad "$name — render does not match $expected:"
+        sed 's/^/        /' "$WORK/$name.diff" >&2
+    fi
+
+    # 2. every lane is backed by a manifest in the directory it names
+    if bash "$SCRIPTS/validate-dependabot.sh" "$WORK/$name.yml" \
+        --root "$tree" --files-from "$WORK/$name.files" > /dev/null 2> "$WORK/$name.val.err"; then
+        ok "$name — every rendered lane is backed by a tracked manifest"
+    else
+        bad "$name — validate-dependabot.sh rejected the render:"
+        grep 'FAIL' "$WORK/$name.val.err" | sed 's/^/        /' >&2
+    fi
+
+    # 3. the pre-fix shape must be REJECTED. Collapse every lane onto "/", the
+    #    v2 render, and require the validator to catch it — a validator that
+    #    passes this proves nothing about the renders above.
+    sed -E 's#^( *directory: ")[^"]*(")#\1/\2#' "$WORK/$name.yml" > "$WORK/$name.v2.yml"
+    if cmp -s "$WORK/$name.yml" "$WORK/$name.v2.yml"; then
+        ok "$name — root-only repo: the v2 shape is the correct shape here, nothing to reject"
+    elif bash "$SCRIPTS/validate-dependabot.sh" "$WORK/$name.v2.yml" \
+        --root "$tree" --files-from "$WORK/$name.files" >/dev/null 2>&1; then
+        bad "$name — the validator ACCEPTED the collapsed-to-\"/\" v2 render; the post-render check is not checking anything"
+    else
+        ok "$name — the collapsed-to-\"/\" v2 render is rejected"
+    fi
+done
+
+# --- the regression case, against real committed bytes -----------------------
+# tailoredtip is the repo a refresh would have regressed: marked owned, content
+# diverged past what v2 could produce. Its expectation is EXTRACTED from the
+# committed upstream copy of its dependabot.yml rather than transcribed, so
+# this cannot pass by agreeing with a copy we wrote ourselves.
+TT_FIXTURE="$LEGACY/tailoredtip-dependabot.fixture"
+if [ -r "$TT_FIXTURE" ] && [ -r "$WORK/tailoredtip.pairs" ]; then
+    body "$TT_FIXTURE" > "$WORK/tt-committed.yml"
+    if bash "$SCRIPTS/validate-dependabot.sh" "$WORK/tt-committed.yml" --pairs-only \
+        > "$WORK/tt-committed.pairs" 2>/dev/null; then
+        if diff -u <(sort "$WORK/tt-committed.pairs") <(sort "$WORK/tailoredtip.pairs") > "$WORK/tt.diff"; then
+            ok "tailoredtip — the render reproduces its COMMITTED lanes exactly (incl. both bun blocks)"
+        else
+            bad "tailoredtip — the render does not reproduce its committed lanes:"
+            sed 's/^/        /' "$WORK/tt.diff" >&2
+        fi
+    else
+        bad "tailoredtip — could not extract lanes from $TT_FIXTURE"
+    fi
+else
+    bad "tailoredtip — missing $TT_FIXTURE or its render; the regression case did not run"
+fi
+
+if [ "$fail" -eq 0 ]; then
+    echo "dependabot-render tests: all green" >&2
+    exit 0
+fi
+echo "dependabot-render tests: FAILURES above" >&2
+exit 1

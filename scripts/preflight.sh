@@ -46,8 +46,13 @@
 #      relabel-then-delete migrate mode cannot delete a label whose relabel has
 #      not been verified by re-query (issue #163). Mock gh only; the MODE
 #      itself is never run in CI, because it mutates other repos' issues.
-#  10. markdownlint (pinned markdownlint-cli2 version)
-#  11. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#  10. dependabot-render tests (scripts/test-dependabot-render.sh) — setup-deps
+#      renders one lane per (ecosystem, DIRECTORY) and every lane is backed by a
+#      manifest in the directory it names, against three recorded consumer
+#      layouts; the collapsed-to-"/" v2 shape must be REJECTED (issue #169).
+#      Recorded file lists only: no repo, no network.
+#  11. markdownlint (pinned markdownlint-cli2 version)
+#  12. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -330,7 +335,20 @@ else
     failed "label-migrate tests (scripts/test-label-migrate.sh)"
 fi
 
-# --- 10. markdownlint --------------------------------------------------------
+# --- 10. dependabot-render tests -----------------------------------------------
+# setup-deps stopped being valid-by-construction when its template gained a
+# per-(ecosystem, directory) repeat (issue #169), so the render is checked
+# dynamically instead — here against recorded consumer file lists, and at run
+# time by validate-dependabot.sh against the repo being written into. The gate
+# also asserts the OLD shape fails: a validator that accepts every lane
+# collapsed onto "/" proves nothing.
+if bash scripts/test-dependabot-render.sh; then
+    pass "dependabot-render tests (scripts/test-dependabot-render.sh)"
+else
+    failed "dependabot-render tests (scripts/test-dependabot-render.sh)"
+fi
+
+# --- 11. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -345,7 +363,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 11. actionlint (best-effort locally; CI runs its own dockerized step) ---
+# --- 12. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then

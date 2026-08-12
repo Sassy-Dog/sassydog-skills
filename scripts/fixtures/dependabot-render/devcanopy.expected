@@ -1,0 +1,15 @@
+# fixture-expectation-for: Sassy-Dog/devcanopy
+# fixture-expectation-source: the repo's committed .github/dependabot.yml (hand-written, no
+#   generated-by marker) at ref f2d5f8f67382c9e99922a06486d8bcd172f322b7 — cargo /agent, cargo /,
+#   npm /tests/frontend, github-actions /. The render reproduces it exactly.
+# fixture-note: the cargo case that proves the workspace rule. Thirteen tracked Cargo.toml files
+#   collapse to TWO lanes: the repo-root workspace and agent/, which declares its own (empty)
+#   [workspace] table on purpose. The nine crates/* members and app/src-tauri share the root's
+#   Cargo.lock and are not independently updatable — a lane per member would open PRs that cannot
+#   resolve. That distinction is not visible in the paths, which is why the derivation reads the
+#   manifest here and the corpus fixture records the [workspace] line.
+# ---8<--- ecosystem<TAB>directory, one rendered lane per line
+cargo	/
+cargo	/agent
+github-actions	/
+npm	/tests/frontend

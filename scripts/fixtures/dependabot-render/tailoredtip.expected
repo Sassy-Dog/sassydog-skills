@@ -1,0 +1,18 @@
+# fixture-expectation-for: Sassy-Dog/tailoredtip
+# fixture-expectation-source: the repo's committed .github/dependabot.yml — the same bytes are
+#   committed verbatim as scripts/fixtures/legacy-markers/tailoredtip-dependabot.fixture, and
+#   test-dependabot-render.sh additionally diffs the render against THAT file rather than this
+#   one, so this list cannot drift into being the only thing the render is checked against.
+# fixture-note: THE regression case. The committed file carries this generator's marker under its
+#   pre-rename producer name at template-version 2, so the ownership matcher calls it ours, while
+#   its content diverged past anything v2 could render — a v2 reconcile collapsed all four lanes
+#   onto "/" and dropped one of the two bun blocks. Every lane below must survive.
+# fixture-note: cocoapods IS detected here (/app/ios, /app/macos) and deliberately renders no
+#   lane: Dependabot has no cocoapods ecosystem at all. It drives the lockfile-sync-pod decision
+#   instead (and tailoredtip gitignores Podfile.lock, so that workflow is skipped there too).
+# ---8<--- ecosystem<TAB>directory, one rendered lane per line
+bun	/scripts
+bun	/web
+github-actions	/
+gradle	/app/android
+pub	/app
