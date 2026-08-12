@@ -1,4 +1,4 @@
-# TEMPLATE: dependabot-auto-merge · version 1
+# TEMPLATE: dependabot-auto-merge · version 2
 # Rendered by sassy-dog:setup-deps.
 #   {{FACT}}              → replace with the detected/confirmed value
 #   {{RUNNER}}            → runs-on value. Default [self-hosted, linux, sassy-dog]
@@ -10,7 +10,7 @@
 #                           and every render is valid by construction.
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:setup-deps | template: dependabot-auto-merge | template-version: 1
+# generated-by: sassy-dog:setup-deps | template: dependabot-auto-merge | template-version: 2
 #
 # Auto-merge green Dependabot PRs so security bumps do not rot in the queue.
 #
@@ -48,6 +48,32 @@ jobs:
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A secret this repo cannot reach resolves to the EMPTY STRING, never an
+      # error, so the mint below fails as an opaque auth error that reads as
+      # unrelated to its cause — the failure mode issue #178 documents. Name the
+      # cause here rather than leaving it to be rediscovered from a stack trace.
+      #
+      # The cause is almost always repo visibility: org secrets at `private`
+      # visibility cover private + internal repos and EXCLUDE public ones, in the
+      # Actions and Dependabot stores alike. setup-deps refuses to render this
+      # workflow into a public repo for exactly that reason — but that check runs
+      # at RENDER time, and cannot see a repo that was internal when rendered and
+      # went public afterwards. That repo keeps this workflow and finds out on its
+      # next Dependabot PR, which may be weeks later.
+      - name: Require the app credentials
+        env:
+          APP_ID: ${{ secrets.PLATFORM_WRITER_APP_ID }}
+          APP_KEY: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
+        run: |
+          missing=
+          [ -n "$APP_ID" ]  || missing="$missing PLATFORM_WRITER_APP_ID"
+          [ -n "$APP_KEY" ] || missing="$missing PLATFORM_WRITER_APP_PRIVATE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Dependabot secret(s):$missing — org secrets are private-visibility and do not reach public repositories. If this repo has gone public, this workflow should be REMOVED rather than re-credentialed (Sassy-Dog/sassydog-skills#178)."
+            exit 1
+          fi
+          echo "App credentials present."
 
       - name: Mint GitHub App token
         id: app_token
