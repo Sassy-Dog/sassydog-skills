@@ -10,9 +10,14 @@ degraded run rather than a silent no-op (#97, #98).
 | `weekly-portfolio-currency` | `sassy-dog:whats-behind` | `skills/whats-behind/SKILL.md` |
 
 Routines are keyed by name here rather than by `trig_…` id. Two reasons: this repo is public, and
-ids are **mutable** — the routines API has no delete, so replacing a routine mints a new id and any
-id committed here goes quietly wrong. Resolve the current id by name when you need it, from the
-Routines list in claude.ai or the triggers API.
+ids are **mutable** — replacing a routine mints a new id, so an id committed here goes quietly
+wrong. Resolve the current id by name when you need it, from the Routines list in claude.ai or the
+triggers API.
+
+Note the asymmetry if you are scripting against routines: **delete exists only in the claude.ai UI,
+not in the triggers API.** An agent can create a routine it cannot remove, so anything created
+programmatically needs a human to finish the cleanup — disable it and rename it so the leftover is
+unmistakable in the meantime.
 
 The routine prompts themselves are untracked config living behind the routines API, outside this
 repo. This doc covers the one thing that *is* durable about a run: its log.
