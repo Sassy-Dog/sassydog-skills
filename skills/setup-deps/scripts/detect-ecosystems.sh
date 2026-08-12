@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 # detect-ecosystems.sh — read-only probe: which Dependabot ecosystems does THIS
-# repo actually have, and which of them will hand Dependabot a lockfile it cannot
-# regenerate? Emits one JSON object; every probe degrades to detected:false and
-# appends to detect_failures rather than aborting (same contract as
-# setup-hooks' detect-hook-stack.sh).
+# repo actually have, AT WHICH DIRECTORIES, and which of them will hand
+# Dependabot a lockfile it cannot regenerate? Emits one JSON object; every probe
+# degrades to detected:false and appends to detect_failures rather than
+# aborting (same contract as setup-hooks' detect-hook-stack.sh).
 #
 # Evidence rule: an ecosystem counts as detected only on TRACKED REPO FILES —
 # never on what happens to be installed on this machine, because the rendered
 # config must hold on every teammate's machine and in CI.
+#
+# `directories` is why this probe is not just a yes/no. Dependabot reads the
+# manifest AT `directory:` and does not recurse, so an ecosystem detected in a
+# subdirectory and reported without its location renders as `directory: "/"` —
+# valid YAML pointing at nothing, and Dependabot then silently does nothing
+# (issue #169: tailoredtip's four correctly-directed lanes would have collapsed
+# onto the root on the next refresh). The derivation rules, and the two
+# ecosystems that collapse to a build/workspace root, live in
+# lib-ecosystems.sh.
 #
 # `lockfile_risk` is the field that matters most. Dependabot updates a manifest
 # (package.json, Podfile) but only writes the lockfile formats it supports. When
@@ -18,9 +27,9 @@
 # ecosystem GA'd (2025-02) the text bun.lock is written natively, so the risk
 # survives only for the binary bun.lockb and for cocoapods.
 #
-# Matching is by PATH REGEX over `git ls-files`, not git pathspec globs: a
-# pathspec like 'package.json' matches only the repo root, which would silently
-# report "no npm" for every workspaces monorepo in the org. Anchor with (^|/).
+# Matching is by PATH REGEX over the corpus, not git pathspec globs: a pathspec
+# like 'package.json' matches only the repo root, which would silently report
+# "no npm" for every workspaces monorepo in the org. Anchor with (^|/).
 #
 # A VENDORED EXAMPLE MANIFEST IS NOT A PROJECT. Scaffolder templates, test
 # fixtures and sample projects commit real-looking manifests (a scaffolding
@@ -37,42 +46,61 @@
 # filter is visible rather than silent.
 #
 # Usage: detect-ecosystems.sh   (run from anywhere inside the target repo)
-# Exit:  0 ok · 1 jq missing or not a git repo
+#        detect-ecosystems.sh --files-from LIST --root DIR   (test hook only —
+#          run the derivation against a recorded file list instead of a repo;
+#          see scripts/test-dependabot-render.sh. Nothing in SKILL.md uses it.)
+# Exit:  0 ok · 1 jq missing, not a git repo, or a bad test-hook argument
 set -uo pipefail
 
 command -v jq >/dev/null 2>&1 || { echo "detect-ecosystems: jq not on PATH" >&2; exit 1; }
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "detect-ecosystems: not in a git repo" >&2; exit 1; }
+
+# shellcheck source=./lib-ecosystems.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-ecosystems.sh"
+
+FILES_FROM=""
+ROOT_ARG=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --files-from) FILES_FROM="${2:-}"; shift 2 || exit 1 ;;
+        --root)       ROOT_ARG="${2:-}"; shift 2 || exit 1 ;;
+        *) echo "detect-ecosystems: unknown argument '$1'" >&2; exit 1 ;;
+    esac
+done
+
+if [ -n "$FILES_FROM" ]; then
+    [ -r "$FILES_FROM" ] || { echo "detect-ecosystems: cannot read --files-from '$FILES_FROM'" >&2; exit 1; }
+    [ -n "$ROOT_ARG" ] || { echo "detect-ecosystems: --files-from requires --root" >&2; exit 1; }
+    ROOT="$ROOT_ARG"
+else
+    ROOT="${ROOT_ARG:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+    [ -n "$ROOT" ] || { echo "detect-ecosystems: not in a git repo" >&2; exit 1; }
+fi
 cd "$ROOT" || exit 1
+# shellcheck disable=SC2034  # read by lib-ecosystems.sh's content probes
+CORPUS_ROOT="$ROOT"
 
-ALL_FILES="$(git ls-files 2>/dev/null)" || { echo "detect-ecosystems: git ls-files failed" >&2; exit 1; }
-
-EXCLUDE_RE='(^|/)(templates?|fixtures?|__fixtures__|testdata|test-?data|examples?|node_modules)(/|$)'
-FILES="$(grep -Ev "$EXCLUDE_RE" <<<"$ALL_FILES")"
-excluded="$(grep -E "$EXCLUDE_RE" <<<"$ALL_FILES")"
-excluded_count=0
-[ -n "$excluded" ] && excluded_count="$(grep -c '' <<<"$excluded")"
+load_corpus "$FILES_FROM" || { echo "detect-ecosystems: could not load the file corpus" >&2; exit 1; }
 
 failures=()
 note() { failures+=("$1"); }
 
 results=""
-# add <ecosystem> <detected 0/1> <lockfile_risk 0/1> <why>
+# add <ecosystem> <detected 0/1> <lockfile_risk 0/1> <why> — a detected
+# ecosystem also carries the directories it was detected AT.
 add() {
-    local name="$1" det="$2" risk="$3" why="$4"
-    results+=$(jq -cn --arg n "$name" --argjson d "$det" --argjson r "$risk" --arg w "$why" \
-        '{($n): {detected: ($d == 1), lockfile_risk: ($r == 1), why: $w}}')$'\n'
+    local name="$1" det="$2" risk="$3" why="$4" dirs_json='[]'
+    if [ "$det" = "1" ]; then
+        dirs_json="$(ecosystem_dirs "$name" | jq -Rs 'split("\n")|map(select(length>0))')"
+        if [ "$dirs_json" = "[]" ]; then
+            # Detected but located nowhere: refusing to guess "/" is the whole
+            # point — a lane at a directory with no manifest finds nothing and
+            # says nothing about it.
+            note "$name: detected but no directory could be derived — render it by hand or fix the derivation"
+        fi
+    fi
+    results+=$(jq -cn --arg n "$name" --argjson d "$det" --argjson r "$risk" --arg w "$why" --argjson dirs "$dirs_json" \
+        '{($n): {detected: ($d == 1), lockfile_risk: ($r == 1), directories: $dirs, why: $w}}')$'\n'
 }
-
-# has <path-regex> — anchored at a path segment boundary, so it finds nested
-# manifests in monorepos as well as root ones. Runs over the vendored-filtered
-# FILES, never ALL_FILES.
-#
-# Herestring, NOT `printf ... | grep -q`. Under `set -o pipefail`, `grep -q`
-# exits on the first match, the writer takes SIGPIPE, and the pipeline reports
-# 141 — so a MATCH reads as a miss. It only trips once the file list is long
-# enough that the writer is still going when grep bails, which means it silently
-# under-detects the largest repos while every small-repo test passes.
-has() { grep -qE "$1" <<<"$FILES"; }
 
 # --- github-actions: always safe. Touches workflow YAML only, no lockfile. ---
 det=0; why="no tracked .github/workflows/*.y*ml"
@@ -127,7 +155,8 @@ add "npm" "$det" "$risk" "$why"
 
 # --- cocoapods: Dependabot has NO cocoapods ecosystem at all ----------------
 # Pods drift in via a Podfile that a native bump touches; the .lock must be
-# refreshed out of band. Flagged so the caller renders the pod sync workflow.
+# refreshed out of band. Flagged so the caller renders the pod sync workflow —
+# the directories are the Podfile folders, which is where that workflow runs.
 det=0; risk=0; why="no tracked Podfile"
 if has '(^|/)Podfile$'; then
     det=1; risk=1; why="tracked Podfile — no Dependabot cocoapods ecosystem; needs lockfile sync"
@@ -183,13 +212,20 @@ add "docker" "$det" 0 "$why"
 # --- CI workflow: the check a merge gate would require ----------------------
 ci_workflow=""
 for cand in ci.yml ci.yaml CI.yml build.yml test.yml; do
-    if [ -f ".github/workflows/$cand" ]; then ci_workflow="$cand"; break; fi
+    if grep -qx "\.github/workflows/$cand" <<<"$FILES"; then ci_workflow="$cand"; break; fi
 done
 [ -z "$ci_workflow" ] && note "no conventional CI workflow file (ci.yml/build.yml/test.yml) found"
 
-repo_slug="$(git config --get remote.origin.url 2>/dev/null \
-    | sed -E 's#(git@|https://)github\.com[:/]##; s#\.git$##')"
-[ -z "$repo_slug" ] && note "no origin remote — repo slug unresolved"
+# Anything a content probe could not read degrades to a note rather than an
+# abort — same contract as every other probe here.
+while IFS= read -r n; do [ -n "$n" ] && note "$n"; done <<<"${CORPUS_NOTES:-}"
+
+repo_slug=""
+if [ -z "$FILES_FROM" ]; then
+    repo_slug="$(git config --get remote.origin.url 2>/dev/null \
+        | sed -E 's#(git@|https://)github\.com[:/]##; s#\.git$##')"
+    [ -z "$repo_slug" ] && note "no origin remote — repo slug unresolved"
+fi
 
 fails_json="$(printf '%s\n' "${failures[@]+"${failures[@]}"}" | jq -Rs 'split("\n")|map(select(length>0))')"
 
@@ -197,7 +233,7 @@ printf '%s' "$results" | jq -s \
     --arg repo "$repo_slug" \
     --arg ci "$ci_workflow" \
     --arg excl_re "$EXCLUDE_RE" \
-    --argjson excl_n "$excluded_count" \
+    --argjson excl_n "$EXCLUDED_COUNT" \
     --argjson fails "$fails_json" \
     'add | {
         repo: $repo,
@@ -205,6 +241,7 @@ printf '%s' "$results" | jq -s \
         ecosystems: .,
         present: [ to_entries[] | select(.value.detected) | .key ],
         needs_lockfile_sync: [ to_entries[] | select(.value.detected and .value.lockfile_risk) | .key ],
+        locations: [ to_entries[] | select(.value.detected) as $e | $e.value.directories[] | {ecosystem: $e.key, directory: .} ],
         vendored_excluded: { count: $excl_n, pattern: $excl_re },
         detect_failures: $fails
      }'

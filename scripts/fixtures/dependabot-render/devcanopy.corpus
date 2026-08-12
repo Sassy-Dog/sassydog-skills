@@ -1,0 +1,24 @@
+# fixture-source-repo: Sassy-Dog/devcanopy
+# fixture-source-ref: f2d5f8f67382c9e99922a06486d8bcd172f322b7
+# fixture-fetched: 2026-08-11
+# fixture-scope: every tracked path that can match an ecosystem probe (manifests, lockfiles, .github/workflows). Paths that cannot change the derivation are omitted to keep the fixture readable; nothing else is filtered, so vendored manifests still reach the exclude filter.
+# fixture-regen: gh api "repos/Sassy-Dog/devcanopy/git/trees/f2d5f8f67382c9e99922a06486d8bcd172f322b7?recursive=1" --jq '.tree[]|select(.type=="blob")|.path' | sort | grep -E '(^|/)(package\.json|bun\.lock|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|pubspec\.yaml|Podfile|go\.mod|Package\.swift|Cargo\.toml|requirements\.txt|pyproject\.toml|setup\.py|Pipfile|settings\.gradle(\.kts)?|build\.gradle(\.kts)?|Directory\.Packages\.props|packages\.config)$|(^|/)Dockerfile[^/]*$|\.(csproj|vbproj|fsproj|sln)$|^\.github/workflows/[^/]+\.ya?ml$'
+# fixture-content: a TAB-separated body follows the path only where the CONTENT decides the derivation (Cargo.toml's [workspace] table); it is the verbatim marker line from upstream.
+# ---8<--- one tracked path per line below; optional TAB-separated content
+.github/workflows/ci.yml
+.github/workflows/dependabot-auto-merge.yml
+agent/Cargo.toml	[workspace]
+app/src-tauri/Cargo.toml
+Cargo.toml	[workspace]
+crates/agentclient/Cargo.toml
+crates/azurecost/Cargo.toml
+crates/github/Cargo.toml
+crates/localhost/Cargo.toml
+crates/openclaw/Cargo.toml
+crates/servicestatus/Cargo.toml
+crates/store/Cargo.toml
+crates/usage/Cargo.toml
+crates/viewmodel/Cargo.toml
+crates/wire/Cargo.toml
+tests/frontend/package-lock.json
+tests/frontend/package.json

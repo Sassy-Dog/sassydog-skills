@@ -24,10 +24,14 @@ It renders up to three things:
 
 | File | When |
 |---|---|
-| `.github/dependabot.yml` | always — grouped, per detected ecosystem |
+| `.github/dependabot.yml` | always — grouped, one entry per (ecosystem, **directory**) |
 | `.github/workflows/dependabot-auto-merge.yml` | when the repo has a merge gate |
-| `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow |
+| `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow. One per bun install root, not one per repo |
 | `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected **and** the app's `ios/Podfile.lock` is tracked (see §3) |
+
+Bundled scripts (`scripts/`): `detect-ecosystems.sh` (probe), `render-dependabot.sh` (render),
+`validate-dependabot.sh` (post-render assertion + divergence check), and `lib-ecosystems.sh` — the
+one ecosystem table all three read, so the validator can never agree with a renderer that is wrong.
 
 Ownership marker: the `generated-by:` comment on the first non-blank line after the YAML document
 start. Re-runs reconcile **only** files carrying that marker — a hand-written `dependabot.yml` is
@@ -63,11 +67,43 @@ because they carry a superseded name is the silent-failure path this contract ex
 bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/detect-ecosystems.sh
 ```
 
-Emits `{repo, ci_workflow, ecosystems{}, present[], needs_lockfile_sync[], vendored_excluded{},
-detect_failures[]}`. Evidence is tracked repo files only, never what is installed locally.
+Emits `{repo, ci_workflow, ecosystems{<eco>: {detected, lockfile_risk, directories[], why}},
+present[], needs_lockfile_sync[], locations[], vendored_excluded{}, detect_failures[]}`. Evidence
+is tracked repo files only, never what is installed locally.
 
 `needs_lockfile_sync` is the field that decides whether this repo's Dependabot PRs can ever merge.
 Read §3 before skipping it.
+
+**`directories` is the field that decides whether Dependabot finds anything at all.** Dependabot
+reads the manifest AT `directory:` and does not recurse, so an ecosystem detected in a
+subdirectory and rendered at `/` is a lane pointing at nothing — valid YAML, zero PRs, no error
+(issue #169). The probe therefore reports one directory per manifest, with two ecosystem-specific
+collapses that are backed by a consumer repo's committed config rather than a guess: **gradle**
+folds modules into the build root that holds `settings.gradle` (tailoredtip: `/app/android`, never
+`/app/android/app`) and **cargo** folds `[workspace]` members into their workspace root (devcanopy:
+`/` and `/agent`, never the nine `crates/*`). npm/bun, pub, nuget and docker do **not** collapse —
+velovate's hand-written config lists every workspace member, every pubspec including a nested one,
+every `.csproj` folder and every Dockerfile folder, and that is the coverage it wants. An ecosystem
+detected with an empty `directories` is reported in `detect_failures` and rendered as nothing;
+never paper over it with `/`.
+
+### The diverged-but-owned case
+
+Before reconciling an owned `dependabot.yml`, render the fresh one (§3) and compare it with what
+is already committed:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/validate-dependabot.sh /tmp/dependabot.new.yml \
+  --compare-to .github/dependabot.yml
+```
+
+Any lane the existing file declares that the fresh render does not is printed as `DIVERGED` and
+fails the run. **That is the stop signal, not a formality.** A file stamped `template-version: N`
+whose content a fresh render of N no longer reproduces is the most dangerous state this generator
+has: the matcher says "mine, reconcile it", the render quietly drops lanes the repo depends on, and
+nothing errors — tailoredtip sat in exactly that state with four correctly-directed lanes under a
+v2 marker. Report the dropped lanes to the user and stop; do not overwrite, and do not "fix" it by
+re-stamping the marker, which only launders a diverged file as current.
 
 **A vendored example manifest is not a project.** Scaffolder templates, test fixtures and sample
 projects commit real-looking manifests, and an unfiltered path match counts them as evidence: a
@@ -139,9 +175,26 @@ Classify into exactly one:
 ## 3. Render
 
 Substitute `{{FACT}}` values and delete the `# {{IF:FLAG}}` / `# {{ENDIF}}` blocks that do not
-apply. Rendering only ever DELETES lines, so every template is valid YAML as-is and every render is
-valid by construction — the same guarantee `setup-hooks` relies on. Never hand-edit a
-rendered file to fix a bug; fix the template and re-render.
+apply. Never hand-edit a rendered file to fix a bug; fix the template and re-render.
+
+**`dependabot.yml` is rendered by script, and VALIDATED AFTER RENDER — it is no longer valid by
+construction.** `dependabot.yml.template` v3 repeats a block per (ecosystem, directory) pair, which
+deletion alone cannot express, so the old static guarantee is gone here on purpose. What replaced
+it is stronger: the render is parsed and every emitted `directory:` is asserted to hold the
+manifest it claims. The old guarantee never caught the bug that forced the change — a v2 render was
+always valid YAML, it just pointed at directories with no manifests. (`setup-hooks` keeps its
+deletion-only invariant; it has no per-location repetition and needs none.)
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/detect-ecosystems.sh > /tmp/deps.json
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/render-dependabot.sh \
+  --detect-json /tmp/deps.json --out /tmp/dependabot.new.yml
+bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-deps/scripts/validate-dependabot.sh /tmp/dependabot.new.yml
+```
+
+**Never write a render the validator rejected**, and never "fix" a rejection by editing the output:
+a failing lane means the derivation is wrong, so fix `lib-ecosystems.sh` and re-render. The
+workflow templates stay hand-rendered — they carry no per-location repeat.
 
 Every template already carries the current `generated-by: sassy-dog:setup-deps` marker, so a
 render normalises a pre-rename file's marker for free — keep the template's marker line verbatim
@@ -149,8 +202,8 @@ rather than preserving whatever the existing file carried. Leave each template's
 `template-version` alone unless the template's *content* changed: the producer rename is an
 identity change, and bumping the version would force a needless re-render across every consumer.
 
-Facts: `{{RUNNER}}`, `{{APP_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the release
-workflow). `{{APP_DIR}}` is the Flutter app directory relative to the repo root — `app` for
+Facts: `{{RUNNER}}`, `{{APP_DIR}}`, `{{PKG_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the
+release workflow). `{{APP_DIR}}` is the Flutter app directory relative to the repo root — `app` for
 tailoredtip, `apps/mobile` for velovate, `.` for a root-level app. It replaces the pod template's
 v1 `{{PUBSPEC_PATH}}`/`{{IOS_DIR}}` facts: all three named points on the same directory, and
 overlapping facts that must agree will eventually disagree — every pubspec/Podfile path now
@@ -158,6 +211,16 @@ derives from the one fact. Render rules are in the template header: a nested app
 token and deletes only the `# {{IF:NESTED_APP}}` marker comments; a root-level app deletes those
 blocks wholesale and collapses each `{{APP_DIR}}/` prefix to nothing (a `./` prefix would break
 the `on.paths` filter), which keeps root renders byte-identical to v1 output.
+
+`{{PKG_DIR}}` is the same shape one template over: the **bun install root** for
+`lockfile-sync-bun` — the directory holding the `package.json` + `bun.lock` that workflow syncs
+(`web` for tailoredtip, `.` for qr-ninja), with the identical nested-vs-root render rule
+(`# {{IF:NESTED_PKG}}`, `{{PKG_DIR}}/` collapsing to nothing at the root, so a root render stays
+byte-identical to v5's `'**/package.json'` trigger). v5 assumed the root outright, which is why
+tailoredtip's copy is hand-tuned: reconciling it to v5 would have pointed `bun install` at a
+directory that does not exist and fired the workflow on `scripts/package.json`, which its body
+cannot handle. **One rendered workflow per install root** — a repo with two independent
+`bun.lock` files needs two, each owning its own lockfile.
 
 `{{RUNNER}}` defaults to the Sassy Dog self-hosted fleet — `[self-hosted, linux, sassy-dog]`, or
 `[self-hosted, macOS, sassy-dog]` for the pod template, which **must** have macOS to run
@@ -209,8 +272,9 @@ the lock is the prerequisite change — the template becomes renderable the mome
 gh api "repos/${REPO}/dependabot/alerts?state=open&per_page=100" --jq 'length'
 ```
 
-After the first Dependabot run, confirm the PRs are **grouped** (one per ecosystem, not one per
-package) and that a pod repo's PR — or a legacy npm+sync bun repo's — carries a follow-up lockfile
+After the first Dependabot run, confirm the PRs are **grouped** (one entry per (ecosystem,
+directory), not one per package) and that a pod repo's PR — or a legacy npm+sync bun repo's —
+carries a follow-up lockfile
 commit (a native-`bun` PR edits `bun.lock` in the PR itself; no follow-up). An ungrouped flood means
 a group is missing `applies-to: security-updates` — a group without it covers version updates only,
 silently leaving security PRs ungrouped, and the mistake is invisible until the flood arrives.
@@ -223,3 +287,9 @@ silently leaving security PRs ungrouped, and the mistake is invisible until the 
   what keeps contributor code out of a write-capable context.
 - Never inline `github.event.pull_request.head.ref` into a `run:` shell; funnel it through `env:`.
 - Never overwrite a `dependabot.yml` lacking this generator's marker; report it and stop.
+- Never write a `dependabot.yml` that `validate-dependabot.sh` rejected, and never default a lane
+  to `directory: "/"` because the location is unclear. A lane pointing at a directory with no
+  manifest is the one failure here nothing else surfaces: no error, no PRs, no signal.
+- Never overwrite an owned file whose committed lanes a fresh render drops (`--compare-to`
+  reports `DIVERGED`). Report it and stop — and do not re-stamp its marker, which only makes a
+  diverged file look current.

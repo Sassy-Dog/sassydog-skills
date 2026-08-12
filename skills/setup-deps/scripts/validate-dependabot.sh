@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# validate-dependabot.sh — the post-render assertion that replaced "valid by
+# construction" (issue #169).
+#
+# WHAT IT ASSERTS, and why that is the useful assertion: every `directory:` a
+# dependabot.yml declares must actually HOLD the manifest its ecosystem claims.
+# A v2 render was always valid YAML — it just pointed every lane at "/", where
+# no manifest lived, and Dependabot answers that by doing nothing at all and
+# reporting nothing at all. Structural validity could never catch that; this
+# can, because it checks the file against the repo it is about to be written
+# into.
+#
+# It reads the same tracked-files corpus and the same ecosystem table as
+# detect-ecosystems.sh (lib-ecosystems.sh) on purpose: a second transcription
+# of the table would let this agree with a renderer that is wrong.
+#
+# --compare-to EXISTING covers the DIVERGED-BUT-OWNED case. A file stamped with
+# this generator's marker whose content a fresh render no longer reproduces is
+# a silent-regression hazard: the ownership matcher says "mine, reconcile it",
+# the render then drops lanes the repo actually needs, and nothing errors
+# (tailoredtip carried a v2 marker over four correctly-directed lanes that a v2
+# render would have collapsed onto "/"). Every (ecosystem, directory) pair the
+# existing file has and the fresh render lacks is reported and fails the run —
+# the point is that a human decides, not that the refresh proceeds.
+#
+# Usage:
+#   validate-dependabot.sh FILE [--root DIR] [--files-from LIST]
+#                               [--compare-to EXISTING]
+#   validate-dependabot.sh FILE --pairs-only     # the extracted lanes, nothing
+#                                                # asserted (needs no repo)
+# Exit: 0 every lane is backed by a manifest (and nothing was dropped)
+#       1 a lane points at nothing, the file is structurally unreadable, or a
+#         comparison found dropped lanes
+#       2 bad usage
+set -uo pipefail
+export LC_ALL=C   # comm needs both sides sorted the same way
+
+# shellcheck source=./lib-ecosystems.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-ecosystems.sh"
+
+FILE=""
+ROOT_ARG=""
+FILES_FROM=""
+COMPARE_TO=""
+PAIRS_ONLY=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --root)       ROOT_ARG="${2:-}"; shift 2 || exit 2 ;;
+        --files-from) FILES_FROM="${2:-}"; shift 2 || exit 2 ;;
+        --compare-to) COMPARE_TO="${2:-}"; shift 2 || exit 2 ;;
+        --pairs-only) PAIRS_ONLY=1; shift ;;
+        -*) echo "validate-dependabot: unknown argument '$1'" >&2; exit 2 ;;
+        *)  [ -z "$FILE" ] || { echo "validate-dependabot: one file at a time" >&2; exit 2; }
+            FILE="$1"; shift ;;
+    esac
+done
+
+[ -n "$FILE" ] || { echo "usage: validate-dependabot.sh FILE [--root DIR] [--files-from LIST] [--compare-to EXISTING]" >&2; exit 2; }
+[ -r "$FILE" ] || { echo "validate-dependabot: cannot read '$FILE'" >&2; exit 2; }
+
+abspath() { echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; }
+
+FILE_ABS="$(abspath "$FILE")"
+COMPARE_ABS=""
+if [ -n "$COMPARE_TO" ]; then
+    [ -r "$COMPARE_TO" ] || { echo "validate-dependabot: cannot read --compare-to '$COMPARE_TO'" >&2; exit 2; }
+    COMPARE_ABS="$(abspath "$COMPARE_TO")"
+fi
+
+if [ "$PAIRS_ONLY" -eq 0 ]; then
+    if [ -n "$FILES_FROM" ]; then
+        [ -r "$FILES_FROM" ] || { echo "validate-dependabot: cannot read --files-from '$FILES_FROM'" >&2; exit 2; }
+        [ -n "$ROOT_ARG" ] || { echo "validate-dependabot: --files-from requires --root" >&2; exit 2; }
+        FILES_FROM="$(abspath "$FILES_FROM")"
+        ROOT="$ROOT_ARG"
+    else
+        ROOT="${ROOT_ARG:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+        [ -n "$ROOT" ] || { echo "validate-dependabot: not in a git repo (pass --root)" >&2; exit 2; }
+    fi
+    cd "$ROOT" || exit 2
+    CORPUS_ROOT="$PWD"
+    load_corpus "$FILES_FROM" || { echo "validate-dependabot: could not load the file corpus" >&2; exit 1; }
+fi
+
+# --- extraction --------------------------------------------------------------
+# A line reader rather than a YAML library: no YAML parser is guaranteed on a
+# developer machine or on the self-hosted fleet, and dependabot.yml has a fixed
+# shape. It is deliberately STRICT — an entry with no directory key is REPORTED
+# rather than skipped, because a silently skipped entry is the very class of
+# bug this script exists to catch. Comment lines are dropped first: consumer
+# configs discuss `directory:` in prose (velovate's does), and a reader that
+# swallowed prose would invent lanes nobody declared.
+_scalar() {
+    local s="${1%%#*}"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    s="${s%\"}"; s="${s#\"}"; s="${s%\'}"; s="${s#\'}"
+    printf '%s' "$s"
+}
+
+# _norm_dir — trailing slashes off, except for the root, which IS "/".
+_norm_dir() {
+    local d="$1"
+    while [ "${#d}" -gt 1 ] && [ "${d%/}" != "$d" ]; do d="${d%/}"; done
+    printf '%s' "$d"
+}
+
+# extract_pairs <file> — one "ecosystem<TAB>directory" line per declared lane.
+# Structural complaints ride along as "!STRUCTURE<TAB>message" lines.
+extract_pairs() {
+    local f="$1" line eco="" val item
+    local entry=0 dir_count=0 in_dirs=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*package-ecosystem:[[:space:]]*(.*)$ ]]; then
+            if [ "$entry" -eq 1 ] && [ "$dir_count" -eq 0 ]; then
+                printf '!STRUCTURE\t%s\n' "entry '$eco' declares no directory/directories key"
+            fi
+            eco="$(_scalar "${BASH_REMATCH[1]}")"
+            entry=1; dir_count=0; in_dirs=0
+            continue
+        fi
+        if [[ "$line" =~ ^[[:space:]]*directories:[[:space:]]*(.*)$ ]]; then
+            val="$(_scalar "${BASH_REMATCH[1]}")"
+            if [ -n "$val" ]; then
+                # inline flow list: directories: ["/a", "/b"]
+                in_dirs=0
+                val="${val#[}"; val="${val%]}"
+                while IFS= read -r item; do
+                    item="$(_scalar "$item")"
+                    [ -n "$item" ] || continue
+                    printf '%s\t%s\n' "$eco" "$(_norm_dir "$item")"
+                    dir_count=$((dir_count + 1))
+                done <<<"${val//,/$'\n'}"
+            else
+                in_dirs=1
+            fi
+            continue
+        fi
+        if [[ "$line" =~ ^[[:space:]]*directory:[[:space:]]*(.*)$ ]]; then
+            in_dirs=0
+            val="$(_scalar "${BASH_REMATCH[1]}")"
+            printf '%s\t%s\n' "$eco" "$(_norm_dir "$val")"
+            dir_count=$((dir_count + 1))
+            continue
+        fi
+        if [ "$in_dirs" -eq 1 ]; then
+            # Block-list items are bare scalars starting with '/'. Anything else
+            # (a `- dependency-name: "*"` under ignore:, the next key) closes
+            # the list instead of being swallowed into it.
+            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*[\"\']?(/[^\"\']*)[\"\']?[[:space:]]*$ ]]; then
+                val="$(_scalar "${BASH_REMATCH[1]}")"
+                printf '%s\t%s\n' "$eco" "$(_norm_dir "$val")"
+                dir_count=$((dir_count + 1))
+            else
+                in_dirs=0
+            fi
+        fi
+    done < "$f"
+    if [ "$entry" -eq 1 ] && [ "$dir_count" -eq 0 ]; then
+        printf '!STRUCTURE\t%s\n' "entry '$eco' declares no directory/directories key"
+    fi
+}
+
+fail=0
+ok() { echo "  ok    $1" >&2; }
+bad() { echo "  FAIL  $1" >&2; fail=1; }
+
+raw="$(extract_pairs "$FILE_ABS")"
+structure="$(grep '^!STRUCTURE' <<<"$raw" | cut -f2-)"
+if [ -n "$structure" ]; then
+    while IFS= read -r msg; do [ -n "$msg" ] && bad "$FILE: $msg"; done <<<"$structure"
+fi
+pairs="$(grep -v '^!STRUCTURE' <<<"$raw" | grep -v '^[[:space:]]*$' | sort -u)"
+
+if [ -z "$pairs" ]; then
+    bad "$FILE: no (ecosystem, directory) pairs found — an empty or unreadable config is not a valid render"
+    echo "validate-dependabot: FAILURES above" >&2
+    exit 1
+fi
+
+if [ "$PAIRS_ONLY" -eq 1 ]; then
+    printf '%s\n' "$pairs"
+    [ "$fail" -eq 0 ] || exit 1
+    exit 0
+fi
+
+echo "validate-dependabot: $FILE against $CORPUS_ROOT" >&2
+while IFS=$'\t' read -r eco dir; do
+    [ -n "$eco" ] || continue
+    if [ -z "$dir" ]; then bad "$eco: entry declares an empty directory"; continue; fi
+    case "$dir" in /*) ;; *) bad "$eco '$dir': a Dependabot directory must start with '/'"; continue ;; esac
+    if ! eco_manifest_re "$eco" >/dev/null; then
+        bad "$eco '$dir': ecosystem unknown to setup-deps' table — cannot assert its manifest (hand-written config?)"
+        continue
+    fi
+    if dir_holds_manifest "$eco" "$dir"; then
+        ok "$eco $dir"
+    else
+        bad "$eco '$dir': no tracked $eco manifest in that directory — Dependabot finds nothing there and says nothing about it"
+    fi
+done <<<"$pairs"
+
+# --- divergence --------------------------------------------------------------
+if [ -n "$COMPARE_ABS" ]; then
+    existing="$(extract_pairs "$COMPARE_ABS" | grep -v '^!STRUCTURE' | grep -v '^[[:space:]]*$' | sort -u)"
+    dropped="$(comm -23 <(printf '%s\n' "$existing") <(printf '%s\n' "$pairs"))"
+    added="$(comm -13 <(printf '%s\n' "$existing") <(printf '%s\n' "$pairs"))"
+    if [ -n "$(tr -d '[:space:]' <<<"$dropped")" ]; then
+        while IFS=$'\t' read -r eco dir; do
+            [ -n "$eco" ] || continue
+            bad "DIVERGED: $COMPARE_TO declares $eco '$dir', which this render does not — reconciling would drop that lane silently"
+        done <<<"$dropped"
+    else
+        ok "no lane in $COMPARE_TO is dropped by this render"
+    fi
+    while IFS=$'\t' read -r eco dir; do
+        [ -n "$eco" ] || continue
+        echo "  note  this render adds $eco '$dir' (absent from $COMPARE_TO)" >&2
+    done <<<"$added"
+fi
+
+if [ "$fail" -eq 0 ]; then
+    echo "validate-dependabot: every lane is backed by a tracked manifest" >&2
+    exit 0
+fi
+echo "validate-dependabot: FAILURES above" >&2
+exit 1
