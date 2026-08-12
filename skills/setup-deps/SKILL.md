@@ -261,7 +261,12 @@ the lock is the prerequisite change — the template becomes renderable the mome
 - **`PLATFORM_WRITER_APP_ID` / `PLATFORM_WRITER_APP_PRIVATE_KEY` in the DEPENDABOT secrets store**,
   not the Actions store. Dependabot-triggered runs cannot see Actions secrets at all — this is the
   most common reason a copied workflow silently no-ops. Org-level with `private` visibility
-  (= private + internal) covers every repo; source of truth is Doppler `_scm/github`.
+  (= private + internal); source of truth is Doppler `_scm/github`. **That does NOT cover a public
+  repo** — `private` visibility excludes public repos in both the Actions and Dependabot stores, so
+  the render must not emit this workflow into one (the credentials resolve to empty strings and the
+  failure surfaces weeks later on that repo's next Dependabot PR). See
+  [#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178); a merge gate is a necessary but
+  not sufficient precondition, repo visibility is the other one.
 - **`allow_auto_merge`** on the repo, for the direct-merge arm.
 - A **CI workflow** whose check is actually required. If `detect_failures` reports no conventional
   CI workflow, that repo needs one before auto-merge means anything.

@@ -31,7 +31,8 @@ Return ONLY a list of findings (empty list if none), each with:
 ## Sassy Dog calibration (apply only when the stack is present)
 
 - **Secrets: Doppler is the source of truth.** Every value syncs to GitHub as `secrets.*` — the policy is **all-secrets, zero `vars.*`**. Flag any secret stored as a GitHub *variable*, any committed secret, and any secret not sourced from Doppler.
-- Org Actions secrets default to "Private and internal repositories" access. Flag `visibility: all` (exposes to public repos) unless justified.
+- Org Actions secrets default to "Private and internal repositories" access. Flag `visibility: all` (exposes to public repos) unless justified. Flag the **inverse** too: a `public` repo whose workflows reference org secrets left at `private` visibility — those resolve to empty strings, and the failure surfaces on some later run as an unrelated-looking auth error, never at the moment the visibility changed. Check both the Actions and Dependabot secret stores; they are separate endpoints with separate visibility, and Dependabot-triggered runs can only see the latter.
+- A `public` repo whose workflows run on `[self-hosted, …]` with an unguarded `on: pull_request` is a finding on its own, severity high: fork PRs execute attacker-authored code on your own fleet, and runner persistence can expose what privileged jobs left behind. "Require approval for first-time contributors" only gates drive-bys until one trivial PR lands. Prefer ephemeral hosted runners; if self-hosted is unavoidable, require an actor guard at job level.
 - Runtime Azure access uses **managed identity + Key Vault `kv-sassydog`** — flag connection strings / keys in code or app settings instead.
 - App Store Connect key lives in Doppler `sources/apple` (`APPLE_ASC_*`); consumer repos must reference it, never store their own copy.
 - Web auth: Better Auth (qr-ninja), Stripe webhooks — flag missing signature verification and unprotected routes.
