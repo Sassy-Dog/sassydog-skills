@@ -1,10 +1,15 @@
 # Versioning — sassy-dog plugin instance
 
-This repo's instance of the org **Versioning spec v1.0**
-(`~/Documents/Cortex/Sassy Dog/Architecture/Development/Versioning.md`, frozen
-2026-07-11; full text mirrored on Sassy-Dog/platform#397). When this doc and
-the spec conflict, the spec wins; changes go through platform#397, never a
-local fork. Adopted 2026-07-11 via issue #31. Per spec §9, this doc is
+This repo's instance of the org **Versioning spec v1.0** (frozen 2026-07-11).
+When this doc and the spec conflict, the spec wins, and changes go through the
+spec rather than a local fork.
+
+> **Note for readers outside Sassy Dog:** the spec itself is internal, so the
+> two pointers below resolve only for maintainers — an internal knowledge base
+> (`Sassy Dog/Architecture/Development/Versioning.md`) and its mirror on
+> `Sassy-Dog/platform#397`. Nothing here depends on reading them: this document
+> is self-contained, and `scripts/test-versioning.sh` is the executable copy of
+> every rule it states. Where you want the authority for a rule, read the test. Adopted 2026-07-11 via issue #31. Per spec §9, this doc is
 validated against the scripts at adoption and whenever either changes — the
 validation is automated as `scripts/test-versioning.sh`, run by
 `scripts/preflight.sh` (CI).

@@ -113,7 +113,10 @@ claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills
 
 ## Updating / Troubleshooting
 
-### One-time re-add after the rename to `sassy-dog`
+### One-time re-add after the rename to `sassy-dog` (legacy — pre-2026-08 installs only)
+
+> Skip this unless you installed the plugin before August 2026 under its old name. A fresh
+> install from the [Installation](#installation) section above is unaffected.
 
 The plugin was renamed `ai-agent-skills` → `sassy-dog` and the marketplace `sassy-dog-skills` →
 `sassydog-skills` in the same release (issue #71). A machine that added the marketplace under the
