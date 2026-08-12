@@ -1,5 +1,5 @@
 ---
-pr_template_path: ""
+pr_template_path: ".github/PULL_REQUEST_TEMPLATE.md"
 pr_template_sections: [Summary, Changes, Verification]
 preflight_commands: |
   bash scripts/preflight.sh
@@ -15,7 +15,8 @@ automatic. Confirm `isInMergeQueue` after enqueuing. PRs run the `CI` workflow (
 by branch protection on `main`; `ci.yml` carries the `merge_group` trigger, without which queue
 entries strand.
 
-**PR body** — no `.github/PULL_REQUEST_TEMPLATE.md` exists; use the three sections above:
+**PR body** — `.github/PULL_REQUEST_TEMPLATE.md` carries these sections; fill it rather than
+composing a body from scratch, and keep the sections in its order:
 
 - **Summary** — what and why, one short paragraph
 - **Changes** — bullet list of skills/agents/scripts touched

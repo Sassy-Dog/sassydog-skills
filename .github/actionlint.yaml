@@ -4,8 +4,14 @@
 # whole check to be disabled.
 #
 # `self-hosted`, `linux`, `macos`, `x64` and `arm64` are built in; only the
-# org-specific labels need listing. The product-scoped ones are legacy: the
-# Linux runners still carry them, but new workflows should use `sassy-dog`.
+# org-specific labels need listing.
+#
+# NOTE: no workflow in THIS repo may use any of them. sassydog-skills is public,
+# `on: pull_request` fires for fork PRs, and an unguarded job on a self-hosted
+# runner would let anyone execute code on the Sassy Dog fleet — see the standing
+# comment on ci.yml's `runs-on`. These labels are declared only so this file
+# stays identical to the org-wide actionlint config; treat any `runs-on` here
+# that references one as a bug, not as guidance.
 self-hosted-runner:
   labels:
     - sassy-dog

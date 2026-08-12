@@ -2,6 +2,10 @@
 
 Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI coding tools.
 
+Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin via the marketplace below; any other agent that can read a Markdown instruction file and run a shell script can use the same `skills/` directory directly — there is nothing Claude-specific in the skill bodies.
+
+**[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Versioning](docs/VERSIONING.md)** · Licensed [Apache-2.0](LICENSE)
+
 ## Plugins
 
 | Plugin | Skills | Description |
@@ -113,7 +117,10 @@ claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills
 
 ## Updating / Troubleshooting
 
-### One-time re-add after the rename to `sassy-dog`
+### One-time re-add after the rename to `sassy-dog` (legacy — pre-2026-08 installs only)
+
+> Skip this unless you installed the plugin before August 2026 under its old name. A fresh
+> install from the [Installation](#installation) section above is unaffected.
 
 The plugin was renamed `ai-agent-skills` → `sassy-dog` and the marketplace `sassy-dog-skills` →
 `sassydog-skills` in the same release (issue #71). A machine that added the marketplace under the

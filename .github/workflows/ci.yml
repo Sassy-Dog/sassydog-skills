@@ -31,11 +31,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Installed rather than inherited from the image ON PURPOSE: the gate is
-      # shellcheck -S warning, whose findings are version-dependent, so a repo
+      # shellcheck -S warning, whose findings are version-dependent, so a job
       # that inherits whatever the runner image happens to ship can go red on an
-      # image bump nobody made. This pin is the one documented in
-      # scripts/preflight.sh, which is what `bash scripts/preflight.sh` uses
-      # locally — same binary, same findings, both places.
+      # image bump nobody made. Pinning here makes CI reproducible.
+      #
+      # It does NOT make CI and local agree: scripts/preflight.sh carries no
+      # shellcheck pin and lints with whatever is on the contributor's PATH, so
+      # a local pass on a different version is not proof of a green build.
+      # CONTRIBUTING.md says so out loud rather than pretending otherwise.
       - name: Install shellcheck (pinned — do not inherit the image's version)
         env:
           SHELLCHECK_VERSION: v0.10.0
