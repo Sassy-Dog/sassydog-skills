@@ -39,21 +39,32 @@ jobs:
       # shellcheck pin and lints with whatever is on the contributor's PATH, so
       # a local pass on a different version is not proof of a green build.
       # CONTRIBUTING.md says so out loud rather than pretending otherwise.
-      - name: Install shellcheck (pinned — do not inherit the image's version)
+      #
+      # The download is sha256-verified before it is unpacked. Note the weaker
+      # provenance here than for actionlint below: shellcheck publishes no
+      # checksums file, and its release assets carry no digest in the Releases
+      # API, so the value below was computed locally from the downloaded tarball
+      # (#182). That attests the artifact has not changed SINCE it was pinned —
+      # it is not a vendor attestation that the artifact is what upstream built.
+      # Pin the version and the checksum TOGETHER, never one without the other.
+      - name: Install shellcheck (pinned + sha256-verified)
         env:
           SHELLCHECK_VERSION: v0.10.0
+          SHELLCHECK_SHA256: 6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
-            | tar -xJ
+          curl -fsSL -o /tmp/shellcheck.tar.xz \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz
           mkdir -p "$HOME/.local/bin"
           mv "shellcheck-${SHELLCHECK_VERSION}/shellcheck" "$HOME/.local/bin/shellcheck"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # All gates live in scripts/preflight.sh (single source of truth for
-      # version pins and guard regexes — run the same script locally before a
-      # PR). It skips actionlint under CI=true; the dockerized step below owns
-      # that gate here.
+      # All gates live in scripts/preflight.sh (single source of truth for the
+      # guard regexes — run the same script locally before a PR). It skips
+      # actionlint under CI=true; the pinned-binary step below owns that gate
+      # here.
       - name: Preflight gates (shellcheck, frontmatter, guards, manifests, markdownlint)
         run: bash scripts/preflight.sh
 
@@ -63,13 +74,23 @@ jobs:
       # workspace) no longer applies — but the pinned binary is still the better
       # choice: no image pull, and the version stays visible next to the pin it
       # has to agree with. Same rationale as the shellcheck step above.
-      - name: Install actionlint (pinned binary — no image pull needed)
+      #
+      # sha256-verified before unpacking, and the value is the VENDOR's: the
+      # linux_amd64 line from actionlint_<ver>_checksums.txt on the same release
+      # tag, independently confirmed by downloading the tarball and hashing it.
+      # That is stronger provenance than the shellcheck pin above, which has no
+      # vendor value to check against. When bumping, take the new version and
+      # its checksum from that same file together (#182).
+      - name: Install actionlint (pinned + sha256-verified)
         env:
           ACTIONLINT_VERSION: 1.7.7
+          ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
-            | tar -xz actionlint
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tar.gz actionlint
           mkdir -p "$HOME/.local/bin"
           mv actionlint "$HOME/.local/bin/actionlint"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
