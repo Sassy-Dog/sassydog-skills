@@ -41,6 +41,23 @@ rather than depth is what keeps `packages/app/Cargo.toml` counting. A manifest f
 an excluded path is not detected, and says so in both `why` and `detect_failures` rather than
 vanishing.
 
+## Every path probe reads one corpus — never its own pipeline
+
+`ALL_TRACKED` is read once and every probe matches against it with a herestring. That is a
+correctness requirement, not tidiness. The probe used to be
+`git ls-files "<glob>" | head -1 | grep -q .`, and under the script's `set -o pipefail` that
+**inverts its own answer on large repos** (issue #172): `head`/`grep -q` exit on the first line, and
+if the match list is bigger than the ~64KB pipe buffer the writer is still going, takes `SIGPIPE`,
+and `pipefail` makes the writer's **141** the pipeline's status. A match returns non-zero, reads as
+a miss, and the render simply carries no route for that tool — nothing errors.
+
+It flips somewhere between 1000 and 2000 paths, so it is invisible in every small-repo check and
+wrong exactly on the biggest repos, where a dropped route costs most (`git ls-files "*"` in
+velovate's 2787-path tree exits 141). All five glob probes — `*.py`, `*.md`, `*.sh`, `*.sln`,
+`*.csproj` — were exposed; the manifest probes never were, because they already read the corpus.
+`scripts/test-detect-hook-stack.sh` pins this against a 20k-path fixture and rejects any pipeline in
+the `has_tracked` definition.
+
 ## The markdownlint version pin (`pin` / `pin_source`)
 
 `tools.markdownlint` carries two extra probe fields beyond `detected` / `why`:

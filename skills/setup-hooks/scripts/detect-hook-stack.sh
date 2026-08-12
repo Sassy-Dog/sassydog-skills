@@ -29,9 +29,7 @@ add() {
         '{($n): ({detected: ($d == 1), why: $w} + $e)}')$'\n'
 }
 
-has_tracked() { git ls-files "$1" | head -1 | grep -q .; }
-
-# --- manifest corpus (dart / rustfmt / gofmt) --------------------------------
+# --- tracked-file corpus (every path probe reads THIS, never its own pipeline)
 # Manifest probes match by PATH REGEX over the tracked tree, not by git
 # pathspec: a bare pathspec like 'pubspec.yaml' — or a `[ -f pubspec.yaml ]`
 # test — matches only the repo ROOT, which silently reported "no dart" for
@@ -52,6 +50,28 @@ VENDORED_RE='(^|/)(templates?|fixtures?|__fixtures__|testdata|test-?data|example
 ALL_TRACKED="$(git ls-files 2>/dev/null)"
 TRACKED_FILES="$(grep -Ev "$VENDORED_RE" <<<"$ALL_TRACKED")"
 VENDORED_FILES="$(grep -E "$VENDORED_RE" <<<"$ALL_TRACKED")"
+
+# has_tracked <path-regex> — does the tracked tree hold a file matching it?
+# Matches the corpus above with a herestring. THERE IS NO PIPELINE HERE, and
+# that is the entire point: do not "simplify" this back to
+# `git ls-files "<glob>" | head -1 | grep -q .`.
+#
+# That was the original shape, and under this script's `set -o pipefail` it
+# INVERTS ITS OWN ANSWER ON LARGE REPOS (issue #172). `head -1`/`grep -q` exit
+# on the first line; if the match list is bigger than the ~64KB pipe buffer the
+# writer is still going, takes SIGPIPE, and pipefail hands the pipeline the
+# writer's 141 — so a MATCH returns non-zero and READS AS A MISS, and the
+# rendered hook silently drops that tool's route. Measured: it flips somewhere
+# between 1000 and 2000 paths (~64KB of output), and `git ls-files "*"` in
+# velovate's 2787-path tree exits 141 today. Size-dependent, so it is invisible
+# in every small-repo test and wrong exactly where a wrong answer costs most —
+# which is why scripts/test-detect-hook-stack.sh pins it against a 20k-path
+# fixture and rejects any `| head` in this definition.
+#
+# ALL_TRACKED, not TRACKED_FILES: these probes have always counted vendored
+# paths (a `*.sh` under examples/ still wants shellcheck). Narrowing them is a
+# behaviour change, not part of this fix.
+has_tracked() { grep -qE "$1" <<<"$ALL_TRACKED"; }
 
 # manifest_tool <tool> <path-regex> <label> — detect on a manifest tracked
 # ANYWHERE, naming the file it matched (a monorepo user needs to know WHICH
@@ -81,7 +101,7 @@ manifest_tool() {
 # --- ruff: config section or ruff.toml, plus tracked *.py -------------------
 why=""
 det=0
-if has_tracked '*.py'; then
+if has_tracked '\.py$'; then
     if [ -f ruff.toml ] || [ -f .ruff.toml ]; then
         det=1; why="ruff.toml present + tracked *.py"
     elif [ -f pyproject.toml ] && grep -q '^\[tool\.ruff' pyproject.toml 2>/dev/null; then
@@ -109,7 +129,7 @@ add prettier "$det" "$why"
 # --- markdownlint: cli2 config + tracked *.md --------------------------------
 why=""; det=0
 if [ -f .markdownlint-cli2.jsonc ] || [ -f .markdownlint-cli2.yaml ] || [ -f .markdownlint.jsonc ] || [ -f .markdownlint.json ]; then
-    if has_tracked '*.md'; then det=1; why="markdownlint config + tracked *.md"; else why="config but no tracked *.md"; fi
+    if has_tracked '\.md$'; then det=1; why="markdownlint config + tracked *.md"; else why="config but no tracked *.md"; fi
 else
     why="no markdownlint config"
 fi
@@ -170,7 +190,7 @@ add markdownlint "$det" "$why" \
 # --- shellcheck: tracked *.sh (no config file convention — presence of shell
 #     scripts IS the evidence; CI repos that shellcheck already prove intent) --
 why=""; det=0
-if has_tracked '*.sh'; then
+if has_tracked '\.sh$'; then
     det=1; why="tracked *.sh"
     grep -rq "shellcheck" .github/workflows/ 2>/dev/null && why="tracked *.sh + shellcheck in CI"
 else
@@ -184,7 +204,7 @@ manifest_tool dart '(^|/)pubspec\.yaml$' pubspec.yaml
 manifest_tool rustfmt '(^|/)Cargo\.toml$' Cargo.toml
 manifest_tool gofmt '(^|/)go\.mod$' go.mod
 why=""; det=0
-if has_tracked '*.sln' || has_tracked '*.csproj'; then
+if has_tracked '\.sln$' || has_tracked '\.csproj$'; then
     det=1; why="tracked .sln/.csproj (SLOW per-edit — opt-in only)"
 else
     why="no .sln/.csproj"

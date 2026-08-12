@@ -51,8 +51,16 @@
 #      manifest in the directory it names, against three recorded consumer
 #      layouts; the collapsed-to-"/" v2 shape must be REJECTED (issue #169).
 #      Recorded file lists only: no repo, no network.
-#  11. markdownlint (pinned markdownlint-cli2 version)
-#  12. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#  11. detect-hook-stack tests (scripts/test-detect-hook-stack.sh) —
+#      setup-hooks' has_tracked probe still answers correctly when the match
+#      list is LARGE. Under pipefail a `| head -1 | grep -q .` returns the
+#      writer's SIGPIPE 141 once the output outruns the ~64KB pipe buffer, so a
+#      MATCH read as a miss and the render silently dropped that tool's route
+#      (issue #172). Needs a 20k-path fixture, because a small one passes
+#      either way; the gate fails loudly if that fixture ever stops tripping
+#      the pre-fix shape. Index-only temp repos: no real repo, no network.
+#  12. markdownlint (pinned markdownlint-cli2 version)
+#  13. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -348,7 +356,21 @@ else
     failed "dependabot-render tests (scripts/test-dependabot-render.sh)"
 fi
 
-# --- 11. markdownlint --------------------------------------------------------
+# --- 11. detect-hook-stack tests -----------------------------------------------
+# The bug this pins (issue #172) is size-dependent: `has_tracked` returned the
+# writer's SIGPIPE 141 rather than "match" once the match list overran the pipe
+# buffer, so the five affected detections under-reported on exactly the largest
+# repos and the render dropped a route with nothing in the output to say so. A
+# small fixture proves nothing here, so the test builds a 20k-path index-only
+# repo and asserts BOTH that the pre-fix shape still fails on it (else the test
+# has gone vacuous) and that the shipped probe does not.
+if bash scripts/test-detect-hook-stack.sh; then
+    pass "detect-hook-stack tests (scripts/test-detect-hook-stack.sh)"
+else
+    failed "detect-hook-stack tests (scripts/test-detect-hook-stack.sh)"
+fi
+
+# --- 12. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -363,7 +385,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 12. actionlint (best-effort locally; CI runs its own dockerized step) ---
+# --- 13. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then
