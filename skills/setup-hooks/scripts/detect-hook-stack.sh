@@ -31,6 +31,53 @@ add() {
 
 has_tracked() { git ls-files "$1" | head -1 | grep -q .; }
 
+# --- manifest corpus (dart / rustfmt / gofmt) --------------------------------
+# Manifest probes match by PATH REGEX over the tracked tree, not by git
+# pathspec: a bare pathspec like 'pubspec.yaml' — or a `[ -f pubspec.yaml ]`
+# test — matches only the repo ROOT, which silently reported "no dart" for
+# every monorepo in the org (velovate keeps its Flutter app under
+# apps/mobile/, so the render simply had no *.dart route and nothing errored).
+# Anchor with (^|/) so packages/app/Cargo.toml counts and notcargo.toml does
+# not. Same rule, same anchoring as setup-deps' detect-ecosystems.sh.
+#
+# A VENDORED EXAMPLE MANIFEST IS NOT A PROJECT. Scaffolder templates, test
+# fixtures and sample projects commit real-looking manifests, so the corpus is
+# filtered by VENDORED_RE before any probe runs — excluding by DIRECTORY NAME,
+# not by depth, is what preserves the anchoring above (packages/web/Cargo.toml
+# still counts, templates/Cargo.toml does not). Same exclusion list as
+# detect-ecosystems.sh. A manifest found ONLY under an excluded path is
+# reported in `why` and in detect_failures, so the filter is visible rather
+# than silent.
+VENDORED_RE='(^|/)(templates?|fixtures?|__fixtures__|testdata|test-?data|examples?|node_modules)(/|$)'
+ALL_TRACKED="$(git ls-files 2>/dev/null)"
+TRACKED_FILES="$(grep -Ev "$VENDORED_RE" <<<"$ALL_TRACKED")"
+VENDORED_FILES="$(grep -E "$VENDORED_RE" <<<"$ALL_TRACKED")"
+
+# manifest_tool <tool> <path-regex> <label> — detect on a manifest tracked
+# ANYWHERE, naming the file it matched (a monorepo user needs to know WHICH
+# pubspec.yaml armed the route).
+#
+# Herestrings, NOT `printf ... | grep`: under pipefail a `grep -q` that exits on
+# the first match leaves the writer with SIGPIPE and the pipeline reports 141,
+# so a MATCH reads as a miss — and only once the file list is long enough that
+# the writer is still going, i.e. it under-detects the largest repos while every
+# small-repo test passes.
+manifest_tool() {
+    local name="$1" re="$2" label="$3" hit vendored
+    hit=$(grep -E "$re" <<<"$TRACKED_FILES" | head -1)
+    if [ -n "$hit" ]; then
+        add "$name" 1 "tracked $label ($hit)"
+        return
+    fi
+    vendored=$(grep -E "$re" <<<"$VENDORED_FILES" | head -1)
+    if [ -n "$vendored" ]; then
+        add "$name" 0 "no project $label — only a vendored one ($vendored)"
+        note "$name: $label found only under a vendored path ($vendored) — a fixture/template manifest is not a project, so $name is NOT detected"
+    else
+        add "$name" 0 "no tracked $label"
+    fi
+}
+
 # --- ruff: config section or ruff.toml, plus tracked *.py -------------------
 why=""
 det=0
@@ -132,9 +179,10 @@ fi
 add shellcheck "$det" "$why"
 
 # --- dart / rustfmt / gofmt / dotnet-format: manifest presence ----------------
-if [ -f pubspec.yaml ]; then add dart 1 "pubspec.yaml"; else add dart 0 "no pubspec.yaml"; fi
-if [ -f Cargo.toml ]; then add rustfmt 1 "Cargo.toml"; else add rustfmt 0 "no Cargo.toml"; fi
-if [ -f go.mod ]; then add gofmt 1 "go.mod"; else add gofmt 0 "no go.mod"; fi
+# Tracked ANYWHERE in the tree, vendored paths excluded — see manifest_tool.
+manifest_tool dart '(^|/)pubspec\.yaml$' pubspec.yaml
+manifest_tool rustfmt '(^|/)Cargo\.toml$' Cargo.toml
+manifest_tool gofmt '(^|/)go\.mod$' go.mod
 why=""; det=0
 if has_tracked '*.sln' || has_tracked '*.csproj'; then
     det=1; why="tracked .sln/.csproj (SLOW per-edit — opt-in only)"

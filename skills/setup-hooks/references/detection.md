@@ -20,10 +20,26 @@ hook error.
 | `prettier` | A `.prettierrc*` / `prettier.config.*` file, or a `prettier` key in `package.json` | `*.ts,tsx,js,jsx,mjs,cjs,css,scss,json` → `npx --no-install prettier --write` | `--no-install` on purpose: prettier must come from the repo's own `node_modules` (the repo pins its version); a bare `npx -y` would fetch latest and fight the pin. |
 | `markdownlint` | A `.markdownlint-cli2.*` / `.markdownlint.*` config AND tracked `*.md` | `*.md` → `markdownlint-cli2 --fix`, then re-check; unfixable exit 2 | The version pin is **not optional** — see below. An unpinned `npx -y` resolves to latest and blocks on rules CI does not run. |
 | `shellcheck` | Tracked `*.sh` (shellcheck in a CI workflow strengthens the evidence and is reported in `why`) | `*.sh` → `shellcheck -S warning`; findings exit 2 | Lint-only — never rewrites. There is no standard shellcheck config file, so tracked shell IS the evidence. |
-| `dart` | `pubspec.yaml` | `*.dart` → `dart format` | Format-only; `dart analyze` is too slow per-edit. |
-| `rustfmt` | `Cargo.toml` | `*.rs` → `rustfmt` | Format-only; `cargo clippy` per edit is far too slow. |
-| `gofmt` | `go.mod` | `*.go` → `gofmt -w` | — |
+| `dart` | A tracked `pubspec.yaml` **anywhere** in the tree | `*.dart` → `dart format` | Format-only; `dart analyze` is too slow per-edit. |
+| `rustfmt` | A tracked `Cargo.toml` **anywhere** in the tree | `*.rs` → `rustfmt` | Format-only; `cargo clippy` per edit is far too slow. |
+| `gofmt` | A tracked `go.mod` **anywhere** in the tree | `*.go` → `gofmt -w` | — |
 | `dotnet_format` | Tracked `*.sln` / `*.csproj` | `*.cs` → `dotnet format --include <file>` | **SLOW** (solution load per invocation) — always opt-in via the Phase 2 interview, never auto-included. |
+
+## Manifest probes are monorepo-safe (`dart` / `rustfmt` / `gofmt`)
+
+These three match a **path regex over the tracked tree**, anchored with `(^|/)`, not a root-only
+file test. A `[ -f pubspec.yaml ]` (or a bare `pubspec.yaml` pathspec) matches the repo root only,
+which reported "no dart" for every monorepo in the org — velovate keeps its Flutter app at
+`apps/mobile/`, so the render carried no `*.dart` route and nothing errored. The `why` string names
+the file that matched, because in a monorepo *which* manifest armed the route is the useful fact.
+
+**A vendored example manifest is not a project.** Scaffolder templates, test fixtures and sample
+projects commit real-looking manifests, so the corpus drops
+`templates?|fixtures?|__fixtures__|testdata|test-?data|examples?|node_modules` path segments first —
+the same exclusion `setup-deps`' `detect-ecosystems.sh` carries, and excluding by *directory name*
+rather than depth is what keeps `packages/app/Cargo.toml` counting. A manifest found **only** under
+an excluded path is not detected, and says so in both `why` and `detect_failures` rather than
+vanishing.
 
 ## The markdownlint version pin (`pin` / `pin_source`)
 
