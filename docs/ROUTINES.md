@@ -1,10 +1,29 @@
 # Scheduled routines — checking load state out of band
 
-Two scheduled cloud routines invoke plugin skills from this repo. Each carries the skill-load
-fallback clause required by [`CLAUDE.md`](../CLAUDE.md) so that a plugin-loading gap produces a
-degraded run rather than a silent no-op (#97, #98).
+> **Moved, 2026-08-13.** The two sweep routines no longer clone this repo. They now source
+> [`Sassy-Dog/sassydog-routines`](https://github.com/Sassy-Dog/sassydog-routines), where their
+> prompts and cloud-adapted skill bodies are version-controlled. **Start debugging a sweep there,
+> not here.**
+>
+> The reasoning below still stands and is why the move happened: since a plugin skill can never
+> load in a routine (#175), the fallback path was the *only* path, and the bodies it read were
+> written for an interactive laptop session — `gh` authenticated, whole portfolio checked out —
+> neither of which exists in a routine container. `sassydog-routines` carries versions written for
+> that container, plus tested reducers replacing the ad-hoc parsing that repeatedly blew the
+> tool-result token ceiling.
+>
+> The skills in this repo are unchanged and remain correct for interactive use. They and the copies
+> in `sassydog-routines` are now deliberately divergent — do not "resync" them.
+>
+> One consequence for this doc: the `Load:` field there reads
+> `repo (sassydog-routines@<short-sha>)`, not `plugin` / `fallback (degraded)`. The precedence rule
+> below is unchanged and still applies.
 
-| Routine | Invokes | Fallback body |
+Historical context follows, for the two routines as they ran until 2026-08-13. Each carried the
+skill-load fallback clause required by [`CLAUDE.md`](../CLAUDE.md) so that a plugin-loading gap
+produced a degraded run rather than a silent no-op (#97, #98).
+
+| Routine | Invoked | Fallback body |
 | --- | --- | --- |
 | `daily-fire-watch` | `sassy-dog:whats-on-fire` | `skills/whats-on-fire/SKILL.md` |
 | `weekly-portfolio-currency` | `sassy-dog:whats-behind` | `skills/whats-behind/SKILL.md` |
@@ -19,8 +38,10 @@ not in the triggers API.** An agent can create a routine it cannot remove, so an
 programmatically needs a human to finish the cleanup — disable it and rename it so the leftover is
 unmistakable in the meantime.
 
-The routine prompts themselves are untracked config living behind the routines API, outside this
-repo. This doc covers the one thing that *is* durable about a run: its log.
+The routine prompts were untracked config living behind the routines API, outside any repo — which
+is precisely what the move fixed. They are now `routines/*.md` in `sassydog-routines`, and what
+remains behind the API is a thin pointer at those files. This doc covers the one thing that was
+durable about a run even then: its log.
 
 ## The precedence rule
 
