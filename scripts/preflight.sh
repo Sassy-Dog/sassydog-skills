@@ -67,15 +67,21 @@
 #      (issue #172). Needs a 20k-path fixture, because a small one passes
 #      either way; the gate fails loudly if that fixture ever stops tripping
 #      the pre-fix shape. Index-only temp repos: no real repo, no network.
-#  12. auto-merge visibility tests (scripts/test-auto-merge-visibility.sh) —
-#      setup-deps' auto-merge render has TWO preconditions, not one: a merge
+#  12. visibility precondition tests (scripts/test-visibility-preconditions.sh)
+#      — setup-deps' App-token renders have TWO preconditions, not one: a merge
 #      gate AND a non-public repo. Its org secrets are `private`-visibility,
 #      which excludes public repos in both the Actions and Dependabot stores, so
 #      a render into one produces a workflow whose `secrets.*` are empty and
 #      which fails weeks later on that repo's next Dependabot PR, as an auth
-#      error that looks unrelated (issue #178). The decision is SKILL.md prose,
-#      not script, so this pins the instruction — same shape as the label-migrate
-#      single-call-site guard. Reads two tracked files: no gh, no network.
+#      error that looks unrelated (issue #178). The precondition belongs to the
+#      CREDENTIAL, not to one workflow: three templates mint it, #178 gated only
+#      auto-merge, and the two it missed are the two that check out PR head
+#      (issue #186) — hence the rename from test-auto-merge-visibility.sh. The
+#      decision is SKILL.md prose, not script, so this pins the instruction —
+#      same shape as the label-migrate single-call-site guard. Must-not-exist
+#      assertions run against a whitespace-flattened copy, because this repo
+#      hard-wraps prose and a line-scoped grep for forbidden wording turns a
+#      wrap into a false PASS. Reads two tracked files: no gh, no network.
 #  13. markdownlint (pinned markdownlint-cli2 version)
 #  13. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
@@ -387,16 +393,18 @@ else
     failed "detect-hook-stack tests (scripts/test-detect-hook-stack.sh)"
 fi
 
-# --- 12. auto-merge visibility ----------------------------------------------
+# --- 12. visibility preconditions -------------------------------------------
 # sassydog-skills went public on 2026-08-12 and its auto-merge workflow was
 # deleted rather than re-credentialed (#177). Without this gate the next
 # setup-deps run would put it straight back: a merge gate is present, and the
 # gate was the only precondition the skill checked. The failure it reintroduces
 # is invisible at render time and surfaces elsewhere, later, looking unrelated.
-if bash scripts/test-auto-merge-visibility.sh; then
-    pass "auto-merge visibility tests (scripts/test-auto-merge-visibility.sh)"
+# #186 widened this from the auto-merge workflow to every template that mints
+# the App token, after the same failure was found open through two other doors.
+if bash scripts/test-visibility-preconditions.sh; then
+    pass "visibility precondition tests (scripts/test-visibility-preconditions.sh)"
 else
-    failed "auto-merge visibility tests (scripts/test-auto-merge-visibility.sh)"
+    failed "visibility precondition tests (scripts/test-visibility-preconditions.sh)"
 fi
 
 # --- 13. markdownlint --------------------------------------------------------

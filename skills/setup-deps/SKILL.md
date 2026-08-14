@@ -26,8 +26,8 @@ It renders up to three things:
 |---|---|
 | `.github/dependabot.yml` | always — grouped, one entry per (ecosystem, **directory**) |
 | `.github/workflows/dependabot-auto-merge.yml` | when the repo has a merge gate **AND is not public** — two preconditions, see §2 |
-| `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync); a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow. One per bun install root, not one per repo |
-| `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected **and** the app's `ios/Podfile.lock` is tracked (see §3) |
+| `.github/workflows/dependabot-bun-lockfile.yml` | legacy fallback — only when npm has `lockfile_risk` (binary `bun.lockb`, or a repo deliberately on npm + sync) **AND the repo is not public**; a text `bun.lock` renders the native `bun` ecosystem instead, no sync workflow. One per bun install root, not one per repo |
+| `.github/workflows/dependabot-pod-lockfile.yml` | when cocoapods is detected **and** the app's `ios/Podfile.lock` is tracked (see §3) **AND the repo is not public** |
 
 Bundled scripts (`scripts/`): `detect-ecosystems.sh` (probe), `render-dependabot.sh` (render),
 `validate-dependabot.sh` (post-render assertion + divergence check), and `lib-ecosystems.sh` — the
@@ -168,13 +168,37 @@ every arm below.**
 gh repo view "${REPO}" --json visibility --jq .visibility
 ```
 
-`public` → **do not render the auto-merge workflow**, whatever the gate says. The workflow mints a
-GitHub App token from org secrets, and org secrets at `private` visibility (= private + internal)
-**exclude public repos** — in the Actions store *and* the Dependabot store alike. Rendered anyway,
-`secrets.*` resolves to the empty string and `create-github-app-token` fails, but not until that
-repo's next Dependabot PR — days or weeks later, as an auth error that looks unrelated to the render
-that caused it. Report the skip and its reason; per this skill's report-and-skip contract, a skipped
-file is a reported outcome, never a silent omission.
+`public` → **do not render ANY of the three App-token workflows**, whatever the gate says:
+`dependabot-auto-merge.yml`, `dependabot-bun-lockfile.yml`, and `dependabot-pod-lockfile.yml`.
+
+**The precondition belongs to the credential, not to the auto-merge workflow.** All three mint a
+GitHub App token from the same two org secrets, and org secrets at `private` visibility (= private +
+internal) **exclude public repos** — in the Actions store *and* the Dependabot store alike. Rendered
+anyway, `secrets.*` resolves to the empty string and `create-github-app-token` fails, but not until
+that repo's next Dependabot PR — days or weeks later, as an auth error that looks unrelated to the
+render that caused it. Scoping this rule to auto-merge alone is what shipped the identical failure
+through two other doors ([#186](https://github.com/Sassy-Dog/sassydog-skills/issues/186)).
+
+The two lockfile templates are the **worse** case, and the ordering is worth noticing:
+`dependabot-auto-merge` deliberately never checks out ("no checkout. PR code never executes here"),
+while both lockfile templates `actions/checkout` the **PR head ref** with the minted token in scope.
+They are hard-gated to `dependabot[bot]` and bun runs `--ignore-scripts`, so the posture is sound as
+it stands — but the two templates carrying more surface were the two without the precondition.
+
+Report the skip and its reason; per this skill's report-and-skip contract, a skipped file is a
+reported outcome, never a silent omission. **For the two lockfile templates the report must also
+carry the consequence and the manual path**, because unlike auto-merge — which had run zero times in
+sixty and was simply dropped — losing lockfile sync breaks the very thing the template exists for:
+
+> `SKIPPED dependabot-bun-lockfile.yml` — repo is public, so `PLATFORM_WRITER_APP_*` cannot resolve
+> here (#178). **Consequence:** every npm-path Dependabot PR will fail a frozen-lockfile CI install
+> and cannot merge. **Workaround:** regenerate the lockfile locally on the PR branch and push it,
+> per PR, until a public-repo sync path exists
+> ([#190](https://github.com/Sassy-Dog/sassydog-skills/issues/190)).
+
+**Do not invent a substitute credential to fill the gap.** What a public repo needing lockfile sync
+*should* do is genuinely unresolved — see the `GITHUB_TOKEN` trap immediately below, which rules out
+the obvious swap for a second, unrelated reason.
 
 Do not reach for a `GITHUB_TOKEN` variant as a consolation prize without testing it first: workflows
 triggered by Dependabot's `pull_request` get a **read-only** `GITHUB_TOKEN` and are served from the
@@ -187,8 +211,10 @@ Classify into exactly one:
 - **merge queue** → render the `MERGE_QUEUE` arm (plain `--auto`, no method flag).
 - **required checks, no queue** → render the `DIRECT_MERGE` arm, and confirm
   `allow_auto_merge` is on (`gh api repos/${REPO} --jq .allow_auto_merge`); enable it if not.
-- **no gate at all** → **do not render the auto-merge workflow.** Render `dependabot.yml` and the
-  lockfile-sync workflows only, and tell the user the repo needs a gate first. With no required
+- **no gate at all** → **do not render the auto-merge workflow.** Render `dependabot.yml`, plus any
+  lockfile-sync workflow that its own preconditions still allow — **the visibility veto above
+  applies here too**, so a public repo gets `dependabot.yml` alone. Tell the user the repo needs a
+  gate first. With no required
   check, `--auto` merges immediately and the review gate is imaginary.
   **`403` lands in this arm too, but for the opposite reason** — not "has not enabled a gate" but
   "cannot". Same behaviour, different report: say the plan offers no gate at all, that the missing
@@ -310,8 +336,12 @@ silently leaving security PRs ungrouped, and the mistake is invisible until the 
 ## Guardrails
 
 - Never render the auto-merge workflow into a repo with no required check.
-- Never render the auto-merge workflow into a **public** repo. Its org secrets are `private`-visibility
-  and cannot resolve there, so the render produces a workflow that fails late and looks unrelated.
+- Never render **any App-token workflow** — auto-merge, bun lockfile-sync, or pod lockfile-sync —
+  into a **public** repo. Their org secrets are `private`-visibility and cannot resolve there, so
+  the render produces a workflow that fails late and looks unrelated. The precondition belongs to
+  the credential, not to one workflow: scoping it to auto-merge left the two templates that check
+  out PR head ungated (#186). For the lockfile ones, report the consequence and the manual
+  regenerate-and-push path too — dropping them is not free the way dropping auto-merge was.
 - Never auto-merge semver-major. A green build does not disprove an API break.
 - Never widen the `dependabot[bot]` actor gate on a `pull_request_target` workflow — that gate is
   what keeps contributor code out of a write-capable context.
