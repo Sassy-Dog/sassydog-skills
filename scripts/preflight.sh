@@ -82,8 +82,20 @@
 #      assertions run against a whitespace-flattened copy, because this repo
 #      hard-wraps prose and a line-scoped grep for forbidden wording turns a
 #      wrap into a false PASS. Reads two tracked files: no gh, no network.
-#  13. markdownlint (pinned markdownlint-cli2 version)
-#  13. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#  13. verify-issue-refs tests (scripts/test-verify-issue-refs.sh) — the
+#      grooming-drift checker. Two of its failure modes are SILENT and neither
+#      changes an exit code: `\b` in a git -E harvest pattern matches nothing,
+#      which empties the near-match pool so every unresolved reference tiers as
+#      `likely-new` and the checker quietly stops finding drift; and a
+#      suggestion ranked on raw edit distance answers the shortest neighbour
+#      (`open`) instead of the actual rename (`open_in`), which is worse than
+#      no suggestion because it is the line a reader acts on without
+#      re-checking. Also pins the NEGATIVE cases — a clean body and a
+#      new-subtree body must stay quiet — since a checker that fires on
+#      everything is muted within a day and then gates nothing at all.
+#      Fixture tree is synthetic and built in a tmpdir: no gh, no network.
+#  14. markdownlint (pinned markdownlint-cli2 version)
+#  15. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -407,7 +419,14 @@ else
     failed "visibility precondition tests (scripts/test-visibility-preconditions.sh)"
 fi
 
-# --- 13. markdownlint --------------------------------------------------------
+# --- 13. verify-issue-refs tests ---------------------------------------------
+if bash scripts/test-verify-issue-refs.sh; then
+    pass "verify-issue-refs tests (scripts/test-verify-issue-refs.sh)"
+else
+    failed "verify-issue-refs tests (scripts/test-verify-issue-refs.sh)"
+fi
+
+# --- 14. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -422,7 +441,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 13. actionlint (best-effort locally; CI runs its own dockerized step) ---
+# --- 15. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then

@@ -42,6 +42,35 @@ REPO=<owner/name> bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-
 
 Emits `{repo, me, ready[], in_flight[], blocked[]}` — `ready` ordered number-ascending with `touches`/`depends_on`/`unannotated` per issue; `in_flight` carries a `mine` flag rather than silently filtering to @me, so a loop can count its own claims while still seeing other sessions'. Judgment (touches-set intersection, priority, the smell test) stays with the caller — this is a read, not a dispatcher.
 
+### Reference check (grooming drift)
+
+Resolves an issue body's code references against a real checkout — paths,
+symbols, and `-p` package args:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/verify-issue-refs.sh <N> --tree /path/to/checkout --format text
+```
+
+Bodies get written from plans and older issues while the tree moves underneath
+them, producing specs whose types and invariants are right and whose *locations*
+are fiction — which reads as perfectly dispatchable. Exit `3` means at least one
+`likely-drift` finding; `0` means none.
+
+**The tier is the point, not the absence.** Every issue names things that do not
+exist yet, so unresolved-means-broken would flag the whole backlog. A finding is
+`likely-drift` only when something *close* exists — an invented reference is
+usually nearly right, which is what lets it survive review — or, for a path,
+when its parent directory exists and it does not. Everything else is
+`likely-new` and is reported without gating.
+
+Run it in **both** places, because two different failure modes look identical in
+the text: a reference that never existed is catchable at grooming, while one
+that a later merge renamed was true when written and only a re-check at dispatch
+can see it.
+
+It resolves references; it does not read code. An issue proposing a helper that
+duplicates a shipped one under another name passes clean.
+
 ### Stale-issue detection
 
 ```bash
@@ -139,6 +168,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate
 |--------|---------|
 | `scripts/board-snapshot.sh` | ProjectV2 snapshot grouped by status. Read-only. Guards the `--limit` truncation trap. |
 | `scripts/queue-snapshot.sh` | Boardless fill/drain queue read: ready/in-flight/blocked buckets + parsed `touches:` and `Depends on #N` body contracts. Read-only. Exit 10 skip convention. |
+| `scripts/verify-issue-refs.sh` | Resolves a body's paths, symbols, and `-p` package args against a checkout. Tiers each miss `likely-drift` (something close exists, or the path's parent directory does) vs `likely-new` (nothing resembles it), and suggests the rename. Read-only. Exit 0 clean / 3 drift / 10 skipped / 64 usage. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
 | `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote), plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
