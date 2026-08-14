@@ -49,13 +49,35 @@ ordered bottom→top with per-layer state, and `lower_open` / `lower_closed_unme
 all derived. That path had never executed before — it was unreachable while every org repo answered
 `404`.
 
-**Still unverified, and not for lack of trying: `lower_open` NON-EMPTY (the ordering gate, exit
-23).** Every layer of every stack reachable today is merged — `github/gh-stack` has eight stacks and
-**none is open**, so the gate's blocking branch cannot be exercised read-only. Producing one means
-creating an open stack, and **every `Sassy-Dog` repo has a merge queue** (checked across five), which
-this skill refuses to combine with a stack (exit 24). So the org has no repo where the happy path
-*could* be tested without disabling a merge-queue control. Treat exit 23 as reasoned-but-unexercised
-until that changes.
+**The ordering gate is verified too, against a purpose-built live stack** (2026-08-13,
+`sassydog-skills` stack 195: two empty-commit PRs, both closed afterwards). This corrects an earlier
+claim in this file that exit 23 could not be exercised because every `Sassy-Dog` repo runs a merge
+queue. **That was wrong, and the reason is worth keeping**, because it is the same mistake a future
+reader is likely to make:
+
+| Probe | Result |
+|---|---|
+| `stack-probe.sh` on the UPPER layer | exit `0`, `position: 2`, **`lower_open: [193]`** |
+| `stack-probe.sh` on the LOWER layer | exit `0`, `position: 1`, `lower_open: []` |
+| `merge-shepherd.sh` on the UPPER layer | **exit `23`** — "blocked by open lower layer(s): 193" |
+| `merge-shepherd.sh` on the LOWER layer | **exit `24`** — "STACKED under a merge queue" |
+
+Nothing merged in any of the four.
+
+**A merge queue does NOT prevent exercising exit 23.** In `stack_gate()` the `lower_open` check
+precedes the queue check, so an upper layer returns `23` whatever the repo's queue configuration;
+the queue branch is reached only when `lower_open` is EMPTY — i.e. only for the bottom-most open
+layer, the one that would actually merge. Reading "this repo has a merge queue" as "the stack paths
+are untestable here" inverts that ordering.
+
+**A chained PR is not a stack.** Opening PR B against PR A's branch leaves both `in_stack: false`
+(exit `10`); stack membership requires an explicit `POST /repos/{o}/{n}/stacks` with
+`{"pull_requests": [<int>, ...]}`. This is why `merge-shepherd.sh`'s empty-rollup note treats
+"intermediate chained/stacked PR" as two cases — the chained one gets no stack gate at all, and is
+caught by the empty-rollup gate instead.
+
+A stack whose PRs all close flips to `open: false` on its own; there is no delete endpoint, and the
+closed record is history in the same way a closed PR is.
 
 The fields that matter downstream:
 
