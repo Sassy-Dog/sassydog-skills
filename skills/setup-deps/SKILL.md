@@ -193,12 +193,30 @@ sixty and was simply dropped — losing lockfile sync breaks the very thing the 
 > `SKIPPED dependabot-bun-lockfile.yml` — repo is public, so `PLATFORM_WRITER_APP_*` cannot resolve
 > here (#178). **Consequence:** every npm-path Dependabot PR will fail a frozen-lockfile CI install
 > and cannot merge. **Workaround:** regenerate the lockfile locally on the PR branch and push it,
-> per PR, until a public-repo sync path exists
-> ([#190](https://github.com/Sassy-Dog/sassydog-skills/issues/190)).
+> per PR — this is the answer for public repos, not a stopgap (see below).
 
-**Do not invent a substitute credential to fill the gap.** What a public repo needing lockfile sync
-*should* do is genuinely unresolved — see the `GITHUB_TOKEN` trap immediately below, which rules out
-the obvious swap for a second, unrelated reason.
+### The manual path IS the answer for a public repo — deliberate non-automation
+
+Decided in [#190](https://github.com/Sassy-Dog/sassydog-skills/issues/190). **A public repo
+regenerates its lockfile by hand on the PR branch. Do not automate it, and do not invent a
+substitute credential to fill the gap.**
+
+This is a decision, not an unfinished item, and it should not read as one. Automating it requires a
+**write-capable credential living inside a public repo**, and every route there is worse than the
+manual push:
+
+- **`GITHUB_TOKEN`** — ruled out twice over. See the trap immediately below for the first reason;
+  the second is that a `GITHUB_TOKEN` push lands as `github-actions[bot]`, which does **not**
+  re-trigger CI on the new commit. The lockfile would be fixed on a PR whose checks never re-run,
+  so a human is still required — automation that does not remove the human is not automation.
+- **Re-scoping the org secrets to `all` visibility** — widens `PLATFORM_WRITER_APP_*` to every
+  public repo in the org to serve one, inverting the `private`-visibility default deliberately.
+- **A PAT** — a standing credential in a public repo, on a workflow that checks out the PR head ref.
+
+**If the manual cost ever genuinely bites**, the one acceptable route is a **dedicated App installed
+only on that repo** with `contents: write`, its credentials held as **repo-level Dependabot secrets**
+(not org). That keeps the blast radius to the single repo. Take that route only when a real repo is
+paying the cost — not pre-emptively.
 
 Do not reach for a `GITHUB_TOKEN` variant as a consolation prize without testing it first: workflows
 triggered by Dependabot's `pull_request` get a **read-only** `GITHUB_TOKEN` and are served from the
