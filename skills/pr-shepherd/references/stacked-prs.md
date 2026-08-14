@@ -19,6 +19,13 @@ This is the part that is easy to get wrong.
 | Question | Probe | Answers |
 |---|---|---|
 | Is this **repo** enabled for stacks? | `GET /repos/{owner}/{name}/stacks` | `200` available · `404` not enabled (or no access) |
+
+> **`Sassy-Dog` IS enabled for the preview, as of 2026-08-13** (verified: `200` on `sassydog-skills`
+> and `velovate`; it was `404` for every org repo when this support was written). The consequence is
+> not cosmetic: `merge-shepherd.sh`'s `stack_gate()` used to short-circuit on exit `11` (repo not
+> enabled) for every merge in every repo, so the GraphQL membership probe was effectively dead code
+> here. It now runs on every merge. Verified non-regressive at the time — the field resolves, a
+> non-stacked PR returns exit `10`, and `stack_gate()` treats `10` and `11` identically.
 | Is this **PR** in a stack? | GraphQL `PullRequest.stack` | object, or `null` |
 
 **GraphQL `null` means both "the repo isn't enabled" and "this PR isn't stacked."** A caller that reads that one null concludes *not stacked, safe to merge* on a repo it never actually checked. Both probes are required, and `stack-probe.sh` is where they live so nothing re-derives the rule.
@@ -34,6 +41,21 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh" <pr> --re
 ```
 
 Exit `0` in a stack · `10` available but not stacked · `11` stacks unavailable here · `1` usage/API error. Omit the PR number to probe the repo and list its open stacks.
+
+**Verified against a real stack, 2026-08-13** — `github/gh-stack` stack **350**, five layers
+(PRs 330 → 333 → 343 → 307 → 321). Probing layers 1, 2 and 3 returned exit `0` with
+`in_stack: true`, `size: 5`, correct **1-based** `position` (330→1, 333→2, 343→3), `entries[]`
+ordered bottom→top with per-layer state, and `lower_open` / `lower_closed_unmerged` / `truncated`
+all derived. That path had never executed before — it was unreachable while every org repo answered
+`404`.
+
+**Still unverified, and not for lack of trying: `lower_open` NON-EMPTY (the ordering gate, exit
+23).** Every layer of every stack reachable today is merged — `github/gh-stack` has eight stacks and
+**none is open**, so the gate's blocking branch cannot be exercised read-only. Producing one means
+creating an open stack, and **every `Sassy-Dog` repo has a merge queue** (checked across five), which
+this skill refuses to combine with a stack (exit 24). So the org has no repo where the happy path
+*could* be tested without disabling a merge-queue control. Treat exit 23 as reasoned-but-unexercised
+until that changes.
 
 The fields that matter downstream:
 

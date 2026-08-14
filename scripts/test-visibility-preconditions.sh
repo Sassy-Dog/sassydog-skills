@@ -175,6 +175,23 @@ else
     bad "skip report offers no lockfile workaround for a public repo needing sync"
 fi
 
+# 8b. (#190) The public-repo lockfile answer is DELIBERATE non-automation. It
+#     must read as a decision, not as a gap someone should close: a reader who
+#     takes it for an unfinished item "fixes" it by putting a write-capable
+#     credential inside a public repo, which is the one outcome the decision
+#     exists to prevent. Pinned on the pairing of a decision word with the
+#     do-not-automate instruction, so softening it to a TODO fails here.
+if printf '%s' "$skill_flat" | grep -qiE 'deliberate non-automation|is the answer for public'; then
+    ok "public-repo lockfile answer is stated as a decision"
+else
+    bad "public-repo lockfile answer no longer reads as a decision (#190)"
+fi
+if printf '%s' "$skill_flat" | grep -qiE 'do not automate it|Do not automate'; then
+    ok "SKILL.md instructs not to automate the public-repo path"
+else
+    bad "SKILL.md lost the do-not-automate instruction for public repos"
+fi
+
 # 8. The template must not claim coverage it may not have. The pre-fix wording
 #    was 'and dependabot-auto-merge.yml holds them anyway' — an unconditional
 #    assertion that is false in exactly the repos this change is about.
