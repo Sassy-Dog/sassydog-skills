@@ -145,6 +145,35 @@ Exit `11` means the preview is not enabled here. **Do not fall back to parallel 
 members really do depend on each other. Drop the exemptions, let the ordinary Dependencies filter
 serialize the chain across ticks, and note it once in the tick report.
 | Smell test | Run take-it's pre-flight smell test — research-shaped titles, open-question sections, stub bodies. Failures bounce back to groom-backlog with a required comment. Never "fix it up" inline; that hides the grooming gap. |
+| Reference decay | Re-resolve the body's code references against the current tree (below). Exit `3` holds the issue this tick. |
+
+### Reference decay — re-check at dispatch, not just at grooming
+
+groom-backlog resolves every reference before promoting, so an issue in Ready
+was accurate **when it was groomed**. Then other issues merge. A rename three
+PRs ago turns a correct body into one that sends a cold worktree agent looking
+for a symbol that is no longer there, and nothing about the issue changed to
+show it — this is why the check runs again here rather than being trusted from
+promotion:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/verify-issue-refs.sh <N> --format text
+```
+
+Exit `3` → **hold the issue this tick** and report it as
+`#N (reference drift: <ref> → <suggestion>)`. It is not a failed attempt, so it
+costs no redispatch budget, and it is not `blocked` either — the body needs a
+one-line correction, not a human decision. Fix the body and it dispatches next
+tick; if the same issue holds on drift twice, bounce it to groom-backlog with a
+comment rather than correcting it inline, which hides the grooming gap the same
+way the smell test does.
+
+Exit `0` dispatches normally. Exit `10` is a **skip, not a pass** — say so in
+the tick report and dispatch anyway; a missing `python3` is not evidence the
+body is sound.
+
+`likely-new` findings never hold an issue. An issue naming the files it is
+asking someone to create is the normal case.
 
 **If `migrations:` is configured** — additional filter: at most ONE issue touching
 `migrations.dirs` in flight at a time, in-flight included. Hold the rest in Ready.
