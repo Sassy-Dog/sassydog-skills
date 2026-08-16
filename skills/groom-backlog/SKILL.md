@@ -256,12 +256,11 @@ via `sassy-dog:github-issues`:
 bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/verify-issue-refs.sh <N> --tree <checkout> --format text
 ```
 
-Exit `3` means at least one `likely-drift` finding — a path whose parent
-directory exists but which does not, a symbol or package with a near neighbour
-in the tree. **Fix the body and re-run; do not promote on a 3.** Ready means
-dispatchable, and a body naming `Store::open_at` where the method is `open_in`
-is not dispatchable, it just reads that way. The suggestion is usually the whole
-fix.
+Exit `3` means at least one `likely-drift` finding — a symbol, package, or path
+with a near neighbour in the tree that it does not match. **Fix the body and
+re-run; do not promote on a 3.** Ready means dispatchable, and a body naming
+`Store::open_at` where the method is `open_in` is not dispatchable, it just
+reads that way. The suggestion is usually the whole fix.
 
 This is the pass that catches **invented** references: bodies written from plans,
 memory, or older issues while the tree moved underneath them. It cannot catch

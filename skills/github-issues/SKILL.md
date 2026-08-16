@@ -59,9 +59,20 @@ are fiction — which reads as perfectly dispatchable. Exit `3` means at least o
 **The tier is the point, not the absence.** Every issue names things that do not
 exist yet, so unresolved-means-broken would flag the whole backlog. A finding is
 `likely-drift` only when something *close* exists — an invented reference is
-usually nearly right, which is what lets it survive review — or, for a path,
-when its parent directory exists and it does not. Everything else is
-`likely-new` and is reported without gating.
+usually nearly right, which is what lets it survive review: a near-match symbol,
+a package missing its workspace prefix, a near-match **sibling file** in the
+directory the path names. Everything else is `likely-new` and is reported
+without gating.
+
+**Two path rules keep the gate credible.** A path from a `touches:` line is
+never drift — `touches:` declares what the PR will *write*, so it names files
+that do not exist yet by design. And for any other path, "its parent directory
+exists" is where the checker goes looking for evidence, not evidence in itself:
+without a near-match sibling it stays `likely-new`. Gating on the bare location
+fired on every new file added to an existing directory, every tick, until the
+operator learned to skim past the gate — which is exactly when a real finding
+slips through (issue #199). The cost is real and accepted: an invented path with
+nothing resembling it beside it is no longer caught.
 
 Run it in **both** places, because two different failure modes look identical in
 the text: a reference that never existed is catchable at grooming, while one
@@ -168,7 +179,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate
 |--------|---------|
 | `scripts/board-snapshot.sh` | ProjectV2 snapshot grouped by status. Read-only. Guards the `--limit` truncation trap. |
 | `scripts/queue-snapshot.sh` | Boardless fill/drain queue read: ready/in-flight/blocked buckets + parsed `touches:` and `Depends on #N` body contracts. Read-only. Exit 10 skip convention. |
-| `scripts/verify-issue-refs.sh` | Resolves a body's paths, symbols, and `-p` package args against a checkout. Tiers each miss `likely-drift` (something close exists, or the path's parent directory does) vs `likely-new` (nothing resembles it), and suggests the rename. Read-only. Exit 0 clean / 3 drift / 10 skipped / 64 usage. |
+| `scripts/verify-issue-refs.sh` | Resolves a body's paths, symbols, and `-p` package args against a checkout. Tiers each miss `likely-drift` (something close exists — a near-match symbol, package, or sibling file) vs `likely-new` (nothing resembles it, or the path came from `touches:`), and suggests the near match. Read-only. Exit 0 clean / 3 drift / 10 skipped / 64 usage. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body + tracking-parent-complete detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. Detector 3 reads the epic-split `Part of #<parent>` convention with a prefix guard (`#28` never claims `#283`'s children) and reports `truncated: true` — never a clean-looking empty result — when its all-state pull hits `ALL_LIMIT` (default 500). |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
 | `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote), plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
