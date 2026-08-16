@@ -12,12 +12,22 @@
 #                                                        #   worktree is already gone, PLUS
 #                                                        #   ordinary [gone] local branches
 #                                                        #   (upstream deleted — guarded, below)
+#   teardown.sh <worktree_path> ... --sweep              # BOTH, one call: the named paths are torn
+#                                                        #   down first, then the sweep, then the
+#                                                        #   shared prune/reconcile/residual tail
 #   teardown.sh --reconcile-only                         # skip all worktree/branch phases; just
 #                                                        #   the default-branch reconcile (switch,
 #                                                        #   fetch --prune, clear ff-blocking
 #                                                        #   stragglers, pull --ff-only) + report.
 #                                                        #   A failed ff exits 1 in this mode
 #                                                        #   (other modes warn and continue).
+#                                                        #   EXCLUSIVE: combining it with paths or
+#                                                        #   --sweep is a contradiction, rejected.
+#
+# Arguments are PRE-SCANNED (issue #200): flags are recognised wherever they
+# appear — `--sweep` may precede or follow the paths — and any unrecognised
+# -prefixed argument is rejected with one usage error and a non-zero exit BEFORE
+# anything is torn down, rather than being taken for a worktree path.
 # Env:
 #   DEFAULT_BRANCH            override the reconcile target (default: origin/HEAD, fallback "main")
 #   ISOLATION_BRANCH_PREFIX   prefix of the Agent runtime's isolation branches
@@ -112,13 +122,57 @@ remove_worktree() {  # $1 = worktree path
 }
 
 RECONCILE_ONLY=0
-SWEEP_MODE=0        # set in --sweep; gates the [gone]-phase counts in the residual report
+SWEEP_MODE=0        # set by --sweep; gates the [gone]-phase counts in the residual report
 GONE_SWEPT=0        # [gone] branches deleted by the sweep
 GONE_HELD=0         # [gone] branches held back by a guard (reported, never silent)
-if [ "${1:-}" = "--reconcile-only" ]; then
-  RECONCILE_ONLY=1
-elif [ "${1:-}" = "--sweep" ]; then
-  SWEEP_MODE=1
+PATHS=()
+
+usage() {
+  cat >&2 <<'EOF'
+usage: teardown.sh [<worktree_path> ...] [--sweep]
+       teardown.sh --reconcile-only
+
+  <worktree_path> ...  tear these worktrees down explicitly (the batch manifest)
+  --sweep              reclaim every agent worktree whose remote branch is gone,
+                       orphan isolation branches, and ordinary [gone] branches
+  --reconcile-only     ONLY reconcile the default branch — exclusive, never
+                       combined with paths or --sweep
+
+Paths and --sweep combine in a single call, in any order: the named paths are
+torn down first, then the sweep, then the shared prune/reconcile/residual tail.
+EOF
+}
+
+# Pre-scan EVERY argument before anything is torn down. Flags are positional-
+# agnostic, and an unrecognised -prefixed argument stops the run here instead of
+# being taken for a worktree path (issue #200: `--sweep` trailing two paths was
+# handed to `basename`, which rejected the leading `-` with its own usage dump
+# — mid-run, after both worktrees were gone, and before the sweep that then
+# never ran at all).
+for arg in "$@"; do
+  case "$arg" in
+    --sweep)          SWEEP_MODE=1 ;;
+    --reconcile-only) RECONCILE_ONLY=1 ;;
+    -*) echo "teardown: unrecognised option '$arg' (nothing was torn down)" >&2; usage; exit 2 ;;
+    *)  PATHS+=("$arg") ;;
+  esac
+done
+
+if [ "$RECONCILE_ONLY" = "1" ] && { [ "$SWEEP_MODE" = "1" ] || [ "${#PATHS[@]}" -gt 0 ]; }; then
+  echo "teardown: --reconcile-only skips every worktree/branch phase, so it cannot be combined with worktree paths or --sweep (nothing was torn down); run them as separate invocations" >&2
+  exit 2
+fi
+
+if [ "$RECONCILE_ONLY" = "0" ] && [ "$SWEEP_MODE" = "0" ] && [ "${#PATHS[@]}" -eq 0 ]; then
+  echo "teardown: pass worktree path(s), --sweep, or --reconcile-only" >&2; usage; exit 2
+fi
+
+if [ "${#PATHS[@]}" -gt 0 ]; then
+  echo "== explicit teardown of ${#PATHS[@]} worktree(s) =="
+  for path in "${PATHS[@]}"; do remove_worktree "$path"; done
+fi
+
+if [ "$SWEEP_MODE" = "1" ]; then
   echo "== sweep: agent worktrees whose remote branch is gone (squash-merged + deleted) =="
   git fetch --prune --quiet origin 2>/dev/null || true
   while IFS= read -r path; do
@@ -210,11 +264,6 @@ elif [ "${1:-}" = "--sweep" ]; then
       fi
     done <<< "$GONE_LIST"
   fi
-elif [ "$#" -gt 0 ]; then
-  echo "== explicit teardown of $# worktree(s) =="
-  for path in "$@"; do remove_worktree "$path"; done
-else
-  echo "teardown: pass worktree path(s), --sweep, or --reconcile-only" >&2; exit 2
 fi
 
 [ "$RECONCILE_ONLY" = "1" ] || git worktree prune

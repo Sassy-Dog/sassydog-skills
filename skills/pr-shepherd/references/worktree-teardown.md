@@ -23,9 +23,13 @@ As each sub-agent returns, record `{issue, pr, worktreePath, worktreeBranch}`. T
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh <wt_path_1> <wt_path_2> ...
-# or, with no manifest (crashed coordinator, older sessions):
+# with no manifest (crashed coordinator, older sessions):
 bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh --sweep
+# this batch AND everything else stale, in one call — flags parse anywhere:
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh <wt_path_1> <wt_path_2> --sweep
 ```
+
+The manifest form and `--sweep` are **not** alternatives: pass both and the named paths are torn down first, then the sweep runs, then the shared prune/reconcile/residual tail — which is what "tear these down, then sweep" should mean in a single invocation. An argument starting with `-` that is neither flag is rejected with a usage error and exit 2 *before* any teardown, never taken for a path (issue #200). `--reconcile-only` is the exception: it skips every worktree/branch phase, so combining it with anything is rejected.
 
 The script force-removes each worktree (the Agent runtime leaves them locked, hence `-f -f`), deletes the local branch, prunes, clears origin-identical stragglers, and ff-reconciles the default branch. It reports — but **never auto-drops** — stashes (destructive; human's call).
 

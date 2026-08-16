@@ -106,8 +106,17 @@
 #      its non-digit guard MUST report #28, or the decoy has gone vacuous.
 #      Mock gh serving recorded JSON: no repo, no network, and the run is
 #      asserted to issue zero non-read calls.
-#  15. markdownlint (pinned markdownlint-cli2 version)
-#  16. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#  15. teardown-args tests (scripts/test-teardown-args.sh) — teardown.sh parses
+#      flags anywhere in its argument list and rejects an unrecognised -* one
+#      BEFORE any teardown runs (issue #200). The bug it pins reads as success:
+#      `teardown.sh <p1> <p2> --sweep` tore both worktrees down, took --sweep
+#      for a third path, and never swept — a tool-level usage dump buried under
+#      successful teardown lines, and a skipped phase leaves nothing behind to
+#      notice. Assertions read teardown's OWN output, never basename's, whose
+#      BSD/GNU wording differs (that is why it surfaced on macOS only). Scratch
+#      repos with a LOCAL bare origin plus a mock gh: no real repo, no network.
+#  16. markdownlint (pinned markdownlint-cli2 version)
+#  17. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -450,7 +459,21 @@ else
     failed "stale-issues tests (scripts/test-stale-issues.sh)"
 fi
 
-# --- 15. markdownlint --------------------------------------------------------
+# --- 15. teardown-args tests ---------------------------------------------------
+# Every wrong answer here is quiet: a flag taken for a worktree path fails in
+# the middle of a run whose visible output is dominated by successful teardown
+# lines, and the phase that never ran leaves no trace. So the gate asserts the
+# phases are REACHED and that they did their work, and that a rejected argument
+# list mutates nothing at all. Scratch repos + a mock gh: no real repo, no
+# network, and the fixture is verified to be its own git root before teardown
+# runs in it (teardown resolves its target by walking up from cwd).
+if bash scripts/test-teardown-args.sh; then
+    pass "teardown-args tests (scripts/test-teardown-args.sh)"
+else
+    failed "teardown-args tests (scripts/test-teardown-args.sh)"
+fi
+
+# --- 16. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -465,7 +488,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 16. actionlint (best-effort locally; CI runs its own dockerized step) ---
+# --- 17. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then
