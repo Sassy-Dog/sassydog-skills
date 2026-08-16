@@ -39,11 +39,22 @@
 #   likely-new   — unresolved and nothing resembles it. Almost always the thing
 #                  the issue is asking someone to create. Reported, never gated.
 #
-# Paths use a sharper rule than fuzzy distance: a missing file whose PARENT
-# DIRECTORY exists is drift (the issue believes a file lives somewhere real and
-# it does not), while a missing file under a missing directory is a new subtree.
-# That is what catches `app/src-tauri/src/repos.rs` — no near-match by name,
-# unambiguous drift by location.
+# Paths carry TWO qualifications on that rule, both of them earned:
+#
+#   1. A path harvested from a `touches:` line is NEVER drift. `touches:` is a
+#      forward-looking declaration of the files a PR will write, so it names
+#      files that do not exist yet by design. Tiered likely-new, rendered, never
+#      gated.
+#   2. Every other unresolved path needs POSITIVE EVIDENCE to tier drift: a
+#      near-match sibling inside the existing parent directory, which is then
+#      the suggestion. `githb.rs` beside `github.rs`. Bare "the parent directory
+#      exists" is NOT evidence — it fires on every new file added to an existing
+#      directory, which is the ordinary shape of an issue asking someone to
+#      create something, and it fires DETERMINISTICALLY, every tick, until the
+#      operator learns to skim past the gate. A gate that cries wolf on a
+#      schedule is worth less than the evidence-free invention this drops
+#      (`app/src-tauri/src/repos.rs` with nothing like it in the directory is
+#      now reported as new). That trade is deliberate; see issue #199.
 #
 # Only backticked tokens, `touches:` entries, and `-p NAME` inside fenced code
 # blocks are examined. Unbackticked prose is never checked: the false-positive
@@ -216,10 +227,16 @@ def classify(tok):
         return 'symbol'
     return None
 
-refs = {}   # ref -> kind   (first classification wins; dedup by text)
+refs = {}            # ref -> kind   (first classification wins; dedup by text)
+touches_paths = set()  # refs whose ORIGIN is the touches: line — tiering needs
+                       # the origin, not just the text, because a touches entry
+                       # is a claim about the FUTURE tree and an inline one is a
+                       # claim about the current tree.
 for t in touches:
     k = classify(t) or 'path'    # a touches entry is a path claim by definition
     refs.setdefault(t, k)
+    if k == 'path':
+        touches_paths.add(t)
 for t in inline:
     k = classify(t)
     if k:
@@ -235,18 +252,34 @@ def git_grep(pattern):
     except Exception:
         return None            # unknown, never "absent"
 
+def clean_path(ref):
+    return re.sub(r'/?\*+$', '', ref).rstrip('/')
+
 def resolve_path(ref):
-    p = re.sub(r'/?\*+$', '', ref).rstrip('/')
+    """(resolved, why, parent) — parent is the EXISTING parent directory when
+    the file is missing but its directory is real, else None.
+
+    It is returned rather than baked into the tier because "the parent exists"
+    is a place to LOOK for evidence, not the evidence itself: the caller scores
+    the names in that directory and tiers drift only on a near match.
+    """
+    p = clean_path(ref)
     full = os.path.join(tree_root, p)
     if os.path.exists(full):
-        return True, None
+        return True, None, None
     parent = os.path.dirname(p)
-    parent_exists = bool(parent) and os.path.isdir(os.path.join(tree_root, parent))
     if not parent:
-        return False, 'top-level path not present'
-    if parent_exists:
-        return False, 'parent directory %s/ exists but this file does not' % parent
-    return False, 'parent directory %s/ does not exist either' % parent
+        return False, 'top-level path not present', None
+    if os.path.isdir(os.path.join(tree_root, parent)):
+        return False, 'parent directory %s/ exists but this file does not' % parent, parent
+    return False, 'parent directory %s/ does not exist either' % parent, None
+
+def siblings(parent):
+    """Names in an existing directory — the near-match pool for a missing file."""
+    try:
+        return os.listdir(os.path.join(tree_root, parent))
+    except OSError:
+        return []
 
 def leaf(ref):
     return re.sub(r'\(\)$', '', ref).split('::')[-1]
@@ -294,13 +327,25 @@ unresolved_syms = []
 
 for ref, kind in sorted(refs.items()):
     if kind == 'path':
-        ok, why = resolve_path(ref)
+        ok, why, parent = resolve_path(ref)
         if ok:
             continue
-        drift = 'exists but this file does not' in (why or '')
-        findings.append({'ref': ref, 'kind': kind,
-                         'tier': 'likely-drift' if drift else 'likely-new',
-                         'suggestion': None, 'why': why})
+        if ref in touches_paths:
+            findings.append({'ref': ref, 'kind': kind, 'tier': 'likely-new',
+                             'suggestion': None,
+                             'why': why + '; declared in touches:, so read as a file to create'})
+            continue
+        # Same cutoff as the symbol pass, for the same reason: 0.6 starts
+        # pairing files that merely share an extension, and a wrong suggestion
+        # is worse than none.
+        near = best_match(os.path.basename(clean_path(ref)), siblings(parent), 0.70) if parent else []
+        if near:
+            findings.append({'ref': ref, 'kind': kind, 'tier': 'likely-drift',
+                             'suggestion': os.path.join(parent, near[0]), 'why': why})
+        else:
+            findings.append({'ref': ref, 'kind': kind, 'tier': 'likely-new',
+                             'suggestion': None,
+                             'why': why + ('; nothing similar beside it' if parent else '')})
     elif kind == 'package':
         if ref in packages:
             continue

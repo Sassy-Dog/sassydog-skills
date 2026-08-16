@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# test-verify-issue-refs.sh — proves the grooming-drift checker on the four
-# reference shapes that actually shipped past review in a production drain.
+# test-verify-issue-refs.sh — proves the grooming-drift checker on the
+# reference shapes that actually shipped past review in a production drain,
+# and on the false-positive shape that made a correct issue unpromotable (#199).
 #
 # Provenance: the shapes are real, the fixture tree is synthetic. Each case
 # below is a de-identified reduction of a body that reached the Ready column of
@@ -45,7 +46,13 @@ fail() { printf '  FAIL %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 # Shaped to make each rule distinguishable from the others:
 #   crates/store/src/lib.rs   a real file, with a real `open_in` method
 #   crates/store/Cargo.toml   a package whose name carries the org prefix
-#   app/src-tauri/src/        a real directory that does NOT contain repos.rs
+#   app/src-tauri/src/        a real directory holding github.rs and nothing
+#                             resembling repos.rs — so a near-match sibling and
+#                             a bare "the directory exists" are separable
+#   app/ui/                   a real directory holding one `sample-*-stale.json`
+#                             fixture, the solador #338 shape: a second one
+#                             beside it IS a near match by name and must still
+#                             not gate when it arrives via `touches:`
 TREE="$WORK/tree"
 mkdir -p "$TREE/crates/store/src" "$TREE/app/src-tauri/src" "$TREE/app/ui"
 cat > "$TREE/crates/store/src/lib.rs" <<'RS'
@@ -65,6 +72,7 @@ pub fn repos_view() -> u8 { 0 }
 pub fn runners_view() -> u8 { 0 }
 RS
 echo "body { color: #fff; }" > "$TREE/app/ui/app.css"
+echo '{"stale": true}' > "$TREE/app/ui/sample-azure-stale.json"
 ( cd "$TREE" && git init -q . && git add -A && \
   git -c user.email=t@t -c user.name=t commit -qm fixture ) >/dev/null 2>&1
 
@@ -78,18 +86,58 @@ run() {
     RC=$?
 }
 
-# --- case 1: invented path under a real directory ---------------------------
-# The shape that no name-distance rule can catch: nothing in the tree resembles
-# `repos.rs`, so the finding has to come from the LOCATION — its parent exists
-# and it does not.
+# --- case 1: a bare "the parent directory exists" does NOT gate -------------
+# This case used to assert the opposite, and the comment above it argued that
+# LOCATION was the only usable signal for a name like `repos.rs`. Issue #199
+# reversed that judgement on evidence: the same rule fires on every new file
+# added to an existing directory — the ordinary shape of an issue asking
+# someone to create something — deterministically, every tick, until the
+# operator learns to skim past the gate. The accepted trade-off is written down
+# here rather than only in the issue: an invented path with nothing resembling
+# it in its directory (exactly `repos.rs`) now goes UNCAUGHT, and that is
+# cheaper than a gate nobody reads. Drift still fires on evidence — case 1b.
 cat > "$WORK/b1.md" <<'MD'
 The per-repo view lives in `app/src-tauri/src/repos.rs`.
 MD
 run "$WORK/b1.md"; rc=$RC
-if [ "$rc" = 3 ] && echo "$OUT" | grep -q 'DRIFT.*repos\.rs'; then
-    pass "invented path under an existing directory is drift"
+if [ "$rc" = 0 ] && echo "$OUT" | grep -q 'new .*repos\.rs'; then
+    pass "missing file with no similar sibling is new, not gated"
 else
-    fail "invented path under an existing directory (exit $rc)"; echo "$OUT" | sed 's/^/       /'
+    fail "parent-exists alone must not gate (exit $rc)"; echo "$OUT" | sed 's/^/       /'
+fi
+
+# --- case 1b: a near-match sibling IS evidence, and is suggested -------------
+# The half of the old rule worth keeping. `githb.rs` sits beside a real
+# `github.rs`: the directory itself supplies the near match, so this tiers
+# drift on the same footing as a renamed method — with a suggestion attached,
+# which is what makes the finding actionable rather than merely alarming.
+cat > "$WORK/b1b.md" <<'MD'
+The GitHub client lives in `app/src-tauri/src/githb.rs`.
+MD
+run "$WORK/b1b.md"; rc=$RC
+if [ "$rc" = 3 ] && echo "$OUT" | grep -q 'did you mean `app/src-tauri/src/github\.rs`'; then
+    pass "near-match sibling is drift, and the sibling is suggested"
+else
+    fail "sibling-evidence drift + suggestion (exit $rc)"; echo "$OUT" | sed 's/^/       /'
+fi
+
+# --- case 1c: a `touches:` path is never drift ------------------------------
+# The solador #338 shape, and the reason #199 was filed. `sample-usage-stale.json`
+# scores ~0.83 against the real `sample-azure-stale.json` beside it, so case 1b's
+# rule would gate it — but `touches:` is a forward-looking declaration of what
+# the PR will WRITE, so a file it names is expected to be absent. Origin beats
+# similarity here; drop the origin tracking and this case fails.
+cat > "$WORK/b1c.md" <<'MD'
+Add the stale fixtures beside the existing one.
+
+touches: app/ui/sample-usage-stale.json app/ui/sample-cronmonitors-stale.json
+MD
+run "$WORK/b1c.md"; rc=$RC
+if [ "$rc" = 0 ] && echo "$OUT" | grep -q 'new .*sample-usage-stale\.json' \
+   && ! echo "$OUT" | grep -q 'DRIFT'; then
+    pass "touches: paths are reported as new even beside a near match"
+else
+    fail "touches: path must never gate (exit $rc)"; echo "$OUT" | sed 's/^/       /'
 fi
 
 # --- case 2: new subtree is NOT drift ---------------------------------------
