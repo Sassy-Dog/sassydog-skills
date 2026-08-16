@@ -67,6 +67,28 @@ stale promises break dispatch-ready.
 Read each candidate IN FULL — `gh issue view N --comments` — scope often lives in follow-up
 comments.
 
+### Suspected-complete tracking parents (board AND boardless)
+
+An epic that split into children never closes itself. GitHub's automation moves on a merged PR's
+`Closes #N` keyword, and a tracking parent is definitionally the issue no PR ever names — so its
+children close one by one under their own PRs while the parent sits open indefinitely, counted as
+pending work by every read of this backlog. One repo's grooming pass found four such issues among
+its eight open (issue #198).
+
+Detection is `sassy-dog:github-issues`' `stale-issues.sh`, detector
+**`tracking-parent-complete`**: an open parent with ≥1 child — bodies carrying the literal
+`Part of #<parent>` line §5 writes — where every child is CLOSED. Run it in this step whatever the
+board mode; unlike the reconcile below, this pass has nothing to do with columns.
+
+Each hit is **reported for a human to close — never groomed, never closed here.** List it as
+`#<parent> — N children, all closed (#286 #287 …)` and drop it from the candidate list: refining an
+issue whose work has already shipped does not merely waste the pass, it re-legitimises the issue
+and the next reader trusts it again.
+
+A `truncated: true` result means the detector's pull came back at its ceiling. Report that as
+**unknown**, not clean, and re-run with a higher `ALL_LIMIT` — same rule as the reconcile join
+below.
+
 ### Reconcile the board against issue state (board mode only)
 
 **Skip this pass entirely without a `board:` block** — a boardless repo has no columns to reconcile,
@@ -200,6 +222,27 @@ A multi-workstream issue gets child issues — one per dispatchable unit — via
 body containing `Part of #<parent>` (NOT `Closes`). Children then pass the §3 rubric individually;
 the parent stays out of Ready, because it tracks rather than dispatches.
 
+**Then write the children table onto the parent.** Without it the split is one-directional — the
+children point up, the parent holds nothing — so a finished epic reads exactly like an untouched
+one and its only remaining signal is that somebody remembers. Once the children exist, edit the
+parent's body to carry a `## Children` section, one row per child:
+
+```markdown
+## Children
+
+| Child | Title | State |
+| --- | --- | --- |
+| #286 | Extract the token-minting helper | closed |
+| #287 | Route the sync workflows through it | open |
+```
+
+Write it through the body-file path §4 already uses — `gh issue edit "$PARENT" --body-file <file>`
+— never a comment. **Refresh the State column on every later grooming pass**, from the issue state
+the §2 pull already has in hand. The table is a snapshot, and a stale snapshot is worse than none:
+it is the artifact a reader trusts *instead of* re-checking. The parent still stays out of Ready,
+and the table is never a substitute for the §2 detector — the table is what a human reads, the
+detector is what notices.
+
 **Run splits FIRST in a grooming pass.** `Depends on #N` lines must point at dispatchable issues —
 children, never a tracking parent — so an issue depending on "the schema part of epic #E" cannot
 finalize its dependency line until #E's split has produced the child number.
@@ -250,6 +293,17 @@ Every promoted issue carries its `touches:` line from rubric #8.
 Final table: issue · verdict (**Ready** / needs-decision / split → children / parked:
 awaiting-user / parked: reason) · what changed.
 
+**Always add the suspected-complete line** from §2, on every run:
+
+```text
+suspected complete: #283 (8 children, all closed) · #284 (5 children, all closed)
+```
+
+Write `suspected complete: none` when the detector found none, and
+`suspected complete: UNKNOWN (pull truncated at ALL_LIMIT=<n>)` when it could not see the whole
+repo. Those are the only three values, and the line is never omitted — silence reads as "none",
+which is precisely the assertion this detector exists to stop the report making by accident.
+
 **With `board:`, add one board line** stating the board's end state rather than only the Ready
 count:
 
@@ -271,6 +325,9 @@ End with the decisions awaiting the user, if any.
 - Never close issues, and never delete content — the original ask always survives as a quote.
   Board **card state** may be reconciled, but only from the reconcile step and only on explicit
   user confirmation — never silently, and never in bulk without the list being shown first.
+  This binds §2's suspected-complete parents too: a `tracking-parent-complete` hit is **reported
+  for a human to close**, never closed here and never refined back into pending work — no matter
+  how certain the evidence looks.
 - Never promote with an unresolved decision "because the default is obvious" — the default goes to
   the user first.
 - Never write a `stack:` line unprompted, and never write one at all without a `stacked_prs:` block.

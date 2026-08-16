@@ -129,6 +129,15 @@ gh issue list --state open --limit 200 --json number,title,labels,updatedAt
 
 plus `sassy-dog:github-issues` stale-issue detection.
 
+**Either way, render its `tracking-parent-complete` hits** — an open epic whose children (the
+`Part of #<parent>` lines `sassy-dog:groom-backlog` writes at split time) have all closed. Such a
+parent can never self-close, because GitHub's automation fires on a merged PR's `Closes #N` and no
+PR ever names a tracking issue, so it stays on the backlog as apparent work indefinitely
+(issue #198). One line each under the backlog section — `#<parent> · N children, all closed` —
+labelled as finished work still open. **Never score it as available work, never recommend it in
+§5's top 5, and never close it**: this skill is read-only here whatever the `write_policy`, and a
+human closes. A `truncated: true` result is reported as unknown, not clean.
+
 ### C. Tech debt + dev experience
 
 Invoke `sassy-dog:repo-health`:
@@ -250,6 +259,8 @@ _Sources: <pulled, with any "skipped — reason">_
 
 ## 🎯 Backlog priorities
 - **#NNN <title>** — `<label>` — <one-line why>
+
+_Suspected complete: #NNN (N children, all closed) — finished work still open; close it, don't groom it._
 
 ## 🧹 Tech debt
 ## 🛠 Dev experience

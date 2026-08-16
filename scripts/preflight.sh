@@ -94,8 +94,20 @@
 #      new-subtree body must stay quiet — since a checker that fires on
 #      everything is muted within a day and then gates nothing at all.
 #      Fixture tree is synthetic and built in a tmpdir: no gh, no network.
-#  14. markdownlint (pinned markdownlint-cli2 version)
-#  15. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
+#  14. stale-issues tests (scripts/test-stale-issues.sh) — the
+#      tracking-parent-complete detector (issue #198). An epic that splits into
+#      children can never close itself: GitHub moves an issue only on a merged
+#      PR's closing keyword, and a tracking parent is the issue no PR ever
+#      names. All three of this detector's wrong answers are silent — a missed
+#      parent is indistinguishable from a clean repo, a PREFIX COLLISION
+#      (#28 claiming #283's children) tells a human to close live work, and a
+#      TRUNCATED pull returns the same empty list a clean one does. The prefix
+#      fixture is mutation-proved: a copy of the script whose regex has lost
+#      its non-digit guard MUST report #28, or the decoy has gone vacuous.
+#      Mock gh serving recorded JSON: no repo, no network, and the run is
+#      asserted to issue zero non-read calls.
+#  15. markdownlint (pinned markdownlint-cli2 version)
+#  16. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -426,7 +438,19 @@ else
     failed "verify-issue-refs tests (scripts/test-verify-issue-refs.sh)"
 fi
 
-# --- 14. markdownlint --------------------------------------------------------
+# --- 14. stale-issues tests ---------------------------------------------------
+# The tracking-parent-complete detector is the only thing that notices a
+# finished epic, so every way it can be wrong is silent: a miss looks like a
+# clean repo, a prefix collision points a human at live work, and a truncated
+# pull returns the empty list a clean pull returns. The prefix fixture is
+# mutation-proved live rather than trusted. Mock gh only: no repo, no network.
+if bash scripts/test-stale-issues.sh; then
+    pass "stale-issues tests (scripts/test-stale-issues.sh)"
+else
+    failed "stale-issues tests (scripts/test-stale-issues.sh)"
+fi
+
+# --- 15. markdownlint --------------------------------------------------------
 if command -v npx >/dev/null 2>&1; then
     if [ "$FIX" = "1" ]; then
         npx -y "$MARKDOWNLINT_PKG" --fix "**/*.md" >/dev/null 2>&1 || true
@@ -441,7 +465,7 @@ else
     skip "markdownlint (npx not installed — CI still enforces)"
 fi
 
-# --- 15. actionlint (best-effort locally; CI runs its own dockerized step) ---
+# --- 16. actionlint (best-effort locally; CI runs its own dockerized step) ---
 if [ "${CI:-}" = "true" ]; then
     skip "actionlint (separate CI step)"
 elif command -v actionlint >/dev/null 2>&1; then
