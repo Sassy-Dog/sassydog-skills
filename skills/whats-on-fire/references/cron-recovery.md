@@ -131,11 +131,12 @@ ORG=Sassy-Dog REPO=platform WORKFLOW_FILE=relay-drift-check.yml \
 query is scoped server-side to the one workflow (`/actions/workflows/<file>/runs?event=workflow_dispatch&status=completed&per_page=10`),
 which is what makes "no qualifying run" trustworthy: 10 runs of one workflow reach back months. Any
 reimplementation that pulls a repo-wide page and filters afterwards loses that guarantee — a
-repo-wide page holds 30 runs, which on `Sassy-Dog/platform` reaches back only 5–13 hours. On
-2026-08-18 exactly that cost a day of false P0 on `cron-doppler-audit`: 52 unrelated runs landed
-between the green dispatch and the sweep, so the page held zero `doppler-audit.yml` runs and the
-miss was reported as evidence. If you cannot scope the query to the workflow, you have no answer — exit 10,
-full severity, footer. Never treat a repo-wide page's miss as evidence.
+repo-wide page is **30 runs deep, not N hours deep**, and on `Sassy-Dog/platform` that has been
+measured at under an hour. On 2026-08-18 exactly that cost a day of false P0 on
+`cron-doppler-audit`: 52 unrelated runs landed between the green dispatch and the sweep, so the
+page held zero `doppler-audit.yml` runs and the miss was reported as evidence. If you cannot scope
+the query to the workflow, you have no answer — exit 10, full severity, footer. Never treat a
+repo-wide page's miss as evidence.
 
 `SINCE` is the reference instant of rule 2: the environment's `lastCheckIn`, or the incident start
 only when no check-in is present; if neither is usable, do not run the check — the monitor stays P0
