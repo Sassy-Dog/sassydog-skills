@@ -3,11 +3,12 @@ name: survey-work
 description: >
   Synthesize the full work surface for the current repo — customer pain (Sentry, GitHub bugs,
   TestFlight feedback), backlog (board or open issues + labels), tech debt (TODO/FIXME, skipped
-  tests), dev experience (CI duration/flake, dependency exposure), and synthesized "next bet"
-  candidates with no GitHub issue yet. Dedupes across sources, scores within each category, returns
-  a prioritized inline plate. Use when the user says "what's on our plate", "what's on our plate
-  today", "what should we work on", "survey the work", "survey what's on deck", "plate it",
-  "what's next", "what should I prioritize", "give me the plate", "what hurts customers most", or
+  tests), security exposure (code scanning, secret scanning, dependency alerts), dev experience (CI
+  duration/flake), and synthesized "next bet" candidates with no GitHub issue yet. Dedupes across
+  sources, scores within each category, returns a prioritized inline plate. Use when the user says
+  "what's on our plate", "what's on our plate today", "what should we work on", "survey the work",
+  "survey what's on deck", "plate it", "what's next", "what should I prioritize", "give me the
+  plate", "what hurts customers most", "any leaked secrets", "what's our security exposure", or
   "triage". Reads the current repo's settings from
   `.claude/sassy-dog/survey-work.md`. Read-only unless that config sets `write_policy: gated`.
 ---
@@ -156,6 +157,9 @@ Invoke `sassy-dog:repo-health`:
   guessed path silently scans the wrong subtree and reports a clean repo.
 - CI health with the configured `ci_workflow`. No config → skip; do not guess a workflow filename.
 - dependency exposure + remediation (no environment needed; defaults to cwd)
+- code scanning and secret scanning (no environment needed; both default to cwd). `analyzed: false`
+  or `enabled: false` is a **blind spot** row, never a clean line; `enabled: null` is a token-scope
+  question. `truncated: true` makes `open` a floor — report "at least N".
 - mobile release lag with the configured `mobile.release_workflow` and `mobile.path_prefix`, **if
   `mobile:` is configured**
 
@@ -234,14 +238,26 @@ by reactions + comments. Don't re-derive a priority the maintainer already assig
 
 **Tech debt + dev experience**: `sassy-dog:repo-health` scoring defaults.
 
-**Dependency exposure**: rank by REMEDIATION STATE, never by alert count — a count only falls when
-a fix merges, so a fresh CVE batch with fixes already queued looks identical to a year of neglect.
-A `parked_green` PR aged ≥3 days is **P0** and belongs under Dev experience with its number and
-merge command: the fix exists, it is green, and only a human press is missing.
+**Security — dependency exposure**: rank by REMEDIATION STATE, never by alert count — a count only
+falls when a fix merges, so a fresh CVE batch with fixes already queued looks identical to a year of
+neglect. A `parked_green` PR aged ≥3 days is **P0** and belongs under **Security** with its number
+and merge command: the fix exists, it is green, and only a human press is missing.
 `unremediated_packages` with an available patch is **P1** (**P0** past 14 days). A `BLOCKED` or
 `DIRTY` fix PR is **P1** — name the failing check, since it is usually a lockfile the updater
 cannot regenerate. A fresh batch (≤2 days) fully covered by open fix PRs is not a finding; it goes
 on the `✓ Clean today:` line.
+
+**Security — code scanning**: rank rule-clustered, never per alert. A rule whose newest alert is
+≤14 days old is `new[]`: **P0** at `critical` or with `autofix: "ready"` (the fix exists and only a
+human press is missing), **P1** at `high`. Everything older is `inherited` — ONE debt line naming
+the rule count and the oldest age, never enumerated and never in the top 5. A flat severity ranking
+here reproduces exactly the wall-of-findings problem the dependency rule above exists to prevent.
+
+**Security — secret scanning**: `validity: "active"` is **P0 on day zero** — GitHub validated the
+credential against its provider, so it is live and no age math applies. A `bypassed: true` alert is
+**P0**: a human overrode push protection to commit it. `unknown` validity is **P1**, escalating to
+**P0** at 30 days, because unverified and untriaged for a month is itself the finding. `inactive`
+is already rotated — one token on the clean line.
 
 Then apply any `## scoring-overrides` section from config — project-specific re-weights.
 
@@ -265,6 +281,13 @@ _Sources: <pulled, with any "skipped — reason">_
   - Sources: [Sentry](url) · [GH #123](url)
   - Why this matters: <one line>
 ### P2 (count + 3 sample titles, collapsed)
+
+## 🔒 Security (P0: N · P1: N)
+### P0
+- **<rule or credential type>** — <one-line why>
+  - Evidence: <alert numbers> · <validity or severity> · open <N>d
+  - Fix: <merge command, autofix note, or "rotate and revoke">
+_Inherited: N alerts across M rules, oldest Dd — debt, not a plate item._
 
 ## 🎯 Backlog priorities
 - **#NNN <title>** — `<label>` — <one-line why>
