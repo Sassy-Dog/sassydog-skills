@@ -130,6 +130,13 @@
 #      is what makes the mismatch visible. The check is LINE-scoped on purpose:
 #      the reconciliation prose in each §1 also says CONFIG_SOURCE, so a
 #      file-scoped grep would pass a block that had lost it.
+#  19. scanning-states tests (scripts/test-scanning-states.sh) — the code- and
+#      secret-scanning pulls' four silent failure modes: the 404 that means
+#      BOTH "Advanced Security off" and "never analyzed" (collapsing them
+#      reports a never-scanned repo as clean), the un-paginated read that
+#      returns a capped 100 as if it were a measurement (live: velovate, true
+#      count 102), a PR-ref alert counted as default-branch debt, and the
+#      validity:"active" P0 rule acquiring an age gate. Mock gh only.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -483,6 +490,16 @@ if bash scripts/test-teardown-args.sh; then
     pass "teardown-args tests (scripts/test-teardown-args.sh)"
 else
     failed "teardown-args tests (scripts/test-teardown-args.sh)"
+fi
+
+# --- 19. scanning-states tests -----------------------------------------------
+# Every failure mode here emits well-formed JSON carrying a plausible number, so
+# nothing downstream can tell a wrong answer from a right one. Mock gh only: no
+# repo, no network.
+if bash scripts/test-scanning-states.sh; then
+    pass "scanning-states tests (scripts/test-scanning-states.sh)"
+else
+    failed "scanning-states tests (scripts/test-scanning-states.sh)"
 fi
 
 # --- 16. markdownlint --------------------------------------------------------
