@@ -4,12 +4,12 @@ description: >
   This skill should be used when the user asks "what's on fire", "what's on fire today", "what's
   broken", "what's broken across our products", "what's stuck", "what's red", "anything burning",
   "portfolio status", "portfolio health", "how's the portfolio looking", "which product needs
-  attention", "cross-product status", "are any of our products broken", or wants one cross-product
-  sweep of production failures and stalled work spanning EVERY repo in a GitHub org rather than a
-  single repository. Pulls Sentry issues and cron monitors, org-wide open issues and pull requests,
-  failing workflows, Dependabot exposure, and structural blind spots (products with no error
-  monitoring, no alerting, or no dependency scanning), then ranks them across products and routes
-  each one to the owning repo. Read-only — never files issues, never mutates state. For deep
+  attention", "cross-product status", "any leaked secrets", "security exposure", or wants one
+  cross-product sweep of production failures and stalled work spanning EVERY repo in a GitHub org
+  rather than a single repository. Pulls Sentry issues and cron monitors, org-wide open issues and
+  pull requests, failing workflows, Dependabot exposure, and structural blind spots (products with
+  no error monitoring, no alerting, or no dependency scanning), then ranks them across products and
+  routes each one to the owning repo. Read-only — never files issues, never mutates state. For deep
   single-repo prioritization, defer to that repository's own survey-work skill.
 ---
 
@@ -125,6 +125,11 @@ Assemble from data already pulled, plus two local comparisons:
   regenerate (Bun, CocoaPods), while **security** updates keep firing regardless — they cannot be
   opted out of that way. Name the ecosystem and route it; the remedy is a lockfile-sync workflow, not
   a version bump.
+- `code_scanning.enabled == false` → code scanning disabled. `analyzed == false` with
+  `enabled == true` → **enabled but never analyzed**, which is a different row: the workflow exists
+  or the feature is on, and no scan has ever produced a result. Both render `open: 0`, so reporting
+  either as clean is the failure this row exists to prevent. `enabled == null` → token scope.
+- `secret_scanning.enabled == false` → secret scanning disabled. `enabled == null` → token scope.
 - Active repos with no matching Sentry project → no error monitoring.
 - Zero metric alert rules org-wide → no alerting. Check once via the alert-rules tool.
 - Roster entries with no directory under `PORTFOLIO_ROOT` → never cloned.
@@ -218,6 +223,13 @@ _Load: <plugin|fallback (degraded)> · Sources: <pulled, with any "skipped — r
 - **<product> — `<monitor>` (<project>/<env>)** — green [dispatch](url) at <time>; awaiting
   scheduled confirmation <nextCheckIn date>
 
+## 🔒 Security exposure (P0: N · P1: N)
+### P0
+- **<product> — <credential type or rule>** — <repo>
+  - Evidence: <alert numbers> · <validity or severity> · open <N>d
+  - Fix: <rotate and revoke | merge PR #N | autofix ready>
+_Inherited: <repo> N alerts across M rules, oldest Dd._
+
 ## 🚧 Stuck shipping
 - **<repo>#<N> <title>** — idle <D>d · <one-line why>
 
@@ -239,6 +251,10 @@ _To ship: `cd <product> && take #<N>`_
 
 Keep the footer. This skill's job ends at naming the product; the per-repo `survey-work` and `take-it`
 take it from there, and the footer is what makes that handoff explicit rather than implied.
+
+P0 security items are **not** duplicated into Production fires. The cross-product top 5 is where
+urgency gets expressed; this skill's existing rule is that semantically distinct signals stay in
+separate fields rather than merging into false alarms.
 
 Two rules for the cron-recovery lines, from `references/cron-recovery.md`:
 

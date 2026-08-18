@@ -187,6 +187,8 @@ populate this table** (the token ceiling is why — see "Read fields, not files"
 | `scheduled_failing[]` | Group `schedule`-event runs by workflow; a workflow is listed only if its most recent completed run failed. A stale failure already followed by green is not an active fire. |
 | `last_failure` | Most recent completed run with conclusion `failure`: workflow, branch, event, url, created_at; null when none. |
 | `dependabot` | **No MCP equivalent — do not populate. See below.** |
+| `code_scanning` | **Unverified — see below.** |
+| `secret_scanning` | **Unverified — see below.** |
 
 ## Unreachable: the Dependabot surface
 
@@ -199,7 +201,7 @@ Render it exactly as `skipped — no gh CLI (Dependabot API unreachable)`, named
 sources line per sections 1 and 5:
 
 ```markdown
-_Load: <plugin|fallback (degraded)> · Sources: Sentry · Sentry crons · GitHub (MCP fallback) · Dependabot skipped — no gh CLI (Dependabot API unreachable)_
+_Load: <plugin|fallback (degraded)> · Sources: Sentry · Sentry crons · GitHub (MCP fallback) · Dependabot skipped — no gh CLI (Dependabot API unreachable) · Code scanning skipped — unverified MCP capability · Secret scanning skipped — unverified MCP capability_
 ```
 
 Do NOT approximate it. The PR capability can see Dependabot's open fix PRs, which makes a partial
@@ -208,6 +210,17 @@ against, so remediation cannot be judged per package, and section 4 ranks Depend
 remediation state, never by count. A half-surface would quietly re-create the exact
 any-PR-counts-as-remediation failure the script's header documents. A named skip is the honest
 answer.
+
+## Unverified: the code- and secret-scanning surfaces
+
+Whether the session's GitHub MCP surface exposes code-scanning or secret-scanning capabilities has
+not been established. Until it is, treat both as unreachable and render them as named skips beside
+Dependabot's — an approximation would be worse, because the blind-spot rows these feed are
+specifically about distinguishing "no alerts" from "never scanned".
+
+Settle it with `Sassy-Dog/velovate` as the positive control: on 2026-08-18 it carried 102 open
+code-scanning alerts and 4 open secret-scanning alerts. An empty result there means the capability
+is absent — no other reading survives. Record the answer as a Container fact, not a per-run probe.
 
 ## Also unreachable without `gh`: the cron-recovery cross-reference
 
