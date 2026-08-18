@@ -118,6 +118,18 @@
 #  16. markdownlint (pinned markdownlint-cli2 version)
 #  17. actionlint — best-effort locally (binary, else docker); SKIPPED in CI
 #      (CI=true) because the workflow runs it as its own step
+#  18. config-source guard — every `!` block that inlines a repo's
+#      .claude/sassy-dog/<skill>.md MUST also echo CONFIG_SOURCE. Same
+#      source-level class as gates 3 and 4. The block resolves against the
+#      SESSION's cwd, not the repo being acted on, and cwd resets between Bash
+#      calls — so a sub-agent working in another repo is silently handed the
+#      session repo's config. That is only wrong when the session repo IS
+#      configured: NO_CONFIG already fails honestly, but a populated config from
+#      the wrong repo is indistinguishable from the right one (2026-08-18 — two
+#      agents were each handed platform's Terraform gates). Announcing the path
+#      is what makes the mismatch visible. The check is LINE-scoped on purpose:
+#      the reconciliation prose in each §1 also says CONFIG_SOURCE, so a
+#      file-scoped grep would pass a block that had lost it.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -501,6 +513,33 @@ elif docker info >/dev/null 2>&1; then
     fi
 else
     skip "actionlint (no binary or docker — CI still enforces)"
+fi
+
+# --- 18. config-injection blocks must announce CONFIG_SOURCE ------------------
+# Two vacuous-green guards, because this gate's whole output is an absence and
+# both ways of covering nothing look identical to a pass: the pathspec matching
+# no tracked files (a directory rename), and no file carrying an injection block
+# at all (the block reworded out from under the regex).
+CONFIG_SOURCE_PATHSPEC=('skills/*/SKILL.md' 'skills/setup-config/references/config-contract.md')
+CONFIG_INJECT_RE='^!`.*\.claude/sassy-dog/'
+config_source_files=$(git ls-files "${CONFIG_SOURCE_PATHSPEC[@]}")
+if [ -z "$config_source_files" ]; then
+    failed "config-source guard — pathspec '${CONFIG_SOURCE_PATHSPEC[*]}' matched no tracked files (renamed or moved? the guard would silently cover nothing)"
+else
+    config_inject_files=$(echo "$config_source_files" | xargs grep -l "$CONFIG_INJECT_RE" 2>/dev/null)
+    if [ -z "$config_inject_files" ]; then
+        failed "config-source guard — no tracked file carries a .claude/sassy-dog injection block (reworded? the guard would silently cover nothing)"
+    else
+        # Line-scoped: the §1 reconciliation prose also mentions CONFIG_SOURCE,
+        # so only the injection LINE itself is evidence that it still announces.
+        config_source_bad=$(echo "$config_inject_files" | xargs grep -n "$CONFIG_INJECT_RE" | grep -v 'CONFIG_SOURCE')
+        if [ -n "$config_source_bad" ]; then
+            echo "$config_source_bad" >&2
+            failed "config-source guard — the injection blocks above do not echo CONFIG_SOURCE, so a consumer cannot tell whose config it was handed (see setup-config/references/config-contract.md)"
+        else
+            pass "config-source guard ($(echo "$config_inject_files" | wc -l | tr -d ' ') injection blocks)"
+        fi
+    fi
 fi
 
 # ------------------------------------------------------------------------------

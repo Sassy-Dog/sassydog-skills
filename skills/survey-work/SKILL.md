@@ -20,7 +20,16 @@ Synthesize everything we might tackle into one prioritized plate.
 
 ## 1. Repo config
 
-!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/survey-work.md" 2>/dev/null || echo "NO_CONFIG"`
+!`root="$(git rev-parse --show-toplevel 2>/dev/null)"; echo "CONFIG_SOURCE: ${root:-<not a git repo>}"; cat "$root/.claude/sassy-dog/survey-work.md" 2>/dev/null || echo "NO_CONFIG"`
+
+**Check `CONFIG_SOURCE` before using any of this.** It is the repo root resolved from the
+**session's** working directory at skill-load time — not necessarily the repo you are about to act
+on — and cwd resets between Bash calls, so you cannot influence it. If it names a repo other than
+the one you are working in, **discard the block above**, read that repo's own
+`.claude/sassy-dog/survey-work.md` by absolute path, and use that instead. Config is meant to be applied
+exactly as written, so the wrong one silently applies another repo's rules: on 2026-08-18 two agents
+shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
+and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
 `write_policy`, and the optional `sentry`, `board`, `testflight`, `mobile`, `posthog`, and

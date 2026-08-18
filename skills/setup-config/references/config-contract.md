@@ -236,12 +236,44 @@ whole point of keeping it separate from the frontmatter facts.
 Each skill inlines its config at load time with dynamic context injection:
 
 ```text
-!`cat "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/sassy-dog/<skill>.md" 2>/dev/null || echo "NO_CONFIG"`
+!`root="$(git rev-parse --show-toplevel 2>/dev/null)"; echo "CONFIG_SOURCE: ${root:-<not a git repo>}"; cat "$root/.claude/sassy-dog/<skill>.md" 2>/dev/null || echo "NO_CONFIG"`
 ```
 
 `git rev-parse` rather than `${CLAUDE_PROJECT_DIR}` because the substitution order between
 placeholder expansion and shell execution is not specified, and every one of these skills requires
 a git repo regardless. The command is safe outside a repo — it yields `NO_CONFIG` with no stderr.
+
+### `CONFIG_SOURCE` — why the block announces where it read from
+
+**The block resolves against the SESSION's working directory, not the repo being acted on**, and
+those are the same thing only when the session was started in the target repo. The harness pins cwd
+to the session root and **resets it between Bash calls**, so an agent cannot `cd` into another repo
+and re-trigger the load — whichever repo the session started in owns config resolution for the whole
+session. Cross-repo work is therefore the exposed case: a sub-agent shipping in repo B, dispatched
+from a session rooted in repo A, is handed A's config.
+
+The failure is silent in exactly one quadrant, which is why it survived so long:
+
+| Session-root repo | Result |
+| --- | --- |
+| Unconfigured | `NO_CONFIG` → the skill stops and asks ✓ |
+| Configured, same as the target | correct ✓ |
+| Configured, **different** from the target | **confident wrong answer**, silent ✗ |
+
+`NO_CONFIG` already fails honestly. The third row did not, because a populated config from the wrong
+repo is indistinguishable from the right one — the same class as a truncated API page reading as an
+empty one. On 2026-08-18 two sub-agents shipping in `sassydog-routines` and `sassydog-skills` were
+each handed `platform`'s Terraform gates (`terraform fmt`, `tflint`,
+`infrastructure/environments/core`) while their real gates were `bats`/`ruff`/`actionlint` and
+`scripts/preflight.sh`. Both caught it only by noticing the mismatch themselves — and since every
+skill instructs that config be applied exactly as written, a *compliant* agent would have run the
+wrong gates.
+
+Hence `CONFIG_SOURCE`: the block names the path it read from, so the mismatch is visible rather than
+inferred. Each skill's §1 carries the reconciliation rule inline — discard, re-read the target repo's
+own file by absolute path, use that. The rule is inline rather than a pointer here on purpose: the
+failure mode is an agent proceeding confidently without reading further, and a pointer is exactly
+what such an agent skips.
 
 **`NO_CONFIG` is a first-class state, not an error.** A skill that finds no config must derive what
 it safely can, run in its most conservative mode, and tell the user to run
