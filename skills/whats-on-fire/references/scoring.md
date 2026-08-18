@@ -24,6 +24,9 @@ So: **customer pain decays with age; stuck work escalates with age.** Never shar
 | Cron monitor environment `missed` or `timeout` — always, a dispatch can never vouch for these | `find_monitors` |
 | Cron monitor environment `error` with **no** qualifying green dispatch after its last failing check-in | `find_monitors` + `cron-recovery.md` |
 | `default_branch_ci` is `failure` | `pull-repo-signals.sh` |
+| Any `secret_scanning.active[]` entry, or any `bypassed: true` | `pull-repo-signals.sh` |
+| `secret_scanning.unknown_validity[]` entry aged >= 30d | `pull-repo-signals.sh` |
+| `code_scanning.new[]` rule at `critical` | `pull-repo-signals.sh` |
 
 A red default branch is P0 regardless of failure rate — a repo can sit at 0% historical failures and
 still have main broken right now. Rate answers "is CI trustworthy"; `default_branch_ci` answers "is
@@ -44,6 +47,8 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 | Dependabot | any `high_crit` > 0 |
 | `scheduled_failing` | non-empty — an ops job whose most recent run failed |
 | `default_branch_ci` | `cancelled` or `timed_out` (ambiguous — verify before ranking P0) |
+| Secret scanning | `unknown_validity[]` entry aged < 30d |
+| Code scanning | `new[]` rule at `high` |
 
 ### P2 — heat worth knowing about
 
@@ -98,6 +103,11 @@ absence of information, not a judgment of low priority.
 |---|---|
 | Dependabot disabled | `dependabot.enabled == false` |
 | Dependabot visibility unknown | `dependabot.enabled == null` — token scope, not a repo setting; do not report as "disabled" |
+| Code scanning disabled | `code_scanning.enabled == false` |
+| Code scanning never analyzed | `code_scanning.analyzed == false` with `enabled == true` — a scan has never produced a result; `open: 0` here is not a clean bill of health |
+| Code scanning visibility unknown | `code_scanning.enabled == null` — token scope, not a repo setting |
+| Secret scanning disabled | `secret_scanning.enabled == false` |
+| Secret scanning visibility unknown | `secret_scanning.enabled == null` — token scope, not a repo setting |
 | No error monitoring | active repo with no matching Sentry project |
 | No alerting | `find_alert_rules` returns zero metric rules org-wide |
 | Archived but still checked out | `repos[].archived == true` with a local clone present |

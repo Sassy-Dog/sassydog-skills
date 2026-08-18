@@ -17,14 +17,37 @@
 #                  "last_failure": { "workflow", "branch", "event", "url", "created_at" } | null,
 #                  "dependabot": { "enabled": true|false|null, "open", "high_crit",
 #                                  "oldest_high_crit_age_days",
-#                                  "open_fix_prs": [ { "number", "title", "state", "age_days" } ] } } ] }
+#                                  "open_fix_prs": [ { "number", "title", "state", "age_days" } ] },
+#                  # NOTE: a deliberately REDUCED projection of what
+#                  # pull-code-scanning.sh and pull-secret-scanning.sh emit.
+#                  # The org sweep routes to a repo; it does not triage
+#                  # inside one. Dropped from code_scanning: per-alert
+#                  # numbers, inherited.by_severity, new[].autofix, tools,
+#                  # default_branch (autofix carries a P0 rule in
+#                  # repo-health/SKILL.md; the org scoring table
+#                  # deliberately has no autofix->P0 rule, since routing
+#                  # a repo needs no readiness verdict on its fix).
+#                  # Dropped from secret_scanning: oldest_age_days,
+#                  # inactive. Do not assume field parity with either
+#                  # per-repo script.
+#                  "code_scanning": { "enabled": true|false|null,
+#                                     "analyzed": true|false|null, "truncated",
+#                                     "open",
+#                                     "new": [ { "rule", "severity", "count",
+#                                                "oldest_age_days" } ],
+#                                     "inherited": { "count", "rules",
+#                                                    "oldest_age_days" } },
+#                  "secret_scanning": { "enabled": true|false|null, "open",
+#                                       "active": [...], "unknown_validity": [...] } } ] }
 #
-# Cost is 1 + 2N calls, plus ONE extra per repo that actually has high/critical
-# alerts (for its open Dependabot PRs). A healthy org pays nothing for that third
-# call. That is the deliberate trade: the org-level searches in pull-org-github.sh
-# cannot express "recent workflow conclusions" or "alert severity", so those two
-# genuinely need a loop. Keep RUN_LIMIT small — this is a triage sweep, not a CI
-# analytics pass.
+# Cost is 1 + 4N calls, plus ONE extra per repo with high/critical Dependabot
+# alerts (its fix PRs). The code- and secret-scanning pulls each read a
+# single page capped at 100 alerts — there is no pagination loop, ever.
+# code_scanning reports `truncated: true` when the cap was hit, marking
+# `open` as a floor rather than a count; secret_scanning carries no such
+# field and simply reflects whatever sits in the first 100. A healthy org
+# pays nothing for the conditional Dependabot call. Keep RUN_LIMIT small —
+# this is a triage sweep, not a security analytics pass.
 #
 # WHY AGE AND FIX-PR STATE ARE PART OF THE CONTRACT: a bare alert count is a
 # LAGGING indicator. It only falls when a fix MERGES, so it conflates "we were
@@ -74,6 +97,12 @@ for repo in "${targets[@]}"; do
   default_branch=$(jq -r --arg r "$repo" \
     '.[] | select(.name == $r) | .defaultBranchRef.name // "main"' <<<"$roster")
   [[ -z "$default_branch" ]] && default_branch="main"
+
+  # Track provenance: a GUESSED branch cannot support the ref filter below.
+  default_branch_resolved=true
+  if [ -z "$(jq -r --arg r "$repo" '.[] | select(.name == $r) | .defaultBranchRef.name // empty' <<<"$roster")" ]; then
+    default_branch_resolved=false
+  fi
 
   runs=$(gh run list --repo "${ORG}/${repo}" --limit "$RUN_LIMIT" \
     --json conclusion,status,workflowName,headBranch,url,createdAt,event 2>/dev/null) || runs='[]'
@@ -147,11 +176,77 @@ for repo in "${targets[@]}"; do
     dependabot='{"enabled":false,"open":null,"high_crit":null,"oldest_high_crit_age_days":null,"open_fix_prs":null}'
   fi
 
+  # Code scanning. The 404 is ambiguous by design — see pull-code-scanning.sh.
+  code_scanning='{"enabled":null,"analyzed":null,"truncated":false,"open":null,"new":[],"inherited":null}'
+  if [ "$default_branch_resolved" != "true" ]; then
+    : # enabled:null here is NOT the usual token-scope signal — the roster
+      # lookup for this repo's default branch failed, so the ref filter
+      # above has nothing safe to compare against. secret_scanning carries
+      # no ref and is unaffected, so the same repo/token can legitimately
+      # show code_scanning unknown while secret_scanning resolves fine.
+      # code_scanning keeps the null-state default assigned above.
+  elif cs=$(gh api "repos/${ORG}/${repo}/code-scanning/alerts?state=open&per_page=100" 2>&1); then
+    if jq -e 'type == "array"' >/dev/null 2>&1 <<<"$cs"; then
+      code_scanning=$(jq -c --arg ref "refs/heads/${default_branch}" '
+        . as $raw
+        | ( map(select(.most_recent_instance.ref == $ref))
+          | map({rule: .rule.id,
+                 severity: (.rule.security_severity_level // "none"),
+                 age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)}) ) as $a
+        | ($a | map(select(.age_days > 14))) as $old
+        | {critical: 4, high: 3, medium: 2, low: 1, none: 0} as $rank
+        | { enabled: true, analyzed: true,
+            # Measured on the RAW page, not $a (ref-filtered): a repo can
+            # have 100 raw alerts with only 40 on the default branch, and
+            # the 60 unseen ones (hidden by the page cap) may include more
+            # default-branch alerts. A truncated computed from $a would
+            # read false and assert completeness it does not have — worse
+            # than no truncated flag at all.
+            truncated: (($raw | length) >= 100),
+            open: ($a | length),
+            new: ( $a | map(select(.age_days <= 14)) | group_by(.rule)
+                   | map({rule: .[0].rule,
+                          severity: (max_by($rank[.severity]) | .severity),
+                          count: length,
+                          oldest_age_days: (map(.age_days) | max)}) ),
+            inherited: { count: ($old | length),
+                         rules: ($old | map(.rule) | unique | length),
+                         oldest_age_days: (if ($old | length) == 0 then null
+                                           else ($old | map(.age_days) | max) end) } }' <<<"$cs")
+    fi
+  elif grep -qi 'advanced security must be enabled\|code scanning is not enabled' <<<"$cs"; then
+    code_scanning='{"enabled":false,"analyzed":false,"truncated":false,"open":null,"new":[],"inherited":null}'
+  elif grep -qi 'no analysis found' <<<"$cs"; then
+    code_scanning='{"enabled":true,"analyzed":false,"truncated":false,"open":null,"new":[],"inherited":null}'
+  fi
+
+  # Secret scanning. validity is the split; age never outranks a live credential.
+  secret_scanning='{"enabled":null,"open":null,"active":[],"unknown_validity":[]}'
+  if ss=$(gh api "repos/${ORG}/${repo}/secret-scanning/alerts?state=open&per_page=100" 2>&1); then
+    if jq -e 'type == "array"' >/dev/null 2>&1 <<<"$ss"; then
+      secret_scanning=$(jq -c '
+        ( map({number,
+               type: .secret_type_display_name,
+               validity: (.validity // "unknown"),
+               bypassed: (.push_protection_bypassed // false),
+               age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)}) ) as $a
+        | { enabled: true, open: ($a | length),
+            active: ($a | map(select(.validity == "active"))
+                        | map({number, type, age_days, bypassed}) | sort_by(-.age_days)),
+            unknown_validity: ($a | map(select(.validity == "unknown"))
+                                  | map({number, type, age_days, bypassed}) | sort_by(-.age_days)) }' <<<"$ss")
+    fi
+  elif grep -qi 'secret scanning is disabled\|is disabled on this repository' <<<"$ss"; then
+    secret_scanning='{"enabled":false,"open":null,"active":[],"unknown_validity":[]}'
+  fi
+
   results=$(jq -c \
     --arg repo "$repo" \
     --arg branch "$default_branch" \
     --argjson runs "$runs" \
-    --argjson dependabot "$dependabot" '
+    --argjson dependabot "$dependabot" \
+    --argjson code_scanning "$code_scanning" \
+    --argjson secret_scanning "$secret_scanning" '
     . + [ (
       ($runs | map(select(.status == "completed"))) as $done
       | ($done | length) as $n
@@ -187,7 +282,9 @@ for repo in "${targets[@]}"; do
               | if . == null then null
                 else { workflow: .workflowName, branch: .headBranch, event: .event,
                        url: .url, created_at: .createdAt } end ),
-          dependabot: $dependabot
+          dependabot: $dependabot,
+          code_scanning: $code_scanning,
+          secret_scanning: $secret_scanning
         }
     ) ]' <<<"$results")
 done

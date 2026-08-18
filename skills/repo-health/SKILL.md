@@ -56,6 +56,57 @@ Emits JSON: `{enabled, open, high_crit, oldest_high_crit_age_days, vulnerable_pa
 
 `open_fix_prs` is already filtered to PRs whose head ref names a vulnerable package, so an unrelated actions-group PR is never mistaken for a fix — judge per package, not per repo. `enabled: null` means "this token cannot see alerts", NOT "disabled"; report it as a scope question.
 
+### Code scanning (CodeQL and other SARIF uploads)
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-code-scanning.sh
+```
+
+Emits JSON: `{enabled, analyzed, truncated, open, default_branch, tools, new, inherited}`.
+`REPO` defaults to cwd.
+
+**`analyzed` is not `enabled`.** The API answers 404 for both "Advanced Security is off" and "on,
+but no analysis has ever run", and both produce `open: 0`. `analyzed: false` with `enabled: true`
+is a repo that has never been scanned — a blind spot, not a clean bill of health. `enabled: null`
+is a token-scope question, exactly as with Dependabot.
+
+**`truncated: true` makes `open` a floor, not a count.** Report it as "at least N".
+
+Alerts are filtered to the resolved default branch and clustered by rule, then split at 14 days:
+
+| Condition | Tier |
+|---|---|
+| `new[]` rule, severity `critical` | **P0** — just shipped, fixable while the code is fresh |
+| `new[]` rule with `autofix: "ready"` | **P0** — the `parked_green` shape: the fix exists and only a human press is missing |
+| `new[]` rule, severity `high` | **P1** |
+| `inherited` | **one debt line** — never enumerated, never in a top 5 |
+| `analyzed: false` | not a finding — a **blind spot** row |
+
+`autofix` is probed only for critical/high rules, so it can only upgrade a P1 to P0; a medium rule
+is never probed and stays `null`.
+
+### Secret scanning
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-secret-scanning.sh
+```
+
+Emits JSON: `{enabled, open, oldest_age_days, active, unknown_validity, inactive}`. `REPO` defaults
+to cwd.
+
+| Condition | Tier |
+|---|---|
+| `validity == "active"` | **P0** on day zero — GitHub validated it against the provider; it is a live credential. No age math. |
+| `bypassed == true` | **P0** — a human overrode push protection to commit it |
+| `unknown_validity[]` entry with `age_days >= 30` | **P0** — unverified and untriaged for a month is itself the finding |
+| `unknown_validity[]` entry with `age_days < 30` | **P1** — verify or dismiss |
+| `inactive` | not a finding — already rotated; one line on the clean list |
+| `enabled: false` | not a finding — a **blind spot** row |
+
+`unknown` is not "probably fine" — it usually means GitHub cannot validate that provider's format
+at all. Never rank an active credential by age; that buries the only unambiguous finding this
+endpoint produces.
+
 ### Mobile release lag
 
 ```bash

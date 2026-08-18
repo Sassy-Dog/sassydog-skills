@@ -10,7 +10,7 @@ Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| `sassy-dog` | `survey-work` | Prioritized work plate — customer pain, backlog, tech debt, dev experience, synthesized next bets (formerly `plate-it`) |
+| `sassy-dog` | `survey-work` | Prioritized work plate — customer pain, backlog, tech debt, security exposure, dev experience, synthesized next bets (formerly `plate-it`) |
 | `sassy-dog` | `groom-backlog` | Backlog grooming — refine issues until dispatchable, then promote to Ready (formerly `groom-it`, originally `fill-it`) |
 | `sassy-dog` | `take-it` | Parallel issue-shipping — "take #341, #432", one worktree sub-agent per issue |
 | `sassy-dog` | `dispatch-ready` | Loop-driven Ready dispatcher — one idempotent tick per invocation, under `/loop` (formerly `drain-it`) |
@@ -28,8 +28,8 @@ Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin
 | `sassy-dog` | `sentry-triage` | Gate-and-escalate Sentry triage; qualifying hits escalate via `github-issues` |
 | `sassy-dog` | `pr-shepherd` | PR lifecycle mechanics — check polling, merge queue vs direct merge, coupled-PR serialization, worktree teardown |
 | `sassy-dog` | `repo-cleanup` | Post-shipping git reconciliation mechanics — `[gone]`/squash-merged branch sweep, stale-worktree teardown, stash triage, untracked-noise sweep (the engine behind a repo's `tidy-repo`) |
-| `sassy-dog` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag |
-| `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `survey-work` |
+| `sassy-dog` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag, code/secret scanning |
+| `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, code/secret scanning, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `survey-work` |
 | `sassy-dog` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
 
 ### Workflow skills + capability skills
