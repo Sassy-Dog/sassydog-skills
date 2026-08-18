@@ -19,10 +19,12 @@
 #                                  "oldest_high_crit_age_days",
 #                                  "open_fix_prs": [ { "number", "title", "state", "age_days" } ] },
 #                  # NOTE: a deliberately REDUCED projection of what
-#                  # pull-code-scanning.sh emits. The org sweep routes to a
-#                  # repo; it does not triage inside one, so per-alert numbers
-#                  # and inherited.by_severity are not carried. Do not assume
-#                  # field parity with the per-repo script.
+#                  # pull-code-scanning.sh and pull-secret-scanning.sh emit.
+#                  # The org sweep routes to a repo; it does not triage
+#                  # inside one. Dropped from code_scanning: per-alert
+#                  # numbers, inherited.by_severity. Dropped from
+#                  # secret_scanning: oldest_age_days, inactive. Do not
+#                  # assume field parity with either per-repo script.
 #                  "code_scanning": { "enabled": true|false|null,
 #                                     "analyzed": true|false|null, "truncated",
 #                                     "open",
@@ -34,9 +36,13 @@
 #                                       "active": [...], "unknown_validity": [...] } } ] }
 #
 # Cost is 1 + 4N calls, plus ONE extra per repo with high/critical Dependabot
-# alerts (its fix PRs), plus one page per 100 code-scanning alerts beyond the
-# first. A healthy org pays nothing for the conditional calls. Keep RUN_LIMIT
-# small — this is a triage sweep, not a security analytics pass.
+# alerts (its fix PRs). The code- and secret-scanning pulls each read a
+# single page capped at 100 alerts — there is no pagination loop, ever.
+# code_scanning reports `truncated: true` when the cap was hit, marking
+# `open` as a floor rather than a count; secret_scanning carries no such
+# field and simply reflects whatever sits in the first 100. A healthy org
+# pays nothing for the conditional Dependabot call. Keep RUN_LIMIT small —
+# this is a triage sweep, not a security analytics pass.
 #
 # WHY AGE AND FIX-PR STATE ARE PART OF THE CONTRACT: a bare alert count is a
 # LAGGING indicator. It only falls when a fix MERGES, so it conflates "we were
@@ -168,18 +174,25 @@ for repo in "${targets[@]}"; do
   # Code scanning. The 404 is ambiguous by design — see pull-code-scanning.sh.
   code_scanning='{"enabled":null,"analyzed":null,"truncated":false,"open":null,"new":[],"inherited":null}'
   if [ "$default_branch_resolved" != "true" ]; then
-    # Unknown branch means an unusable ref filter. Unknown is not clean.
-    code_scanning='{"enabled":null,"analyzed":null,"truncated":false,"open":null,"new":[],"inherited":null}'
+    : # Unknown branch means an unusable ref filter. Unknown is not clean;
+      # code_scanning keeps the null-state default assigned above.
   elif cs=$(gh api "repos/${ORG}/${repo}/code-scanning/alerts?state=open&per_page=100" 2>&1); then
     if jq -e 'type == "array"' >/dev/null 2>&1 <<<"$cs"; then
       code_scanning=$(jq -c --arg ref "refs/heads/${default_branch}" '
-        ( map(select(.most_recent_instance.ref == $ref))
+        . as $raw
+        | ( map(select(.most_recent_instance.ref == $ref))
           | map({rule: .rule.id,
                  severity: (.rule.security_severity_level // "none"),
                  age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)}) ) as $a
         | {critical: 4, high: 3, medium: 2, low: 1, none: 0} as $rank
         | { enabled: true, analyzed: true,
-            truncated: (($a | length) >= 100),
+            # Measured on the RAW page, not $a (ref-filtered): a repo can
+            # have 100 raw alerts with only 40 on the default branch, and
+            # the 60 unseen ones (hidden by the page cap) may include more
+            # default-branch alerts. A truncated computed from $a would
+            # read false and assert completeness it does not have — worse
+            # than no truncated flag at all.
+            truncated: (($raw | length) >= 100),
             open: ($a | length),
             new: ( $a | map(select(.age_days <= 14)) | group_by(.rule)
                    | map({rule: .[0].rule,

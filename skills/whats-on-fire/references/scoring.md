@@ -24,9 +24,9 @@ So: **customer pain decays with age; stuck work escalates with age.** Never shar
 | Cron monitor environment `missed` or `timeout` — always, a dispatch can never vouch for these | `find_monitors` |
 | Cron monitor environment `error` with **no** qualifying green dispatch after its last failing check-in | `find_monitors` + `cron-recovery.md` |
 | `default_branch_ci` is `failure` | `pull-repo-signals.sh` |
-| Secret scanning | any `active[]` entry, or any `bypassed: true` |
-| Secret scanning | `unknown_validity[]` entry aged >= 30d |
-| Code scanning | `new[]` rule at `critical` |
+| Any `secret_scanning.active[]` entry, or any `bypassed: true` | `pull-repo-signals.sh` |
+| `secret_scanning.unknown_validity[]` entry aged >= 30d | `pull-repo-signals.sh` |
+| `code_scanning.new[]` rule at `critical` | `pull-repo-signals.sh` |
 
 A red default branch is P0 regardless of failure rate — a repo can sit at 0% historical failures and
 still have main broken right now. Rate answers "is CI trustworthy"; `default_branch_ci` answers "is
