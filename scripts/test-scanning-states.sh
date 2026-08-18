@@ -72,6 +72,16 @@ case "$path" in
   # so the reverse order makes this arm unreachable and every probe returns a
   # page of alerts instead of a 404.
   */autofix)
+    # Only MOCK_MODE=autofix hands back distinguishable per-alert responses;
+    # every other mode's probe (triggered incidentally by a fresh critical/high
+    # rule) gets the same generic 404 the real API returns for an unprobed repo.
+    if [ "$MOCK_MODE" = "autofix" ]; then
+        alert_no="${path%/autofix}"; alert_no="${alert_no##*/}"
+        case "$alert_no" in
+            50) echo '{"status":"success"}'; exit 0 ;;
+            60) echo '{"message":"Not supported for this alert type"}' >&2; exit 1 ;;
+        esac
+    fi
     echo '{"message":"Not Found"}' >&2; exit 1 ;;
   */code-scanning/alerts*)
     case "$MOCK_MODE" in
@@ -94,6 +104,38 @@ case "$path" in
             tool: {name: "CodeQL"},
             most_recent_instance: {ref: "refs/heads/main"}
           }]' ;;
+      capped)
+        # Every page — including the PAGE_CAP'th — comes back exactly 100. The
+        # short-page break condition never fires, so the only way the loop can
+        # end is by hitting PAGE_CAP itself: this is the one shape that can
+        # actually exercise `truncated=true`.
+        jq -nc '[range(100) | {
+            number: (. + 1),
+            created_at: ((now - (200 * 86400)) | todate),
+            rule: {id: "js/xss", security_severity_level: "high"},
+            tool: {name: "CodeQL"},
+            most_recent_instance: {ref: "refs/heads/main"}
+          }]' ;;
+      autofix)
+        # Three fresh (age <= BOUNDARY) rules, one per severity that matters to
+        # the probe gate: critical and high get probed (see the */autofix arm
+        # above for alert numbers 50 and 60), medium does not and must stay
+        # unprobed — proving the "ONLY critical/high" gate rather than just
+        # asserting the docstring's claim about it.
+        jq -nc '[
+          {number: 50, created_at: ((now - (2 * 86400)) | todate),
+           rule: {id: "js/sql-injection", security_severity_level: "critical"},
+           tool: {name: "CodeQL"},
+           most_recent_instance: {ref: "refs/heads/main"}},
+          {number: 60, created_at: ((now - (2 * 86400)) | todate),
+           rule: {id: "js/xss", security_severity_level: "high"},
+           tool: {name: "CodeQL"},
+           most_recent_instance: {ref: "refs/heads/main"}},
+          {number: 70, created_at: ((now - (2 * 86400)) | todate),
+           rule: {id: "js/weak-hash", security_severity_level: "medium"},
+           tool: {name: "CodeQL"},
+           most_recent_instance: {ref: "refs/heads/main"}}
+        ]' ;;
       pr-ref)
         jq -nc '[
           {number: 1, created_at: ((now - (2 * 86400)) | todate),
@@ -154,6 +196,14 @@ out=$(run_code two-pages)
     && ok "paginates past page 1 (open=102, not 100)" \
     || bad "paginates past page 1 (expected open=102, got $(jq -r '.open' <<<"$out"))"
 
+out=$(run_code capped)
+[ "$(jq -r '.truncated' <<<"$out")" = "true" ] \
+    && ok "PAGE_CAP full pages -> truncated:true" \
+    || bad "PAGE_CAP full pages -> truncated:true (got $(jq -r '.truncated' <<<"$out"))"
+[ "$(jq -r '.open' <<<"$out")" = "500" ] \
+    && ok "a capped read reports the floor (open=500), not a guess" \
+    || bad "a capped read reports the floor (expected open=500, got $(jq -r '.open' <<<"$out"))"
+
 echo "3. the ref filter" >&2
 
 out=$(run_code pr-ref)
@@ -179,6 +229,19 @@ out=$(run_code split)
 [ "$(jq -r '.inherited.rules' <<<"$out")" = "2" ] \
     && ok "inherited counts distinct rules" \
     || bad "inherited counts distinct rules (got $(jq -r '.inherited.rules' <<<"$out"))"
+
+echo "5. autofix probe scoping" >&2
+
+out=$(run_code autofix)
+[ "$(jq -r '.new[] | select(.rule=="js/sql-injection") | .autofix' <<<"$out")" = "ready" ] \
+    && ok "critical rule, successful autofix probe -> ready" \
+    || bad "critical rule, successful autofix probe -> ready (got $(jq -c '.new' <<<"$out"))"
+[ "$(jq -r '.new[] | select(.rule=="js/xss") | .autofix' <<<"$out")" = "unsupported" ] \
+    && ok "high rule, autofix probe 422s -> unsupported" \
+    || bad "high rule, autofix probe 422s -> unsupported (got $(jq -c '.new' <<<"$out"))"
+[ "$(jq -r '.new[] | select(.rule=="js/weak-hash") | .autofix' <<<"$out")" = "null" ] \
+    && ok "medium rule is never probed -> autofix stays null" \
+    || bad "medium rule is never probed -> autofix stays null (got $(jq -c '.new' <<<"$out"))"
 
 [ "$fail" -eq 0 ] || { echo "scanning-states tests: FAILED" >&2; exit 1; }
 echo "scanning-states tests: all green" >&2
