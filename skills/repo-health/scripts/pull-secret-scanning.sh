@@ -25,6 +25,12 @@
 # provider's format at all, so it stays a finding and escalates once nobody has
 # triaged it for a month. `inactive` is already rotated: counted, never listed.
 #
+# Both `active[]` and `unknown_validity[]` sort oldest-first: age never changes
+# `active[]`'s severity (it's P0 either way, see above), but for a human
+# reading the list, longest-exposed-first is the useful order, and matching
+# `unknown_validity[]`'s existing order beats an arbitrary difference between
+# two adjacent arrays in the same object.
+#
 # `enabled` is three-state for the same reason as the sibling pulls: a 403 that
 # means "this token cannot see it" must never render as "the feature is off".
 #
@@ -72,7 +78,7 @@ jq -c '
       open: ($a | length),
       oldest_age_days: (if ($a | length) == 0 then null else ($a | map(.age_days) | max) end),
       active: ($a | map(select(.validity == "active"))
-                  | map({number, type, age_days, bypassed}) | sort_by(.age_days)),
+                  | map({number, type, age_days, bypassed}) | sort_by(-.age_days)),
       unknown_validity: ($a | map(select(.validity == "unknown"))
                             | map({number, type, age_days, bypassed}) | sort_by(-.age_days)),
       inactive: ($a | map(select(.validity == "inactive")) | length) }

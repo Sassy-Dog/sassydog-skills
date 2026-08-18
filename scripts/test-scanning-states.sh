@@ -299,16 +299,30 @@ out=$(run_secret secrets-mixed)
 
 echo "7. source-level: the active-credential P0 rule carries no age gate" >&2
 
-# Flattened, because this repo hard-wraps prose: a line-scoped grep for the
-# forbidden shape turns a line wrap into a false PASS, and a must-NOT-exist
-# assertion is exactly where that matters.
-flat_health="$(tr -s '[:space:]' ' ' < skills/repo-health/SKILL.md)"
-grep -qi 'validity == "active"[^|]*| \*\*P0\*\* on day zero' <<<"$flat_health" \
-    && ok "SKILL.md states validity:active is P0 on day zero" \
-    || bad "SKILL.md must state validity:active is P0 on day zero"
-grep -qiE 'validity == "active"[^|]*\|[^|]*(>=|older than|after) *[0-9]+ *d' <<<"$flat_health" \
-    && bad "the active-credential rule acquired an age gate — a live credential is P0 immediately" \
-    || ok "the active-credential rule carries no age threshold"
+# A presence-and-negative-regex check cannot catch a DUPLICATE row: a second,
+# contradictory "validity:active ... older than Nd" row slips past a regex
+# anchored to the original row alone. The property worth asserting is
+# uniqueness — exactly one row mentions validity:active — the same shape the
+# label-taxonomy "no third copy" gate uses, and for the same reason.
+#
+# This runs on raw lines rather than the flattened text section 6 used:
+# unlike prose, a markdown table row is syntactically one line (wrapping it
+# would break the table), so raw per-line matching is the exact right
+# granularity and lets us isolate "that row" cleanly instead of guessing at
+# row boundaries inside a flattened string.
+skill_file="skills/repo-health/SKILL.md"
+active_rows="$(grep -ci 'validity == "active"' "$skill_file")"
+[ "$active_rows" = "1" ] \
+    && ok "exactly one table row mentions validity:active (no duplicate/contradictory row)" \
+    || bad "expected exactly one validity:active row, found $active_rows"
+
+active_row="$(grep -i 'validity == "active"' "$skill_file" | head -1)"
+grep -qi 'on day zero' <<<"$active_row" \
+    && ok "the validity:active row states P0 on day zero" \
+    || bad "the validity:active row must state P0 on day zero (got: $active_row)"
+grep -qiE '(>=[[:space:]]*[0-9]+[[:space:]]*d|older than[[:space:]]+[0-9]+|after[[:space:]]+[0-9]+[[:space:]]*d)' <<<"$active_row" \
+    && bad "the validity:active row carries an age-like token — a live credential is P0 immediately (got: $active_row)" \
+    || ok "the validity:active row carries no age-like token in either cell"
 
 [ "$fail" -eq 0 ] || { echo "scanning-states tests: FAILED" >&2; exit 1; }
 echo "scanning-states tests: all green" >&2
