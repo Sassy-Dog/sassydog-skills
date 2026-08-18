@@ -224,10 +224,11 @@ Then apply the rules in `cron-recovery.md` unchanged.
 The reason is measured, not theoretical. On 2026-08-18 the daily sweep ranked `cron-doppler-audit`
 as a live P0 for a control that had been verified green the previous evening. That sweep ran from
 `Sassy-Dog/sassydog-routines`, whose port of this contract had pulled a **repo-wide** page and
-filtered by workflow afterwards — and a repo-wide page holds 30
-runs, which on `Sassy-Dog/platform` reaches back only 5–13 hours. That morning its horizon stopped
-at 22:53Z, three hours *after* the 19:49Z green dispatch it needed to see, with 52 unrelated runs
-in between. The page contained zero `doppler-audit.yml` runs at all.
+filtered by workflow afterwards — and a repo-wide page is **30 runs deep, not N hours deep**. How
+much wall-clock that buys is a function of repo activity alone: on `Sassy-Dog/platform` it has been
+measured at under an hour. That morning its horizon stopped at 22:53Z, three hours *after* the
+19:49Z green dispatch it needed to see, with 52 unrelated runs in between. The page contained zero
+`doppler-audit.yml` runs at all.
 
 That is the failure this whole reference exists to prevent, in its most dangerous form: a truncated
 page is indistinguishable from an empty one, so "we could not see far enough" renders as "nobody
