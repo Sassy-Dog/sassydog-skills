@@ -102,7 +102,7 @@ the footer on every sweep, and a footer that always fires is a footer nobody rea
 | Outcome | Meaning | Downgrade? | Footer? |
 |---|---|---|---|
 | Workflow resolved, green dispatch after the reference instant | verified fixed | **yes** | no |
-| Workflow resolved, no qualifying run (including an empty list) | evidence: nobody verified | no | no |
+| Workflow resolved, no qualifying run (including an empty list) | evidence: nobody verified — **only if the query was workflow-scoped**, see below | no | no |
 | **404** — successful call, no such workflow in the owning repo | not applicable (convention not followed there) | no | **no** |
 | 401 / 403 — no `actions:read` on that repo | absence of evidence | no | **yes, naming the repo** |
 | Timeout / network / 5xx / unparseable | absence of evidence | no | **yes, naming the repo** |
@@ -126,6 +126,16 @@ ORG=Sassy-Dog REPO=platform WORKFLOW_FILE=relay-drift-check.yml \
   SINCE=2026-08-03T16:47:35Z \
   bash ${CLAUDE_PLUGIN_ROOT}/skills/whats-on-fire/scripts/check-dispatch-recovery.sh
 ```
+
+**A truncated page is a third state, and it renders exactly like an empty one.** The script's
+query is scoped server-side to the one workflow (`/actions/workflows/<file>/runs?event=workflow_dispatch&status=completed&per_page=10`),
+which is what makes "no qualifying run" trustworthy: 10 runs of one workflow reach back months. Any
+reimplementation that pulls a repo-wide page and filters afterwards loses that guarantee — a
+repo-wide page holds 30 runs, which on `Sassy-Dog/platform` reaches back only 5–13 hours. On
+2026-08-18 exactly that cost a day of false P0 on `cron-doppler-audit`: 52 unrelated runs landed
+between the green dispatch and the sweep, so the page held zero `doppler-audit.yml` runs and the
+miss was reported as evidence. If you cannot scope the query to the workflow, you have no answer — exit 10,
+full severity, footer. Never treat a repo-wide page's miss as evidence.
 
 `SINCE` is the reference instant of rule 2: the environment's `lastCheckIn`, or the incident start
 only when no check-in is present; if neither is usable, do not run the check — the monitor stays P0
