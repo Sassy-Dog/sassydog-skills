@@ -31,3 +31,18 @@ The flake metric counts a SHA that failed then passed **within the same event co
 | Isolated TODO/FIXME markers | report counts only; not individually actionable |
 
 Markers are a *density* signal, not a backlog — never enumerate all 200 in a report. Surface the top directories and any marker that names a known incident or security concern.
+
+## Security scanning (`pull-code-scanning.sh`, `pull-secret-scanning.sh`)
+
+| Signal | Severity |
+|---|---|
+| `active[]` non-empty, or any `bypassed: true` | P0 — a validated live credential, or push protection deliberately overridden |
+| `unknown_validity[]` entry aged >= 30d | P0 — unverified and untriaged for a month |
+| `unknown_validity[]` entry aged < 30d | P1 |
+| `new[]` rule, severity `critical`, or `autofix: "ready"` | P0 |
+| `new[]` rule, severity `high` | P1 |
+| `inherited.count > 0` | one debt line; never enumerated, never in a top 5 |
+| `analyzed == false`, or either `enabled == false` | blind spot, not a finding |
+| `enabled == null` | token-scope question; never report as "disabled" |
+
+`truncated: true` makes `open` a floor. Report it as "at least N", never as a count.

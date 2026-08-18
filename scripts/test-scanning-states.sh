@@ -25,6 +25,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 cd "$REPO_ROOT" || exit 1
 
 CODE_SCRIPT="skills/repo-health/scripts/pull-code-scanning.sh"
+SECRET_SCRIPT="skills/repo-health/scripts/pull-secret-scanning.sh"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -67,6 +68,28 @@ page=1
 case "$path" in *page=*) page="${path##*page=}"; page="${page%%&*}" ;; esac
 
 case "$path" in
+  */secret-scanning/alerts*)
+    case "$MOCK_MODE" in
+      secrets-disabled)
+        echo '{"message":"Secret scanning is disabled on this repository."}' >&2
+        exit 1 ;;
+      secrets-mixed)
+        jq -nc '[
+          {number: 1, secret_type_display_name: "Google API Key",
+           created_at: ((now - (2 * 86400)) | todate),
+           validity: "active", push_protection_bypassed: false},
+          {number: 2, secret_type_display_name: "Azure Storage Account Access Key",
+           created_at: ((now - (220 * 86400)) | todate),
+           validity: "unknown", push_protection_bypassed: false},
+          {number: 3, secret_type_display_name: "Stripe Webhook Signing Secret",
+           created_at: ((now - (3 * 86400)) | todate),
+           validity: "unknown", push_protection_bypassed: true},
+          {number: 4, secret_type_display_name: "Rotated Token",
+           created_at: ((now - (5 * 86400)) | todate),
+           validity: "inactive", push_protection_bypassed: false}
+        ]' ;;
+      *) echo "mock gh: unknown MOCK_MODE: $MOCK_MODE" >&2; exit 1 ;;
+    esac ;;
   # The autofix arm MUST precede the alerts arm: an autofix path is
   # .../code-scanning/alerts/<n>/autofix, which the alerts glob also matches,
   # so the reverse order makes this arm unreachable and every probe returns a
@@ -171,6 +194,7 @@ MOCK
 chmod +x "$WORK/bin/gh"
 
 run_code() { MOCK_MODE="$1" PATH="$WORK/bin:$PATH" REPO="mock-org/mock-repo" bash "$CODE_SCRIPT"; }
+run_secret() { MOCK_MODE="$1" PATH="$WORK/bin:$PATH" REPO="mock-org/mock-repo" bash "$SECRET_SCRIPT"; }
 
 echo "1. the four-state disambiguation" >&2
 
@@ -242,6 +266,49 @@ out=$(run_code autofix)
 [ "$(jq -r '.new[] | select(.rule=="js/weak-hash") | .autofix' <<<"$out")" = "null" ] \
     && ok "medium rule is never probed -> autofix stays null" \
     || bad "medium rule is never probed -> autofix stays null (got $(jq -c '.new' <<<"$out"))"
+
+echo "6. secret-scanning classification" >&2
+
+out=$(run_secret secrets-disabled)
+[ "$(jq -r '.enabled' <<<"$out")" = "false" ] \
+    && ok "secret scanning off  -> enabled:false" \
+    || bad "secret scanning off  -> enabled:false (got $(jq -r '.enabled' <<<"$out"))"
+
+out=$(run_secret secrets-mixed)
+[ "$(jq -r '.active | length' <<<"$out")" = "1" ] \
+    && ok "validity:active isolated into active[]" \
+    || bad "validity:active isolated into active[] (got $(jq -c '.active' <<<"$out"))"
+[ "$(jq -r '.active[0].age_days' <<<"$out")" = "2" ] \
+    && ok "a 2-day-old live credential is still reported (no age floor)" \
+    || bad "a 2-day-old live credential is still reported (got $(jq -c '.active' <<<"$out"))"
+[ "$(jq -r '.unknown_validity | length' <<<"$out")" = "2" ] \
+    && ok "unknown-validity alerts collected" \
+    || bad "unknown-validity alerts collected (got $(jq -c '.unknown_validity' <<<"$out"))"
+[ "$(jq -r '.inactive' <<<"$out")" = "1" ] \
+    && ok "inactive counted, not listed" \
+    || bad "inactive counted, not listed (got $(jq -r '.inactive' <<<"$out"))"
+[ "$(jq -r '[.active[], .unknown_validity[]] | map(.number) | index(4) // "absent"' <<<"$out")" = "absent" ] \
+    && ok "the inactive alert (number 4) never appears in active[] or unknown_validity[]" \
+    || bad "the inactive alert (number 4) leaked into a listed array"
+[ "$(jq -r '.oldest_age_days' <<<"$out")" = "220" ] \
+    && ok "oldest_age_days spans every open alert" \
+    || bad "oldest_age_days spans every open alert (got $(jq -r '.oldest_age_days' <<<"$out"))"
+[ "$(jq -r '[.unknown_validity[] | select(.bypassed)] | length' <<<"$out")" = "1" ] \
+    && ok "push_protection_bypassed carried through" \
+    || bad "push_protection_bypassed carried through"
+
+echo "7. source-level: the active-credential P0 rule carries no age gate" >&2
+
+# Flattened, because this repo hard-wraps prose: a line-scoped grep for the
+# forbidden shape turns a line wrap into a false PASS, and a must-NOT-exist
+# assertion is exactly where that matters.
+flat_health="$(tr -s '[:space:]' ' ' < skills/repo-health/SKILL.md)"
+grep -qi 'validity == "active"[^|]*| \*\*P0\*\* on day zero' <<<"$flat_health" \
+    && ok "SKILL.md states validity:active is P0 on day zero" \
+    || bad "SKILL.md must state validity:active is P0 on day zero"
+grep -qiE 'validity == "active"[^|]*\|[^|]*(>=|older than|after) *[0-9]+ *d' <<<"$flat_health" \
+    && bad "the active-credential rule acquired an age gate — a live credential is P0 immediately" \
+    || ok "the active-credential rule carries no age threshold"
 
 [ "$fail" -eq 0 ] || { echo "scanning-states tests: FAILED" >&2; exit 1; }
 echo "scanning-states tests: all green" >&2

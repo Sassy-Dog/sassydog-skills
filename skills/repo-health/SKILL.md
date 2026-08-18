@@ -85,6 +85,28 @@ Alerts are filtered to the resolved default branch and clustered by rule, then s
 `autofix` is probed only for critical/high rules, so it can only upgrade a P1 to P0; a medium rule
 is never probed and stays `null`.
 
+### Secret scanning
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-secret-scanning.sh
+```
+
+Emits JSON: `{enabled, open, oldest_age_days, active, unknown_validity, inactive}`. `REPO` defaults
+to cwd.
+
+| Condition | Tier |
+|---|---|
+| `validity == "active"` | **P0** on day zero — GitHub validated it against the provider; it is a live credential. No age math. |
+| `bypassed == true` | **P0** — a human overrode push protection to commit it |
+| `unknown_validity[]` entry with `age_days >= 30` | **P0** — unverified and untriaged for a month is itself the finding |
+| `unknown_validity[]` entry with `age_days < 30` | **P1** — verify or dismiss |
+| `inactive` | not a finding — already rotated; one line on the clean list |
+| `enabled: false` | not a finding — a **blind spot** row |
+
+`unknown` is not "probably fine" — it usually means GitHub cannot validate that provider's format
+at all. Never rank an active credential by age; that buries the only unambiguous finding this
+endpoint produces.
+
 ### Mobile release lag
 
 ```bash
