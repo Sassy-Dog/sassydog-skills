@@ -22,9 +22,14 @@
 #                  # pull-code-scanning.sh and pull-secret-scanning.sh emit.
 #                  # The org sweep routes to a repo; it does not triage
 #                  # inside one. Dropped from code_scanning: per-alert
-#                  # numbers, inherited.by_severity. Dropped from
-#                  # secret_scanning: oldest_age_days, inactive. Do not
-#                  # assume field parity with either per-repo script.
+#                  # numbers, inherited.by_severity, new[].autofix, tools,
+#                  # default_branch (autofix carries a P0 rule in
+#                  # repo-health/SKILL.md; the org scoring table
+#                  # deliberately has no autofix->P0 rule, since routing
+#                  # a repo needs no readiness verdict on its fix).
+#                  # Dropped from secret_scanning: oldest_age_days,
+#                  # inactive. Do not assume field parity with either
+#                  # per-repo script.
 #                  "code_scanning": { "enabled": true|false|null,
 #                                     "analyzed": true|false|null, "truncated",
 #                                     "open",
@@ -174,7 +179,11 @@ for repo in "${targets[@]}"; do
   # Code scanning. The 404 is ambiguous by design — see pull-code-scanning.sh.
   code_scanning='{"enabled":null,"analyzed":null,"truncated":false,"open":null,"new":[],"inherited":null}'
   if [ "$default_branch_resolved" != "true" ]; then
-    : # Unknown branch means an unusable ref filter. Unknown is not clean;
+    : # enabled:null here is NOT the usual token-scope signal — the roster
+      # lookup for this repo's default branch failed, so the ref filter
+      # above has nothing safe to compare against. secret_scanning carries
+      # no ref and is unaffected, so the same repo/token can legitimately
+      # show code_scanning unknown while secret_scanning resolves fine.
       # code_scanning keeps the null-state default assigned above.
   elif cs=$(gh api "repos/${ORG}/${repo}/code-scanning/alerts?state=open&per_page=100" 2>&1); then
     if jq -e 'type == "array"' >/dev/null 2>&1 <<<"$cs"; then
@@ -184,6 +193,7 @@ for repo in "${targets[@]}"; do
           | map({rule: .rule.id,
                  severity: (.rule.security_severity_level // "none"),
                  age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)}) ) as $a
+        | ($a | map(select(.age_days > 14))) as $old
         | {critical: 4, high: 3, medium: 2, low: 1, none: 0} as $rank
         | { enabled: true, analyzed: true,
             # Measured on the RAW page, not $a (ref-filtered): a repo can
@@ -199,10 +209,10 @@ for repo in "${targets[@]}"; do
                           severity: (max_by($rank[.severity]) | .severity),
                           count: length,
                           oldest_age_days: (map(.age_days) | max)}) ),
-            inherited: { count: ($a | map(select(.age_days > 14)) | length),
-                         rules: ($a | map(select(.age_days > 14)) | map(.rule) | unique | length),
-                         oldest_age_days: (if ($a | length) == 0 then null
-                                           else ($a | map(.age_days) | max) end) } }' <<<"$cs")
+            inherited: { count: ($old | length),
+                         rules: ($old | map(.rule) | unique | length),
+                         oldest_age_days: (if ($old | length) == 0 then null
+                                           else ($old | map(.age_days) | max) end) } }' <<<"$cs")
     fi
   elif grep -qi 'advanced security must be enabled\|code scanning is not enabled' <<<"$cs"; then
     code_scanning='{"enabled":false,"analyzed":false,"truncated":false,"open":null,"new":[],"inherited":null}'
@@ -221,9 +231,10 @@ for repo in "${targets[@]}"; do
                bypassed: (.push_protection_bypassed // false),
                age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)}) ) as $a
         | { enabled: true, open: ($a | length),
-            active: ($a | map(select(.validity == "active")) | map({number, type, age_days, bypassed})),
+            active: ($a | map(select(.validity == "active"))
+                        | map({number, type, age_days, bypassed}) | sort_by(-.age_days)),
             unknown_validity: ($a | map(select(.validity == "unknown"))
-                                  | map({number, type, age_days, bypassed})) }' <<<"$ss")
+                                  | map({number, type, age_days, bypassed}) | sort_by(-.age_days)) }' <<<"$ss")
     fi
   elif grep -qi 'secret scanning is disabled\|is disabled on this repository' <<<"$ss"; then
     secret_scanning='{"enabled":false,"open":null,"active":[],"unknown_validity":[]}'
