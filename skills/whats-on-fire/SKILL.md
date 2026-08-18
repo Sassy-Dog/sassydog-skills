@@ -40,7 +40,11 @@ command -v gh && gh auth status
   probe failure that does NOT skip its surfaces: route the section 2B pulls through the GitHub-MCP
   fallback in `references/cloud-fallback.md` instead. Only the Dependabot half of that surface has
   no MCP equivalent — it is rendered `skipped — no gh CLI (Dependabot API unreachable)` and named
-  on the sources line like any other skip. `gh` present but unauthenticated stays an ordinary skip.
+  on the sources line like any other skip. **`check-dispatch-recovery.sh` (section 2A) also needs
+  `gh`**, and its fallback is in the same reference: query the runs capability scoped to the ONE
+  workflow, never a repo-wide page. That distinction is not a detail — a repo-wide page truncates
+  the evidence away and turns a verified-green control into a P0. `gh` present but unauthenticated
+  stays an ordinary skip.
 - **Sentry** — probe by listing projects for the Sentry org; on error, skip both Sentry surfaces.
 - **Portfolio root** — the local checkout directory (env `PORTFOLIO_ROOT`, default
   `~/Repos/sassy-dog`). Only needed for the two blind spots that compare the org against local

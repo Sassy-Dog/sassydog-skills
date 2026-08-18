@@ -38,7 +38,10 @@ session resolve them. The capabilities this recipe needs:
   every other repo must be attached before its PRs, issues, or runs can be read.
 - **List or search pull requests** and **issues** — org-wide where the server offers it, per repo
   only as the fallback. Prefer the org-wide form; "Bounding the fan-out" explains why.
-- **List workflow runs** — per repo. No org-wide form exists, so this is what the fan-out is for.
+- **List workflow runs** — per repo for the CI-health surface (no org-wide form exists, so this is
+  what the fan-out is for), but **scoped to a single workflow** for the cron-recovery
+  cross-reference. The two are different queries and must not be shared — see "Also unreachable
+  without `gh`" below.
 - **Search code** — how the currency audit (`whats-behind`) reads `uses:`, `runs-on:`, and
   toolchain pins without fetching whole workflow files. If the server offers no code search, fall
   back to a narrowly scoped file-contents read per "Read fields, not files" — never a directory
@@ -205,3 +208,32 @@ against, so remediation cannot be judged per package, and section 4 ranks Depend
 remediation state, never by count. A half-surface would quietly re-create the exact
 any-PR-counts-as-remediation failure the script's header documents. A named skip is the honest
 answer.
+
+## Also unreachable without `gh`: the cron-recovery cross-reference
+
+`scripts/check-dispatch-recovery.sh` shells out to `gh`, so section 2A's cron-recovery
+cross-reference (`references/cron-recovery.md`) needs a fallback too. Unlike the Dependabot
+surface, this one **does** have an MCP equivalent — but only if it is queried in the right shape,
+and getting that wrong is not a skipped surface, it is a **false P0 every morning**.
+
+**Query the workflow's own runs, never a repo-wide page.** Ask the runs capability for
+`<basename>.yml`, filtered to `workflow_dispatch` and completed status — the same shape
+`check-dispatch-recovery.sh` uses (`/actions/workflows/<file>/runs?event=workflow_dispatch&status=completed`).
+Then apply the rules in `cron-recovery.md` unchanged.
+
+The reason is measured, not theoretical. On 2026-08-18 the daily sweep ranked `cron-doppler-audit`
+as a live P0 for a control that had been verified green the previous evening. That sweep ran from
+`Sassy-Dog/sassydog-routines`, whose port of this contract had pulled a **repo-wide** page and
+filtered by workflow afterwards — and a repo-wide page holds 30
+runs, which on `Sassy-Dog/platform` reaches back only 5–13 hours. That morning its horizon stopped
+at 22:53Z, three hours *after* the 19:49Z green dispatch it needed to see, with 52 unrelated runs
+in between. The page contained zero `doppler-audit.yml` runs at all.
+
+That is the failure this whole reference exists to prevent, in its most dangerous form: a truncated
+page is indistinguishable from an empty one, so "we could not see far enough" renders as "nobody
+verified the fix" — evidence, exit 0, no footer. Scoped to the workflow the same query returns 9
+runs and 128KB: under the ceiling, no spill, and no way to truncate away the answer.
+
+**If you cannot scope the call**, the surface is `skipped — <reason>`: the monitor reports at full
+severity AND the repo goes in the cross-reference footer. Never hand the decision a repo-wide page
+and treat the result as evidence.
