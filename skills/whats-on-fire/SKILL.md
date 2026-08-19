@@ -150,13 +150,32 @@ their clone lingers, and org repos may never have been cloned at all. Take the a
 Products map to repos many-to-one. Report per repo, then group under the product heading. At Sassy
 Dog the non-obvious ones are `velovate` → repos `velovate` + `velovate-web` (the local directory
 `velovate-app` maps to the repo named `velovate`), `lupita` → `lupita` + `lupita-web` (both
-archived), and `devcanopy` → `devcanopy`. Everything else is one product, one repo.
+archived), and `devcanopy` → `devcanopy`. Everything else is one product, one repo — and that
+default is a **name match**, which is the one piece of evidence here that lies.
+
+**A Sentry project and a repo sharing a name are not evidence of ownership.** A project slug can
+match a repo that does not own it — a marketing-site repo `<product>-web` alongside a Sentry
+project `<product>-web` fed by a member-app frontend that lives in a different repo entirely. Note
+which way the selection runs: the entries listed above are *in* the map precisely because their
+names lie, so the projects that most need the map are exactly the ones a name match resolves most
+confidently. Absence from the map means unverified, never verified.
+
+So the default is qualified, and the qualification applies to every walk on this map. A pairing the
+map names explicitly is **routed**. A pairing resolved only because the two names match is
+**unconfirmed routing** — still report it and still name the best-candidate repo, but mark it on
+the line (`<repo> — routing unconfirmed, name match only`) rather than asserting that repo owns it.
+To confirm, check that the project's recent `culprit`/file paths resolve in that repo, or that the
+repo actually initializes that project's DSN; once confirmed, add the pairing above so the next
+sweep reads it as fact. Never silently promote a name match to ownership.
 
 This same map is what resolves a red cron monitor's **owning repo** for the recovery
 cross-reference (`references/cron-recovery.md`): monitor → its Sentry project → the owning product
 → that product's repo(s). It is already load-bearing in the reverse direction — blind spots walk
 repo → Sentry project — so keep both walks on this one map; a second, separate mapping would be
-one more place to drift.
+one more place to drift. The caveat above travels with the map for the same reason: it is stated
+here once, and the cron walk points back at it instead of carrying its own copy. That walk is where
+an unconfirmed route costs the most — it decides which repo's green dispatch is allowed to vouch
+for a monitor — so `references/cron-recovery.md` spells out what unconfirmed means there.
 
 ## 4. Score
 
