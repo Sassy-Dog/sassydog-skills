@@ -35,6 +35,23 @@ Parallel issue-shipping is opt-in. Default **yes** if the repo has GitHub Issues
 
 Offer the gate defaults verbatim; record any threshold tweak in `{{SENTRY_GATE_SUMMARY}}`. Requires Sentry detected + an escalation repo.
 
+### 2b. Sentry project — confirm a prior claim (asked ONLY when the sibling scan hit)
+
+Never ask "which project is this repo's?" — that question invites a name match. The project is
+established by the culprit check in `detection.md` (its culprits must resolve in *this* repo), and a
+candidate that fails it is not offered to the user at all; it becomes `sentry: none`.
+
+Ask this question only when the best-effort sibling-checkout scan found the verified slug already
+declared in another repo's `.claude/sassy-dog/survey-work.md`. Name the other repo and its config
+path, and **default the answer to "it is already owned — do not configure it here"**: two repos
+declaring one project double-report the same Sentry issues while both plates still look complete,
+so a wrong "yes" is invisible. Configure it here only on an explicit confirmation that this repo is
+the right owner (or that both genuinely emit into it).
+
+A *miss* here asks nothing and blocks nothing. The scan is secondary by design: a cloud session has
+no sibling checkouts on disk, so it finds nothing there — which is exactly why the culprit check,
+not this question, is the guard that has to hold.
+
 ### 3. Merge policy — always confirm, never trust the probe alone
 
 Show the detected value (`merge_queue: true/false/null` + repo settings) and have the user confirm queue vs direct. State the stakes: a wrong "queue" guess means `--auto` calls that silently never merge; a wrong "direct" guess bypasses queue serialization. Sets `IF:MERGE_QUEUE` and `{{MERGE_POLICY_NOTE}}`.

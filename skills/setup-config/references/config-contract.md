@@ -67,7 +67,8 @@ sentry:                     # present  -> the Sentry surface runs
   projects: [qrninja-web]
 ```
 
-Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry: false`. The same
+Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry: false` — the one
+documented exception to this principle is `sentry: none`, below. The same
 holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_bootstrap`,
 `review_agent`, and `claim_label`.
 
@@ -77,6 +78,33 @@ Two keys are genuine scalars rather than blocks, because they carry no sub-facts
   observation: a refresh re-verifies it against `mergeQueue(branch:)`, but a live state that
   contradicts the configured value is surfaced to the user rather than written over it
 - `write_policy: read-only|gated` — whether `survey-work` may file issues under its Sentry gate
+
+### The one exception: `sentry: none`
+
+**`sentry: none` is the FIRST documented exception to presence-is-the-toggle, and it is deliberate.**
+It is not a `false` flag by another name and it does not reopen paired state: it carries a fact the
+absence of the key cannot carry — that someone **checked**, and this repo genuinely has no error
+monitoring to point at.
+
+The reason the exception is worth its cost: `setup-config` may only write a `sentry:` block for a
+project it has **verified by culprit** against this repo's own code (`references/detection.md`,
+"Sentry project — verify by CULPRIT, never by name"). Verification can fail — no MCP server, no
+recent issues to sample, or culprits that resolve in some other codebase — and the alternatives are
+both worse than a new form. Guessing a same-named project makes the wrong repo claim another
+codebase's P0s, silently. Omitting the key instead makes a *finished* check indistinguishable from
+one that never ran, so the next refresh re-litigates it and the next guess is one interview away.
+
+Three states, all distinct:
+
+| Config | Meaning | `survey-work` behaviour |
+| --- | --- | --- |
+| `sentry:` block with `org`/`projects` | verified project | surface runs |
+| `sentry: none` | confirmed: this repo has no error monitoring | reported as a blind spot |
+| key absent | never configured / unknown | reported as a blind spot (unconfirmed) |
+
+The exception is scoped to `sentry:` alone. No other key has a `none` form, and adding one requires
+the same justification: a confirmed-absent state that a reader would otherwise mistake for an
+unfinished check.
 
 ## Shared blocks
 

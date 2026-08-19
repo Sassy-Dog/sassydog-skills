@@ -3,7 +3,10 @@ CONFIG TEMPLATE: survey-work
 Rendered into a consumer repo as .claude/sassy-dog/survey-work.md
   {{FACT}}          -> the detected + LIVE-VERIFIED value
   optional: blocks  -> omit the whole block when the repo lacks that surface.
-                       Presence is the toggle; there is no `sentry: false`.
+                       Presence is the toggle. There is no `sentry: false` — the
+                       confirmed-absent form is the scalar `sentry: none`, the
+                       contract's one documented exception (config-contract.md).
+                       Omitted = never checked; `none` = checked, nothing there.
   ## sections       -> carried across verbatim on refresh, never rewritten.
 Drop this comment block from the rendered output. `---` must be line 1.
 -->
@@ -14,7 +17,7 @@ ci_workflow: {{CI_WORKFLOW}}
 priority_labels: {{PRIORITY_LABELS}}
 write_policy: {{WRITE_POLICY}}
 
-# optional — omit any block this repo does not have
+# optional — omit any block this repo does not have (`sentry:` only for a culprit-verified project — name similarity is not evidence; unverified renders `sentry: none`)
 
 sentry:
   org: {{SENTRY_ORG}}

@@ -23,7 +23,7 @@ It emits one JSON object; every probe degrades to `null`/`[]` plus an entry in `
 | `codegen` | `IF:CODEGEN`, `{{CODEGEN_COMMAND}}`, `{{CODEGEN_OUTPUT_DIRS}}` | Hint only; confirm the actual command |
 | `monorepo` | `{{STACK_SUMMARY}}`, `{{PREFLIGHT_COMMANDS}}`, tidy-repo `{{DEP_VERSION_GLOBS}}`/`{{NOISE_ALLOWLIST}}` | Preflight derives from runner + scripts: e.g. bun → `bun run lint && bun run type-check && bun run --filter <pkg> test`; confirm in interview. **tidy-repo facts derive from `runner` + `migrations.dirs`** (no extra probe) — see the derivation table below |
 | `repo_settings.deleteBranchOnMerge` | tidy-repo `{{DELETE_BRANCH_ON_MERGE}}` | Drives whether tidy-repo's stale-remote-branch step is a no-op |
-| `sentry`, `posthog`, `testflight_bundle_id` | `IF:SENTRY`/`IF:POSTHOG`/`IF:TESTFLIGHT`, `{{BUNDLE_ID}}` | `sentry: true` means the SDK is initialized — org/project slugs (`{{SENTRY_ORG}}`, `{{SENTRY_PROJECTS}}`) come from the interview or a Sentry MCP project listing |
+| `sentry`, `posthog`, `testflight_bundle_id` | `IF:SENTRY`/`IF:POSTHOG`/`IF:TESTFLIGHT`, `{{BUNDLE_ID}}` | `sentry: true` means the SDK is initialized — it says nothing about *which* project. An MCP listing or the interview only proposes candidate slugs; each one must pass the culprit check in the hand-checks below before it is written, and an unverified candidate becomes `sentry: none` |
 | `secret_manager` | `IF:SECRET_BOOTSTRAP`, `{{SECRET_BOOTSTRAP_CMD}}` | Hint only (`.envrc`/`doppler.yaml` presence). Non-interactive agent shells never fire direnv, so survey-work §1 must run the bootstrap itself, BEFORE its env presence probes — otherwise the ASC probe false-negatives `asc:missing` on loaded-lazily credentials. The exact command is interview-confirmed (detection can't know `eval "$(doppler secrets download --no-file --format env)"` vs a repo wrapper). |
 
 ## tidy-repo fact derivation (from existing fields — no extra probe)
@@ -44,7 +44,47 @@ After the script, verify in the session (cheap, parallel):
 - **tidy-repo never-discard list** (`{{NEVER_DISCARD}}`): gitignored-but-precious files the noise sweep must leave alone — scan `.gitignore` / repo docs for `.env.local`, local secret files, etc. Default `.env.local` if a web app; confirm in the interview (it's unconfirmable from the stack alone).
 - **tidy-repo claim label** (`{{CLAIM_LABEL}}`): if take-it is selected, grep the existing/rendered take-it for the label it sets to claim an issue (commonly `status:in-progress`); only then render `IF:CLAIM_LABEL`.
 
-- **Sentry slugs**: if `sentry: true` and an MCP server is connected, list projects for the org to propose `{{SENTRY_PROJECTS}}`.
+- **Sentry project — verify by CULPRIT, never by name.** If `sentry: true`, an MCP project listing
+  gives you *candidates*, not an answer. **Name similarity is not evidence.** A Sentry project and a
+  GitHub repo can share a name and belong to different codebases — a marketing-site repo named
+  `<product>-web` sitting beside a Sentry project `<product>-web` that actually receives events from
+  a member-app frontend living in another repo. Verify before writing anything:
+
+  1. List the org's projects (MCP) to get candidate slugs.
+  2. For each candidate, sample its recent issues and read each one's `culprit`, plus the route,
+     module, and file paths in the top stack frames.
+  3. Confirm those paths **resolve in the repo being configured** — the file is tracked here, the
+     route is served here, the symbol is defined here. Check with `git ls-files` / `rg` against this
+     repo's tree; recollection is not a check.
+  4. A project whose culprits match **no** path in this repo is the wrong project **regardless of
+     what it is called**. Do not write it.
+
+  **Verification failing writes `sentry: none`, never a guessed block.** Failing includes: no MCP
+  server connected, no recent issues to sample, and culprits that do not resolve here. `sentry: none`
+  is the confirmed-absent form — "this repo has no error monitoring" — and it is a different claim
+  from omitting the key, which means "never checked". See `config-contract.md`, "Governing
+  principle: presence is the toggle", for the three states.
+
+  The cost of guessing is invisible after the fact: the wrong repo claims another codebase's P0s,
+  two repos double-report the same Sentry issues, `take-it` is dispatched against a repo holding no
+  such route or symbol — and both plates still look complete, so nothing signals the error.
+
+- **Sentry prior-claim scan — best-effort, SECONDARY, never blocking.** Once a candidate survives
+  the culprit check, look for another repo that already declares it. Sibling checkouts under the
+  same parent directory are the cheap place to look:
+
+  ```bash
+  grep -rl "candidate-slug" ../*/.claude/sassy-dog/survey-work.md 2>/dev/null
+  ```
+
+  A hit means another repo already claims that project. **Default to assuming it is already owned**
+  — do not configure it here until the user confirms explicitly (interview question 2b).
+
+  **This scan is secondary to the culprit check and must never be the only guard.** A cloud session
+  has no sibling checkouts on disk, so it finds nothing there and says nothing about it; a miss is
+  therefore never fatal and never blocks the run. The culprit check is the one that works
+  everywhere — and it alone would have caught the case that motivated this rule, where zero of the
+  erroring routes existed in the same-named repo.
 - **Critical paths** for repo-health scoring (`{{SCAN_PATHS}}`, `{{EXCLUDE_PATHSPECS}}`): propose source dirs from the layout, excluding detected migration/generated dirs.
 - **Review orchestrator**: `ls .claude/agents/*review*` in the target repo → offers `IF:REVIEW_ORCHESTRATOR` + `{{REVIEW_ORCHESTRATOR_AGENT}}`.
 - **Mobile release workflow**: if a workflow name matches `mobile|release.*ios|eas`, propose `{{RELEASE_WORKFLOW}}` + `{{MOBILE_PATH_PREFIX}}` (sets `IF:MOBILE`).
