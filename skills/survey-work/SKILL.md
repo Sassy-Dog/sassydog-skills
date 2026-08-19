@@ -56,8 +56,11 @@ Otherwise, **run EXACTLY these three surfaces and nothing else:**
 3. `repo-health` tech-debt scan **with no `SCAN_PATHS`**, letting it default to the whole tracked
    tree — you do not know this repo's source layout
 
-**Do NOT run**, and render each as `skipped — not configured` on the sources line: Sentry,
-TestFlight, PostHog, mobile release lag, board snapshot, secret bootstrap, CI health.
+**Do NOT run.** Each one is then a **blind spot**, not a footnote: render it as a row in §6's
+`## ⚠️ Blind spots (this plate cannot see these)` section, directly above the recommendations —
+plus its `skipped — not configured` token on the sources line, which indexes the same set and
+never a different one. The surfaces: Sentry, TestFlight, PostHog, mobile release lag, board
+snapshot, secret bootstrap, CI health.
 
 > **The trap this closes.** "Derivable" means *derivable from git or `gh` in this repo*. It does
 > NOT mean "I can discover it another way." Sentry projects for the org are listable, and a
@@ -79,8 +82,10 @@ authoritative.
 
 ## 2. Prerequisites
 
-Run these probes. For each failure, label that surface "skipped — <reason>" in the output and
-continue. **Never abort the whole plate on one missing precondition.**
+Run these probes. For each failure, label that surface "skipped — <reason>" in the output **and
+give it a row in §6's `## ⚠️ Blind spots` section** — a probe that failed leaves the surface every
+bit as dark as one that was never configured. Continue either way: **never abort the whole plate on
+one missing precondition.**
 
 ```bash
 gh auth status && cd "$(git rev-parse --show-toplevel)"
@@ -104,7 +109,9 @@ Issue the independent pulls in a single message with multiple tool calls.
 
 ### A. Customer pain
 
-**Sentry** — **ONLY if the config has a `sentry:` block.** No block → `skipped — not configured`; do not list org projects to discover one. Invoke `sassy-dog:sentry-triage` with the
+**Sentry** — **ONLY if the config has a `sentry:` block.** No block → `skipped — not configured`
+**and a blind-spot row in §6, the loudest one there**; do not list org projects to discover one.
+Invoke `sassy-dog:sentry-triage` with the
 configured org and projects. Gate policy: the configured `sentry.gate` when `write_policy: gated`,
 otherwise report-only with no escalation. It handles query syntax, the qualifying gate, and GitHub
 cross-referencing.
@@ -118,11 +125,14 @@ gh issue list --state open --label bug \
 
 Demand proxy = reactions + comments.
 
-**TestFlight** — **ONLY if the config has a `testflight:` block.** No block → `skipped — not configured`. Invoke `sassy-dog:testflight` with the
+**TestFlight** — **ONLY if the config has a `testflight:` block.** No block → `skipped — not
+configured` **and a blind-spot row in §6**, ranked alongside Sentry as customer pain. Invoke
+`sassy-dog:testflight` with the
 configured bundle id, command `feedback`. Parse screenshot submissions (tester comments) and crash
 submissions (stack signatures). Tag items `[TestFlight]`.
 
-**PostHog** — **ONLY if the config sets `posthog: true`** (best-effort even then). No key → `skipped`. If a read key is provisioned, pull survey
+**PostHog** — **ONLY if the config sets `posthog: true`** (best-effort even then). No key →
+`skipped` **and a blind-spot row in §6**. If a read key is provisioned, pull survey
 responses and high-frequency `$exception` events; otherwise render `skipped — PostHog (no read
 key)` and move on.
 
@@ -155,13 +165,15 @@ Invoke `sassy-dog:repo-health`:
 - tech-debt scan with the configured `scan_paths` and `exclude_pathspecs`. **Never invent these** —
   with no config, omit `SCAN_PATHS` entirely so the script defaults to the whole tracked tree. A
   guessed path silently scans the wrong subtree and reports a clean repo.
-- CI health with the configured `ci_workflow`. No config → skip; do not guess a workflow filename.
+- CI health with the configured `ci_workflow`. No config → skip **and render a blind-spot row in
+  §6**; do not guess a workflow filename.
 - dependency exposure + remediation (no environment needed; defaults to cwd)
 - code scanning and secret scanning (no environment needed; both default to cwd). `analyzed: false`
-  or `enabled: false` is a **blind spot** row, never a clean line; `enabled: null` is a token-scope
-  question. `truncated: true` makes `open` a floor — report "at least N".
+  or `enabled: false` is a **blind spot** row — it goes in §6's `## ⚠️ Blind spots` section with
+  every other dark surface, never on the clean line; `enabled: null` is a token-scope question.
+  `truncated: true` makes `open` a floor — report "at least N".
 - mobile release lag with the configured `mobile.release_workflow` and `mobile.path_prefix`, **if
-  `mobile:` is configured**
+  `mobile:` is configured** — not configured → a blind-spot row in §6, the quietest kind
 
 Its `references/scoring.md` thresholds apply unless overridden by config.
 
@@ -263,14 +275,22 @@ Then apply any `## scoring-overrides` section from config — project-specific r
 
 ## 6. Output format
 
-Render inline as markdown. Two anti-verbosity rules are non-negotiable: empty surfaces get a single
-token on the consolidated `✓ Clean today:` line, never their own section; and within a section,
-skip empty P-buckets. Recommendations go LAST.
+Render inline as markdown. Three rules are non-negotiable.
+
+**Empty is not dark.** A surface that was checked and came back with nothing gets a single token on
+the consolidated `✓ Clean today:` line, never its own section. A surface that was NOT checked never
+reaches that line at all — it gets a blind-spot row instead. Collapsing the two is exactly the
+failure the blind-spots section exists to prevent: a never-queried surface reported as clean.
+
+**Skip empty P-buckets** within a section.
+
+**Recommendations go LAST — below the blind spots**, so a reader weighs what the plate could not
+see against the ranking, instead of discovering it afterwards in a footnote.
 
 ```markdown
 # On the plate (YYYY-MM-DD)
 
-_Sources: <pulled, with any "skipped — reason">_
+_Sources: <pulled> · <dark surface> skipped — <reason> → Blind spots · ..._
 
 ✓ Clean today: <surface> · <surface> · ...
 
@@ -306,11 +326,38 @@ _<N> merged-PR branches lingering locally — residue for `clean it`, not plate 
 
 ## 🆕 Auto-filed this run   <!-- gated write_policy only; omit entirely when empty -->
 
+## ⚠️ Blind spots (this plate cannot see these)   <!-- omit entirely when nothing is dark -->
+- **Customer pain** — no `sentry:` block. Production errors were NOT checked.
+- **Customer pain** — no `testflight:` block. Beta crashes and tester feedback were NOT checked.
+- **Security — code scanning** — never analyzed. Vulnerable code patterns were NOT checked.
+- **Dev experience** — no `ci_workflow`. Pipeline duration and flake were NOT checked.
+- **Mobile release lag** — no `mobile:` block. Shipped-vs-main drift was NOT checked.
+
 ## 👉 Today's recommendations (cross-category top 5)
 1. **<title>** — <category> · <one-line why>
 
 _To ship: `take #<N> #<M>`_
 ```
+
+### Blind spots
+
+One row per dark surface, and every row carries three things: the surface, the missing config key
+or failed probe, and — in plain past tense — what was NOT checked. Four rules:
+
+- **Order by what the darkness costs, customer pain first.** Sentry and TestFlight rank loudest.
+  Customer pain is usually the single highest-signal category on the plate, so a dark Sentry means
+  the recommendations below were ranked without the input most likely to have topped them. Security
+  is next, then backlog, then tech debt, dev experience, and mobile release lag last. A dark
+  mobile-release-lag check narrows a plate; a dark Sentry can invert one.
+- **This section and the sources line are the same set, restated.** Every `skipped —` token up top
+  has exactly one row here, and every row has its token. The token is an index; the row is the
+  finding. If the two disagree about a surface the plate is wrong — a dark surface visible ONLY on
+  the sources line is the defect this section replaces.
+- **Omit the section entirely when nothing is dark** — heading included, per the anti-verbosity
+  rules above. A fully-covered plate says nothing here.
+- **Never score, rank, or recommend a blind spot.** It is a statement about the plate's own
+  coverage, not a work item: it stays out of §5's scoring and out of the top 5. The fix for a blind
+  spot is `sassy-dog:setup-config`, which the closing section already offers.
 
 ## 7. Write policy
 
