@@ -137,6 +137,18 @@
 #      returns a capped 100 as if it were a measurement (live: velovate, true
 #      count 102), a PR-ref alert counted as default-branch debt, and the
 #      validity:"active" P0 rule acquiring an age gate. Mock gh only.
+#  20. sentry-verification tests (scripts/test-sentry-verification.sh) —
+#      setup-config may only write a `sentry:` block for a project VERIFIED by
+#      culprit against this repo's own code, and records a failed verification
+#      as `sentry: none` (issue #213). Name similarity is the evidence an agent
+#      reaches for first and it is wrong invisibly: the wrong repo claims
+#      another codebase's P0s while BOTH plates still render complete. Also pins
+#      `sentry: none` as the config contract's first documented exception to
+#      "presence is the toggle" — prose a later consistency sweep reads as drift
+#      and deletes — and keeps the sibling prior-claim scan SECONDARY, since a
+#      cloud session has no sibling checkouts and would lose the guard silently.
+#      Source-level, must-not-exist checks run on a flattened copy. No gh, no
+#      network: six tracked files.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -500,6 +512,17 @@ if bash scripts/test-scanning-states.sh; then
     pass "scanning-states tests (scripts/test-scanning-states.sh)"
 else
     failed "scanning-states tests (scripts/test-scanning-states.sh)"
+fi
+
+# --- 20. sentry-verification tests -------------------------------------------
+# The decision under test is prose an agent follows, not code a script runs, so
+# the gate reads the instruction itself. Every failure it guards is silent by
+# construction — a mis-configured Sentry project produces a plate that looks
+# complete in both repos. Six tracked files: no gh, no network.
+if bash scripts/test-sentry-verification.sh; then
+    pass "sentry-verification tests (scripts/test-sentry-verification.sh)"
+else
+    failed "sentry-verification tests (scripts/test-sentry-verification.sh)"
 fi
 
 # --- 16. markdownlint --------------------------------------------------------

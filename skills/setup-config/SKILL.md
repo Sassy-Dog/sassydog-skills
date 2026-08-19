@@ -102,8 +102,16 @@ all. A `setup-config` marker has never existed to recognise.
 ## Phase 1 — detect
 
 Read `references/detection.md`, run `scripts/detect-capabilities.sh` from the repo root, and do the
-listed hand-checks (Sentry slugs via MCP, review-orchestrator agents, mobile workflows). Detection
-output is evidence, not truth — consequential fields get confirmed in Phase 2.
+listed hand-checks (Sentry project **verified by culprit**, review-orchestrator agents, mobile
+workflows). Detection output is evidence, not truth — consequential fields get confirmed in Phase 2.
+
+**The Sentry hand-check is a verification, not a listing.** An MCP project listing proposes
+candidates; **name similarity is not evidence**, because a Sentry project and a repo can share a
+name and belong to different codebases. Sample the candidate's recent issues and confirm their
+`culprit` / route / file paths resolve in *this* repo. Unverified — including no MCP server and no
+issues to sample — writes `sentry: none` (the confirmed-absent form, `references/config-contract.md`),
+never a guessed block. The sibling-checkout prior-claim scan is best-effort and secondary; it never
+substitutes for the culprit check and never blocks the run.
 
 ## Phase 2 — interview
 

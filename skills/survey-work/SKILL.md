@@ -328,6 +328,7 @@ _<N> merged-PR branches lingering locally — residue for `clean it`, not plate 
 
 ## ⚠️ Blind spots (this plate cannot see these)   <!-- omit entirely when nothing is dark -->
 - **Customer pain** — no `sentry:` block. Production errors were NOT checked.
+- **Customer pain** — `sentry: none`: confirmed at setup that this repo has no error monitoring. Production errors are not being recorded anywhere — this plate did not miss them, nothing sees them.
 - **Customer pain** — no `testflight:` block. Beta crashes and tester feedback were NOT checked.
 - **Security — code scanning** — never analyzed. Vulnerable code patterns were NOT checked.
 - **Dev experience** — no `ci_workflow`. Pipeline duration and flake were NOT checked.
