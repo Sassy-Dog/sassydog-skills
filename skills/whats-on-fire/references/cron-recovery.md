@@ -77,6 +77,16 @@ The product↔repo map is SKILL.md section 3 — the same map blind spots walk i
 repo with no matching Sentry project"). Do not build a second mapping; one more map is one more
 place to drift.
 
+**Its collision caveat lives there too, and is not restated here.** SKILL.md section 3 states once
+that a Sentry project and a repo sharing a name are not evidence of ownership, and that a pairing
+resolved on name alone is *unconfirmed routing*. Read it there; what belongs here is what it costs
+on this walk, which is more than a wrong line in a report. A downgrade asserts that one specific
+repo's green dispatch re-tested *this* monitor's check — an unconfirmed route cannot carry that
+assertion, so a route holding only by name match **never downgrades**: the monitor ranks at full
+severity with its route named unconfirmed on the line. That is rule 3's shape (no evidence →
+escalate, and say so) without rule 3's footer — the footer names repos whose lookup failed, and an
+unconfirmed route is a read that was never entitled to be believed, not one that broke.
+
 Resolution comes **before** any judgment about the workflow: never carry over `recovery.ts`'s
 platform-local shortcut of listing other repos' monitors as permanently external. Whether the
 derived workflow exists is answered *in the owning repo* (found → cross-reference; 404 → not
