@@ -22,7 +22,7 @@ So: **customer pain decays with age; stuck work escalates with age.** Never shar
 |---|---|
 | Sentry issue passing the qualifying gate, `lastSeen` ≤ 48h | `sentry-triage` |
 | Cron monitor environment `missed` or `timeout` — always, a dispatch can never vouch for these | `find_monitors` |
-| Cron monitor environment `error` with **no** qualifying green dispatch after its last failing check-in | `find_monitors` + `cron-recovery.md` |
+| Cron monitor environment `error` **and blind** — no auto-managed owner issue (`cron-recovery.md` rule 0) **and** no qualifying green dispatch after its last failing check-in | `find_monitors` + `cron-recovery.md` |
 | `default_branch_ci` is `failure` | `pull-repo-signals.sh` |
 | Any `secret_scanning.active[]` entry, or any `bypassed: true` | `pull-repo-signals.sh` |
 | `secret_scanning.unknown_validity[]` entry aged >= 30d | `pull-repo-signals.sh` |
@@ -57,6 +57,26 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 | PR idle | 3–7 days |
 | Normalized-P1 backlog issues | see the map below |
 | Dependabot | `open` > 0 with no high/critical |
+
+### Not a tier — working, reporting a tracked finding
+
+A cron environment in `error` whose control has an **open auto-managed issue** naming that workflow
+is neither broken nor fixed-pending-confirmation: it is working as designed, reporting a standing
+finding with a durable owner. A check-in has only `ok` and `error`, so most controls deliberately
+map "I found something" onto `error` alongside "I could not look" — the monitor cannot distinguish
+them, and this sweep must. Report it as `working — tracked in <issue>`, and rank the **finding** on
+its own merits (a CVE backlog is security exposure) — never the monitor.
+
+Unlike the third state below, this one **does not clear**. It persists as long as the finding does,
+re-checking in `error` daily. Re-raising it as a fresh outage each morning is the unbounded-nag
+failure mode: an alert whose only remedy is "the outstanding work is still outstanding". Skipping
+this check ranked a correct CVE scan as a P0 production outage on 2026-08-20
+(`Sassy-Dog/platform#735`).
+
+**Never corroborate a P0 with a P1 signal.** That same alert cited "today's scheduled CI run also
+failed" as supporting evidence — but `scheduled_failing` is P1 in this very file, for the same
+push-vs-schedule reason `default_branch_ci` is push-class only. Stacking a P1 under a P0 headline
+manufactures confidence instead of adding information.
 
 ### Not a tier — fixed, awaiting scheduled confirmation
 

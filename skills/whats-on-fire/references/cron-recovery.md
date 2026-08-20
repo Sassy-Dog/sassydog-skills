@@ -25,14 +25,40 @@ monitor state; keep the two contracts aligned — a subtly different reimplement
 split this fix closes. The one deliberate widening is repo resolution (below): the digest is
 platform-local, this sweep is org-wide.
 
+## Rule 0 — is the control actually broken?
+
+**Check this before any rule below.** The rules that follow decide whether a BROKEN control has
+since been fixed. This one decides whether it was ever broken.
+
+Before the dispatch cross-reference, search the owning repo's open issues for the workflow basename
+or the control's issue title. An open issue that the workflow itself files and auto-closes on a
+clean run is a **durable owner**: proof the control ran and reported. Rank the underlying finding
+on its own merits and report the monitor as the fourth state, "working — tracked in `<issue>`".
+
+Two things follow, and both were got wrong on 2026-08-20 for `cron-ci-runner-cve-watch`:
+
+- **The dispatch cross-reference is meaningless for this class.** A CVE backlog is cleared by a pin
+  bump or a suppression entry, never by re-running the scanner, so no human would ever dispatch it.
+  "No qualifying green dispatch since the failing check-in" was true, and carried no information.
+- **This state does not clear, and must not re-page.** It persists as long as the finding does —
+  the monitor checks in `error` every single day. Re-raising it as a fresh outage each morning is
+  the unbounded-nag failure mode: an alert whose only remedy is "the outstanding work is still
+  outstanding".
+
 ## The four rules — each one exists because a weaker version failed
 
 **1. Only `error` qualifies for downgrade. `missed` and `timeout` always escalate.**
 A `missed` check-in means the schedule never fired; a `timeout` means it fired and never finished.
 A green dispatch disproves neither, and downgrading them would let a manual re-run quiet the
 dead-cron alarm — the precise failure the schedule gate exists to prevent. `error` is the one
-status meaning "it ran, and the check it performed failed", which is what a fix-and-verify
-dispatch actually re-tests. Treat any unknown future status like `missed`: never downgrade it.
+status meaning **"it ran"**, which is what a fix-and-verify dispatch can re-test at all. Treat any
+unknown future status like `missed`: never downgrade it.
+
+This rule used to read *"`error` is the one status meaning 'it ran, and the check it performed
+**failed**'"*, and that second clause was wrong. Sentry offers a check-in exactly two states, so a
+control with a findings tier has nowhere to put "it ran, the check SUCCEEDED, and it found
+something tracked" — most controls in this org deliberately map that onto `error` too. `error`
+therefore means "it ran", and nothing more. Which of the two it was is what rule 0 decides.
 
 **2. The dispatch must post-date the most recent FAILING CHECK-IN, not merely the incident start.**
 The reference instant is the environment's `lastCheckIn`; the incident start (from
