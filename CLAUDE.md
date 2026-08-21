@@ -56,6 +56,24 @@ The relationship between the `assess-it` skill and the nine `*-reviewer` agents 
 
 ## Conventions that matter
 
+- **`whats-on-fire`'s rules carry parity markers, and the CI gate for them is in the OTHER repo.**
+The skill has two intentional homes: this plugin copy (`SKILL.md` + `references/`) and the
+flattened, self-contained copy in `Sassy-Dog/sassydog-routines` that the `daily-fire-watch` cloud
+routine reads by path, which exists because plugin skills cannot load in a routine session
+([#175](https://github.com/Sassy-Dog/sassydog-skills/issues/175)). Nothing used to check that the
+two agreed, and on 2026-08-20 that produced a false P0 in the scheduled run — **a fix applied to
+this copy would not have changed the routine's behaviour at all** ([#221](https://github.com/Sassy-Dog/sassydog-skills/issues/221)).
+Every load-bearing rule now carries a `<!-- rule: <id> -->` marker beside it in *both* homes, and
+`sassydog-routines`' `scripts/check-skill-parity.sh` fails when the marker sets differ. **Adding a
+rule here means adding the marker here, the marker there, and a line in that repo's
+`parity/whats-on-fire-rules.tsv`.** Two things not to redesign: the check compares marker
+*identity* and never prose, because the two homes word the same rule differently and wrap it
+differently — a wording-based check reports the routine as missing rules it plainly carries; and it
+cannot move into this repo, because this repo is PUBLIC and that one is INTERNAL, so its CI can
+clone this one anonymously while this one's CI cannot authenticate to it at all (the
+`private`-visibility trap of [#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178)). A
+change spanning both repos lands **here first**, or that repo's CI clones a `main` without the new
+marker and fails.
 - **Skill `description` is a trigger spec, not a summary.** It is dense with quoted user phrases ("set a GitHub secret", "check TestFlight feedback") because matching those phrases is what activates the skill. When adding/editing a skill, write the description as the list of utterances that should trigger it.
 - **Progressive disclosure.** SKILL.md stays thin and actionable; depth goes in `references/*.md` that the skill says to read "when you reach that phase." Don't inline reference-doc detail into SKILL.md.
 - **Reviewer agents carry a "Sassy Dog calibration" section** applied only when the relevant stack is present (e.g. Doppler is the secrets source of truth, all-secrets/zero-`vars.*`, managed identity + Key Vault `kv-sassydog`, pin Actions to SHAs). New org-wide policies belong in the matching reviewer's calibration block.
