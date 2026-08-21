@@ -211,16 +211,46 @@ remediation state, never by count. A half-surface would quietly re-create the ex
 any-PR-counts-as-remediation failure the script's header documents. A named skip is the honest
 answer.
 
-## Unverified: the code- and secret-scanning surfaces
+## Settled: the code- and secret-scanning surfaces are absent
 
-Whether the session's GitHub MCP surface exposes code-scanning or secret-scanning capabilities has
-not been established. Until it is, treat both as unreachable and render them as named skips beside
-Dependabot's — an approximation would be worse, because the blind-spot rows these feed are
-specifically about distinguishing "no alerts" from "never scanned".
+The session's GitHub MCP surface exposes **neither** capability. Settled on 2026-08-19 by
+enumerating the 55-tool roster: no tool lists or gets either alert type, so no call is refused
+because no call exists ([sassydog-routines#11](https://github.com/Sassy-Dog/sassydog-routines/issues/11#issuecomment-5335967737)).
+Render both as named skips beside Dependabot's — the blind-spot rows these feed are specifically
+about distinguishing "no alerts" from "never scanned", and an approximation destroys exactly that
+distinction. Record it as a Container fact, not a per-run probe.
 
-Settle it with `Sassy-Dog/velovate` as the positive control: on 2026-08-18 it carried 102 open
-code-scanning alerts and 4 open secret-scanning alerts. An empty result there means the capability
-is absent — no other reading survives. Record the answer as a Container fact, not a per-run probe.
+`run_secret_scanning` is **not** this capability: it scans file contents handed to it in the call
+and cannot enumerate a repo's stored alerts.
+
+**If the roster ever changes and this is re-probed**, the positive control exists to separate three
+outcomes an empty result cannot tell apart on its own — the tool is absent, the tool is gated, or
+the repo is genuinely clean. It can only do that job while the control repo is definitively **not**
+clean. So the rule is: **measure the control in the same session as the probe, and never cite a
+count written down here.**
+
+That is a post-mortem, not a precaution. This file used to assert as settled fact that `velovate`
+carried 102 open code-scanning and 4 open secret-scanning alerts. Two days later the secret half was
+zero — all four resolved on 2026-08-19, two of them the live Google API keys that the 2026-08-19
+sweep had itself ranked #2 in its top 5. **The control decayed precisely because the fire watch
+worked**, and an empty result would then have read as *confirming* the tool was absent, when zero is
+exactly what a working tool returns. Half the control still discriminated and half silently did not,
+which is the hardest version of this failure to notice.
+
+<!-- rule: control-durable-fixture -->
+### Pick the fixture from an archived repo
+
+A control's durability is the whole point, and it runs **opposite** to the ranking rule. A fire in
+an archived repo is not a fire — but an *alert* in an archived repo is the ideal fixture, because
+nobody will ever remediate it. Scoping the control search to live repos is how the 2026-08-21 pass
+concluded "no durable secret-scanning control exists" while a 9-month-stable one sat in plain sight.
+
+Measured 2026-08-21 — re-measure, do not cite:
+
+- **Code scanning.** `Sassy-Dog/velovate`, 77 open alerts.
+- **Secret scanning.** `Sassy-Dog/qrninja-app` (archived), 11 open alerts, unchanged since
+  2025-11-19. Org-wide there are 16 open and 15 of them sit in archived repos; the one live alert is
+  an `active` credential — something to revoke, never to preserve as a fixture.
 
 ## Also unreachable without `gh`: the cron-recovery cross-reference
 
