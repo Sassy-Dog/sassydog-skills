@@ -24,6 +24,28 @@ Notes:
 - Same no-OR/AND restriction as the UI/MCP — HTTP 400 on boolean operators.
 - Pagination via the `Link` header; the first page (25) is almost always enough for triage — say so if you truncate.
 
+## Count semantics differ by transport — and the names do not
+
+`count` / `userCount` (REST) and Events / Users (MCP `search_issues`) look like the same two
+numbers and are not. This is the single highest-consequence difference between the two paths, so
+both count traps are recorded here together rather than one per transport doc:
+
+| Transport | What the counts mean | Trap |
+|---|---|---|
+| REST `/issues/` | **Lifetime** `count` / `userCount` — the `statsPeriod=14d` in the recipe above does not scope them | The parameter reads like a bound on the numbers and is not one. Never infer "recent activity" from a REST count; gate staleness on `lastSeen`, which is the only field that carries it. |
+| MCP `search_issues` | **Windowed** to the `period` argument — counts *and* `firstSeen` — rendered under the same labels | The counts are silently *rescaled*, not filtered. `VELOVATE-WORKERS-2` returned 1 event / 1 user against a true 30 / 3 — a 30× undercount — and the 30d pull returned 1 event too, so widening `period` is not a workaround (issue #218). Re-verified 2026-08-21: the same call reported `firstSeen` as 2 days ago against a true 2026-06-25. |
+
+**Neither transport marks which kind of number it handed you**, which is why `sentry-triage`'s gate
+rule 0 requires a per-issue lifetime confirmation via the resource-fetch capability
+(`get_sentry_resource`, `resourceType='issue'`) before any count reaches a threshold — on the MCP
+path *and* the REST path, so the gate does not silently mean something different depending on which
+one happened to be available.
+
+That REST is accidentally correct here is not a reason to prefer it or to skip confirmation on it.
+It is the reason the defect survived: the REST-based `daily-fire-watch` routine ranked the issue a
+P0 the same morning the MCP-based interactive run declared the surface clean, so the edition that
+gets reviewed daily was the one that could not reproduce the bug.
+
 ## Cron monitors
 
 Per-environment cron state comes from the org monitors endpoint. Requires `org:read` (or `alerts:read`) — see the scope warning above.

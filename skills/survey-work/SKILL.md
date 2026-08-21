@@ -245,6 +245,13 @@ Score each category independently; surface a cross-category top-5 by relative ra
 — severity: crash=10, error=6, bug-label=4, feedback=2, suggestion=1; recency_decay 1.0/0.7/0.4/0.1
 for ≤2d/≤7d/≤30d/older; overlap boost 1.0/1.5/2.0 for 1/2/3 sources.
 
+`occurrences` and `distinct_users` mean **lifetime** totals, and the formula is worthless without
+that. A windowed count multiplies through two logs and collapses exactly the long-running recurring
+issues the gate exists to catch: on 2026-08-20 a velovate issue at a true 30/3 arrived as 1/1 and
+the whole Sentry surface rendered as clean (issue #218). `sassy-dog:sentry-triage` confirms counts
+per issue before it gates — take its numbers, never a raw search result, and never quote a figure it
+tagged `skip-unconfirmed` as though it were measured.
+
 **Backlog**: lead with the issue's own priority label (the configured `priority_labels`), tie-break
 by reactions + comments. Don't re-derive a priority the maintainer already assigned.
 
