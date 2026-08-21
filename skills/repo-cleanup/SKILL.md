@@ -239,6 +239,13 @@ Then remove with `rm` and announce: `discarded <path> — <pattern>`.
 
 Everything else — untracked source files, markdown drafts, JSON exports, screenshots:
 
+> **A screenshot reaching this bucket means something bypassed the sanctioned destination.**
+> `tmp/` is where throwaway artifacts belong — it is in the universal allowlist above, so anything
+> there is already swept without reaching a prompt, and `sassy-dog:setup-hooks` generates a guard
+> that nudges Claude when one lands in the repo root instead. Treat a root-level screenshot here as
+> the fallback path, not the normal one, and prefer `[g]itignore it` only after checking whether
+> `tmp/` was the intended home.
+
 ```
 <path> — <size> · <file type or first-line snippet>
    assessment: <best guess>

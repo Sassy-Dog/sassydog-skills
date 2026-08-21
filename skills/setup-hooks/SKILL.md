@@ -30,9 +30,19 @@ global hook because a global one fires uselessly in repos whose stack it doesn't
    Contract: **formatters fix silently (exit 0); linters with unfixable findings exit 2** so the
    harness feeds the findings straight back for an immediate fix — defects surface at edit time,
    not in the PR review loop.
-2. **A `hooks.PostToolUse` entry in `.claude/settings.json`** (or `settings.local.json` when the
-   user wants personal-only) whose command is
-   `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/sassydog-post-edit.sh"`.
+2. **`.claude/hooks/sassydog-artifact-guard.sh`** — a stray-artifact guard rendered from
+   `references/templates/sassydog-artifact-guard.template.sh`. Stack-agnostic, so it is always
+   generated and has no conditional blocks. It keeps screenshots and other throwaway binaries out
+   of the repo **root**, where they accumulate unnoticed — invisible to `git diff`, breaking
+   nothing, and indistinguishable later from a deliberate asset. The sanctioned destination is
+   `tmp/`, which `sassy-dog:repo-cleanup` already auto-discards universally, so `tidy-repo` sweeps
+   it with no per-repo config. Contract: **it reports, it never moves or deletes.**
+3. **The settings entries** in `.claude/settings.json` (or `settings.local.json` when the user
+   wants personal-only): one `hooks.PostToolUse` entry per script, plus one `hooks.Stop` entry for
+   the guard's catch-all scan. See `references/settings-merge.md`.
+4. **A root-anchored `/tmp/` line in the target repo's `.gitignore`** — the destination the guard
+   points at. Owned here rather than by `setup-config` because a guard whose destination is not
+   ignored just relocates the mess; the two must not drift apart.
 
 ## Ownership contract (what a re-run may touch)
 
@@ -126,8 +136,18 @@ Never introduce a `{{...}}` placeholder into executable shell for the version �
 SC1083 and break the lint-clean-as-is invariant. Prettier is the deliberate contrast and needs no
 equivalent: `npx --no-install` makes the repo's own lockfile its pin, so leave it exactly as it is.
 
-Then compose the settings change per `references/settings-merge.md` (add the owned entry if
-missing; in refresh mode also remove owned entries whose tool set became empty).
+Render the artifact guard from `references/templates/sassydog-artifact-guard.template.sh`. It is
+stack-agnostic with no `{{IF:...}}` blocks, so the render is a verbatim copy minus the TEMPLATE
+NOTE paragraph, with the `generated-by` header normalised the same way. It is generated
+unconditionally — an empty detected tool set removes the post-edit dispatcher but never this.
+
+Then compose the settings change per `references/settings-merge.md` (add the owned entries if
+missing; in refresh mode also remove the post-edit entry when its tool set became empty).
+
+**Also ensure `/tmp/` is in the target repo's `.gitignore`** — root-anchored, so it never shadows a
+tracked `tmp/` deeper in the tree. Idempotent: check with
+`git check-ignore -q tmp/probe` from the repo root and skip when already covered. Append it under
+the repo's existing comment style; include the line in the approval diff like any other write.
 
 **Print the full rendered script AND the settings diff, and write only after the user approves** —
 writing into a product repo is an outward-facing action; never write silently. Preserve the
@@ -142,12 +162,31 @@ execute bit on the script.
    printf '{"tool_input":{"file_path":"<some-real-repo-file>"}}' | bash .claude/hooks/sassydog-post-edit.sh
    ```
 
-3. Validate the settings file still parses: `jq -e . .claude/settings.json`.
-4. If the markdownlint route was rendered, confirm the version the hook will run matches CI's —
+3. Shellcheck the guard too, then drive **both** its events against the real repo — a guard that
+   silently no-ops is the failure mode here, so assert the loud case actually fires:
+
+   ```bash
+   shellcheck -S warning .claude/hooks/sassydog-artifact-guard.sh
+   # expect exit 2 + a nudge naming the file:
+   printf '{"hook_event_name":"PostToolUse","cwd":"%s","tool_input":{"file_path":"probe.png"}}' "$PWD" \
+     | bash .claude/hooks/sassydog-artifact-guard.sh
+   # expect {"decision":"block",...} on stdout while a root artifact exists:
+   printf '{"hook_event_name":"Stop","cwd":"%s","stop_hook_active":false}' "$PWD" \
+     | bash .claude/hooks/sassydog-artifact-guard.sh
+   # expect SILENT — the recursion guard:
+   printf '{"hook_event_name":"Stop","cwd":"%s","stop_hook_active":true}' "$PWD" \
+     | bash .claude/hooks/sassydog-artifact-guard.sh
+   ```
+
+   Create and delete a throwaway `probe.png` in the root around this; leaving it behind is the
+   very thing the hook exists to catch.
+4. Confirm `tmp/` is actually ignored: `git check-ignore -v tmp/probe.png` must print the rule.
+5. Validate the settings file still parses: `jq -e . .claude/settings.json`.
+6. If the markdownlint route was rendered, confirm the version the hook will run matches CI's —
    `grep -o 'markdownlint-cli2[^"]*' .claude/hooks/sassydog-post-edit.sh` against the probe's
    `pin_source`. A pinned render must show the pin on both invocations; a fix-only render must show
    no blocking re-check at all. Nothing else in this flow catches a drifted version.
-5. Remind: hooks load on the next session in that repo (settings changes are not hot-reloaded).
+7. Remind: hooks load on the next session in that repo (settings changes are not hot-reloaded).
 
 ## Guardrails
 
@@ -155,8 +194,17 @@ execute bit on the script.
   getting approval.
 - Never touch hook entries this generator does not own (anything not referencing
   `.claude/hooks/sassydog-`), and never rewrite unrelated settings keys.
-- The dispatcher must stay non-destructive: format-in-place and read-only lint only — never a
-  hook that deletes, commits, pushes, or mutates anything beyond the edited file's formatting.
+- **The post-edit dispatcher** must stay non-destructive: format-in-place and read-only lint only —
+  never a hook that deletes, commits, pushes, or mutates anything beyond the edited file's
+  formatting.
+- **The artifact guard must not mutate at all** — it names a stray and tells Claude to move it,
+  and never relocates or deletes the file itself. Auto-moving a file the user is about to open is
+  worse than reporting it, and a guard that silently rearranges a working tree is exactly the class
+  of hook the rule above exists to prevent.
+- **Never make the guard's Stop entry exit 2, and never drop its `stop_hook_active` check.** Stop
+  is the one event where blocking is self-perpetuating: Claude Code sets that flag session-wide
+  while a stop continuation is in flight, so without the guard a stray the model legitimately
+  chooses to keep wedges the session. Emit `{"decision":"block","reason":...}` on stdout instead.
 - The generator itself always runs from the plugin — generated hooks are repo state, the generator
   is not.
 
