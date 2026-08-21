@@ -149,6 +149,20 @@
 #      cloud session has no sibling checkouts and would lose the guard silently.
 #      Source-level, must-not-exist checks run on a flattened copy. No gh, no
 #      network: six tracked files.
+#  21. sentry-counts tests (scripts/test-sentry-counts.sh) — sentry-triage may
+#      only gate on counts it CONFIRMED as lifetime (issue #218). `count`/
+#      `userCount` mean different things per transport under identical labels:
+#      REST is lifetime, the MCP's search_issues rescales to its `period`, and
+#      neither says which it returned — velovate's VELOVATE-WORKERS-2 came back
+#      1/1 against a true 30/3, and a 30d pull returned 1 event too, so a wider
+#      window is not the fix. It went unnoticed because the REST-based routine
+#      under daily review was accidentally CORRECT while the interactive run
+#      called the surface clean. Pins the discovery/scoring split, the confirm
+#      step's position BEFORE the gate, the ban on choosing what to confirm by
+#      windowed count (which reads as a missing optimization and re-creates the
+#      bug one step earlier), and both halves of `skip-unconfirmed` — never
+#      qualifies, always reported. Source-level, flattened must-not-exist
+#      checks. No gh, no network, no Sentry call: four tracked files.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -523,6 +537,16 @@ if bash scripts/test-sentry-verification.sh; then
     pass "sentry-verification tests (scripts/test-sentry-verification.sh)"
 else
     failed "sentry-verification tests (scripts/test-sentry-verification.sh)"
+fi
+
+# --- 21. sentry-counts tests -------------------------------------------------
+# Also prose, and the failure it guards is a false CLEAN rather than a false
+# alarm: an under-reported count does not look wrong, it looks quiet. Reads four
+# tracked files; no gh, no network, no Sentry call.
+if bash scripts/test-sentry-counts.sh; then
+    pass "sentry-counts tests (scripts/test-sentry-counts.sh)"
+else
+    failed "sentry-counts tests (scripts/test-sentry-counts.sh)"
 fi
 
 # --- 16. markdownlint --------------------------------------------------------
