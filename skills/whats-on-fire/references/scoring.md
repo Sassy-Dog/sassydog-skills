@@ -3,6 +3,7 @@
 Severity tiers for the portfolio sweep. These are **not** the per-repo `survey-work` rules — read the
 inversion below before reusing anything from `repo-health/references/scoring.md`.
 
+<!-- rule: staleness-inversion -->
 ## The staleness inversion
 
 Per-repo `survey-work` applies a `recency_decay` so old signals matter less. That is right for customer
@@ -16,6 +17,7 @@ So: **customer pain decays with age; stuck work escalates with age.** Never shar
 
 ## Tiers
 
+<!-- rule: tier-p0 -->
 ### P0 — production is degraded, or the pipeline is dead
 
 | Signal | Source |
@@ -38,6 +40,7 @@ problem but it blocks no merges, so it ranks as P1 ops (below), not P0. Ranking 
 produces the exact false alarm this split exists to prevent: reporting "main is red, shipping is
 blocked" when the only red thing is a database sweep that will retry in four hours.
 
+<!-- rule: tier-p1 -->
 ### P1 — shipping is blocked or exposure is real
 
 | Signal | Threshold |
@@ -50,6 +53,7 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 | Secret scanning | `unknown_validity[]` entry aged < 30d |
 | Code scanning | `new[]` rule at `high` |
 
+<!-- rule: tier-p2 -->
 ### P2 — heat worth knowing about
 
 | Signal | Threshold |
@@ -59,6 +63,7 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 | Security-labelled backlog issues | **any tier, including unranked** — always listed, see the map below |
 | Dependabot | `open` > 0 with no high/critical |
 
+<!-- rule: state-working-tracked-finding -->
 ### Not a tier — working, reporting a tracked finding
 
 A cron environment in `error` whose control has an **open auto-managed issue** naming that workflow
@@ -74,11 +79,13 @@ failure mode: an alert whose only remedy is "the outstanding work is still outst
 this check ranked a correct CVE scan as a P0 production outage on 2026-08-20
 (`Sassy-Dog/platform#735`).
 
+<!-- rule: no-p1-corroborating-p0 -->
 **Never corroborate a P0 with a P1 signal.** That same alert cited "today's scheduled CI run also
 failed" as supporting evidence — but `scheduled_failing` is P1 in this very file, for the same
 push-vs-schedule reason `default_branch_ci` is push-class only. Stacking a P1 under a P0 headline
 manufactures confidence instead of adding information.
 
+<!-- rule: state-fixed-awaiting-schedule -->
 ### Not a tier — fixed, awaiting scheduled confirmation
 
 A cron environment in `error` whose backing workflow shows a green `workflow_dispatch` completed
@@ -94,12 +101,14 @@ all, the monitor stays P0 **and** the report footer names the repo that could no
 contract — reference-instant choice, owning-repo resolution, and the 404/403 split — is
 `cron-recovery.md`.
 
+<!-- rule: blind-spots-unranked -->
 ### Not ranked — blind spots
 
 Structural gaps are reported in their own section and never assigned a P-tier. They are conditions,
 not incidents; ranking them alongside a live outage makes both harder to read. They also persist
 unchanged across runs, so a tier would just add recurring noise at a fixed severity.
 
+<!-- rule: label-normalization-map -->
 ## Label normalization
 
 The priority taxonomy drifted across repos — some use `priority:*`, some `sev:*`, some bare labels,
@@ -118,6 +127,7 @@ Do **not** re-derive a priority a maintainer already assigned; this map only mak
 vocabularies comparable across repos. An unlabeled issue is unranked, not P3 — absence of a label is
 absence of information, not a judgment of low priority.
 
+<!-- rule: security-always-listed -->
 ### Security is never collapsed into a count
 
 **An issue carrying `security` or `area:security` is ALWAYS listed by number, at whatever tier the
