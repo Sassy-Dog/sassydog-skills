@@ -56,6 +56,7 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 |---|---|
 | PR idle | 3–7 days |
 | Normalized-P1 backlog issues | see the map below |
+| Security-labelled backlog issues | **any tier, including unranked** — always listed, see the map below |
 | Dependabot | `open` > 0 with no high/critical |
 
 ### Not a tier — working, reporting a tracked finding
@@ -108,7 +109,7 @@ carries several:
 
 | Tier | Matches |
 |---|---|
-| P1 | `priority:critical`, `priority:high`, `sev:critical`, `sev:high`, or (`bug` **and** `area:security`\|`security`) |
+| P1 | `priority:critical`, `priority:high`, `sev:critical`, `sev:high` |
 | P2 | `priority:medium`, `sev:medium` |
 | P3 | `priority:low`, `sev:low`, `enhancement` |
 | unranked | everything else — count them, don't list them |
@@ -116,6 +117,51 @@ carries several:
 Do **not** re-derive a priority a maintainer already assigned; this map only makes differing
 vocabularies comparable across repos. An unlabeled issue is unranked, not P3 — absence of a label is
 absence of information, not a judgment of low priority.
+
+### Security is never collapsed into a count
+
+**An issue carrying `security` or `area:security` is ALWAYS listed by number, at whatever tier the
+map gives it — including `unranked`.** Its tier is not adjusted: the rule above still holds, and a
+maintainer's `sev:*` is still the severity. What changes is only that a security issue can never
+end its life as part of a bare integer. `unranked` matters here as much as P2 does, because an
+unlabelled security issue is the *most* likely to be new and the least likely to have been triaged
+by anyone yet.
+
+This is a *rendering* rule, deliberately, because the failure was a rendering failure. The map used
+to reach security only through (`bug` **and** `security`), so promotion depended on whether the
+issue happened to be phrased as a defect — and most real security work is not: hardening, a missing
+control, an unmodelled sanitizer, a policy decision. Promoting on `security` alone would have fixed
+the symptom by re-deriving priority, which is the one thing the paragraph above forbids. Listing it
+regardless of tier fixes the actual harm without touching the maintainer's judgment.
+
+The `bug` conjunction is gone with it. `bug` is a **type**, not a severity multiplier, and it never
+belonged in a priority map.
+
+#### Worked example — the exact combination that regressed
+
+`Sassy-Dog/velovate`, two security issues filed the same day (issue #219):
+
+| Issue | Labels | Tier | Rendered |
+|---|---|---|---|
+| #2181 | `bug`, `security`, `sev:medium` | P2 | **listed** — by number |
+| #2186 | `security`, `observability`, `sev:medium` | P2 | **listed** — by number |
+| *(hypothetical)* | `security`, `sev:low` | P3 | **listed** — by number |
+| *(hypothetical)* | `security`, no priority label | unranked | **listed** — by number |
+| #2190 | `enhancement`, `sev:medium` | P2 | counted only |
+
+Under the pre-fix map #2181 normalized to P1 and #2186 to P2 — identical severity, one label apart,
+opposite visibility. #2186 covers 72 open CodeQL alerts including **10 sites logging raw rider
+coordinates** on a product live with real users' location history, and it was invisible in every
+`daily-fire-watch` post from the day it was filed.
+
+Note that both now sit at P2, which is *lower* than #2181's old P1. That is the correction, not a
+regression: `sev:medium` is what the maintainer said, and both are listed either way.
+
+**Why this rule carries more weight than its size suggests.** The cloud edition cannot read code-
+scanning or secret-scanning alerts at all — settled by probe, recorded as a §0 Container fact
+(`Sassy-Dog/sassydog-routines#11`). A CodeQL finding therefore reaches the report **only** if a
+human files it as a GitHub issue. This listing rule is the whole of that escape hatch; a label
+technicality closing it takes an entire surface offline silently.
 
 ## Blind-spot conditions
 

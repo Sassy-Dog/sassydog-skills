@@ -163,6 +163,22 @@
 #      bug one step earlier), and both halves of `skip-unconfirmed` — never
 #      qualifies, always reported. Source-level, flattened must-not-exist
 #      checks. No gh, no network, no Sentry call: four tracked files.
+#  22. security-listing tests (scripts/test-security-listing.sh) — a
+#      security-labelled issue is never collapsed into a bare count (issue
+#      #219). The label map used to reach security only via (`bug` AND
+#      `security`), so visibility depended on whether the issue happened to be
+#      phrased as a defect — and most security work is not (hardening, a
+#      missing control, a policy decision). On velovate, two security issues
+#      filed the same day at the same severity split P1/P2 on one label, and
+#      the P2 one — 72 CodeQL alerts, 10 sites logging raw rider coordinates on
+#      a live product — was invisible in every daily-fire-watch post since it
+#      was filed. The fix is a LISTING rule, not a promotion, and that is the
+#      fragile part: #219 itself proposed promoting security to P1, so a reader
+#      arrives pre-loaded with the rejected option, and promotion would
+#      re-derive a priority the same file forbids re-deriving. The gate pins
+#      the tier-untouched wording, the `unranked` case, and the survival of the
+#      re-derive principle itself. Source-level, flattened must-not-exist
+#      checks; no gh, no network: two tracked files.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -547,6 +563,16 @@ if bash scripts/test-sentry-counts.sh; then
     pass "sentry-counts tests (scripts/test-sentry-counts.sh)"
 else
     failed "sentry-counts tests (scripts/test-sentry-counts.sh)"
+fi
+
+# --- 22. security-listing tests ----------------------------------------------
+# Also prose, and also a false CLEAN rather than a false alarm: the issue was
+# counted, so the report looked complete while naming nothing. Two tracked
+# files; no gh, no network.
+if bash scripts/test-security-listing.sh; then
+    pass "security-listing tests (scripts/test-security-listing.sh)"
+else
+    failed "security-listing tests (scripts/test-security-listing.sh)"
 fi
 
 # --- 16. markdownlint --------------------------------------------------------
