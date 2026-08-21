@@ -143,6 +143,34 @@ configured agent against the staged diff versus the default branch, with a one-l
 statement. Blocking findings → fix and re-run. Nits → roll in, or note "Known and accepted" in the
 PR body.
 
+### Reconcile the docs against the repo
+
+**Before drafting the PR body**, re-read the docs describing what this change touched — `CLAUDE.md`,
+the relevant `README.md`, anything in `docs/` — and fix every claim the change just made untrue, in
+this PR. A stale doc is a defect in the change, not tidying for later: lint, type, test and the
+review agent all pass on a PR whose `CLAUDE.md` now states the opposite of what the repo does,
+because docs are an input to no other gate.
+
+It runs here, before §5, for a reason: §5 is where "what changed" gets written down, and a doc fix
+belongs in the same PR as the change that invalidated it, never a follow-up.
+
+**Scope it to the change**, or it gets skipped: the docs covering the area you touched, plus any
+claim you happened to disprove while working. Not every markdown file in the repo. If a gap is too
+large to close here, file an issue and say so in the PR body — that is a reported outcome, whereas
+leaving a confident sentence that is wrong is not.
+
+Two traps, both of which have produced real errors:
+
+- **Issue state is not evidence.** A closed issue does not prove the behaviour landed, and an open
+  one does not prove it did not. One repo closed an issue via a manual checklist while the doc's
+  claim that nothing automated tested that boundary stayed *true* — "correcting" it from issue state
+  would have introduced an error. Read the code, the workflow, the config; only those settle it.
+  Same for citations: check whether a `#N` you are about to write is an issue or a PR, and match how
+  the file already cites things.
+- **Claims of deliberate absence rot silently.** "Nothing tests X", "there is no Y yet", "the stored
+  value is never read" — nothing fails when these stop being true, and they are the sentences a
+  reader leans on hardest. Check those specifically.
+
 Apply any `## extra-gates` section from config here.
 
 ## 5. Template-compliant PR body

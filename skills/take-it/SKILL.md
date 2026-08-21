@@ -188,11 +188,22 @@ as `.git/take-it-batch.json`, so a crashed coordinator's worktrees stay reclaima
 > 3. Implement the change following the repo's `CLAUDE.md`.
 > 4. Follow the repo-specific implementation rules from the config's `## subagent-rules` section.
 > 5. Run the pre-flight locally and fix anything red: {preflight_commands from config}
-> 6. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a
+> 6. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
+>    you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
+>    your change just made untrue, in this same PR. A stale doc is a defect in your change, not
+>    tidying for later; no other gate reads docs, so a wrong sentence ships silently and stays
+>    confident. Scope it to the area you touched plus any claim you happened to disprove — not every
+>    markdown file. Too large to close here → say so in the PR body rather than leaving a confident
+>    sentence that is wrong. Two traps: **issue state is not evidence** (a closed issue does not
+>    prove the behaviour landed, an open one does not prove it did not — read the code, the workflow,
+>    the config; and check whether a `#N` you cite is an issue or a PR), and **claims of deliberate
+>    absence rot silently** ("nothing tests X", "there is no Y yet") because nothing fails when they
+>    stop being true.
+> 7. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a
 >    literal `Closes #{N}` line.
-> 7. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
+> 8. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
 >    {pr_template_sections from config}.
-> 8. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name> status=<opened|skipped|failed>
+> 9. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name> status=<opened|skipped|failed>
 >    note=<one-line>`
 
 ### Stacked variant (ONLY for a chain resolved in §2)

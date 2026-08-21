@@ -190,6 +190,23 @@
 #      than merely miss a file. Caught a real symlink bug on its first run
 #      (physical vs logical repo root). Scratch git repos and empty files: no
 #      gh, no network, no binaries.
+#  24. doc-reconciliation tests (scripts/test-doc-reconciliation.sh) — all
+#      THREE shipping paths must tell the agent to fix docs its change made
+#      untrue, before the PR body is drafted (issue #220). Docs are an input
+#      to no other gate, so lint, type, test and the review agent all pass on
+#      a PR whose CLAUDE.md now says the opposite of what the repo does. This
+#      gates the INSTRUCTION, never staleness itself: #220 rules that out,
+#      because staleness is a semantic judgement with nothing to grep for and
+#      a script pretending otherwise reproduces the skimmed-past output of
+#      #199. take-it and dispatch-ready matter most — they dispatch sub-agents
+#      that open PRs from a cold worktree and never see an interactive
+#      session's CLAUDE.md, so a rule living only in send-it never runs for
+#      them. Pins both traps in both directions (a closed issue does not prove
+#      the behaviour landed; an OPEN one does not prove it did not) and the
+#      scope limiter, since an unbounded doc step is one nobody runs.
+#      Source-level; its flatten strips blockquote markers, because take-it's
+#      rule lives inside a `>` prompt template where a wrap otherwise reads as
+#      a missing phrase. Three tracked files, no gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -648,6 +665,15 @@ if bash scripts/test-artifact-guard.sh; then
     pass "artifact-guard tests (scripts/test-artifact-guard.sh)"
 else
     failed "artifact-guard tests (scripts/test-artifact-guard.sh)"
+fi
+
+# --- 24. doc-reconciliation tests --------------------------------------------
+# Gates the instruction, not staleness — see the header note. The sub-agent
+# briefs are the half that gets missed. Three tracked files; no gh, no network.
+if bash scripts/test-doc-reconciliation.sh; then
+    pass "doc-reconciliation tests (scripts/test-doc-reconciliation.sh)"
+else
+    failed "doc-reconciliation tests (scripts/test-doc-reconciliation.sh)"
 fi
 
 # ------------------------------------------------------------------------------
