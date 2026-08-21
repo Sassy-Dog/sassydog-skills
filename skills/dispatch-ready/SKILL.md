@@ -207,8 +207,13 @@ up front — a half-claimed chain lets another loop pick up a layer mid-build. T
 appears **once** in the manifest, and teardown waits for the TOP layer to be terminal.
 
 The reused prompt carries take-it's shared-state isolation rules — worktree confinement, never
-`git stash`, never an editable or dev install into a shared interpreter or global store. Keep them
-intact when appending failure context for a §2 redispatch.
+`git stash`, never an editable or dev install into a shared interpreter or global store — **and its
+doc-reconciliation step**, which requires the sub-agent to fix any doc its change made untrue before
+committing. Keep all of them intact when appending failure context for a §2 redispatch.
+
+The doc step is the one most easily lost here, because these agents open their own PRs from a cold
+worktree and never see an interactive session's instructions. A gate that lives only in `send-it`
+never runs for them at all.
 
 **Model policy: pass `model: "opus"` on every dispatched Agent call.** Implementation work runs on
 Opus because it is the cheaper tier relative to the coordinator's session model — only this
