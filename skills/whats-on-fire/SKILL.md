@@ -214,6 +214,12 @@ Apply `references/scoring.md`. The two rules that matter most:
 Normalize priority labels across the repos' differing taxonomies using the map in the reference —
 but never re-derive a priority a maintainer already assigned.
 
+**An issue labelled `security` or `area:security` is always listed by number, whatever tier it
+normalizes to — `unranked` included.** Its tier is untouched; only its visibility is guaranteed. A security issue must
+never end up inside a bare `P2: 10` count — and since this edition cannot read code- or
+secret-scanning alerts at all, a human-filed issue is the only route those findings have into
+this report.
+
 ## 5. Output format
 
 Render inline as markdown. Two anti-verbosity rules are non-negotiable: (1) empty surfaces get a
