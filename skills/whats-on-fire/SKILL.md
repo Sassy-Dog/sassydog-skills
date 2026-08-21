@@ -38,10 +38,12 @@ command -v gh && gh auth status
 
 - **GitHub CLI** — `gh` missing entirely (cloud/CCR routine sessions ship without it) is the one
   probe failure that does NOT skip its surfaces: route the section 2B pulls through the GitHub-MCP
-  fallback in `references/cloud-fallback.md` instead. Only the Dependabot half of that surface has
-  no MCP equivalent — it is rendered `skipped — no gh CLI (Dependabot API unreachable)` and named
-  on the sources line like any other skip. **`check-dispatch-recovery.sh` (section 2A) also needs
-  `gh`**, and its fallback is in the same reference: query the runs capability scoped to the ONE
+  fallback in `references/cloud-fallback.md` instead. Three parts of that surface have no MCP
+  equivalent at all — Dependabot alerts, code-scanning alerts and secret-scanning alerts — and each
+  is named on the sources line like any other skip: `skipped — no gh CLI (Dependabot API
+  unreachable)` and `Security scanning skipped — no MCP capability (code + secret scanning alerts
+  unreachable)`. **`check-dispatch-recovery.sh` (section 2A) also needs `gh`**, and its fallback is
+  in the same reference: query the runs capability scoped to the ONE
   workflow, never a repo-wide page. That distinction is not a detail — a repo-wide page truncates
   the evidence away and turns a verified-green control into a P0. `gh` present but unauthenticated
   stays an ordinary skip.
