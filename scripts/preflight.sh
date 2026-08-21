@@ -179,6 +179,17 @@
 #      the tier-untouched wording, the `unranked` case, and the survival of the
 #      re-derive principle itself. Source-level, flattened must-not-exist
 #      checks; no gh, no network: two tracked files.
+#  23. artifact-guard tests (scripts/test-artifact-guard.sh) — setup-hooks'
+#      stray-artifact guard, whose failure mode is SILENCE: every degraded
+#      input is deliberately fail-open, so a guard that has stopped firing is
+#      indistinguishable from a clean repo and the artifacts quietly resume
+#      piling up in the root. Pins the loud cases (exit 2 naming the file; the
+#      Stop block JSON) as hard as the quiet ones, all three path-parameter
+#      spellings, the deliberate .svg exclusion, and the `stop_hook_active`
+#      recursion guard — the one regression that would wedge a session rather
+#      than merely miss a file. Caught a real symlink bug on its first run
+#      (physical vs logical repo root). Scratch git repos and empty files: no
+#      gh, no network, no binaries.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -630,6 +641,13 @@ else
             pass "config-source guard ($(echo "$config_inject_files" | wc -l | tr -d ' ') injection blocks)"
         fi
     fi
+fi
+
+# --- 23. artifact-guard tests -------------------------------------------------
+if bash scripts/test-artifact-guard.sh; then
+    pass "artifact-guard tests (scripts/test-artifact-guard.sh)"
+else
+    failed "artifact-guard tests (scripts/test-artifact-guard.sh)"
 fi
 
 # ------------------------------------------------------------------------------
