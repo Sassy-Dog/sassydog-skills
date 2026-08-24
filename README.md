@@ -94,10 +94,25 @@ last-write-wins run drops one of the two with no error anywhere.
 
 ### Review agents
 
-`assess-it` ships dedicated audit-mode agents (namespaced `sassy-dog:<name>`):
+Nine domain reviewers ship with the plugin (namespaced `sassy-dog:<name>`):
 `architecture-reviewer`, `code-quality-reviewer`, `security-reviewer`, `testing-reviewer`,
 `cicd-release-reviewer`, `infra-platform-reviewer`, `observability-ops-reviewer`,
-`dx-docs-reviewer`, `dependency-supply-chain-reviewer`.
+`dx-docs-reviewer`, `dependency-supply-chain-reviewer`. Each runs in either of two modes and
+returns the same finding schema in both: **audit mode**, a whole-repo sweep dispatched by
+`assess-it`, and **diff-scoped mode**, one changeset dispatched by `pr-review-orchestrator`.
+
+`pr-review-orchestrator` is the tenth agent and the diff-scoped entry point, dispatched by `send-it`
+before the PR body is drafted for any repo whose `review_agent:` names it (it is not yet the
+default). It reads the diff versus the derived default branch, classifies the
+changed paths into surfaces, fans out in parallel to the touched surfaces' reviewers only, runs its
+own integration-check pass for the cross-surface concerns no single specialist can see, then
+aggregates and dedupes into one report split into Blocking versus Nits. It dispatches **only** these
+nine — a default fanning out to an agent a consumer repo may not have fails the whole review rather
+than degrading. A repo opts in by naming it in `.claude/sassy-dog/send-it.md`:
+
+```yaml
+review_agent: sassy-dog:pr-review-orchestrator
+```
 
 ## Installation
 
@@ -170,7 +185,8 @@ This repo is a single plugin: skills, agents, and the manifest live at the root.
 sassydog-skills/
 ├── .claude-plugin/plugin.json   # Plugin manifest
 ├── agents/                      # Subagents (auto-discovered, namespaced sassy-dog:<name>)
-│   └── *-reviewer.md
+│   ├── *-reviewer.md            # Nine domain reviewers — audit mode or diff-scoped mode
+│   └── pr-review-orchestrator.md  # Diff-scoped fan-out over those nine
 └── skills/
     └── my-skill/
         ├── SKILL.md             # Required — frontmatter + instructions
