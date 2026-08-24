@@ -13,6 +13,15 @@ command -v gh >/dev/null || { echo '{"error":"gh CLI not on PATH"}'; exit 1; }
 command -v jq >/dev/null || { echo '{"error":"jq not on PATH"}'; exit 1; }
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo '{"error":"not a git repo"}'; exit 1; }
 
+# The tracked-path list, captured ONCE and matched with herestrings below.
+# Never `git ls-files | grep -q …`: under this script's `set -o pipefail`,
+# `grep -q` closes the pipe on its first match, `git` takes SIGPIPE, pipefail
+# promotes its 141, and a MATCH reads as a MISS — but only once the tree
+# outruns the ~64KB pipe buffer, i.e. in exactly the large consumer repos this
+# probe is aimed at (issue #172, generalised in #256). A herestring is a file
+# redirect, so there is no writer left to signal.
+TRACKED="$(git ls-files)"
+
 # --- repo + default branch ---------------------------------------------------
 # NOTE: autoMergeAllowed is NOT a gh-repo-view field (REST-only) — fetched below.
 repo_json=$(gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge,squashMergeAllowed 2>/dev/null) \
@@ -68,15 +77,15 @@ labels="[]"
 # --- migrations --------------------------------------------------------------------
 mig_kind=""; mig_dirs="[]"
 if ls drizzle.config.* packages/*/drizzle.config.* apps/*/drizzle.config.* >/dev/null 2>&1; then mig_kind="drizzle"; fi
-[[ -z "$mig_kind" ]] && git ls-files | grep -q 'prisma/schema.prisma' && mig_kind="prisma"
-[[ -z "$mig_kind" ]] && git ls-files | grep -qi 'Migrations/.*\.cs$' && mig_kind="ef-core"
-mig_dirs=$(git ls-files | grep -iE '(^|/)migrations/' | sed -E 's|/migrations/.*|/migrations/|i' | sort -u | head -5 | jq -R . | jq -s .)
+[[ -z "$mig_kind" ]] && grep -q 'prisma/schema.prisma' <<<"$TRACKED" && mig_kind="prisma"
+[[ -z "$mig_kind" ]] && grep -qi 'Migrations/.*\.cs$' <<<"$TRACKED" && mig_kind="ef-core"
+mig_dirs=$(grep -iE '(^|/)migrations/' <<<"$TRACKED" | sed -E 's|/migrations/.*|/migrations/|i' | sort -u | head -5 | jq -R . | jq -s .)
 
 # --- codegen -------------------------------------------------------------------------
 codegen="false"; codegen_hint=""
 if ls scripts/codegen*.sh graphql.config.* codegen.yml codegen.ts >/dev/null 2>&1; then
   codegen="true"; codegen_hint=$(ls scripts/codegen*.sh graphql.config.* codegen.yml codegen.ts 2>/dev/null | head -1)
-elif git ls-files | grep -q 'pubspec.yaml' && grep -qs build_runner pubspec.yaml */pubspec.yaml 2>/dev/null; then
+elif grep -q 'pubspec.yaml' <<<"$TRACKED" && grep -qs build_runner pubspec.yaml */pubspec.yaml 2>/dev/null; then
   codegen="true"; codegen_hint="build_runner"
 fi
 
@@ -87,7 +96,7 @@ runner=""
 [[ -z "$runner" && -f pnpm-lock.yaml ]] && runner="pnpm"
 [[ -z "$runner" && -f package-lock.json ]] && runner="npm"
 [[ -z "$runner" && -f pubspec.yaml ]] && runner="flutter"
-[[ -z "$runner" ]] && git ls-files | grep -q '\.csproj$' && runner="dotnet"
+[[ -z "$runner" ]] && grep -q '\.csproj$' <<<"$TRACKED" && runner="dotnet"
 dev_script=""
 for d in ./dev ./run.sh; do [[ -x "$d" ]] && { dev_script="$d"; break; }; done
 [[ -z "$dev_script" && -f package.json ]] && jq -e '.scripts.dev' package.json >/dev/null 2>&1 && dev_script="$runner run dev"
@@ -98,7 +107,7 @@ git grep -lqiE '@sentry/|sentry_flutter|sentry\.init|Sentry\.Init' -- ':(exclude
 posthog="false"
 git grep -lqi 'posthog' -- ':(exclude)*.lock*' >/dev/null 2>&1 && posthog="true"
 bundle_id=""
-if git ls-files | grep -qE '(^|/)(ios/|app\.json)'; then
+if grep -qE '(^|/)(ios/|app\.json)' <<<"$TRACKED"; then
   bundle_id=$(git grep -hoE '"bundleIdentifier"\s*:\s*"[^"]+"|PRODUCT_BUNDLE_IDENTIFIER = [A-Za-z0-9.$()-]+' 2>/dev/null \
     | head -1 | grep -oE '[a-z]+\.[a-z0-9-]+\.[a-zA-Z0-9.-]+' | head -1) || true
 fi

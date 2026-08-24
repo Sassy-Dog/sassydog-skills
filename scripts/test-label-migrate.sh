@@ -231,6 +231,13 @@ has_label() { awk -F'\t' -v n="$1" '$1 == n { found = 1 } END { exit !found }' "
 issue_labels() { awk -F'\t' -v n="$1" '$1 == n { print $2 }' "$MOCK_ISSUES"; }
 action_of() { jq -r --arg o "$1" 'select(.old == $o) | .action' <"$2"; }
 relabeled_of() { jq -r --arg o "$1" 'select(.old == $o) | .relabeled' <"$2"; }
+# The human-readable detail string for a mapping, CAPTURED rather than piped
+# into `grep -q`. Under this script's pipefail, `grep -q` closes the pipe on its
+# first match, jq takes SIGPIPE and pipefail promotes the 141 — so a detail that
+# DOES say what is asserted reports as a miss (issue #172, generalised in #256).
+# That inversion in a gate whose whole job is refusing vacuous greens is exactly
+# how three of PR #252's four mutation proofs came back `undetected`.
+detail_of() { jq -r --arg o "$1" 'select(.old == $o) | .detail' <"$2"; }
 
 # --- 1. the structural invariant, read off the source ------------------------
 # Not "the delete happens later in the script" — later is what a stray `|| true`
@@ -308,10 +315,9 @@ if [ "$(action_of 'priority:p1' "$WORK/dry.json")" = "would-migrate" ] \
 else
     bad "--dry-run preview counts wrong: $(cat "$WORK/dry.json")"
 fi
-if jq -e -r 'select(.old == "priority:p1") | .detail' <"$WORK/dry.json" \
-     | grep -q '#1, #3' \
-   && jq -e -r 'select(.old == "priority:p1") | .detail' <"$WORK/dry.json" \
-     | grep -q "delete 'priority:p1' ONLY if 0 still carry it"; then
+dry_detail="$(detail_of 'priority:p1' "$WORK/dry.json")"
+if grep -q '#1, #3' <<<"$dry_detail" \
+   && grep -q "delete 'priority:p1' ONLY if 0 still carry it" <<<"$dry_detail"; then
     ok "--dry-run names the issues it would relabel AND the delete it would then gate"
 else
     bad "--dry-run detail did not preview both the relabel and the delete"
@@ -367,10 +373,10 @@ if [ "$(action_of 'priority:p1' "$WORK/partial.json")" = "held-back" ] \
 else
     bad "a partial relabel did not withhold the delete: $(cat "$WORK/partial.json")"
 fi
+partial_detail="$(detail_of 'priority:p1' "$WORK/partial.json")"
 if grep -q "MAPPINGS HELD BACK" "$WORK/partial.err" \
    && grep -q "priority:p1 -> sev:critical" "$WORK/partial.err" \
-   && jq -e -r 'select(.old == "priority:p1") | .detail' <"$WORK/partial.json" \
-      | grep -q "1 issue(s) still carrying 'priority:p1'"; then
+   && grep -q "1 issue(s) still carrying 'priority:p1'" <<<"$partial_detail"; then
     ok "the run names the held-back mapping and the re-query count behind it"
 else
     bad "the held-back mapping was not reported: $(cat "$WORK/partial.err")"
@@ -447,10 +453,10 @@ seed
 rc=0
 MOCK_FAIL_DELETE=1 PATH="$WORK/bin:$PATH" bash "$ALIGN" --repo "$MOCK_REPO" \
     --migrate "$WORK/plan-one.txt" >"$WORK/delfail.json" 2>"$WORK/delfail.err" || rc=$?
+delfail_detail="$(detail_of 'priority:p1' "$WORK/delfail.json")"
 if [ "$rc" -eq 4 ] && [ "$(action_of 'priority:p1' "$WORK/delfail.json")" = "held-back" ] \
    && has_label "priority:p1" \
-   && jq -e -r 'select(.old == "priority:p1") | .detail' <"$WORK/delfail.json" \
-      | grep -q "verified, but removing"; then
+   && grep -q "verified, but removing" <<<"$delfail_detail"; then
     ok "a delete that fails after verification is held back and reported, not swallowed"
 else
     bad "a failed delete was mis-reported: exit $rc, $(cat "$WORK/delfail.json")"
@@ -463,10 +469,10 @@ seed
 rc=0
 MOCK_LIST_FAIL_FROM=2 PATH="$WORK/bin:$PATH" bash "$ALIGN" --repo "$MOCK_REPO" \
     --migrate "$WORK/plan-one.txt" >"$WORK/requery.json" 2>"$WORK/requery.err" || rc=$?
+requery_detail="$(detail_of 'priority:p1' "$WORK/requery.json")"
 if [ "$rc" -eq 4 ] && [ "$(action_of 'priority:p1' "$WORK/requery.json")" = "held-back" ] \
    && ! wrote "label delete" && has_label "priority:p1" \
-   && jq -e -r 'select(.old == "priority:p1") | .detail' <"$WORK/requery.json" \
-      | grep -q "re-query failed"; then
+   && grep -q "re-query failed" <<<"$requery_detail"; then
     ok "a re-query that FAILS after a fully successful relabel still withholds the delete"
 else
     bad "an unverifiable re-query did not withhold: exit $rc, $(cat "$WORK/requery.json")"

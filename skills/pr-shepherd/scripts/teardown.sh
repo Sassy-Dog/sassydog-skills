@@ -78,7 +78,14 @@ BRANCH="${DEFAULT_BRANCH:-$(git symbolic-ref --short refs/remotes/origin/HEAD 2>
 ISO_PREFIX="${ISOLATION_BRANCH_PREFIX:-worktree-agent-}"
 
 branch_in_live_worktree() {  # $1 = branch — true if ANY worktree has it checked out
-  git worktree list --porcelain | grep -qxF "branch refs/heads/$1"
+  # Captured first, never piped into `grep -q`: under this script's pipefail,
+  # grep -q closes the pipe on its first match, git takes SIGPIPE and pipefail
+  # promotes the 141 — so a MATCH would read as a MISS (issue #172 / #256) and
+  # this guard would clear a branch a live worktree still has checked out. An
+  # unreadable worktree list still answers "no" here, as the pipeline did.
+  local wts
+  wts="$(git worktree list --porcelain)"
+  grep -qxF "branch refs/heads/$1" <<<"$wts"
 }
 
 # Delete an isolation branch left behind by its worktree. No-op unless the name

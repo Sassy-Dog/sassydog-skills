@@ -238,7 +238,7 @@ behind_by() { # -> commits the PR head is behind the base, "" if unknown
 # branch; never the PR's own head branch (--delete-branch / the [gone] sweep owns
 # that); never a branch some live worktree has checked out.
 drop_isolation_branch() { # $1 = candidate branch name (may be empty / non-isolation)
-  local br="$1" head_ref
+  local br="$1" head_ref wts
   [ -n "$br" ] || return 0
   case "$br" in "$ISO_PREFIX"*) : ;; *) return 0 ;; esac
   [ "$br" = "$BRANCH" ] && return 0
@@ -248,7 +248,11 @@ drop_isolation_branch() { # $1 = candidate branch name (may be empty / non-isola
     echo "  (PR head ref unavailable — leaving $br for teardown.sh --sweep)"; return 0
   fi
   [ "$br" = "$head_ref" ] && return 0
-  if git -C "$MAIN_WT" worktree list --porcelain | grep -qxF "branch refs/heads/$br"; then
+  # Captured first, never piped into `grep -q` — see teardown.sh's
+  # branch_in_live_worktree: pipefail turns grep -q's early close into a 141,
+  # and a match read as a miss deletes a branch a live worktree is using.
+  wts="$(git -C "$MAIN_WT" worktree list --porcelain)"
+  if grep -qxF "branch refs/heads/$br" <<<"$wts"; then
     echo "  KEEP isolation branch $br (checked out by a live worktree)"; return 0
   fi
   git -C "$MAIN_WT" branch -D "$br" >/dev/null 2>&1 && echo "  deleted isolation branch $br" \
