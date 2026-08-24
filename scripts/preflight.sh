@@ -738,6 +738,19 @@ else
     failed "template-actionlint tests (scripts/test-template-actionlint.sh)"
 fi
 
+# --- 27. review-orchestrator allowlist tests ---------------------------------
+# The defect this catches is invisible to the author who ships it: `react-typescript-engineer`
+# and `iac-cloud-architect` exist as USER-LEVEL agents on a typical developer's
+# machine, so an orchestrator dispatch (or a `review_surfaces:` example) naming
+# one passes every other gate, works when its author tests it, and fails only in
+# a consumer repo. A file-listing comparison against agents/, in the shape of
+# gate 8's no-third-copy guard. No gh, no network.
+if bash scripts/test-review-orchestrator-allowlist.sh; then
+    pass "review-orchestrator allowlist tests (scripts/test-review-orchestrator-allowlist.sh)"
+else
+    failed "review-orchestrator allowlist tests (scripts/test-review-orchestrator-allowlist.sh)"
+fi
+
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then
     echo "preflight: all gates green" >&2
