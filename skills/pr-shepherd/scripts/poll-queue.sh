@@ -8,7 +8,12 @@
 #   OPEN  + isInMergeQueue:false  -> disambiguate via the last RemovedFromMergeQueueEvent:
 #     reason "merged"               -> result "merged"   (queue merged it; the PR-state flip
 #                                      to MERGED lags the queue-entry removal by a beat — #60)
-#     any other reason, or no event -> result "ejected"  (queue ejected it — or it never enqueued)
+#     no event, but seen in queue   -> NOT terminal      (the removal EVENT lags too — #234; a
+#                                      non-empty QSTATES disproves "never enqueued", so re-read
+#                                      next tick rather than guess a verdict)
+#     any other reason              -> result "ejected"  (queue ejected it)
+#     no event AND never in queue   -> result "ejected"  (it never enqueued — the --auto
+#                                      method-flag trap)
 #   CLOSED (not merged)           -> result "closed"   (closed without merge)
 #
 # Does NOT merge, re-enqueue, or recover — coordinator inspects exit state and decides.
@@ -125,19 +130,36 @@ while true; do
                 # momentarily true for a PR the queue just merged. The removal
                 # event's reason disambiguates. Allowlist the benign — reason is
                 # an open String, so ONLY "merged" is a healthy exit; any other
-                # reason, or no removal event at all (never enqueued), is a
-                # genuine eject.
+                # reason is a genuine eject, and no removal event at all is a
+                # genuine eject ONLY for a PR never seen in the queue (#234).
                 removal_reason=$(jq -r '.timelineItems.nodes[-1].reason // empty' <<<"$view")
                 if [[ "$removal_reason" == "merged" ]]; then
                     RESULTS[$i]="merged"
                     printf 'PR #%-5s  MERGED ✅  (removal reason "merged"; PR-state flip lagging)\n' "$pr" >&2
+                elif [[ -z "$removal_reason" && -n "${QSTATES[$i]}" ]]; then
+                    # The removal EVENT lags too (#234): the entry is gone and
+                    # the timeline is still empty. An empty timeline alone does
+                    # NOT mean "never enqueued" — QSTATES says this PR was in
+                    # the queue on an earlier tick, so that reading is disproven
+                    # and neither "merged" nor "ejected" is supported yet. Stay
+                    # non-terminal and re-read; the loop's global POLL_MAX_TICKS
+                    # ceiling (exit 124 = undetermined) already bounds this, so
+                    # deliberately NO per-PR counter — its fall-through verdict
+                    # would re-create the false "ejected" on a merely slow
+                    # timeline that this branch exists to remove.
+                    all_done=0
+                    printf 'PR #%-5s  queue entry gone, removal event not yet visible (last queue-entry state: %s) — re-reading\n' \
+                        "$pr" "${QSTATES[$i]}" >&2
                 else
                     RESULTS[$i]="ejected"
                     {
                         printf 'PR #%-5s  EJECTED 🚨  OPEN with isInMergeQueue:false (removal reason: %s; last queue-entry state: %s)\n' \
                             "$pr" "${removal_reason:-none}" "${QSTATES[$i]:-never seen in queue}"
-                        echo "           Either the queue ejected it (merge_group failed on the rebased ref)"
-                        echo "           or it never enqueued (the --auto method-flag trap). Do NOT blindly"
+                        echo "           A removal reason that is not \"merged\" means the queue ejected it"
+                        echo "           (merge_group failed on the rebased ref); no removal event AND never"
+                        echo "           seen in the queue means it never enqueued (the --auto method-flag"
+                        echo "           trap). A missing event on a PR that WAS seen in the queue is neither"
+                        echo "           — that case stays non-terminal and re-reads (#234). Do NOT blindly"
                         echo "           re-enqueue — see 'Eject recovery' in references/merge-queue.md."
                     } >&2
                 fi
