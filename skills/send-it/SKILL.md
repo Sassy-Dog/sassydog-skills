@@ -177,6 +177,11 @@ plugin is older than the agent, the dispatch errors — or the repo set the expl
 review: SKIPPED — no review_agent resolved (lint/type/test only)
 ```
 
+**Then name which of the two produced it** — `opt-out (review_agent: skip)` or the dispatch failure
+and its cause — on the next line. The quoted line above is the contract and never changes; the
+reason is context, and without it a deliberate opt-out and a plugin that failed to load render
+identically while meaning opposite things.
+
 The line is **unconditional** — it renders on every run where no agent resolves, not only when
 someone asks about review. Same fail-closed posture as the destructive-SQL guard above: a silently
 absent review reads exactly like a passing one, and that is the confusion this line exists to

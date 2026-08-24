@@ -86,5 +86,5 @@ After the script, verify in the session (cheap, parallel):
   everywhere — and it alone would have caught the case that motivated this rule, where zero of the
   erroring routes existed in the same-named repo.
 - **Critical paths** for repo-health scoring (`{{SCAN_PATHS}}`, `{{EXCLUDE_PATHSPECS}}`): propose source dirs from the layout, excluding detected migration/generated dirs.
-- **Review orchestrator**: `ls .claude/agents/*review*` in the target repo → offers `IF:REVIEW_ORCHESTRATOR` + `{{REVIEW_ORCHESTRATOR_AGENT}}`.
+- **Review orchestrator**: `ls .claude/agents/*review*` in the target repo → offers `IF:REVIEW_ORCHESTRATOR` + `{{REVIEW_ORCHESTRATOR_AGENT}}`. No local agent → **omit the key**, which is not "no review": `send-it`'s gate then dispatches the shipped `sassy-dog:pr-review-orchestrator`. Render `review_agent: skip` only when the user declines review outright.
 - **Mobile release workflow**: if a workflow name matches `mobile|release.*ios|eas`, propose `{{RELEASE_WORKFLOW}}` + `{{MOBILE_PATH_PREFIX}}` (sets `IF:MOBILE`).

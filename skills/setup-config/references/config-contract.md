@@ -172,14 +172,19 @@ selects a default rather than disabling anything.
 **Omitting the key selects the shipped orchestrator.** It is no longer the off switch it was before
 the default existed: the orchestrator ships with the plugin, so it resolves in any repo that has
 the plugin and nothing else, which is what makes default-on statable as a rule instead of a
-per-repo opt-in. A repo can therefore never silently ship unreviewed. The accepted cost is one
+per-repo opt-in. No `send-it` run can therefore silently ship unreviewed. The accepted cost is one
 extra review pass of latency and tokens on every `send-it` run in every consumer repo.
+
+**That claim stops at `send-it`.** `take-it` and `dispatch-ready` dispatch sub-agents that open
+their own PRs from a cold worktree and never invoke `send-it`, so this default does not reach them
+— a known gap, not something this key can close.
 
 A repo that genuinely wants no design review sets **`review_agent: skip`** — an explicit act that
 shows up in the config diff, and one `send-it` still reports on the run rather than passing over in
 silence. The same SKIPPED line covers a *resolution failure*, which is a different thing: the two
-share a rendering because they share a consequence — a diff nobody reviewed — and a run that
-printed nothing would be indistinguishable from a clean review.
+share that line because they share a consequence — a diff nobody reviewed — and a run that printed
+nothing would be indistinguishable from a clean review. They do not share urgency, so `send-it`
+names which one it hit on the line after; the quoted line itself is fixed.
 
 **The opt-out is spelled `skip`, not `none`.** `none` belongs to the presence-is-the-toggle
 exception above, which records a confirmed absence somebody went and checked for; `review_agent` is

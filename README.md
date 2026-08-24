@@ -112,7 +112,8 @@ than degrading.
 **It is the default reviewer**, so no repo has to opt in: `send-it` dispatches the `review_agent:`
 configured in `.claude/sassy-dog/send-it.md` if there is one, and this orchestrator otherwise. A
 repo that wants a different reviewer names it; a repo that genuinely wants none says so explicitly,
-and that run still reports `review: SKIPPED`:
+and that run still reports the verbatim line
+`review: SKIPPED — no review_agent resolved (lint/type/test only)`:
 
 ```yaml
 review_agent: my-own-orchestrator   # override — omit the key to get sassy-dog:pr-review-orchestrator
