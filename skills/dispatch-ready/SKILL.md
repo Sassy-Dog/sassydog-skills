@@ -95,7 +95,9 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
 
 - **Open PRs from those branches** → delegate to `sassy-dog:pr-shepherd`: mergeable check,
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
-  local default branch.
+  local default branch. **Keep the issue → open-PR mapping this step produces** — §4's Collision
+  filter reads those PRs' actual changed files, and re-deriving the mapping there costs a second
+  round of lookups.
 - **Failed or red PRs** → surface in the tick report with the failing check named, and comment
   `dispatch-ready: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the
   failure context appended is allowed on a later tick. A second failure demotes to blocked — via
@@ -144,7 +146,60 @@ Filter, in order:
 | Claimed | Skip if assignee set, or status ≠ Ready / `in-progress` label present — another session got it |
 | Blocked | Skip the `blocked` label |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges. **Exempt: members of a stack this tick is dispatching** (below). |
-| Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's `touches:` set — same repo-relative path, or a glob on one side matching a path on the other. Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
+| Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's **effective file set** — same repo-relative path, or a glob on one side matching a path on the other. The effective set is the in-flight issue's open PR's *actual changed files* where it has a PR, and its declared `touches:` where it does not (next section). Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
+
+### Collision — an in-flight PR's real files beat the declaration
+
+`touches:` is a **prediction**, written at grooming time, and it under-declares systematically. On
+2026-08-24 in this repo, #247 and #249 both edited `scripts/preflight.sh` and #249 never declared
+it — it declared 3 files, its PR changed 9. The declared sets showed no overlap, so the filter
+called the two independent; the collision was caught only because a human was reading live PR
+contents. Two mandatory repo rules widen almost every PR past what grooming can predict, and
+neither is knowable when the touch-set is written:
+
+- **doc reconciliation** (`CLAUDE.md`, `README.md`, `docs/`) — which claims a change falsifies is
+  visible only once the change exists;
+- **CI wiring** (`scripts/preflight.sh` and the tests it gates) — grooming often does not yet know
+  a test will be needed.
+
+So for an in-flight issue that **already has an open PR**, intersect against what that PR actually
+changed rather than against what its issue predicted:
+
+```bash
+gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path'
+```
+
+§2 already resolved which in-flight issues have an open PR — reuse that mapping; where it is
+absent, `gh issue view <N> --repo "$REPO" --json closedByPullRequestsReferences` names the PR (an
+OPEN entry only; a merged one is no longer in flight). Cost is one `gh` call per in-flight issue
+per tick. This stays here rather than moving into a capability skill: `queue-snapshot.sh` parses
+the declared contracts, and the intersection **judgement** — which set to trust, and what to do
+when it cannot be read — has always been the calling skill's.
+
+Resolve a source per in-flight issue, and **name the source in the tick report**, so an
+under-declaration is visible instead of silent:
+
+| In-flight issue | Set used | Reported source |
+| --- | --- | --- |
+| Open PR, `gh pr view` succeeded | that PR's changed files | `pr` |
+| No PR yet — sub-agent still implementing | declared `touches:` | `declared (no PR yet)` |
+| Open PR, but the read failed or was rate-limited | declared `touches:` | `declared (PR read failed)` |
+
+**A failed read is never "no overlap".** Fall back to the declared set and *say so* — the declared
+set is a narrower check, not an absent one, and a hold it produces is still a hold. Never let
+"could not read the PR" resolve to "that PR touches nothing": unknown is not clear. Same for a PR
+whose file list came back empty *because the call errored* — an error is a failed read, not an
+empty diff.
+
+**Known limitation: this narrows the gap, it does not close it.** An issue with no PR yet offers
+nothing but its declaration, and that is precisely the window in which a sub-agent is writing the
+undeclared `CLAUDE.md` edit. `sassy-dog:pr-shepherd`'s coupled-PR serialization stays the fallback
+for that window.
+
+**Do not "simplify" this back into a declared-set-only filter**, and do not close the remaining gap
+by having `groom-backlog` over-declare (appending `CLAUDE.md` / `README.md` / `preflight.sh` to
+every touch-set). Over-declaration was considered and rejected in #257: near-universal overlap on
+`CLAUDE.md` would plausibly serialize the whole queue to one issue at a time.
 
 ### Stacks (ONLY if `stacked_prs:` is configured)
 
@@ -215,8 +270,10 @@ but flag them to pr-shepherd so their merges serialize.
 
 Take the first `capacity` survivors. The Collision filter is the primary defense against concurrent
 file-overlapping dispatch; `sassy-dog:pr-shepherd`'s coupled-PR serialization
-(`references/serialization.md`) stays the **fallback** for overlaps this filter cannot see —
-chiefly `unannotated` issues that turn out to collide at merge time.
+(`references/serialization.md`) stays the **fallback** for the overlaps it still cannot see —
+`unannotated` issues, and in-flight issues with no PR yet, whose undeclared edits become visible
+only once their PR exists. That fallback is unchanged by reading live PR contents here; it now
+catches less, not nothing.
 
 ## 5. Dispatch
 
@@ -261,7 +318,8 @@ Terse — this prints every few minutes under `/loop`:
 
 ```text
 DRAIN TICK — in-flight 3/5 | merged this tick: #1712 | dispatched: #1707 #1711 | Ready remaining: 4
-holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (touches overlaps in-flight #1707)
+holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (overlaps in-flight #1707)
+collision sources: #1707 pr · #1710 declared (no PR yet) · #1706 declared (PR read failed — narrower check)
 stacks: #1720 → #1721 → #1722 dispatched as 1 layer-stack (1 slot, 3 PRs)
 unannotated (dispatched without a touches set — coupling unchecked): #1711
 review: #1709 BLOCKING (unvalidated path join in scripts/render.sh) — redispatch 1 of 1
@@ -270,7 +328,10 @@ review: #1709 BLOCKING (unvalidated path join in scripts/render.sh) — redispat
 Plus one line per failure with its next action. Drop the `unannotated` line on ticks that dispatch
 nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the `review:` line on
 ticks with no review outcome to report — but never drop a Blocking finding or a
-`review: SKIPPED` from it, which are outcomes, not noise. When a chain was
+`review: SKIPPED` from it, which are outcomes, not noise. The `collision sources:` line renders
+whenever anything is in flight and names every in-flight issue's source, since a `pr` source is
+what proves the filter saw real files; drop it only on a tick with nothing in flight, and never
+drop a `declared (PR read failed)` entry — a degraded check is an outcome too. When a chain was
 declared but the repo is not enabled for the preview, say so once rather than every tick:
 `stacks: #1720→#1722 declared but stacks unavailable in this repo — sequencing by dependency instead`.
 
