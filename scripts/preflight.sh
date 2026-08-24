@@ -207,6 +207,23 @@
 #      Source-level; its flatten strips blockquote markers, because take-it's
 #      rule lives inside a `>` prompt template where a wrap otherwise reads as
 #      a missing phrase. Three tracked files, no gh, no network.
+#  25. poll-queue-eject tests (scripts/test-poll-queue-eject.sh) — poll-queue.sh
+#      may only call `ejected` on evidence it actually has (issue #234). #60's
+#      race guard anticipates the PR-STATE flip lagging the queue-entry
+#      removal; the removal EVENT lags too, and an empty timeline does not
+#      distinguish "never enqueued" from "not visible yet". A tick landing in
+#      that window reported qr-ninja#847 — merged cleanly the same second — as
+#      EJECTED, wrong in both directions at once: a loud verdict pointing a
+#      human at eject recovery, and a silent `"result":"ejected"` in the final
+#      JSON that a coordinator branches on. The disproof was already in the
+#      script (QSTATES, printed in the failing line). The lag case is now
+#      non-terminal, bounded ONLY by the global POLL_MAX_TICKS/exit 124
+#      ceiling — no per-PR counter, whose fall-through verdict would re-create
+#      the same false eject — so the gate asserts the run reaches that ceiling
+#      rather than resolving early, and pins the two cases that must stay
+#      terminal (a real eject, a PR that never enqueued) so the fix cannot
+#      swallow them. Its prose checks are flattened, both call sites being
+#      hard-wrapped. Mock gh serving recorded payloads: no repo, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -674,6 +691,18 @@ if bash scripts/test-doc-reconciliation.sh; then
     pass "doc-reconciliation tests (scripts/test-doc-reconciliation.sh)"
 else
     failed "doc-reconciliation tests (scripts/test-doc-reconciliation.sh)"
+fi
+
+# --- 25. poll-queue-eject tests ----------------------------------------------
+# The verdict under test is terminal and loud, and its JSON twin is silent — a
+# false `ejected` on a merged PR sends a human to eject recovery and a
+# coordinator down the recovery branch with no warning at all. Section 1 also
+# carries the "no per-PR counter" decision: the run must reach the global
+# ceiling rather than resolve early. Mock gh: no repo, no network.
+if bash scripts/test-poll-queue-eject.sh; then
+    pass "poll-queue-eject tests (scripts/test-poll-queue-eject.sh)"
+else
+    failed "poll-queue-eject tests (scripts/test-poll-queue-eject.sh)"
 fi
 
 # ------------------------------------------------------------------------------
