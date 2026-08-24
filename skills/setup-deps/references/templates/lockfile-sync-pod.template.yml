@@ -1,4 +1,4 @@
-# TEMPLATE: lockfile-sync-pod · version 4
+# TEMPLATE: lockfile-sync-pod · version 5
 # Rendered by sassy-dog:setup-deps for repos where
 # detect-ecosystems.sh reports cocoapods with lockfile_risk (a tracked Podfile).
 #
@@ -30,7 +30,7 @@
 #   {{FLUTTER_VERSION}}  → keep in lockstep with the release workflow
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:setup-deps | template: lockfile-sync-pod | template-version: 4
+# generated-by: sassy-dog:setup-deps | template: lockfile-sync-pod | template-version: 5
 #
 # Refresh pubspec.lock + Podfile.lock on Dependabot pub PRs — the macOS twin of
 # dependabot-bun-lockfile.yml.
@@ -47,6 +47,9 @@
 #     CI and must not trip the bot-actor approval gate.
 #   - Clean regeneration rather than chasing per-pod constraint prompts.
 #   - PR head ref/repo via env:, never inlined into a run: shell.
+#   - The App token never reaches .git/config: checkout sets
+#     persist-credentials: false and passes no token: at all, and only the push
+#     step carries the credential, inline from its own env: (issue #232).
 #
 # Security note: `pod install` evaluates podspec Ruby from the resolved pod set.
 # These are the same podspecs the release iOS build already executes on this
@@ -79,10 +82,11 @@ jobs:
       # unrelated to its cause (issue #178). Name the cause here.
       #
       # Org secrets at `private` visibility cover private + internal repos and
-      # EXCLUDE public ones, in the Actions and Dependabot stores alike. Note
-      # this template has no render-time visibility precondition the way
-      # dependabot-auto-merge does, so for THIS workflow the guard is the only
-      # thing standing between a public repo and an unexplained auth failure.
+      # EXCLUDE public ones, in the Actions and Dependabot stores alike. Since
+      # #186 setup-deps refuses to render ANY of the three App-token workflows
+      # into a public repo, so this guard is the backstop for the copies that
+      # predate that rule or were hand-copied: it names the cause instead of
+      # failing as an opaque auth error.
       - name: Require the app credentials
         env:
           APP_ID: ${{ secrets.PLATFORM_WRITER_APP_ID }}
@@ -104,11 +108,19 @@ jobs:
           app-id: ${{ secrets.PLATFORM_WRITER_APP_ID }}
           private-key: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
 
+      # No token: here, and persist-credentials: false. actions/checkout
+      # defaults persist-credentials to true, which writes whatever token it
+      # was given into .git/config for the rest of the job — in a workspace
+      # that holds PR-authored content, and one where `pod install` then
+      # evaluates podspec Ruby. The App token is needed only by the push, so it
+      # is passed only there (issue #232). Dependabot pushes its head branch to
+      # the BASE repo rather than a fork, so the default GITHUB_TOKEN reads
+      # this ref fine; dropping token: costs nothing.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.PR_HEAD_REF }}
           repository: ${{ env.PR_HEAD_REPO }}
-          token: ${{ steps.app_token.outputs.token }}
+          persist-credentials: false
           fetch-depth: 0
 
       - uses: subosito/flutter-action@fd55f4c5af5b953cc57a2be44cb082c8f6635e8e # v2.21.0
@@ -131,7 +143,12 @@ jobs:
           rm -f Podfile.lock
           pod install --repo-update
 
+      # The only step that needs repository write, and the only one holding
+      # the credential. Pushing to an explicit authenticated URL rather than
+      # to `origin` is what lets the checkout above stay credential-free.
       - name: Commit and push lockfiles if changed
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           if git diff --quiet -- '*.lock' 'Podfile.lock' '{{APP_DIR}}/ios/Podfile.lock'; then
             echo "lockfiles unchanged after regeneration — nothing to commit."
@@ -141,4 +158,4 @@ jobs:
           git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
           git add -- '*.lock' '{{APP_DIR}}/ios/Podfile.lock'
           git commit -m "chore(deps): regenerate pubspec.lock + Podfile.lock for Dependabot pub bump"
-          git push origin "HEAD:${PR_HEAD_REF}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${PR_HEAD_REPO}.git" "HEAD:${PR_HEAD_REF}"
