@@ -224,6 +224,25 @@
 #      terminal (a real eject, a PR that never enqueued) so the fix cannot
 #      swallow them. Its prose checks are flattened, both call sites being
 #      hard-wrapped. Mock gh serving recorded payloads: no repo, no network.
+#  26. template-actionlint tests (scripts/test-template-actionlint.sh) — the
+#      three setup-deps WORKFLOW templates are linted by actionlint, in a
+#      RENDER (issue #245). Bare actionlint lints `.github/workflows/*`, which
+#      here is ci.yml and nothing else, so the highest-consequence YAML in the
+#      repo — `pull_request_target`, a minted PLATFORM_WRITER_APP_* token, a
+#      push to a PR head ref — was checked by nothing, and a defect there
+#      never reddens this repo: it ships to consumers, where Dependabot
+#      answers a broken workflow by silently doing nothing. The templates
+#      cannot be linted directly (render-time `# {{IF:FLAG}}` blocks and
+#      `{{TOKEN}}` substitutions parse as errors that are not defects), so the
+#      gate renders each one in every documented shape first — the manual step
+#      #232's agent performed by hand. `sassy-dog` is DECLARED to actionlint
+#      as a self-hosted label rather than muted with -ignore, so every other
+#      unknown label still fails. Four vacuous-green guards (an uncovered
+#      template, an IF-arm that is OFF in every variant, a leftover token, and
+#      a missing actionlint under CI) plus three mutations. SKIPPED here under
+#      CI=true — ci.yml runs it as its own step, after the pinned actionlint
+#      install, because $GITHUB_PATH reaches only LATER steps and preflight
+#      runs before it. Renders into a tmpdir: no repo, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -703,6 +722,20 @@ if bash scripts/test-poll-queue-eject.sh; then
     pass "poll-queue-eject tests (scripts/test-poll-queue-eject.sh)"
 else
     failed "poll-queue-eject tests (scripts/test-poll-queue-eject.sh)"
+fi
+
+# --- 26. template-actionlint tests -------------------------------------------
+# Same CI split as gate 17, for a mechanical reason: ci.yml puts the pinned
+# actionlint on $GITHUB_PATH, which reaches only the steps AFTER the install —
+# and this script runs before it. So CI owns this gate as its own step; here it
+# is the local half. The script itself hard-FAILS rather than skips when
+# CI=true and actionlint is missing, so the CI step cannot quietly no-op.
+if [ "${CI:-}" = "true" ]; then
+    skip "template-actionlint (separate CI step)"
+elif bash scripts/test-template-actionlint.sh; then
+    pass "template-actionlint tests (scripts/test-template-actionlint.sh)"
+else
+    failed "template-actionlint tests (scripts/test-template-actionlint.sh)"
 fi
 
 # ------------------------------------------------------------------------------

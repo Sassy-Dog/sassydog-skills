@@ -39,7 +39,7 @@ These fail the build. Preflight reports each one by name.
 
 **Version shape.** `.claude-plugin/plugin.json`'s `version` must be well-formed CalVer and must agree with `marketplace.json`. See below for why you should not be editing it at all.
 
-**shellcheck, markdownlint, actionlint** across the tree, plus the suite of invariant tests in `scripts/test-*.sh`.
+**shellcheck, markdownlint, actionlint** across the tree, plus the suite of invariant tests in `scripts/test-*.sh`. actionlint covers `setup-deps`' workflow templates as well as this repo's own workflows, but it has to lint a **render** of them — their `# {{IF:FLAG}}` blocks and `{{TOKEN}}` placeholders are not valid on their own. Adding a template, or a new `{{IF:}}` arm to one, means adding it to the render matrix in `scripts/test-template-actionlint.sh`; the gate fails rather than silently leaving it unlinted.
 
 ## Rules enforced in review, not by CI
 
