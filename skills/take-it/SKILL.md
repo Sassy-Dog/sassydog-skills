@@ -29,11 +29,19 @@ shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
-and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs` blocks. Contract:
-`sassy-dog:setup-config` → `references/config-contract.md`.
+`review_site`, and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs`
+blocks. Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
 
 `stack_summary` (the repo's tech stack, always present) and `stacked_prs` (stacked pull requests,
 usually absent) are unrelated despite the shared word.
+
+**`review_site:` decides WHERE this skill's review gate runs** — `agent`, each sub-agent reviewing
+its own diff before it opens a PR (§5 step 6), or `coordinator`, §6 reviewing each PR after it
+opens and before it merges. **Absent selects `agent`**, the fail-safe site. It never decides
+*whether* a review runs or *which* agent runs it. That is `review_agent:`'s resolution order, owned
+by `send-it` and unchanged by this key — read it from `sassy-dog:setup-config` →
+`references/config-contract.md` (`review_agent`) rather than re-deriving it here. Resolve the agent
+by that order once per invocation and reuse the resolved name everywhere below.
 
 Repo slug and default branch are derived, never configured:
 
@@ -159,6 +167,12 @@ git switch "$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)"
 manifest** as results return — `{issue, pr, worktreePath, worktreeBranch}` — somewhere durable such
 as `.git/take-it-batch.json`, so a crashed coordinator's worktrees stay reclaimable.
 
+**Substitute the resolved review agent into step 6 of the template below when `review_site` is
+`agent`.** When it is `coordinator`, drop step 6 from the prompt entirely and review in §6 instead —
+never drop it from both. When the resolution order yields nothing (`review_agent: skip`), drop the
+step and say so once in the §7 report; a review nobody ran and a review nobody mentioned are the
+same thing to the reader.
+
 **Sub-agent prompt template** (self-contained — the agent has zero conversation context):
 
 > You are shipping GitHub issue **#{N}** in this repo ({stack_summary from config}).
@@ -188,7 +202,18 @@ as `.git/take-it-batch.json`, so a crashed coordinator's worktrees stay reclaima
 > 3. Implement the change following the repo's `CLAUDE.md`.
 > 4. Follow the repo-specific implementation rules from the config's `## subagent-rules` section.
 > 5. Run the pre-flight locally and fix anything red: {preflight_commands from config}
-> 6. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
+> 6. **Run the review gate before you commit** — lint, type and test cannot catch a design
+>    regression. Dispatch **{resolved review agent}** against your **changeset** — working tree,
+>    staged and untracked included — versus `{default_branch}`, with a one-line scope statement.
+>    Not "the staged diff": you have not committed yet, and an untracked file is invisible to
+>    `git diff` while being the highest-risk class in the change. **Blocking findings → fix them
+>    and re-review before you commit**, so nothing unreviewed ever reaches GitHub. Nits → roll in,
+>    or record "Known and accepted" in the PR body. **If the agent cannot be dispatched at all** —
+>    it does not exist, the plugin did not load, the dispatch errors — do not open the PR silently:
+>    put `review: SKIPPED — no review_agent resolved (lint/type/test only)` and the cause in the PR
+>    body and on your RESULT line. A review that printed nothing is indistinguishable from a clean
+>    one.
+> 7. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
 >    you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
 >    your change just made untrue, in this same PR. A stale doc is a defect in your change, not
 >    tidying for later; no other gate reads docs, so a wrong sentence ships silently and stays
@@ -199,12 +224,12 @@ as `.git/take-it-batch.json`, so a crashed coordinator's worktrees stay reclaima
 >    the config; and check whether a `#N` you cite is an issue or a PR), and **claims of deliberate
 >    absence rot silently** ("nothing tests X", "there is no Y yet") because nothing fails when they
 >    stop being true.
-> 7. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a
+> 8. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a
 >    literal `Closes #{N}` line.
-> 8. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
+> 9. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
 >    {pr_template_sections from config}.
-> 9. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name> status=<opened|skipped|failed>
->    note=<one-line>`
+> 10. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name>
+>     status=<opened|skipped|failed> review=<clean|nits|skipped> note=<one-line>`
 
 ### Stacked variant (ONLY for a chain resolved in §2)
 
@@ -213,9 +238,10 @@ ONE worktree building every layer in order**, not one agent per issue. Dispatchi
 parallel agents is the failure this shape exists to prevent: they would each branch from the default
 branch and rediscover the dependency as a conflict.
 
-Substitute steps 6–8 of the prompt above with the following; steps 1–5 (worktree confinement, never
+Substitute steps 7–9 of the prompt above with the following; steps 1–6 (worktree confinement, never
 `git stash`, no shared-interpreter installs, read the issue, follow `CLAUDE.md` and
-`## subagent-rules`, run the pre-flight) apply unchanged **per layer**:
+`## subagent-rules`, run the pre-flight, run the review gate) apply unchanged **per layer** — a
+stack is reviewed layer by layer, because a layer's diff is what its own PR carries.
 
 > You are shipping a STACK of {depth} GitHub issues, bottom → top: {ordered list, e.g. #101 → #102 → #103}.
 > Each layer's PR targets the branch of the layer below it; the bottom targets `{default_branch}`.
@@ -245,12 +271,29 @@ Substitute steps 6–8 of the prompt above with the following; steps 1–5 (work
 > coordinator link them. **A failed link is recoverable; a wrong base is not.**
 >
 > **Do NOT merge any layer.** Report back one line:
-> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> note=<one-line>`
+> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|skipped> note=<one-line>`
 
 If a middle layer fails, the layers below it are still valid, independent PRs. Report the partial
 stack rather than discarding the work — the coordinator can land what exists and re-dispatch the rest.
 
 ## 6. Coordinator: watch + merge (delegated)
+
+### Review gate on the coordinator site (ONLY when `review_site: coordinator`)
+
+**With `review_site: agent` — the default, and the value an absent key selects — this section does
+not run**: every sub-agent already reviewed its own diff at step 6, before its PR existed.
+
+When the site is `coordinator`, review each PR as its RESULT line arrives and **before handing it
+to `sassy-dog:pr-shepherd` below**, dispatching the agent resolved in §1 against that PR's diff
+versus the derived default branch. Then:
+
+- **Blocking finding** → hold the PR; **never merge past it**. Name the finding in the §7 report and
+  allow ONE redispatch carrying it as context. A second failure gets the `blocked` label plus a
+  comment naming the finding, and a human decides.
+- **Nits** → note them in the report; they never hold a merge.
+- **No agent resolved, or the dispatch failed** → print
+  `review: SKIPPED — no review_agent resolved (lint/type/test only)` and name which of the two it
+  was. Never merge on a review that was never reported.
 
 Use the capability skill for ALL polling, merge, and teardown mechanics — do NOT reimplement them
 inline:
@@ -299,6 +342,8 @@ for unshipped issues) and a next-action one-liner per failure.
 
 - **Single-writer**: sub-agents never merge or enqueue; only the coordinator does, and only for
   green PRs.
+- **Never merge past a Blocking review finding**, on either `review_site`. One redispatch carrying
+  the finding, then `blocked` — and a review that could not run is reported, never passed over.
 - **Never auto-rebase a CONFLICTING PR** — surface it. Expect an upper stack layer to go
   `CONFLICTING` after the layer below squash-merges; that is the normal shape, not a fault.
 - Cap parallelism at 5. Don't dispatch on stubs or `blocked` issues.

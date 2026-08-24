@@ -35,9 +35,16 @@ exactly as written, so the wrong one silently applies another repo's rules: on 2
 shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
 and caught it only by noticing the mismatch themselves.
 
-Frontmatter supplies `max_in_flight` and the optional `board`, `migrations`, `codegen`,
-`merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:setup-config` →
+Frontmatter supplies `max_in_flight` and `review_site`, plus the optional `board`, `migrations`,
+`codegen`, `merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:setup-config` →
 `references/config-contract.md`.
+
+**`review_site:` decides WHERE this loop's review gate runs** — `agent`, each dispatched sub-agent
+reviewing its own diff before it opens a PR (§5), or `coordinator`, this tick reviewing each open
+PR before it merges (§2). **Absent selects `agent`**, the fail-safe site. It never decides *whether*
+a review runs or *which* agent runs it. That is `review_agent:`'s resolution order, owned by
+`send-it` and unchanged by this key — read it from `sassy-dog:setup-config` →
+`references/config-contract.md` (`review_agent`) rather than re-deriving it here.
 
 **If it reads `NO_CONFIG`**, STOP. Dispatch-ready dispatches sub-agents and merges PRs unattended, on a
 loop — running it against an unconfigured repo means guessing a concurrency cap and skipping
@@ -95,6 +102,22 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   the board plus a `blocked` label, or `issue-claim.sh block N --comment "dispatch-ready: 2 failed
   attempts — <cause>"` — and a human decides next. **Never park failures in Ready**: Ready must
   stay synonymous with dispatchable.
+- **Open PRs not yet reviewed, when `review_site: coordinator`** → review before merging, never
+  after. Dispatch the agent resolved by `send-it`'s order against the PR's diff versus the derived
+  default branch, and hand only reviewed PRs to `sassy-dog:pr-shepherd` this tick. A PR whose review
+  could not run at all — no agent resolved, or the dispatch failed — reports
+  `review: SKIPPED — no review_agent resolved (lint/type/test only)` with the cause, and is held,
+  not merged on an unreported review. Under `review_site: agent` this bullet does not run: the
+  sub-agent reviewed before its PR existed.
+- **PRs carrying a Blocking review finding** → **never merge past one.** This is the existing
+  failure path, not new machinery: surface it in the tick report with the finding named, comment
+  `dispatch-ready: attempt 1 failed — review: <finding>` on the issue, and allow ONE redispatch
+  carrying that finding as context on a later tick — the same single-redispatch budget a failed
+  check gets. A second failure demotes to `blocked` the same way, with the finding in the comment,
+  and a human decides. **Never park it back in Ready**: Ready must stay synonymous with
+  dispatchable. On the `agent` site this rarely fires, because findings were fixed before the PR
+  existed — but it still fires when a sub-agent could not resolve a reviewer at all, which is
+  exactly the case that must not pass silently.
 - **`CONFLICTING` PRs** → never auto-rebase; surface and hold.
 
 ## 3. Compute capacity
@@ -207,13 +230,23 @@ up front — a half-claimed chain lets another loop pick up a layer mid-build. T
 appears **once** in the manifest, and teardown waits for the TOP layer to be terminal.
 
 The reused prompt carries take-it's shared-state isolation rules — worktree confinement, never
-`git stash`, never an editable or dev install into a shared interpreter or global store — **and its
+`git stash`, never an editable or dev install into a shared interpreter or global store — **its
 doc-reconciliation step**, which requires the sub-agent to fix any doc its change made untrue before
-committing. Keep all of them intact when appending failure context for a §2 redispatch.
+committing, and **its review gate**, under the site this repo configures. Keep all of them intact
+when appending failure context for a §2 redispatch.
 
-The doc step is the one most easily lost here, because these agents open their own PRs from a cold
-worktree and never see an interactive session's instructions. A gate that lives only in `send-it`
-never runs for them at all.
+**Honour `review_site:` when you build the prompt.** With `review_site: agent` — the default an
+absent key selects — take-it's step-6 review gate stays in the prompt verbatim and each sub-agent
+reviews its own diff before opening its PR. With `review_site: coordinator`, drop that one step and
+review each PR in §2 of a later tick instead, before it merges. **Never drop it from both**, and
+never substitute a different agent for the one `review_agent:`'s order resolves — this key chooses
+the site alone.
+
+Those two gates are the ones most easily lost here, because these agents open their own PRs from a
+cold worktree and never see an interactive session's instructions: a gate that lives only in
+`send-it` never runs for them at all. That is why the review gate is a config key read here rather
+than a rule stated once in `send-it`, and why dropping it from the prompt under
+`review_site: coordinator` obliges §2 to run it — never to skip it.
 
 **Model policy: pass `model: "opus"` on every dispatched Agent call.** Implementation work runs on
 Opus because it is the cheaper tier relative to the coordinator's session model — only this
@@ -231,10 +264,13 @@ DRAIN TICK — in-flight 3/5 | merged this tick: #1712 | dispatched: #1707 #1711
 holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (touches overlaps in-flight #1707)
 stacks: #1720 → #1721 → #1722 dispatched as 1 layer-stack (1 slot, 3 PRs)
 unannotated (dispatched without a touches set — coupling unchecked): #1711
+review: #1709 BLOCKING (unvalidated path join in scripts/render.sh) — redispatch 1 of 1
 ```
 
 Plus one line per failure with its next action. Drop the `unannotated` line on ticks that dispatch
-nothing unannotated, and the `stacks:` line on ticks that dispatch no chain. When a chain was
+nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the `review:` line on
+ticks with no review outcome to report — but never drop a Blocking finding or a
+`review: SKIPPED` from it, which are outcomes, not noise. When a chain was
 declared but the repo is not enabled for the preview, say so once rather than every tick:
 `stacks: #1720→#1722 declared but stacks unavailable in this repo — sequencing by dependency instead`.
 
@@ -335,6 +371,9 @@ cancellation are no-ops, not errors: each re-runs this section and retries.
   safely re-runnable, with worktrees reclaimable via the batch manifest.
 - **Single-writer**: only the coordinator merges or enqueues; max one redispatch per issue without
   a human.
+- **Never merge past a Blocking review finding**, and never park one back in Ready — one redispatch
+  carrying the finding, then `blocked`. A review that could not run is reported and held, never
+  passed over in silence.
 - If `sassy-dog:pr-shepherd` or take-it is missing, STOP and say so — do not improvise
   dispatch or merge mechanics.
 

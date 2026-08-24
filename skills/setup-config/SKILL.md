@@ -50,8 +50,12 @@ gh api graphql -f query='{repository(owner:"OWNER",name:"NAME"){mergeQueue(branc
 Confirm cwd is a git repo with a GitHub remote:
 
 ```bash
-gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge
+gh repo view --json nameWithOwner,defaultBranchRef,deleteBranchOnMerge,visibility
 ```
+
+`visibility` is on that call for one reason and is read exactly once: it seeds `review_site:`
+(Phase 1). Extend this call rather than adding a second one — and never re-read it on a refresh,
+for the reason Phase 4 gives.
 
 **Probe the remote before trusting the checkout.** Every signal the mode table reads lives in the
 working tree, and the working tree can be days stale. Fetch, then list what the remote default
@@ -105,6 +109,29 @@ Read `references/detection.md`, run `scripts/detect-capabilities.sh` from the re
 listed hand-checks (Sentry project **verified by culprit**, review-orchestrator agents, mobile
 workflows). Detection output is evidence, not truth — consequential fields get confirmed in Phase 2.
 
+### Seed `review_site` — once, from visibility, then never again
+
+`take-it.md` and `dispatch-ready.md` each carry a `review_site:` key deciding **where** their review
+gate runs: in each dispatched sub-agent before its PR opens (`agent`), or in the dispatching loop
+after each PR opens and before it merges (`coordinator`). Resolve it from the `visibility` field of
+the Phase 0 probe and write the resolved value **explicitly** into both files:
+
+| `visibility` | `review_site:` |
+| --- | --- |
+| `PUBLIC` | `agent` |
+| `INTERNAL` / `PRIVATE` | `coordinator` |
+
+**Write the resolved value, never the rule that produced it,** and never leave the key out so a
+skill can read visibility at run time. A derived `review_site` means a later visibility change
+silently rewrites the repo's review architecture — taking a repo private downgrades pre-PR review
+to after-the-fact review with nothing announcing it, the failure class issue #187 documents.
+`references/config-contract.md` → `review_site` carries the full argument; read it before
+"simplifying" this key into a derivation.
+
+Exposure is only the *default* grounds for the choice, so the seeded value is a proposal like any
+other: show it in the preview, and let the user override it on cost, latency, or a wish for
+stricter review than the repo's visibility implies.
+
 **The Sentry hand-check is a verification, not a listing.** An MCP project listing proposes
 candidates; **name similarity is not evidence**, because a Sentry project and a repo can share a
 name and belong to different codebases. Sample the candidate's recent issues and confirm their
@@ -152,6 +179,14 @@ state, and diff the result against the committed config.
 **Frontmatter is regenerated; `##` prose sections are carried across verbatim.** That split is the
 whole point of the format — prose is the thing a refresh must never rewrite.
 
+**`review_site:` is the one fact this phase must NOT re-derive.** It was seeded from visibility at
+setup and is carried forward unchanged; re-reading visibility here is precisely what would flip a
+repo's review architecture on the first refresh after a visibility change, with the change invisible
+in every run's output. If live visibility no longer matches what the configured value implies,
+**stop and surface both sides** — the same shape a `merge_queue` disagreement gets — and let the
+user decide. If the key is absent because the config predates it, propose the seeded value as an
+addition and say so in the preview; until then the reading skills default it to `agent`.
+
 Apply per file, on approval only.
 
 ## Phase 5 — adopt mode
@@ -186,6 +221,8 @@ user approves** — writing into a product repo is outward-facing and never sile
 - Never write into the target repo without showing full content and getting approval.
 - Never delete a directory lacking a `generated-by:` marker.
 - Never delete generated skills before their config is written and verified.
-- Never copy a fact forward without re-verifying it against live state.
+- Never copy a fact forward without re-verifying it against live state — except `review_site:`,
+  which is seeded once and carried forward by design; a live-visibility mismatch is surfaced, never
+  applied.
 - Prose in `##` sections is user-owned: carried across verbatim, never rewritten or summarised.
 - This skill always runs from the plugin; it is never copied into a consumer repo.
