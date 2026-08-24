@@ -70,14 +70,17 @@ sentry:                     # present  -> the Sentry surface runs
 Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry: false` — the one
 documented exception to this principle is `sentry: none`, below. The same
 holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_bootstrap`,
-`review_agent`, and `claim_label`.
+and `claim_label`.
 
-Two keys are genuine scalars rather than blocks, because they carry no sub-facts:
+Three keys are genuine scalars rather than blocks, because they carry no sub-facts:
 
 - `merge_queue: true|false` — merge queue vs. direct squash-merge. It carries **intent**, not an
   observation: a refresh re-verifies it against `mergeQueue(branch:)`, but a live state that
   contradicts the configured value is surfaced to the user rather than written over it
 - `write_policy: read-only|gated` — whether `survey-work` may file issues under its Sentry gate
+- `review_agent: <agent>|skip` — which agent `send-it`'s review gate dispatches. **This key is not
+  governed by presence-is-the-toggle at all: it has a default.** Omitting it does not disable the
+  gate, it selects the shipped `sassy-dog:pr-review-orchestrator` — see `review_agent` below
 
 ### The one exception: `sentry: none`
 
@@ -147,13 +150,41 @@ stacked_prs:
   max_depth: 4              # cap on layers a dispatcher will build
 
 secret_bootstrap: eval "$(doppler secrets download --no-file --format env 2>/dev/null)"
-review_agent: qr-ninja-review-orchestrator
+review_agent: qr-ninja-review-orchestrator   # override; omit -> sassy-dog:pr-review-orchestrator
 claim_label: in-progress
 posthog: true
 merge_queue: false
 ```
 
-Omit any block the repo doesn't use.
+Omit any block the repo doesn't use — with one exception, `review_agent:`, where omitting the key
+selects a default rather than disabling anything.
+
+### `review_agent` — read by `send-it`
+
+`send-it`'s review gate resolves an agent on **every** run; the config only chooses which one:
+
+| Config | Gate behaviour |
+| --- | --- |
+| `review_agent: <agent>` | dispatches that agent — a repo's own orchestrator wins |
+| key absent | dispatches `sassy-dog:pr-review-orchestrator`, the diff-scoped orchestrator the plugin ships |
+| `review_agent: skip` | dispatches nothing, and still prints `review: SKIPPED — no review_agent resolved (lint/type/test only)` |
+
+**Omitting the key selects the shipped orchestrator.** It is no longer the off switch it was before
+the default existed: the orchestrator ships with the plugin, so it resolves in any repo that has
+the plugin and nothing else, which is what makes default-on statable as a rule instead of a
+per-repo opt-in. A repo can therefore never silently ship unreviewed. The accepted cost is one
+extra review pass of latency and tokens on every `send-it` run in every consumer repo.
+
+A repo that genuinely wants no design review sets **`review_agent: skip`** — an explicit act that
+shows up in the config diff, and one `send-it` still reports on the run rather than passing over in
+silence. The same SKIPPED line covers a *resolution failure*, which is a different thing: the two
+share a rendering because they share a consequence — a diff nobody reviewed — and a run that
+printed nothing would be indistinguishable from a clean review.
+
+**The opt-out is spelled `skip`, not `none`.** `none` belongs to the presence-is-the-toggle
+exception above, which records a confirmed absence somebody went and checked for; `review_agent` is
+not a presence-toggle key at all, so its opt-out overrides a default rather than confirming an
+absence — and `skip` names the line the gate actually prints.
 
 ### `stacked_prs` — read by `groom-backlog`, `take-it`, `dispatch-ready`, `send-it`
 

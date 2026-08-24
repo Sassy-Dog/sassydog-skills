@@ -2,6 +2,10 @@
 CONFIG TEMPLATE: send-it — see survey-work.config.md header for render rules.
 merge_queue MUST come from live GraphQL, never from a previous render:
   gh api graphql -f query='{repository(owner:"O",name:"N"){mergeQueue(branch:"B"){id}}}'
+review_agent is the one key presence does NOT toggle: omit it unless this repo has its
+own review orchestrator, and the review gate falls back to the shipped
+sassy-dog:pr-review-orchestrator. `review_agent: skip` is the explicit opt-out from
+review entirely — render it only when the user asks for it (config-contract.md).
 -->
 ---
 pr_template_path: "{{PR_TEMPLATE_PATH}}"
