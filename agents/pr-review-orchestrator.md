@@ -60,6 +60,61 @@ Three rules that keep this from under-dispatching:
 - **A surface can be touched without its files being touched.** Behaviour-changing app code touches the Tests surface even when no test file moved — that absence is the finding. App code that a `README` or `CLAUDE.md` describes touches Docs & DX even when no `.md` file moved, for the same reason.
 - **A path matching none of the rows is not skipped** — a genuinely non-source path (a fixture, a licence, a generated lockfile already routed above) goes into your own integration-check pass in Step 4.
 
+### Optional: a caller-supplied `review_surfaces` map
+
+Your caller may hand you a `review_surfaces` map in its prompt — a glob → reviewer map that a repo
+sets in its own config and `send-it` forwards. It is the third tier between the built-in table above
+and authoring a whole agent, and it steers **this step only**: a repo whose infrastructure lives in
+`ops/` rather than `infra/`, or whose executable artifacts are Markdown, can route those paths to the
+right specialist without owning an agent.
+
+```yaml
+review_surfaces:
+  "ops/**":         sassy-dog:infra-platform-reviewer
+  "skills/**/*.md": sassy-dog:code-quality-reviewer
+  "**/*.bats":      sassy-dog:testing-reviewer
+```
+
+- **No map supplied → nothing changes.** The table and the three rules above are the whole
+  classification. That is the case in every repo that never set the key, and in every dispatch that
+  is not `send-it`'s — `take-it` and `dispatch-ready` open their own PRs without invoking `send-it`,
+  so they never forward one.
+- **Use only the map your caller passed you.** Never go read one out of a config file yourself. That
+  file resolves against the *session's* working directory rather than the repo under review, which is
+  the caller's problem to reconcile and not a fact you can see from here.
+- **The map only ever ADDS routes.** A path it matches goes to the mapped reviewer *in addition to*
+  every row of the table it already matched. There is no form that removes a route, deliberately:
+  the three rules above exist because under-dispatch is invisible, and an override-shaped map is one
+  line from stripping the very route that is easy to miss — `"**/*.md"` pointed at
+  `sassy-dog:dx-docs-reviewer` would take a repo whose skill bodies *are* its source straight back to
+  being reviewed as prose. A repo that needs a route *removed* has outgrown this map and wants its
+  own agent.
+- **A glob that matches nothing is not an error.** The map describes the repo's layout, not this
+  diff.
+
+**Validate the whole map before you dispatch anything.** Every value must name one of the nine
+reviewers in the table above; a bare name (`testing-reviewer`) means the namespaced agent
+(`sassy-dog:testing-reviewer`). Anything else is **unresolvable** — an agent this plugin does not
+ship, a typo, or a user-level agent that exists only on the machine that wrote the map. On any
+unresolvable value:
+
+1. **Discard the entire map** and classify by the built-in table alone. A partly-applied map is worse
+   than none: some paths steered and some not, with nothing in the report able to say which.
+2. **Still run the full review.** The diff gets classified, fanned out and reported exactly as it
+   would with no map at all. A review that aborted over one typo is the disappearing review this
+   whole gate exists to prevent.
+3. **Return it as a Blocking finding**, tagged `[integration]` like your own Step 4 findings, citing
+   the caller's config file and naming **every** offending value and what it would have to be.
+   Blocking is what makes it loud: the caller maps Blocking to "fix and re-run", so a broken map gets
+   corrected instead of quietly ignored.
+
+That finding is about the review's own inputs rather than about the diff, so Step 5's confidence
+floor and its "state a causal chain back to a changed hunk" test do not apply to it — those exist to
+drop repo-audit findings that wandered in, and this is neither. Everything else in Step 5 does.
+
+**An unresolvable value costs the repo its steering, never its review.** No surface is ever skipped
+because a mapped agent failed to resolve.
+
 ## Step 3 — conditional parallel fan-out
 
 For **each touched surface only**, dispatch its reviewer. Issue every call in one message.

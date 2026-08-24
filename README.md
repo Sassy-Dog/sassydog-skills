@@ -118,7 +118,15 @@ and that run still reports the verbatim line
 ```yaml
 review_agent: my-own-orchestrator   # override — omit the key to get sassy-dog:pr-review-orchestrator
 # review_agent: skip                # explicit opt-out: no review runs, and the run says so
+review_surfaces:                    # optional — steer the routing without owning an agent
+  "ops/**": sassy-dog:infra-platform-reviewer
 ```
+
+Between those two sits a third tier. The optional **`review_surfaces:`** map steers which of the
+nine a path routes to, for a repo whose layout the built-in heuristics do not match. It only ever
+*adds* a route — nothing it can say removes one, so it cannot quietly under-dispatch — its values
+are restricted to the nine agents that ship here, and an unresolvable value discards the whole map
+and comes back as a Blocking finding rather than a skipped surface.
 
 ## Installation
 
