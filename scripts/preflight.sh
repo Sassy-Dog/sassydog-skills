@@ -243,7 +243,17 @@
 #      CI=true — ci.yml runs it as its own step, after the pinned actionlint
 #      install, because $GITHUB_PATH reaches only LATER steps and preflight
 #      runs before it. Renders into a tmpdir: no repo, no network.
-#  27. gotcha-claims tests (scripts/test-gotcha-claims.sh) — a `gotcha_summary`
+#  27. review-orchestrator allowlist tests
+#      (scripts/test-review-orchestrator-allowlist.sh) — the orchestrator may
+#      only dispatch agents this plugin actually ships, and the defect is
+#      invisible to the author who ships it: `react-typescript-engineer` and
+#      `iac-cloud-architect` exist as USER-LEVEL agents on a typical
+#      developer's machine, so a dispatch (or a `review_surfaces:` example)
+#      naming one passes every other gate, works when its author tests it, and
+#      fails only in a consumer repo. A file-listing comparison against
+#      `agents/`, in the shape of gate 8's no-third-copy guard. No gh, no
+#      network.
+#  28. gotcha-claims tests (scripts/test-gotcha-claims.sh) — a `gotcha_summary`
 #      claim about issue state may not reach an issue body unless it has been
 #      CONFIRMED against that issue (issue #249). The field is prose in a
 #      frontmatter slot, so it is neither derived nor in the `##` lane a human
@@ -756,7 +766,20 @@ else
     failed "template-actionlint tests (scripts/test-template-actionlint.sh)"
 fi
 
-# --- 27. gotcha-claims tests --------------------------------------------------
+# --- 27. review-orchestrator allowlist tests ---------------------------------
+# The defect this catches is invisible to the author who ships it: `react-typescript-engineer`
+# and `iac-cloud-architect` exist as USER-LEVEL agents on a typical developer's
+# machine, so an orchestrator dispatch (or a `review_surfaces:` example) naming
+# one passes every other gate, works when its author tests it, and fails only in
+# a consumer repo. A file-listing comparison against agents/, in the shape of
+# gate 8's no-third-copy guard. No gh, no network.
+if bash scripts/test-review-orchestrator-allowlist.sh; then
+    pass "review-orchestrator allowlist tests (scripts/test-review-orchestrator-allowlist.sh)"
+else
+    failed "review-orchestrator allowlist tests (scripts/test-review-orchestrator-allowlist.sh)"
+fi
+
+# --- 28. gotcha-claims tests --------------------------------------------------
 # The verifier's whole contract is "unknown is held": a claim citing #N reaches
 # an issue body only when its asserted state was confirmed. So the fixture that
 # matters is the stale one, and the failure mode that matters is degrading to a
