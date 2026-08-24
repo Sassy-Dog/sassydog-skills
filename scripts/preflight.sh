@@ -272,9 +272,10 @@
 #      injection step, and the template slot — flattened, this repo hard-wraps.
 #      Mock gh: no repo, no network.
 #  29. review-gate decision tests (scripts/test-review-gate-decisions.sh) — the
-#      three decisions #237 settled about `send-it`'s review gate, all prose and
-#      every one of them reading like drift to an "align with the governing
-#      principle" sweep (issue #247). (a) The gate is UNCONDITIONAL: an absent
+#      five decisions settled about the review gate, all prose and every one of
+#      them reading like drift to an "align with the governing principle" sweep
+#      (three from #237, issue #247; two from #248, issue #255).
+#      (a) The gate is UNCONDITIONAL: an absent
 #      `review_agent:` resolves the shipped `sassy-dog:pr-review-orchestrator`,
 #      and #235's verbatim `review: SKIPPED` line survives that default as the
 #      backstop for *resolution* failure — deleting it as unreachable restores
@@ -288,12 +289,26 @@
 #      exception, which records an absence somebody went and CHECKED for, and
 #      that justification does not apply to a key that merely overrides a
 #      default — the missing symmetry is precisely what a tidying sweep closes.
+#      (d) `review_site` is CONFIGURED, not derived, deliberately: visibility IS
+#      derivable, so a literal reading of "configure only what cannot be
+#      derived" deletes the key — and deriving it live means a visibility change
+#      silently rewrites a repo's review architecture, downgrading pre-PR review
+#      to after-the-fact review with no diff, prompt or output line (the #187
+#      failure class). `setup-config` seeds it once and records the value, and
+#      the Phase 4 carve-out exempting it from update mode's re-verify-every-
+#      fact rule — the half that survives a REFRESH, and the half that lives in
+#      another file — is pinned scoped to that phase. (e) A Blocking finding
+#      blocks the merge with exactly ONE redispatch, then `blocked`; never
+#      merged past, never parked back in Ready. The rationale for the number is
+#      pinned with it, since "one" alone reads as an arbitrary retry count.
 #      Source-level like gates 12, 20, 21, 22 and 24; its must-not-exist checks
 #      run flattened (proved: the same forbidden wording, hard-wrapped between
 #      `codegen` and `review_agent`, is invisible to a line-scoped grep and
-#      caught by the flattened one), and it uses no `| grep -q` pipeline, whose
-#      SIGPIPE-plus-pipefail 141 reports a caught mutation as a miss (#172).
-#      Nine mutations, three tracked files, no gh, no network.
+#      caught by the flattened one), the flatten also stripping blockquote
+#      markers because take-it's step-6 rule lives inside a `>` prompt template,
+#      and it uses no `| grep -q` pipeline, whose SIGPIPE-plus-pipefail 141
+#      reports a caught mutation as a miss (#172). Twenty-one mutations across
+#      the five decisions, six tracked files, no gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
