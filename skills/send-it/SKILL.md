@@ -146,9 +146,11 @@ not "if set": a section a reader skips when the block is absent is a review that
 a trace.
 
 **If `review_agent:` is set** — lint, type, and test cannot catch design regressions. Before
-drafting the PR body, dispatch the configured agent against the staged diff versus the default
-branch, with a one-line scope statement. Blocking findings → fix and re-run. Nits → roll in, or
-note "Known and accepted" in the PR body.
+drafting the PR body, dispatch the configured agent against the **changeset** — working tree,
+staged and untracked included — versus the derived default branch, with a one-line scope statement.
+Not "the staged diff": this gate runs before the commit, and an untracked file is invisible to
+`git diff` while being the highest-risk class in the change (§3). Blocking findings → fix and
+re-run. Nits → roll in, or note "Known and accepted" in the PR body.
 
 **If no agent resolves, say so.** The gate is never omitted from the run's output. When no
 `review_agent:` is configured, or the configured one cannot be resolved, print this line verbatim
