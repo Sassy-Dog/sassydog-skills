@@ -29,8 +29,8 @@ and caught it only by noticing the mismatch themselves.
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
 `merge_queue`, and the optional `migrations`, `codegen`, and `stacked_prs` blocks. `review_agent:`
 is optional too, but its absence is **not** an off switch — it selects the shipped
-`sassy-dog:pr-review-orchestrator` (§4). Contract: `sassy-dog:setup-config` →
-`references/config-contract.md`.
+`sassy-dog:pr-review-orchestrator` (§4), which an optional `review_surfaces:` map may steer.
+Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
 
 Repo slug and default branch are **derived, never configured**:
 
@@ -167,6 +167,18 @@ included — versus the derived default branch, with a one-line scope statement.
 diff": this gate runs before the commit, and an untracked file is invisible to `git diff` while
 being the highest-risk class in the change (§3). Blocking findings → fix and re-run. Nits → roll
 in, or note "Known and accepted" in the PR body.
+
+**Forward `review_surfaces:` when the shipped orchestrator is what resolved.** If config carries
+that optional map, pass it **verbatim** in the dispatch brief. It steers the orchestrator's path
+classification and nothing else. Do not validate it, repair it, or fill in a value you think was
+meant here — the orchestrator owns the allowed-value check, because it is also dispatched by callers
+that are not this skill, and a check written in two places drifts into a check in neither.
+
+| Resolved agent | What happens to `review_surfaces:` |
+| --- | --- |
+| `sassy-dog:pr-review-orchestrator` — default or named | forwarded verbatim |
+| a repo's own agent | **not** forwarded; say so on the run — the map has no contract outside the shipped orchestrator |
+| none (`review_agent: skip`, or a dispatch failure) | nothing is dispatched, so nothing is forwarded |
 
 **If no agent resolves, say so.** The gate is never omitted from the run's output. When the
 resolved agent cannot be dispatched — it does not exist, the plugin did not load, the installed

@@ -70,7 +70,7 @@ sentry:                     # present  -> the Sentry surface runs
 Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry: false` — the one
 documented exception to this principle is `sentry: none`, below. The same
 holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_bootstrap`,
-and `claim_label`.
+`review_surfaces`, and `claim_label`.
 
 Three keys are genuine scalars rather than blocks, because they carry no sub-facts:
 
@@ -80,7 +80,10 @@ Three keys are genuine scalars rather than blocks, because they carry no sub-fac
 - `write_policy: read-only|gated` — whether `survey-work` may file issues under its Sentry gate
 - `review_agent: <agent>|skip` — which agent `send-it`'s review gate dispatches. **This key is not
   governed by presence-is-the-toggle at all: it has a default.** Omitting it does not disable the
-  gate, it selects the shipped `sassy-dog:pr-review-orchestrator` — see `review_agent` below
+  gate, it selects the shipped `sassy-dog:pr-review-orchestrator` — see `review_agent` below. Its
+  optional companion `review_surfaces:` is an ordinary presence-toggled block with no default, and
+  the difference is the point: one chooses *whether* a review happens, the other only *where* paths
+  route inside one
 
 ### The one exception: `sentry: none`
 
@@ -151,6 +154,8 @@ stacked_prs:
 
 secret_bootstrap: eval "$(doppler secrets download --no-file --format env 2>/dev/null)"
 review_agent: qr-ninja-review-orchestrator   # override; omit -> sassy-dog:pr-review-orchestrator
+review_surfaces:                            # optional; steers the shipped orchestrator only
+  "ops/**": sassy-dog:infra-platform-reviewer
 claim_label: in-progress
 posthog: true
 merge_queue: false
@@ -190,6 +195,57 @@ names which one it hit on the line after; the quoted line itself is fixed.
 exception above, which records a confirmed absence somebody went and checked for; `review_agent` is
 not a presence-toggle key at all, so its opt-out overrides a default rather than confirming an
 absence — and `skip` names the line the gate actually prints.
+
+### `review_surfaces` — read by `send-it`, steers `pr-review-orchestrator`
+
+**Optional, and omitted by default.** A glob → reviewer map that steers the shipped orchestrator's
+path classification — the third tier, between the plugin's built-in heuristics and authoring a whole
+agent. A repo whose infrastructure lives in `ops/` rather than `infra/`, or whose executable
+artifacts are Markdown, can route those paths to the right specialist without owning an agent.
+
+```yaml
+review_surfaces:
+  "ops/**":         sassy-dog:infra-platform-reviewer
+  "skills/**/*.md": sassy-dog:code-quality-reviewer
+  "**/*.bats":      sassy-dog:testing-reviewer
+```
+
+**Values are restricted to the nine reviewers this plugin ships** — `architecture-reviewer`,
+`code-quality-reviewer`, `security-reviewer`, `testing-reviewer`, `cicd-release-reviewer`,
+`infra-platform-reviewer`, `observability-ops-reviewer`, `dx-docs-reviewer`,
+`dependency-supply-chain-reviewer` — with or without the `sassy-dog:` prefix, the bare name meaning
+the namespaced agent. Nothing else is legal. An agent living in someone's own `~/.claude/agents/`
+resolves on the machine that wrote the map and nowhere else, so a map naming one would steer for its
+author and steer nothing for everybody else — the same class of failure as fanning out to an agent a
+consumer repo lacks ([#236](https://github.com/Sassy-Dog/sassydog-skills/issues/236)).
+
+**An unresolvable value is a loud error, never a skipped surface.** The orchestrator validates the
+map before it dispatches anything; on any bad value it discards the **whole** map, classifies by its
+built-in table, reviews the diff as it otherwise would, and returns a **Blocking** finding naming
+every offending entry. A typo therefore costs the repo its steering and never its review, and
+`send-it`'s Blocking → "fix and re-run" mapping is what makes it loud. A partly-applied map is
+deliberately not on offer: some paths steered and some not is precisely the state no report could
+describe. A glob that matches nothing is not an error — the map describes the repo's layout, not one
+diff.
+
+**The map only ever adds routes.** A path it matches goes to the mapped reviewer *in addition to*
+every built-in row it already matched; no form of it removes a route. Under-dispatch is invisible
+where over-dispatch is merely slower, and an override-shaped map sits one line away from stripping a
+route that exists precisely because it is easy to miss — `"**/*.md"` pointed at `dx-docs-reviewer`
+would send a repo whose skill bodies *are* its source back to being reviewed as prose. A repo that
+needs a route **removed** has outgrown this tier and wants its own `review_agent:`.
+
+**It reaches the orchestrator only through `send-it`,** which forwards it verbatim in the dispatch
+brief without validating it; the orchestrator never reads config itself. Two consequences: a
+`review_agent:` naming a repo's own agent is handed no map — the key has no contract outside the
+shipped orchestrator, and `send-it` reports that on the run — and `take-it` / `dispatch-ready`, which
+open their own PRs without invoking `send-it`, never forward one, so the orchestrator falls back to
+its built-in classification there. Same scope limit as the `review_agent:` default above.
+
+**`setup-config` never proposes this key.** There is no detection for it and there should not be:
+the globs are a deliberate statement about a repo's layout, and a generator guessing them would be
+the no-invention rule's failure mode with a config file to make it look considered. It is hand-set,
+by a user who asked for it.
 
 ### `stacked_prs` — read by `groom-backlog`, `take-it`, `dispatch-ready`, `send-it`
 
