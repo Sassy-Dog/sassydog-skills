@@ -97,3 +97,18 @@ jobs:
 
       - name: actionlint
         run: actionlint -color
+
+      # Bare actionlint above lints `.github/workflows/*` — in this repo, this
+      # file and nothing else. The three workflow TEMPLATES setup-deps renders
+      # into every consumer repo were therefore linted by nothing, while being
+      # the highest-consequence YAML in the tree (issue #245). They cannot be
+      # linted in place: their render-time placeholders parse as errors that
+      # are not defects, so this gate renders each template in every documented
+      # shape and lints the renders.
+      #
+      # A separate step rather than part of preflight because $GITHUB_PATH
+      # reaches only LATER steps: preflight runs before the install above and
+      # cannot see actionlint at all. The script skips a missing actionlint
+      # locally but FAILS on one under CI=true, so this step cannot no-op.
+      - name: actionlint (setup-deps workflow templates)
+        run: bash scripts/test-template-actionlint.sh
