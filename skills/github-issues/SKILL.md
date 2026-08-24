@@ -82,6 +82,35 @@ can see it.
 It resolves references; it does not read code. An issue proposing a helper that
 duplicates a shipped one under another name passes clean.
 
+### Gotcha check (config claims that rot)
+
+Resolves a `groom-backlog` config's `gotcha_summary` against real issue state,
+before `groom-backlog` copies any of it into an issue body:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/verify-gotcha-claims.sh --config <repo-root>/.claude/sassy-dog/groom-backlog.md --repo <owner/name>
+```
+
+`gotcha_summary` is prose in a frontmatter slot, so nothing recomputes it and no
+human curates it — it is the one config field that can assert a time-varying fact
+and never be revisited. One repo's asserted "#15 is not finished — #308 (updater)
+and #334 (Windows + Authenticode) remain" for nine days after all three closed
+(issue #249), aimed at a cold worktree agent with no way to check it.
+
+**Callers inject the text between the SAFE GOTCHAS markers, never the raw field.**
+Exit `3` means at least one claim was dropped. A claim citing `#N` survives only
+when its asserted state is explicit and currently true; wrong, ambiguous, and
+**unresolvable** all drop. There is deliberately **no skip exit** — a missing
+`gh` or an undetermined repo makes every citing claim unresolvable, so unknown is
+held rather than passed through. Claims citing no issue are invariants and are
+kept, annotated `KEEP time-varying` when they carry a date or a roadmap position
+that nothing here can resolve.
+
+`--lint` is the offline half — no `gh`, no network — reporting the four banned
+shapes (issue-ref, state-verb, dated, roadmap) so an existing config carrying
+them can be named at refresh rather than carried forward. The rule those shapes
+come from is `sassy-dog:setup-config` → `references/config-contract.md`.
+
 ### Stale-issue detection
 
 ```bash
@@ -180,6 +209,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate
 | `scripts/board-snapshot.sh` | ProjectV2 snapshot grouped by status. Read-only. Guards the `--limit` truncation trap. |
 | `scripts/queue-snapshot.sh` | Boardless fill/drain queue read: ready/in-flight/blocked buckets + parsed `touches:` and `Depends on #N` body contracts. Read-only. Exit 10 skip convention. |
 | `scripts/verify-issue-refs.sh` | Resolves a body's paths, symbols, and `-p` package args against a checkout. Tiers each miss `likely-drift` (something close exists — a near-match symbol, package, or sibling file) vs `likely-new` (nothing resembles it, or the path came from `touches:`), and suggests the near match. Read-only. Exit 0 clean / 3 drift / 10 skipped / 64 usage. |
+| `scripts/verify-gotcha-claims.sh` | Resolves a `groom-backlog` config's `gotcha_summary` against issue state and emits only the claims that survive, between SAFE GOTCHAS markers. Fail-closed: wrong state, ambiguous assertion, and unresolvable all drop, so there is no skip exit. `--lint` reports time-varying shapes offline. Read-only. Exit 0 clean / 3 dropped or found / 64 usage. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body + tracking-parent-complete detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. Detector 3 reads the epic-split `Part of #<parent>` convention with a prefix guard (`#28` never claims `#283`'s children) and reports `truncated: true` — never a clean-looking empty result — when its all-state pull hits `ALL_LIMIT` (default 500). |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
 | `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote), plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |

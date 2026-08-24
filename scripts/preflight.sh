@@ -243,6 +243,34 @@
 #      CI=true — ci.yml runs it as its own step, after the pinned actionlint
 #      install, because $GITHUB_PATH reaches only LATER steps and preflight
 #      runs before it. Renders into a tmpdir: no repo, no network.
+#  27. review-orchestrator allowlist tests
+#      (scripts/test-review-orchestrator-allowlist.sh) — the orchestrator may
+#      only dispatch agents this plugin actually ships, and the defect is
+#      invisible to the author who ships it: `react-typescript-engineer` and
+#      `iac-cloud-architect` exist as USER-LEVEL agents on a typical
+#      developer's machine, so a dispatch (or a `review_surfaces:` example)
+#      naming one passes every other gate, works when its author tests it, and
+#      fails only in a consumer repo. A file-listing comparison against
+#      `agents/`, in the shape of gate 8's no-third-copy guard. No gh, no
+#      network.
+#  28. gotcha-claims tests (scripts/test-gotcha-claims.sh) — a `gotcha_summary`
+#      claim about issue state may not reach an issue body unless it has been
+#      CONFIRMED against that issue (issue #249). The field is prose in a
+#      frontmatter slot, so it is neither derived nor in the `##` lane a human
+#      curates: nothing revisits it, and groom-backlog copies it verbatim to a
+#      cold worktree agent with no way to check it. solador's asserted three
+#      issues were open for nine days after all three closed. The load-bearing
+#      case is the KNOWN-STALE fixture — a verifier that accepts everything
+#      passes every clean config, so only a config the mock gh contradicts
+#      distinguishes one that works — and the second is DEGRADATION: no gh, no
+#      repo, a failed lookup must still drop, because a skip here is a silent
+#      pass on exactly the input the gate exists for. Its no-gh PATH is a
+#      symlink sandbox rather than /usr/bin:/bin, which on a GitHub-hosted
+#      runner would quietly mean "gh present". Two mutations (neuter the state
+#      comparison; treat unresolvable as open) prove both, a source guard bans
+#      any skip exit, and three prose gates pin the contract rule, the
+#      injection step, and the template slot — flattened, this repo hard-wraps.
+#      Mock gh: no repo, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -749,6 +777,17 @@ if bash scripts/test-review-orchestrator-allowlist.sh; then
     pass "review-orchestrator allowlist tests (scripts/test-review-orchestrator-allowlist.sh)"
 else
     failed "review-orchestrator allowlist tests (scripts/test-review-orchestrator-allowlist.sh)"
+fi
+
+# --- 28. gotcha-claims tests --------------------------------------------------
+# The verifier's whole contract is "unknown is held": a claim citing #N reaches
+# an issue body only when its asserted state was confirmed. So the fixture that
+# matters is the stale one, and the failure mode that matters is degrading to a
+# skip when gh is missing. Mock gh, symlink-sandboxed PATH: no repo, no network.
+if bash scripts/test-gotcha-claims.sh; then
+    pass "gotcha-claims tests (scripts/test-gotcha-claims.sh)"
+else
+    failed "gotcha-claims tests (scripts/test-gotcha-claims.sh)"
 fi
 
 # ------------------------------------------------------------------------------

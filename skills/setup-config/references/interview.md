@@ -63,7 +63,7 @@ Both are **board-optional**: with `IF:BOARD` they drive the board's **Ready** st
 - `{{MAX_IN_FLIGHT}}` — concurrent in-flight cap (default **5**).
 - `{{DISPATCH_MODEL}}` — model for dispatched sub-agents (default **`opus`** = latest Opus alias, for cost control; the coordinator tick stays on the session model). Record verbatim in the rendered §4.
 - If `IF:BOARD`: pin `{{BOARD_READY_OPTION_ID}}` (and Backlog id for bounce-backs) alongside the other board IDs.
-- groom-backlog: confirm `{{GOTCHA_SUMMARY}}` — the one-line list of repo gotchas every refined issue body should carry (e.g. codegen paths, i18n catalogs, migration policy).
+- groom-backlog: confirm `{{GOTCHA_SUMMARY}}` — the one-line list of repo gotchas every refined issue body should carry (e.g. codegen paths, i18n catalogs, migration policy). **Ask for invariants, not status.** A trap that stays true until the architecture changes belongs here; an issue number with a state claim (`#334 … remains`), an "as of `<date>`", or a roadmap position does not — nothing recomputes this field, so a status written here rots in place and is copied verbatim into issue bodies (config-contract.md, "`gotcha_summary` carries INVARIANTS ONLY"). If the user offers one, say why and rewrite it with them.
 
 ### 3c. Stacked PRs? (opt-in; default NO — skip in update mode unless raised)
 
