@@ -27,8 +27,10 @@ shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
-`merge_queue`, and the optional `migrations`, `codegen`, `review_agent`, and `stacked_prs` blocks.
-Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
+`merge_queue`, and the optional `migrations`, `codegen`, and `stacked_prs` blocks. `review_agent:`
+is optional too, but its absence is **not** an off switch — it selects the shipped
+`sassy-dog:pr-review-orchestrator` (§4). Contract: `sassy-dog:setup-config` →
+`references/config-contract.md`.
 
 Repo slug and default branch are **derived, never configured**:
 
@@ -103,8 +105,9 @@ stage the file I changed" is the failure mode this step exists to prevent.
 
 Run each gate **only if** the matching config block is present. That covers exactly two gates —
 `migrations:` and `codegen:` — and for those, skipping silently is correct: a repo with no
-migrations genuinely has no migration gate. It does **not** extend to the review gate in §4.
-`review_agent:` always reports its disposition, configured or not.
+migrations genuinely has no migration gate. It does **not** extend to the review gate in §4: that
+one runs on every PR, because it resolves an agent whether or not the repo configured one, and it
+always reports its disposition.
 
 ### If `migrations:` is set
 
@@ -145,27 +148,47 @@ Unlike the freshness gates in §3, this one has an outcome on every run. The hea
 not "if set": a section a reader skips when the block is absent is a review that disappears without
 a trace.
 
-**If `review_agent:` is set** — lint, type, and test cannot catch design regressions. Before
-drafting the PR body, dispatch the configured agent against the **changeset** — working tree,
-staged and untracked included — versus the derived default branch, with a one-line scope statement.
-Not "the staged diff": this gate runs before the commit, and an untracked file is invisible to
-`git diff` while being the highest-risk class in the change (§3). Blocking findings → fix and
-re-run. Nits → roll in, or note "Known and accepted" in the PR body.
+**The gate always runs; config only chooses the agent.** Resolve one, in this order:
 
-**If no agent resolves, say so.** The gate is never omitted from the run's output. When no
-`review_agent:` is configured, or the configured one cannot be resolved, print this line verbatim
-before drafting the PR body:
+| Config | Agent dispatched |
+| --- | --- |
+| `review_agent:` names an agent | that agent — a repo's own orchestrator always wins |
+| key absent | `sassy-dog:pr-review-orchestrator`, the diff-scoped orchestrator this plugin ships |
+| `review_agent: skip` | none — the explicit opt-out; the SKIPPED line below still renders |
+
+**Absence is a default, not an off switch.** The shipped orchestrator resolves in any repo that has
+this plugin and nothing else, so a repo can no longer ship unreviewed merely by never having
+configured a reviewer; opting out is now an explicit act, visible in the config diff. The cost is
+real and accepted: one extra review pass of latency and tokens on every `send-it` run.
+
+**Dispatch the resolved agent** — lint, type, and test cannot catch design regressions. Before
+drafting the PR body, run it against the **changeset** — working tree, staged and untracked
+included — versus the derived default branch, with a one-line scope statement. Not "the staged
+diff": this gate runs before the commit, and an untracked file is invisible to `git diff` while
+being the highest-risk class in the change (§3). Blocking findings → fix and re-run. Nits → roll
+in, or note "Known and accepted" in the PR body.
+
+**If no agent resolves, say so.** The gate is never omitted from the run's output. When the
+resolved agent cannot be dispatched — it does not exist, the plugin did not load, the installed
+plugin is older than the agent, the dispatch errors — or the repo set the explicit
+`review_agent: skip`, print this line verbatim before drafting the PR body:
 
 ```text
 review: SKIPPED — no review_agent resolved (lint/type/test only)
 ```
 
+**Then name which of the two produced it** — `opt-out (review_agent: skip)` or the dispatch failure
+and its cause — on the next line. The quoted line above is the contract and never changes; the
+reason is context, and without it a deliberate opt-out and a plugin that failed to load render
+identically while meaning opposite things.
+
 The line is **unconditional** — it renders on every run where no agent resolves, not only when
 someone asks about review. Same fail-closed posture as the destructive-SQL guard above: a silently
 absent review reads exactly like a passing one, and that is the confusion this line exists to
-remove. It is a backstop against *resolution* failure, not a placeholder for repos that never
-configured an agent, so it stays as written even once a review agent resolves by default — an agent
-that fails to resolve is still a run whose diff nobody reviewed.
+remove. **The default agent does not retire it.** It is a backstop against *resolution* failure,
+never a placeholder for repos that never configured an agent, and a resolution that failed is still
+a run whose diff nobody reviewed — now the only way an unconfigured repo reaches that state, which
+makes the line worth more than it was before, not less.
 
 ### Reconcile the docs against the repo
 

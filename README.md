@@ -102,16 +102,22 @@ returns the same finding schema in both: **audit mode**, a whole-repo sweep disp
 `assess-it`, and **diff-scoped mode**, one changeset dispatched by `pr-review-orchestrator`.
 
 `pr-review-orchestrator` is the tenth agent and the diff-scoped entry point, dispatched by `send-it`
-before the PR body is drafted for any repo whose `review_agent:` names it (it is not yet the
-default). It reads the diff versus the derived default branch, classifies the
+before the PR body is drafted. It reads the diff versus the derived default branch, classifies the
 changed paths into surfaces, fans out in parallel to the touched surfaces' reviewers only, runs its
 own integration-check pass for the cross-surface concerns no single specialist can see, then
 aggregates and dedupes into one report split into Blocking versus Nits. It dispatches **only** these
 nine — a default fanning out to an agent a consumer repo may not have fails the whole review rather
-than degrading. A repo opts in by naming it in `.claude/sassy-dog/send-it.md`:
+than degrading.
+
+**It is the default reviewer**, so no repo has to opt in: `send-it` dispatches the `review_agent:`
+configured in `.claude/sassy-dog/send-it.md` if there is one, and this orchestrator otherwise. A
+repo that wants a different reviewer names it; a repo that genuinely wants none says so explicitly,
+and that run still reports the verbatim line
+`review: SKIPPED — no review_agent resolved (lint/type/test only)`:
 
 ```yaml
-review_agent: sassy-dog:pr-review-orchestrator
+review_agent: my-own-orchestrator   # override — omit the key to get sassy-dog:pr-review-orchestrator
+# review_agent: skip                # explicit opt-out: no review runs, and the run says so
 ```
 
 ## Installation
