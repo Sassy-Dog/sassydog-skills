@@ -218,11 +218,43 @@ Per failing candidate:
    Space-separated, globs allowed. Keep it to files that will actually change, not every file
    mentioned. This is the coupling signal dispatch-ready parses, so under-scoping it re-introduces the
    conflict churn it exists to prevent.
-4. Record the repo gotchas a cold sub-agent needs, from the config's `gotcha_summary`.
+4. Record the repo gotchas a cold sub-agent needs — **from the verifier's output, never from the
+   config field directly** (see below).
 5. `gh issue edit N --body-file …` — edit the body, don't comment-and-hope.
 
 Decisions are NEVER guessed: present each to the user as a recommendation with trade-offs, then
 fold the answer into the body marked **Decision (date)** so it supersedes any `(decision)` marker.
+
+### Verify the gotchas before they reach a body
+
+`gotcha_summary` is the one config field nothing ever revisits: it is not derived, and it is not in
+the `##` prose lane a human curates. So a status written there — "#334 (Windows + Authenticode)
+remains" — stays asserted long after the issue closed, and the reader is a cold worktree agent with
+no way to check it. One repo's config asserted three closed issues were open for nine days
+(issue #249). Resolve it every time, never once per session:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/verify-gotcha-claims.sh \
+  --config <repo-root>/.claude/sassy-dog/groom-backlog.md --repo <owner/name>
+```
+
+**Copy only the text between `--- BEGIN SAFE GOTCHAS ---` and `--- END SAFE GOTCHAS ---` into the
+issue body.** Never the raw field, and never a dropped claim "with a caveat" — a caveat in a body a
+cold agent reads as ground truth is not a protection.
+
+Exit `3` means at least one claim was dropped: its cited issue is in the opposite state, or could
+not be resolved at all. **Unresolvable is dropped too** — a missing `gh`, an unknown repo, a failed
+lookup. Unknown is held, never passed through, so this gate has no skip: a verifier that degrades to
+"assume fine" is worth nothing on the day it matters. Exit 3 does not fail the grooming run; the
+surviving gotchas still go in, and every drop is named in §6.
+
+A `KEEP time-varying` line is not a drop — it is a claim nothing here *can* resolve (an "as of
+`<date>`", a roadmap position). It still goes into the body, and it is still a defect in the config:
+report it and offer to fix the config with the user. The contract rule and the offline `--lint` mode
+that finds these across a whole config are in `sassy-dog:setup-config` →
+`references/config-contract.md`.
+
+With `NO_CONFIG` there is no field to verify — the gotchas step is skipped and said so, per §1.
 
 ## 5. Epic split
 
@@ -311,6 +343,18 @@ Write `suspected complete: none` when the detector found none, and
 `suspected complete: UNKNOWN (pull truncated at ALL_LIMIT=<n>)` when it could not see the whole
 repo. Those are the only three values, and the line is never omitted — silence reads as "none",
 which is precisely the assertion this detector exists to stop the report making by accident.
+
+**Always add the dropped-gotchas line**, on every run that refined at least one body:
+
+```text
+gotchas dropped: #334 (config asserts open, actually CLOSED) · #501 (cited, no checkable state)
+```
+
+Write `gotchas dropped: none` when every claim survived, and
+`gotchas dropped: skipped (NO_CONFIG)` when there was no field to verify. A dropped claim is a
+defect in `.claude/sassy-dog/groom-backlog.md`, not in the issue — name the config file and offer
+to fix it. Never omit the line: a silent drop and a clean field look identical, and the whole point
+of dropping is that somebody learns the config is wrong.
 
 **With `board:`, add one board line** stating the board's end state rather than only the Ready
 count:

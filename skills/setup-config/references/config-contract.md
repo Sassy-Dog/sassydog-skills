@@ -356,6 +356,61 @@ gotcha_summary: >
 
 Prose sections: `## extra-rubric`.
 
+#### `gotcha_summary` carries INVARIANTS ONLY
+
+**An invariant is a trap that stays true until someone changes the architecture. A status is a fact
+about today.** This field takes the first and never the second — because it is the one field the
+format protects with neither of its two mechanisms. It is not *derived* (nothing recomputes it after
+setup, unlike every fact in the table above), and it is not *prose* (it sits in frontmatter, so it
+is outside the `##` lane a human curates when reality moves). Nothing revisits it, ever, and
+`groom-backlog` copies it into issue bodies read by a cold worktree agent that has no way to check
+it.
+
+Good — invariants, all still true a year later:
+
+```yaml
+gotcha_summary: >
+  Business logic lives in `crates/`, never in the Tauri shell. Renaming `LEGACY_SERVICE` orphans
+  every stored credential. Migrations are irreversible in this repo — additive changes only.
+```
+
+Rotting — every one of these is a status:
+
+```yaml
+gotcha_summary: >
+  The release path WORKS as of 2026-08-15. #15 is not finished — #308 (updater) and #334
+  (Windows + Authenticode) remain. Windows signing is next up after the 1.2 milestone.
+```
+
+Four shapes are banned outright:
+
+| Banned | Example | Why |
+| --- | --- | --- |
+| An issue number with a state claim | `#334 (Windows + Authenticode) remains` | The issue closes; the sentence does not |
+| "X remains" / "still open" / "not finished" | `the updater is still unfinished` | Asserts a moment, reads as a rule |
+| "as of `<date>`" | `the release path WORKS as of 2026-08-15` | Its own timestamp is the tell |
+| Roadmap status | `Windows signing is next up` | Plans move; this field does not |
+
+**This is not hypothetical.** `Sassy-Dog/solador` carried the rotting example above from 2026-08-15
+onward. All three issues closed within two days — #308 on the 16th, #334 and #15 on the 17th — and
+nine days later the config still asserted they were open, ready to be written verbatim into a fresh
+issue body (issue #249). The same repo asserted the same class of claim in `survey-work.md`'s
+`## extra-guardrails`, a **prose** section, and *that* copy was corrected within two days. Same
+repo, same week, same kind of claim: the lane with a human curator got maintained and the
+frontmatter one rotted. The rule above exists because that seam is in the format, not in one
+operator.
+
+Two mechanics back the rule up, and neither replaces it:
+
+- **At injection.** `groom-backlog` §4 never copies this field into an issue body directly. It runs
+  `github-issues`' `verify-gotcha-claims.sh`, which resolves every cited `#N` against real issue
+  state and **drops** any claim whose asserted state is wrong *or unresolvable* — unknown is held,
+  never passed through — then injects only what survived.
+- **At refresh.** `verify-gotcha-claims.sh --config <path> --lint` reports the four banned shapes
+  offline (no `gh`, no network; exit 3 = findings), so a config that already carries them can be
+  **named** rather than carried forward unexamined. A refresh regenerates frontmatter, so an
+  offending `gotcha_summary` is rewritten with the user, not silently preserved.
+
 ### `take-it.md`
 
 ```yaml
