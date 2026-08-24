@@ -181,9 +181,12 @@ through two other doors ([#186](https://github.com/Sassy-Dog/sassydog-skills/iss
 
 The two lockfile templates are the **worse** case, and the ordering is worth noticing:
 `dependabot-auto-merge` deliberately never checks out ("no checkout. PR code never executes here"),
-while both lockfile templates `actions/checkout` the **PR head ref** with the minted token in scope.
-They are hard-gated to `dependabot[bot]` and bun runs `--ignore-scripts`, so the posture is sound as
-it stands — but the two templates carrying more surface were the two without the precondition.
+while both lockfile templates `actions/checkout` the **PR head ref** inside a job that mints the
+credential. They are hard-gated to `dependabot[bot]`, bun runs `--ignore-scripts`, and since
+[#232](https://github.com/Sassy-Dog/sassydog-skills/issues/232) the token is no longer handed to
+`checkout` at all — `persist-credentials: false`, no `token:`, and the push authenticated from its
+own step `env:` — so the posture is sound as it stands, but the two templates carrying more surface
+were the two without the precondition.
 
 Report the skip and its reason; per this skill's report-and-skip contract, a skipped file is a
 reported outcome, never a silent omission. **For the two lockfile templates the report must also
@@ -364,6 +367,11 @@ silently leaving security PRs ungrouped, and the mistake is invisible until the 
 - Never widen the `dependabot[bot]` actor gate on a `pull_request_target` workflow — that gate is
   what keeps contributor code out of a write-capable context.
 - Never inline `github.event.pull_request.head.ref` into a `run:` shell; funnel it through `env:`.
+- Never hand the minted App token to `actions/checkout` in either lockfile-sync template, and never
+  drop their `persist-credentials: false`. `checkout` defaults that to true, which writes the
+  credential into `.git/config` for the rest of a job whose workspace holds PR-authored content —
+  for no benefit, since only the push needs write and it authenticates from its own step `env:`
+  ([#232](https://github.com/Sassy-Dog/sassydog-skills/issues/232)).
 - Never overwrite a `dependabot.yml` lacking this generator's marker; report it and stop.
 - Never write a `dependabot.yml` that `validate-dependabot.sh` rejected, and never default a lane
   to `directory: "/"` because the location is unclear. A lane pointing at a directory with no
