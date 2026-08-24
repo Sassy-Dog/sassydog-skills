@@ -72,7 +72,7 @@ documented exception to this principle is `sentry: none`, below. The same
 holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_bootstrap`,
 `review_surfaces`, and `claim_label`.
 
-Three keys are genuine scalars rather than blocks, because they carry no sub-facts:
+Four keys are genuine scalars rather than blocks, because they carry no sub-facts:
 
 - `merge_queue: true|false` — merge queue vs. direct squash-merge. It carries **intent**, not an
   observation: a refresh re-verifies it against `mergeQueue(branch:)`, but a live state that
@@ -84,6 +84,10 @@ Three keys are genuine scalars rather than blocks, because they carry no sub-fac
   optional companion `review_surfaces:` is an ordinary presence-toggled block with no default, and
   the difference is the point: one chooses *whether* a review happens, the other only *where* paths
   route inside one
+- `review_site: agent|coordinator` — **where** the review gate runs on the two dispatching paths,
+  `take-it` and `dispatch-ready`. Like `review_agent:` it carries a default rather than an off
+  switch (absent selects `agent`), and unlike every other key here it is *seeded from a derived
+  fact and then frozen* — `review_site` below says why that is deliberate rather than drift
 
 ### The one exception: `sentry: none`
 
@@ -156,13 +160,14 @@ secret_bootstrap: eval "$(doppler secrets download --no-file --format env 2>/dev
 review_agent: qr-ninja-review-orchestrator   # override; omit -> sassy-dog:pr-review-orchestrator
 review_surfaces:                            # optional; steers the shipped orchestrator only
   "ops/**": sassy-dog:infra-platform-reviewer
+review_site: agent                          # where the gate runs on the dispatching paths
 claim_label: in-progress
 posthog: true
 merge_queue: false
 ```
 
-Omit any block the repo doesn't use — with one exception, `review_agent:`, where omitting the key
-selects a default rather than disabling anything.
+Omit any block the repo doesn't use — with two exceptions, `review_agent:` and `review_site:`,
+where omitting the key selects a default rather than disabling anything.
 
 ### `review_agent` — read by `send-it`
 
@@ -180,9 +185,10 @@ the plugin and nothing else, which is what makes default-on statable as a rule i
 per-repo opt-in. No `send-it` run can therefore silently ship unreviewed. The accepted cost is one
 extra review pass of latency and tokens on every `send-it` run in every consumer repo.
 
-**That claim stops at `send-it`.** `take-it` and `dispatch-ready` dispatch sub-agents that open
-their own PRs from a cold worktree and never invoke `send-it`, so this default does not reach them
-— a known gap, not something this key can close.
+**That claim scopes to `send-it`, and a companion key extends it.** `take-it` and `dispatch-ready`
+dispatch sub-agents that open their own PRs from a cold worktree and never invoke `send-it`, so
+this default cannot reach them on its own. `review_site` below is what carries the gate into those
+two paths; `review_agent` still decides *which* agent runs once it does.
 
 A repo that genuinely wants no design review sets **`review_agent: skip`** — an explicit act that
 shows up in the config diff, and one `send-it` still reports on the run rather than passing over in
@@ -195,6 +201,66 @@ names which one it hit on the line after; the quoted line itself is fixed.
 exception above, which records a confirmed absence somebody went and checked for; `review_agent` is
 not a presence-toggle key at all, so its opt-out overrides a default rather than confirming an
 absence — and `skip` names the line the gate actually prints.
+
+### `review_site` — read by `take-it` and `dispatch-ready`
+
+**Where** the review gate runs on the two dispatching paths. `send-it` does not read this key: it
+has exactly one site, its own run, and always reviews there.
+
+| Config | Where the review happens |
+| --- | --- |
+| `review_site: agent` | each dispatched sub-agent reviews **its own diff before it opens a PR** — `send-it`'s posture exactly: Blocking findings are fixed and re-reviewed before the PR body is drafted, so nothing unreviewed reaches GitHub |
+| `review_site: coordinator` | the dispatching loop reviews each PR **after it opens**, before it merges — centralised, single writer, one place to read every outcome |
+| key absent | `agent` — the fail-safe site, for the same reason an absent `review_agent` selects an agent rather than none |
+
+**This key chooses the site, never the agent and never whether.** Which agent runs is
+`review_agent`'s resolution order in the section above — unchanged by this key, and deliberately
+not restated here, because an order written twice drifts into an order honoured in neither place.
+No value of `review_site`, and no absence of it, turns the gate off. Only `review_agent: skip`
+does, and that still prints the SKIPPED line.
+
+**A Blocking finding is never merged past.** On the `coordinator` site `dispatch-ready` treats one
+exactly like a failed check — surface it named, one redispatch carrying the finding as context,
+then the `blocked` label — and never parks it back in Ready. That path lives in
+`dispatch-ready` §2; this key only decides whether it is the path that runs.
+
+**`NO_CONFIG` is not a hole in this.** `take-it` and `dispatch-ready` are the two workflow skills
+that stop outright on `NO_CONFIG` rather than degrading, so an unconfigured repo dispatches nothing
+and therefore produces no unreviewed PR by this route. The absent-key default covers the other
+half: a repo configured before this key existed still gets a review, at `agent`, until its next
+`setup-config` run writes a value.
+
+#### Why this key is CONFIGURED and not DERIVED
+
+This is a deliberate exception to *configure only what cannot be derived*, the governing principle
+at the top of this document, and the reason has to live beside the key rather than in the commit
+that added it.
+
+Visibility **is** derivable — `gh repo view --json visibility` answers it on any run — so a literal
+reading of the principle deletes this key and reads visibility live. Do not. **Deriving it live
+means a visibility change silently rewrites the repo's review architecture.** Taking a repo private
+would downgrade it from pre-PR review to after-the-fact review with nothing announcing the change:
+no config diff, no prompt, no line in any run's output. That is the failure class
+[#187](https://github.com/Sassy-Dog/sassydog-skills/issues/187) documents — a visibility transition
+silently disabling the protections a repo was relying on — and a review architecture that changes
+when nobody chose to change it is the same defect with a different subject.
+
+Seeding once at setup and recording the resolved value keeps the derivation's benefit — nobody
+hand-picks a default — without the silent flip, and it leaves room to choose on grounds other than
+exposure: cost, latency, or a repo that simply wants stricter review than its visibility implies.
+
+So `setup-config` reads visibility **once**, at setup, and writes the resolved value explicitly:
+
+| `visibility` | Seeded `review_site:` |
+| --- | --- |
+| `PUBLIC` | `agent` |
+| `INTERNAL` / `PRIVATE` | `coordinator` |
+
+In a public repo a bad diff is world-visible the instant it is pushed, so pre-PR review earns its
+cost; internally that exposure argument mostly evaporates. **A refresh carries the value forward.**
+It is the one configured fact update mode must not re-derive from live state — where live
+visibility no longer matches what the value was seeded from, that is a *stop and surface*, exactly
+as a `merge_queue` disagreement is, and never an automatic rewrite.
 
 ### `review_surfaces` — read by `send-it`, steers `pr-review-orchestrator`
 
@@ -240,7 +306,9 @@ brief without validating it; the orchestrator never reads config itself. Two con
 `review_agent:` naming a repo's own agent is handed no map — the key has no contract outside the
 shipped orchestrator, and `send-it` reports that on the run — and `take-it` / `dispatch-ready`, which
 open their own PRs without invoking `send-it`, never forward one, so the orchestrator falls back to
-its built-in classification there. Same scope limit as the `review_agent:` default above.
+its built-in classification there. Those two paths do still run a review, under the
+`review_site:` key above; it is an *unsteered* one. Forwarding this map to them is a separate change, not something
+the key already does.
 
 **`setup-config` never proposes this key.** There is no detection for it and there should not be:
 the globs are a deliberate statement about a repo's layout, and a generator guessing them would be

@@ -128,6 +128,16 @@ nine a path routes to, for a repo whose layout the built-in heuristics do not ma
 are restricted to the nine agents that ship here, and an unresolvable value discards the whole map
 and comes back as a Blocking finding rather than a skipped surface.
 
+The two dispatching paths reach the same gate through **`review_site:`** in their own config
+(`take-it.md`, `dispatch-ready.md`), which chooses *where* it runs: `agent`, each dispatched
+sub-agent reviewing its own diff before it opens a PR, or `coordinator`, the dispatching loop
+reviewing each PR after it opens and before it merges. An absent key selects `agent`.
+`setup-config` seeds it once from repo visibility (public → `agent`, internal/private →
+`coordinator`) and writes the resolved value explicitly rather than re-deriving it, so a later
+visibility change cannot silently rewrite a repo's review architecture. It chooses only the site —
+`review_agent:` still chooses the agent — and a Blocking finding is never merged past: one
+redispatch carrying the finding, then the `blocked` label.
+
 ## Installation
 
 ### Claude Code
