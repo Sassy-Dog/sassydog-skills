@@ -271,6 +271,29 @@
 #      any skip exit, and three prose gates pin the contract rule, the
 #      injection step, and the template slot — flattened, this repo hard-wraps.
 #      Mock gh: no repo, no network.
+#  29. review-gate decision tests (scripts/test-review-gate-decisions.sh) — the
+#      three decisions #237 settled about `send-it`'s review gate, all prose and
+#      every one of them reading like drift to an "align with the governing
+#      principle" sweep (issue #247). (a) The gate is UNCONDITIONAL: an absent
+#      `review_agent:` resolves the shipped `sassy-dog:pr-review-orchestrator`,
+#      and #235's verbatim `review: SKIPPED` line survives that default as the
+#      backstop for *resolution* failure — deleting it as unreachable restores
+#      the original silent-no-review bug wearing a default, since a run that
+#      printed nothing is indistinguishable from one that reviewed cleanly.
+#      (b) `review_agent` is deliberately NOT presence-is-the-toggle — it has a
+#      default, so it was moved OUT of that key list while `review_surfaces` (no
+#      default) was moved IN, and "restoring" it turns the absent key back into
+#      an off switch for every consumer repo at once. (c) The opt-out is
+#      `review_agent: skip`, not `none`: `none` belongs to the `sentry: none`
+#      exception, which records an absence somebody went and CHECKED for, and
+#      that justification does not apply to a key that merely overrides a
+#      default — the missing symmetry is precisely what a tidying sweep closes.
+#      Source-level like gates 12, 20, 21, 22 and 24; its must-not-exist checks
+#      run flattened (proved: the same forbidden wording, hard-wrapped between
+#      `codegen` and `review_agent`, is invisible to a line-scoped grep and
+#      caught by the flattened one), and it uses no `| grep -q` pipeline, whose
+#      SIGPIPE-plus-pipefail 141 reports a caught mutation as a miss (#172).
+#      Nine mutations, three tracked files, no gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -788,6 +811,18 @@ if bash scripts/test-gotcha-claims.sh; then
     pass "gotcha-claims tests (scripts/test-gotcha-claims.sh)"
 else
     failed "gotcha-claims tests (scripts/test-gotcha-claims.sh)"
+fi
+
+# --- 29. review-gate decision tests -------------------------------------------
+# Three prose decisions from #237 that each read as drift: the gate is
+# unconditional (and the SKIPPED line survives the default), `review_agent` is
+# deliberately not presence-is-the-toggle, and the opt-out is `skip`, not `none`.
+# Must-not-exist checks run flattened — this repo hard-wraps. Three tracked
+# files, no gh, no network.
+if bash scripts/test-review-gate-decisions.sh; then
+    pass "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
+else
+    failed "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
 fi
 
 # ------------------------------------------------------------------------------
