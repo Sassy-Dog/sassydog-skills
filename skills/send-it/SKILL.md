@@ -101,7 +101,10 @@ stage the file I changed" is the failure mode this step exists to prevent.
 
 ## 3. Freshness gates
 
-Run each gate **only if** the matching config block is present. Skip silently otherwise.
+Run each gate **only if** the matching config block is present. That covers exactly two gates —
+`migrations:` and `codegen:` — and for those, skipping silently is correct: a repo with no
+migrations genuinely has no migration gate. It does **not** extend to the review gate in §4.
+`review_agent:` always reports its disposition, configured or not.
 
 ### If `migrations:` is set
 
@@ -136,12 +139,31 @@ and ask rather than running something that looks equivalent.
 
 Any check fails → fix before commit. Never push and rely on CI to surface it.
 
-### If `review_agent:` is set
+### Review gate (`review_agent:`)
 
-Lint, type, and test cannot catch design regressions. Before drafting the PR body, dispatch the
-configured agent against the staged diff versus the default branch, with a one-line scope
-statement. Blocking findings → fix and re-run. Nits → roll in, or note "Known and accepted" in the
-PR body.
+Unlike the freshness gates in §3, this one has an outcome on every run. The heading is deliberately
+not "if set": a section a reader skips when the block is absent is a review that disappears without
+a trace.
+
+**If `review_agent:` is set** — lint, type, and test cannot catch design regressions. Before
+drafting the PR body, dispatch the configured agent against the staged diff versus the default
+branch, with a one-line scope statement. Blocking findings → fix and re-run. Nits → roll in, or
+note "Known and accepted" in the PR body.
+
+**If no agent resolves, say so.** The gate is never omitted from the run's output. When no
+`review_agent:` is configured, or the configured one cannot be resolved, print this line verbatim
+before drafting the PR body:
+
+```text
+review: SKIPPED — no review_agent resolved (lint/type/test only)
+```
+
+The line is **unconditional** — it renders on every run where no agent resolves, not only when
+someone asks about review. Same fail-closed posture as the destructive-SQL guard above: a silently
+absent review reads exactly like a passing one, and that is the confusion this line exists to
+remove. It is a backstop against *resolution* failure, not a placeholder for repos that never
+configured an agent, so it stays as written even once a review agent resolves by default — an agent
+that fails to resolve is still a run whose diff nobody reviewed.
 
 ### Reconcile the docs against the repo
 
