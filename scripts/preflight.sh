@@ -309,6 +309,31 @@
 #      and it uses no `| grep -q` pipeline, whose SIGPIPE-plus-pipefail 141
 #      reports a caught mutation as a miss (#172). Twenty-one mutations across
 #      the five decisions, six tracked files, no gh, no network.
+#  30. pipefail-grep guard (scripts/test-pipefail-grep.sh) — no script under
+#      `pipefail` may feed an UNBOUNDED writer into `grep -q` (issue #256,
+#      generalising #172). grep -q closes the pipe on its first match, the
+#      writer takes SIGPIPE, pipefail promotes the 141 — so the pipeline reports
+#      failure precisely WHEN IT MATCHED, but only once the output outruns the
+#      ~64KB pipe buffer. Nothing generalised #172: gate 11 pins one function by
+#      name, and the shape recurred in PR #252, where a `scan … | grep -q` made
+#      three of that gate's four mutation proofs report `undetected`. The RULE
+#      is deliberately narrow and must not be "simplified": flag every pipeline
+#      into `grep -q` whose SOURCE stage is not `printf` or `echo` — purely
+#      syntactic, ~12 sites on the tree it landed on, all fixed in that PR. Both
+#      wider options were rejected on #256 (a per-site opt-out marker: ~128
+#      annotations that degrade into paste; a blanket ban: a ~131-line rewrite
+#      of the scripts this repo relies on to catch its own regressions). Its
+#      known limitation is stated in its own header: a huge variable through
+#      `printf` slips past, because no syntactic check knows a variable's size.
+#      The linter does NOT cover this — verified against shellcheck 0.11.0,
+#      which says nothing about the shape and whose SC2143 actively RECOMMENDS
+#      `grep -q`.
+#      Exemptions are a central table in the guard keyed by (file, substring),
+#      never an inline marker, and a stale one FAILS; there is exactly one, the
+#      pre-#172 shape gate 11 transcribes verbatim. Fixtures are tracked under
+#      scripts/fixtures/pipefail-grep/ and deliberately not `*.sh`, because the
+#      guard is in its own scan scope and a printf-built fixture makes it flag
+#      itself (measured — the first draft did). No gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -838,6 +863,19 @@ if bash scripts/test-review-gate-decisions.sh; then
     pass "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
 else
     failed "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
+fi
+
+# --- 30. pipefail-grep guard --------------------------------------------------
+# Source-level, and the one gate whose subject is the OTHER gates: a `| grep -q`
+# under pipefail reports a match as a miss once the writer outruns the pipe
+# buffer, which is how PR #252's mutation proofs came back `undetected`. The
+# printf/echo allowlist is the settled rule (#256) and the guard's header
+# carries both its rationale and its known limitation — read that before
+# widening or narrowing it. Tracked fixtures, no gh, no network.
+if bash scripts/test-pipefail-grep.sh; then
+    pass "pipefail-grep guard (scripts/test-pipefail-grep.sh)"
+else
+    failed "pipefail-grep guard (scripts/test-pipefail-grep.sh)"
 fi
 
 # ------------------------------------------------------------------------------

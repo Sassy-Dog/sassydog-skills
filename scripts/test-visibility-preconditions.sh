@@ -92,7 +92,13 @@ fi
 
 # 2. The rule. Matched on the pairing of 'public' with a do-not-render
 #    instruction.
-if grep -iE 'public' "$SKILL" | grep -qiE 'do not render|never render|not render'; then
+#    Captured first, never `grep … | grep -q`: under this script's pipefail,
+#    grep -q closes the pipe on its first match, the upstream grep takes
+#    SIGPIPE, and the promoted 141 makes a MATCH read as a MISS (issue #172,
+#    generalised in #256) — this gate would report the rule missing from a file
+#    that states it.
+public_lines="$(grep -iE 'public' "$SKILL")"
+if grep -qiE 'do not render|never render|not render' <<<"$public_lines"; then
     ok "SKILL.md states public -> do not render"
 else
     bad "SKILL.md does not tie 'public' to a do-not-render instruction"
