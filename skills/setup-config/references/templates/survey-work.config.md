@@ -4,9 +4,16 @@ Rendered into a consumer repo as .claude/sassy-dog/survey-work.md
   {{FACT}}          -> the detected + LIVE-VERIFIED value
   optional: blocks  -> omit the whole block when the repo lacks that surface.
                        Presence is the toggle. There is no `sentry: false` — the
-                       confirmed-absent form is the scalar `sentry: none`, the
-                       contract's one documented exception (config-contract.md).
-                       Omitted = never checked; `none` = checked, nothing there.
+                       confirmed-absent form is the scalar `none`, the contract's
+                       one documented exception, and FOUR keys carry it:
+                       `sentry: none`, `testflight: none`, `posthog: none`,
+                       `mobile: none` (config-contract.md).
+                       Omitted = nobody checked; `none` = somebody checked and
+                       there is nothing there. The four are deliberately NOT
+                       symmetric: only `sentry: none` still renders a blind-spot
+                       row on the plate. Never default a `none` — it is written
+                       only on an explicit answer (interview.md §2c), except
+                       `sentry: none`, which records a failed culprit check.
   ## sections       -> carried across verbatim on refresh, never rewritten.
 Drop this comment block from the rendered output. `---` must be line 1.
 -->
@@ -17,9 +24,9 @@ ci_workflow: {{CI_WORKFLOW}}
 priority_labels: {{PRIORITY_LABELS}}
 write_policy: {{WRITE_POLICY}}
 
-# optional — omit any block this repo does not have (`sentry:` only for a culprit-verified project — name similarity is not evidence; unverified renders `sentry: none`)
+# optional — omit any block this repo does not have (`sentry:` only for a culprit-verified project — name similarity is not evidence; unverified renders `sentry: none`). For `sentry`/`testflight`/`posthog`/`mobile` the confirmed-absent alternative is the scalar `none` in place of the block
 
-sentry:
+sentry:                                 # or `sentry: none` — no verified project (never "no error monitoring")
   org: {{SENTRY_ORG}}
   projects: {{SENTRY_PROJECTS}}
   gate: {{SENTRY_GATE}}
@@ -29,12 +36,12 @@ board:
   project_id: {{BOARD_PROJECT_ID}}
   status_field_id: {{BOARD_STATUS_FIELD_ID}}
   backlog_option_id: {{BOARD_BACKLOG_OPTION_ID}}
-testflight:
+testflight:                             # or `testflight: none` — confirmed: no beta channel
   bundle_id: {{BUNDLE_ID}}
-mobile:
+mobile:                                 # or `mobile: none` — confirmed: no mobile app
   release_workflow: {{RELEASE_WORKFLOW}}
   path_prefix: {{MOBILE_PATH_PREFIX}}
-posthog: {{POSTHOG}}
+posthog: {{POSTHOG}}                    # `true`, or `none` — confirmed: no product analytics. Never render `false`; omit the key instead
 secret_bootstrap: {{SECRET_BOOTSTRAP_CMD}}
 ---
 

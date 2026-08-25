@@ -37,6 +37,15 @@ Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority
 `secret_bootstrap` blocks. Contract: `sassy-dog:setup-config` →
 `references/config-contract.md`.
 
+**Four of those keys also accept the scalar `none`** — `sentry`, `testflight`, `posthog`, `mobile`
+(for the first three that replaces a block; `posthog` is already a scalar). `none` is a *confirmed
+absence*: somebody checked. For `testflight`, `posthog` and `mobile` that means the product has no
+such surface; `sentry: none` is weaker on purpose and means only that no error-monitoring project is
+**verified** here — it covers a check that could not run as well as a genuine absence, which is why
+§6 treats it differently. An absent key means nobody has checked at all. Never collapse the two, and note the `none` values do **not** all render alike — §6 has
+the rule and the reason. Treat a `posthog: false` as an absent key, not as a decision: it is a
+detection result that should never have been written through (`references/config-contract.md`).
+
 **Write posture is decided here.** `write_policy: read-only` (or absent, or `NO_CONFIG`) means this
 skill NEVER files issues or mutates anything. Only `write_policy: gated` unlocks §7.
 
@@ -109,7 +118,12 @@ Issue the independent pulls in a single message with multiple tool calls.
 
 ### A. Customer pain
 
-**Sentry** — **ONLY if the config has a `sentry:` block.** No block → `skipped — not configured`
+**Sentry** — **ONLY if the config has a `sentry:` block.** `sentry: none` is not a block, and it is
+also **not** a clean-line token: alone among the four `none` keys it still gets a blind-spot row in
+§6, worded as confirmed rather than unchecked — `skipped — sentry: none (recorded at setup)` on the
+sources line, and the matching row. §6's *Confirmed N/A* rule carries the reason, and the limit: the
+row reports that no project is verified here, never that the repo has no Sentry. No key at all →
+`skipped — not configured`
 **and a blind-spot row in §6, the loudest one there**; do not list org projects to discover one.
 Invoke `sassy-dog:sentry-triage` with the
 configured org and projects. Gate policy: the configured `sentry.gate` when `write_policy: gated`,
@@ -125,14 +139,17 @@ gh issue list --state open --label bug \
 
 Demand proxy = reactions + comments.
 
-**TestFlight** — **ONLY if the config has a `testflight:` block.** No block → `skipped — not
-configured` **and a blind-spot row in §6**, ranked alongside Sentry as customer pain. Invoke
+**TestFlight** — **ONLY if the config has a `testflight:` block.** `testflight: none` is a
+confirmed absence, not a hole: this product has no beta channel, so render one `TestFlight (n/a)`
+token on the clean line and **no** blind-spot row. No key at all → `skipped — not configured`
+**and a blind-spot row in §6**, ranked alongside Sentry as customer pain. Invoke
 `sassy-dog:testflight` with the
 configured bundle id, command `feedback`. Parse screenshot submissions (tester comments) and crash
 submissions (stack signatures). Tag items `[TestFlight]`.
 
-**PostHog** — **ONLY if the config sets `posthog: true`** (best-effort even then). No key →
-`skipped` **and a blind-spot row in §6**. If a read key is provisioned, pull survey
+**PostHog** — **ONLY if the config sets `posthog: true`** (best-effort even then). `posthog: none`
+is a confirmed absence — one `PostHog (n/a)` token on the clean line and **no** blind-spot row. No
+key at all → `skipped` **and a blind-spot row in §6**. If a read key is provisioned, pull survey
 responses and high-frequency `$exception` events; otherwise render `skipped — PostHog (no read
 key)` and move on.
 
@@ -173,7 +190,9 @@ Invoke `sassy-dog:repo-health`:
   every other dark surface, never on the clean line; `enabled: null` is a token-scope question.
   `truncated: true` makes `open` a floor — report "at least N".
 - mobile release lag with the configured `mobile.release_workflow` and `mobile.path_prefix`, **if
-  `mobile:` is configured** — not configured → a blind-spot row in §6, the quietest kind
+  `mobile:` is configured** — `mobile: none` is a confirmed absence (this product has no mobile
+  app): one `mobile release lag (n/a)` token on the clean line and **no** blind-spot row. No key at
+  all → a blind-spot row in §6, the quietest kind
 
 Its `references/scoring.md` thresholds apply unless overridden by config.
 
@@ -282,12 +301,27 @@ Then apply any `## scoring-overrides` section from config — project-specific r
 
 ## 6. Output format
 
-Render inline as markdown. Three rules are non-negotiable.
+Render inline as markdown. Four rules are non-negotiable.
 
 **Empty is not dark.** A surface that was checked and came back with nothing gets a single token on
 the consolidated `✓ Clean today:` line, never its own section. A surface that was NOT checked never
 reaches that line at all — it gets a blind-spot row instead. Collapsing the two is exactly the
 failure the blind-spots section exists to prevent: a never-queried surface reported as clean.
+
+**Confirmed N/A is a THIRD state, and it is not "empty" either.** `testflight: none`,
+`posthog: none`, and `mobile: none` say a human confirmed this product has no such surface. They
+take the clean line with an explicit `(n/a)` marker — `TestFlight (n/a)` — and get **no**
+blind-spot row and **no** `skipped —` token on the sources line, so the token↔row invariant below
+still holds exactly. The marker is the whole point: "checked, nothing there" and "there is nothing
+here to check" are different claims, and it is the only thing distinguishing them.
+**`sentry: none` is the deliberate exception and keeps its blind-spot row** — absent error
+monitoring is a gap somebody could close, an absent mobile app is a product fact
+(`sassy-dog:setup-config` → `references/config-contract.md`, "The one exception"). Its row is worded
+as recorded-at-setup rather than as a product fact, and that wording is exact rather than tactful:
+`sentry: none` covers **two** outcomes, "this repo genuinely has no error monitoring" and "the
+culprit check could not run at all" (no MCP server, no issues to sample — `references/detection.md`).
+Neither is something this plate checked, and the second is a reason on its own for the row to
+survive. Never widen it into a claim that the repo has no Sentry.
 
 **Skip empty P-buckets** within a section.
 
@@ -299,7 +333,7 @@ see against the ranking, instead of discovering it afterwards in a footnote.
 
 _Sources: <pulled> · <dark surface> skipped — <reason> → Blind spots · ..._
 
-✓ Clean today: <surface> · <surface> · ...
+✓ Clean today: <checked-and-empty surface> · <confirmed-absent surface> (n/a) · ...
 
 ## 🔥 Customer pain (P0: N · P1: N · P2: N)
 ### P0
@@ -335,7 +369,7 @@ _<N> merged-PR branches lingering locally — residue for `clean it`, not plate 
 
 ## ⚠️ Blind spots (this plate cannot see these)   <!-- omit entirely when nothing is dark -->
 - **Customer pain** — no `sentry:` block. Production errors were NOT checked.
-- **Customer pain** — `sentry: none`: confirmed at setup that this repo has no error monitoring. Production errors are not being recorded anywhere — this plate did not miss them, nothing sees them.
+- **Customer pain** — `sentry: none`: confirmed at setup that no error-monitoring project is verified for this repo (either there is none, or the culprit check could not run). This plate did not miss production errors; nothing here is watching for them.
 - **Customer pain** — no `testflight:` block. Beta crashes and tester feedback were NOT checked.
 - **Security — code scanning** — never analyzed. Vulnerable code patterns were NOT checked.
 - **Dev experience** — no `ci_workflow`. Pipeline duration and flake were NOT checked.
@@ -350,8 +384,20 @@ _To ship: `take #<N> #<M>`_
 ### Blind spots
 
 One row per dark surface, and every row carries three things: the surface, the missing config key
-or failed probe, and — in plain past tense — what was NOT checked. Four rules:
+or failed probe, and — in plain past tense — what was NOT checked. The one row that does not fit
+that third thing is `sentry: none`, which reports what setup **recorded** rather than what this
+plate skipped. Five rules:
 
+- **A confirmed absence is not a dark surface — with exactly one exception.** `testflight: none`,
+  `posthog: none`, and `mobile: none` produce **no row at all**; they belong on the clean line with
+  the `(n/a)` marker above. `sentry: none` produces a row, worded as confirmed rather than
+  unchecked. That asymmetry is deliberate, is pinned in CI, and is not an inconsistency to tidy
+  away — see `references/config-contract.md`, "The one exception"
+  ([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)). An unclearable row is worse
+  than no row: on an infra repo with no app, those three rendered on **every** plate with no config
+  that could clear them, two of them in the loudest position this section has. A reader who meets
+  the same unactionable rows every time stops reading the heading — and then the row that should
+  stop them, a genuinely dark Sentry, is sitting in a list they learned to skip.
 - **Order by what the darkness costs, customer pain first.** Sentry and TestFlight rank loudest.
   Customer pain is usually the single highest-signal category on the plate, so a dark Sentry means
   the recommendations below were ranked without the input most likely to have topped them. Security

@@ -30,12 +30,16 @@
 #   3. THE OPT-OUT IS `review_agent: skip`, NOT `none`. The contract's
 #      `sentry: none` section — itself pinned by test-sentry-verification.sh —
 #      states that it is the FIRST documented exception to presence-is-the-toggle
-#      and that adding another `none` form needs the same justification: a value
+#      and that a key joining that form needs the same justification: a value
 #      recording that somebody went and CHECKED for a confirmed absence.
 #      `review_agent`'s opt-out overrides a default instead, so that
 #      justification does not apply, and `skip` is also the word the gate's own
-#      output uses. The missing symmetry with `sentry: none` is exactly what a
-#      tidying sweep would "fix".
+#      output uses. The missing symmetry is exactly what a tidying sweep would
+#      "fix" — and issue #261 raised that pressure rather than lowering it, by
+#      growing the `none` form from one key to FOUR (`sentry`, `testflight`,
+#      `posthog`, `mobile`). The contract now names `review_agent:` and
+#      `review_site:` in that section's exclusion list, with the reason; this
+#      gate is what keeps `skip` from being "aligned" to `none` anyway.
 #
 #   4. `review_site` IS CONFIGURED, NOT DERIVED — DELIBERATELY. The contract's
 #      governing principle is *configure only what cannot be derived*, and repo
@@ -395,7 +399,12 @@ else
     ok "located setup-config Phase 4 (update mode)"
     assert_in "$phase4" 're-verify every fact against live state' \
         "Phase 4 still states update mode's re-verify-every-fact rule"
-    assert_in "$phase4" '`review_site:` is the one fact this phase must NOT re-derive' \
+    # "the one fact" was dropped, deliberately: issue #261 added four more
+    # non-re-derived frontmatter values (the `none` forms), and the same file's
+    # guardrail list already named them beside `review_site`, so the uniqueness
+    # claim was false nine lines from where it was made. The DECISION this pins
+    # is that Phase 4 exempts `review_site` — not that it is the only exemption.
+    assert_in "$phase4" '`review_site:` is a fact this phase must NOT re-derive' \
         "Phase 4 exempts review_site from the re-verify rule"
     assert_in "$phase4" 'stop and surface both sides' \
         "Phase 4 surfaces a visibility mismatch rather than rewriting the value"
