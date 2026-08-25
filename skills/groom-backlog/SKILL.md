@@ -242,9 +242,15 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/verify-gotcha-claims.sh 
 issue body.** Never the raw field, and never a dropped claim "with a caveat" — a caveat in a body a
 cold agent reads as ground truth is not a protection.
 
-Exit `3` means at least one claim was dropped: its cited issue is in the opposite state, or could
-not be resolved at all. **Unresolvable is dropped too** — a missing `gh`, an unknown repo, a failed
-lookup. Unknown is held, never passed through, so this gate has no skip: a verifier that degrades to
+Exit `3` means at least one claim was dropped: its cited issue is in the opposite state, could not
+be resolved at all, or the field is `malformed` — an unpaired backtick run, which makes the whole
+field unparseable and drops all of it (issue #262). Fragments of one sentence are
+dropped together, and the split needs positive evidence of a sentence start, so a **neighbouring
+invariant can go with a dropped one** — read the report, not just the safe block, when a gotcha you
+expected is missing. Exit `3` **also** covers a splitter failure,
+which prints `the claim splitter failed` and certifies nothing: when you see it, report the parse
+failure rather than `gotchas dropped: none`, because nothing was verified at all. **Unresolvable is dropped too** — a missing `gh`, an unknown repo, a failed lookup.
+Unknown is held, never passed through, so this gate has no skip: a verifier that degrades to
 "assume fine" is worth nothing on the day it matters. Exit 3 does not fail the grooming run; the
 surviving gotchas still go in, and every drop is named in §6.
 
@@ -353,8 +359,10 @@ gotchas dropped: #334 (config asserts open, actually CLOSED) · #501 (cited, no 
 Write `gotchas dropped: none` when every claim survived, and
 `gotchas dropped: skipped (NO_CONFIG)` when there was no field to verify. A dropped claim is a
 defect in `.claude/sassy-dog/groom-backlog.md`, not in the issue — name the config file and offer
-to fix it. Never omit the line: a silent drop and a clean field look identical, and the whole point
-of dropping is that somebody learns the config is wrong.
+to fix it. A `malformed` drop is the whole field at once and its reason names no `#N`, so report it
+as `gotchas dropped: all (malformed — unpaired backtick run in gotcha_summary)` and fix it
+before the next run. Never omit the line: a silent drop and a clean field look identical, and the
+whole point of dropping is that somebody learns the config is wrong.
 
 **With `board:`, add one board line** stating the board's end state rather than only the Ready
 count:

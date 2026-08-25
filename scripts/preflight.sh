@@ -266,11 +266,35 @@
 #      repo, a failed lookup must still drop, because a skip here is a silent
 #      pass on exactly the input the gate exists for. Its no-gh PATH is a
 #      symlink sandbox rather than /usr/bin:/bin, which on a GitHub-hosted
-#      runner would quietly mean "gh present". Two mutations (neuter the state
-#      comparison; treat unresolvable as open) prove both, a source guard bans
-#      any skip exit, and three prose gates pin the contract rule, the
-#      injection step, and the template slot — flattened, this repo hard-wraps.
-#      Mock gh: no repo, no network.
+#      runner would quietly mean "gh present". The THIRD failure mode is
+#      upstream of the classifier (issue #262): the sentence splitter could not
+#      see backticks, so the `;` in `code=0; cmd || code=$?` cut a claim
+#      mid-span and the truncated HEAD — citing no #N — was certified an
+#      invariant into the SAFE block a caller copies verbatim. Spans are now
+#      paired by backtick RUN (a ``…`` delimiter otherwise pairs with itself,
+#      leaving the body exposed), and an unpaired run quarantines the WHOLE
+#      field, because greedy pairing can mis-bind BEFORE the stray tick. But
+#      the guard that BOUNDS the family is GROUP LINKAGE: three narrower fixes
+#      each decided where the cut lands and each had a next input, so the
+#      fragments of a sentence are now tagged, resolved individually and
+#      COMMITTED TOGETHER — a mis-parse costs a drop, never a half-sentence
+#      certified. Parity and a padded-span heuristic were both tried and both
+#      deleted (the header records why). The root case carries no backtick at
+#      all: `;` matched the boundary regex, so a clause dropped and the
+#      survivors were welded into an inverted sentence. Seven mutations
+#      (neuter the state comparison; treat unresolvable as open; remove group
+#      linkage; unmask the span body; pair tick-wise; drop the unpaired
+#      quarantine; break the splitter), plus a coverage MATRIX that measures
+#      which rule is each fixture's sole protection and fails when that moves,
+#      so narrow mutation scoping cannot rot into proving nothing. The
+#      sentence-start default is INVERTED (a split needs positive evidence),
+#      whose accepted cost is over-linking: a neighbour can be dropped for a
+#      citation that is not its own. The class is bounded, not closed —
+#      anaphora is out of scope,
+#      each reproducing a real fabrication rather than perturbing output; a
+#      source guard bans any skip exit; three prose gates pin the contract
+#      rule, the injection step, and the template slot — flattened, this repo
+#      hard-wraps. Mock gh: no repo, no network.
 #  29. review-gate decision tests (scripts/test-review-gate-decisions.sh) — the
 #      five decisions settled about the review gate, all prose and every one of
 #      them reading like drift to an "align with the governing principle" sweep

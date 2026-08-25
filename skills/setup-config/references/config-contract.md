@@ -405,11 +405,23 @@ Two mechanics back the rule up, and neither replaces it:
 - **At injection.** `groom-backlog` §4 never copies this field into an issue body directly. It runs
   `github-issues`' `verify-gotcha-claims.sh`, which resolves every cited `#N` against real issue
   state and **drops** any claim whose asserted state is wrong *or unresolvable* — unknown is held,
-  never passed through — then injects only what survived.
+  never passed through — then injects only what survived. **Keep inline code spans paired.** An
+  unpaired backtick run makes the field unparseable, and the verifier drops all of it rather than
+  split it into fragments that may be truncated (issue #262) — one stray `` ` `` therefore costs
+  every gotcha in the field, not just its own sentence. Where the pairing is merely *wrong* rather
+  than unpaired — two stray ticks, so every run still finds a partner — the fragments of a sentence
+  are kept or dropped **together**, so the worst case is losing that sentence, never certifying half
+  of it. Splitting requires positive evidence of a sentence start, so a sentence following an
+  abbreviation-shaped token (`U.S.`, `No.`, or any word of four characters or fewer) is welded to
+  its predecessor and can be dropped with it — **write each gotcha as its own sentence ending in a
+  full word** if you want it judged independently. Write a literal backtick as `` `` ` `` `` rather than bare.
 - **At refresh.** `verify-gotcha-claims.sh --config <path> --lint` reports the four banned shapes
   offline (no `gh`, no network; exit 3 = findings), so a config that already carries them can be
-  **named** rather than carried forward unexamined. A refresh regenerates frontmatter, so an
-  offending `gotcha_summary` is rewritten with the user, not silently preserved.
+  **named** rather than carried forward unexamined. It reports an unpaired backtick run too, and it
+  evaluates whole sentences rather than fragments, so it never shows you a fragment you did not
+  write as if it were your claim. A refresh
+  regenerates frontmatter, so an offending `gotcha_summary` is rewritten with the user, not
+  silently preserved.
 
 ### `take-it.md`
 
