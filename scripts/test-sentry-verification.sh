@@ -587,7 +587,12 @@ NA_MARKER='(n/a)'
 #     rule and is an affirmation; `and` ends the search so it reads that way.
 #     `,` and `or` are deliberately NOT boundaries — `does not get, or need, a
 #     blind-spot row` is one negation, and treating either as a boundary stops
-#     the scan inside the clause it belongs to.
+#     the scan inside the clause it belongs to. ALL THREE scans stop at the same
+#     boundary, through one shared `clause_break` (issue #270). Two of them did
+#     and `cancelled` did not, which reads as deliberate to a later reader
+#     and was not: `that is not so. sentry is exempt from a blind-spot row` let
+#     the PREVIOUS clause's `not` cancel a real negation, so the sentence read
+#     AFFIRMED and could satisfy the very `'+'` veto that exists to catch it.
 #   * PARENTHETICAL INSERTIONS are skipped without being counted, reading
 #     right-to-left: the token bearing the closing comma opens the skip and the
 #     token bearing the opening comma closes it and is itself counted. Without
@@ -620,6 +625,60 @@ dest_tally() {
     printf '%s' "$1" | tr -d '*_`' | tr '[:upper:]' '[:lower:]' |
         awk -v dest="$2" '
         function bare(t) { gsub(/^[^a-z]+|[^a-z]+$/, "", t); return t }
+        # ONE clause boundary, shared by all three scans (issue #270).
+        # `governed` and `post_negated` carried this expression verbatim while
+        # `cancelled` had NO boundary check at all, so a negator in a PREVIOUS
+        # clause cancelled a real negation and the sentence then read AFFIRMED —
+        # a must-affirm veto passing on prose that states the inverse, which is
+        # the direction of issue #268, again. Measured on main: `that is not so.
+        # sentry is exempt from a blind-spot row` returned 1/0.
+        #
+        # It takes BOTH the raw token and its bare form because `bare()` strips
+        # the trailing terminator. That is what made the boundary invisible to
+        # `cancelled` rather than merely unchecked: a scan holding only bare
+        # words cannot see a boundary at all, so passing `b2` twice here would
+        # reproduce the bug while looking like the fix.
+        #
+        # TWO KNOWN LIMITS, both measured rather than assumed, because one shared
+        # helper invites the reading that every arm of it works.
+        #
+        # 1. The THREE DASH ARMS ARE DEAD, in all three scans, in every form —
+        # not merely narrow. They are EQUALITY tests, so an attached dash never
+        # satisfies one (`special-` is not `-`), and a standalone dash bares to
+        # the empty string, which every scan skips before reaching here.
+        # Measured, main and this branch alike: `nothing - sentry keeps a
+        # blind-spot row` and `the key is not special- mobile is exempt from a
+        # blind-spot row` both classify exactly as they would with the arms
+        # absent, and neutering all three changes no assertion. Only `[;:.]$`
+        # has the attached-only behaviour (`true.`, `so;`). The arms are kept
+        # because reviving them changes where the two ALREADY bounded scans
+        # stop, on prose this file classifies correctly today — the
+        # clause-bounding rework filed as issue #271, which subsumes this
+        # function.
+        #
+        # 2. NEW WITH THIS CHANGE, and its honest cost: the `:` arm is now live
+        # inside `cancelled`, where a config-key token (`sentry:`) is far likelier
+        # than a real colon clause. `cancelled` has no parenthetical skip —
+        # `governed` does — so an aside carrying a key literal now ends the scan
+        # early. Measured, main to here: `testflight: none is not, like sentry:
+        # none, exempt from a blind-spot row` goes 1/0 to 0/1, while the same
+        # sentence with a colon-free aside is unchanged, which isolates the arm.
+        # That is the QUIET direction on a `-` want. It is accepted rather than
+        # special-cased, because both repairs are worse: dropping `:` from the
+        # shared set weakens the two scans that were already correct, in exactly
+        # the direction issue #270 exists to close, and giving `cancelled` a set
+        # of its own re-creates the divergence this change removes. No prose in
+        # the tree hits it, and a parenthetical skip for `cancelled` belongs
+        # with #271.
+        #
+        # NO APOSTROPHE may appear in any comment in this awk program: it is a
+        # single-quoted shell word, so one closes the program and the next `{`
+        # is a bash syntax error. Measured here while writing this block.
+        function clause_break(t, b) {
+            return (t ~ /[;:.]$/ || b == "and" || b == "but" || b == "so" ||
+                    b == "then" || t == "-" || t == "\342\200\224" ||
+                    t == "\342\200\223")
+        }
         # Is there a SECOND negator governing the one at position `at`? Double
         # negation cancels, and the cancelling word is not always adjacent:
         # `none of them is exempt from a blind-spot row` puts it four back.
@@ -630,6 +689,15 @@ dest_tally() {
             for (j = at - 1; j >= 1 && j >= at - 4; j--) {
                 b2 = bare(w[j])
                 if (b2 == "") continue
+                # Same clause only, and checked BEFORE the negator arms so a
+                # sentence-final `not.` BOUNDS rather than cancels — the sibling
+                # shape, and the reason `sentry is not. mobile is exempt from a
+                # blind-spot row` is a negation. The lookback budget is untouched
+                # — four POSITIONS here, four CONTENT WORDS in the two siblings,
+                # which is a real difference and not a wording slip. This changes
+                # where the scan STOPS, not what BOUNDS it. Bounding by clause
+                # instead of by a count at all is issue #271.
+                if (clause_break(w[j], b2)) return 0
                 if (b2 ~ /^(no|not|never|neither|nor|without|nothing)$/) return 1
                 if (b2 == "none" && j < at && bare(w[j + 1]) == "of") return 1
             }
@@ -649,10 +717,7 @@ dest_tally() {
                 b = bare(t)
                 if (b == "") continue
                 cnt++
-                if (t ~ /[;:.]$/ || b == "and" || b == "but" || b == "so" ||
-                    b == "then" || t == "-" || t == "\342\200\224" ||
-                    t == "\342\200\223")
-                    return 0
+                if (clause_break(t, b)) return 0
                 if (b ~ /^(no|not|never|neither|nor|without|nothing|exempt|instead|rather|excluded|omitted)$/) {
                     p = (i > 1) ? bare(w[i - 1]) : ""
                     # A negator inside a prepositional phrase negates that
@@ -715,10 +780,7 @@ dest_tally() {
                 b = bare(t)
                 if (b == "") continue
                 cnt++
-                if (t ~ /[;:.]$/ || b == "and" || b == "but" || b == "so" ||
-                    b == "then" || t == "-" || t == "\342\200\224" ||
-                    t == "\342\200\223")
-                    return 0
+                if (clause_break(t, b)) return 0
                 if (b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/)
                     return 1
             }
@@ -736,6 +798,138 @@ dest_tally() {
         END { printf "%d %d", a + 0, n + 0 }'
 }
 dest_affirmed() { local t; t="$(dest_tally "$1" "$2")"; printf '%s' "${t%% *}"; }
+
+# --- The classifier's own clause boundary (issue #270) ------------------------
+#
+# Every veto below that reads a DESTINATION — `assert_dest`, the sentence scans,
+# and the four-key row classification, though not the plain `grep` assertions
+# beside them — is only as good as this classifier, and nothing in this file
+# tested the classifier itself — its behaviour was measured out of band and
+# written into a comment. A comment does not redden. So the boundary #270 closed
+# is pinned here, in both directions, against fixed strings that owe nothing to
+# what any tracked file happens to say today.
+#
+# SCOPE, stated so this is not read as coverage of the whole classifier. What is
+# pinned is the clause boundary and the lookback around it. Two of the rules in
+# the header above remain comment-only: `governed`'s four-content-word budget
+# and its PREPOSITION test each flip one of that header's own cited
+# counterexamples with the gate still green. Both strings are already written down there, so pinning them
+# is transcription rather than measurement, and it is not #270 work — but it is
+# available, and this sentence exists so nobody concludes it was already done.
+#
+# Each case asserts the WHOLE `<affirmed> <negated>` tally, never one half of it.
+# Probing one number is the "tallying is not classifying" failure this file
+# already learned on the four-key table, and here it is worse: a case that
+# stopped classifying altogether returns `0 0`, which satisfies every
+# "nothing affirmed" probe while measuring nothing.
+#
+# The distances are load-bearing and were measured, not eyeballed, and WHICH
+# CASE MEASURES WHAT has to stay straight. `cancelled` looks back four positions
+# from the negator, so a case whose earlier negator sits five back reads NEGATED
+# on the BROKEN classifier too and is no evidence about the BOUNDARY at all —
+# the cases in the `Direction 1` block — those and no others — read AFFIRMED
+# before this fix and NEGATED after it, which is what makes THOSE boundary
+# evidence. The quantifier is scoped to that block deliberately, not to
+# everything below: measured by running both editions over all twelve strings
+# here, the `Direction 1` block is the entire set that differs between them, and
+# a universal reaching further would be refuted by the cases beside it — this
+# gate reporting a claim its own source contradicts, which is the failure #268
+# is about, committed inside the fix for it.
+#
+# `... and sentry is exempt ...` is the five-back shape and is deliberately
+# ABSENT: green before this fix and after it, pinning nothing.
+#
+# `... — sentry is exempt ...` is the same shape and is deliberately PRESENT,
+# for a DIFFERENT job — and must not be read as boundary evidence, which is the
+# confusion this paragraph exists to prevent. A standalone dash bares to the
+# empty string, which costs a POSITION-counted window a step and a
+# content-word-counted one nothing, so it pins the lookback BOUND and only that.
+# It carries its own heading below for that reason, outside `Direction 1`.
+#
+# COVERAGE IS DERIVED BY MEASUREMENT, never asserted, and no tally of it is
+# written down here — a number nobody can re-derive is what a future editor
+# trusts instead of re-measuring, which is this file's own rule. Every case in
+# this battery was proved load-bearing by at least one mutation of the classifier that it, and
+# for most of them only it, reddens. The direction-2 and control cases are pinned
+# by mutations of the LOOKBACK rather than of the boundary, which is what showed
+# they are not decoration. The comma pair closed a real gap: before it existed,
+# adding `,` to `clause_break` left the ENTIRE gate green, and one shared helper
+# is exactly what makes that a single edit.
+dest_case() {
+    local label="$1" text="$2" want="$3" got
+    got="$(dest_tally "$text" "$ROW_DEST")"
+    if [ "$got" = "$want" ]; then ok "$label"
+    else bad "$label (want '$want' affirmed/negated, got '$got')"; fi
+}
+
+echo "-- the destination classifier's clause boundary (#270)"
+
+# The control. With no earlier negator the classifier was always right here, so
+# it is what makes the `Direction 1` cases evidence of a BOUNDARY rather than of
+# a classifier that has simply stopped cancelling. Scoped to that block for the
+# same reason the preamble scopes its quantifier — and note the scope is
+# `Direction 1`, NOT everything under this control: apart from that one block,
+# no case here differs between the two editions.
+dest_case "a lone negation is NEGATED" \
+    'sentry: none is exempt from a blind-spot row' '0 1'
+
+# Direction 1: a negator in a PREVIOUS clause must not cancel this one.
+dest_case "a negator across a period does not cancel" \
+    'that is not so. sentry is exempt from a blind-spot row' '0 1'
+dest_case "a negator across a semicolon does not cancel" \
+    'it is never so; posthog is exempt from a blind-spot row' '0 1'
+# `not so.` and `never so;` carry a conjunction (`so`) as well as a terminator,
+# so on their own they cannot say WHICH arm fired. This one bares to `special`
+# and isolates the terminator.
+dest_case "a negator across a period alone does not cancel" \
+    'the key is not special. mobile is exempt from a blind-spot row' '0 1'
+# And this one isolates the conjunction: no terminator anywhere in the window.
+dest_case "a negator across a conjunction does not cancel" \
+    'sentry is not, and mobile is exempt from a blind-spot row' '0 1'
+# ORDER, not just presence. Here the boundary and the negator are the SAME token
+# (`not.`), so a `clause_break` call moved below the negator arms — the ordinary
+# "test the cheap comparisons first" tidy — cancels and inverts the sentence.
+dest_case "a sentence-final negator bounds rather than cancels" \
+    'sentry is not. mobile is exempt from a blind-spot row' '0 1'
+
+# NOT boundary evidence — the lookback BOUND. Its own block, because it is the
+# one case here that is not about `clause_break` at all, and leaving it under
+# `Direction 1` put a counterexample inside the set that heading quantifies
+# over. Measured, it reads `0 1` on main and `0 1` here: identical in both
+# editions, so it says nothing whatever about the boundary. It earns its place
+# from the other direction — the comment at the call site claims the
+# POSITIONS-versus-CONTENT-WORDS difference is real, and until this case existed
+# that claim reddened nothing. `cancelled` bounds on `j`, so a token baring to
+# the empty string still costs it a step and the standalone dash here pushes
+# `not` out of the window, while its siblings count content words, which would
+# keep `not` in scope and cancel.
+dest_case "a standalone dash costs the lookback a position" \
+    'it is not true — sentry is exempt from a blind-spot row' '0 1'
+
+# What is NOT a boundary, and this pair is here because of THIS change. The set
+# used to be written out twice; one shared helper makes it a single edit, so
+# "a comma ends a clause too" now silently rewrites all three scans at once.
+# Measured: adding `,` to `clause_break` left the whole gate green before these
+# two cases existed. Both counterexamples are the file header's own — `,` and
+# `or` are deliberately not boundaries, and a parenthetical is skipped without
+# being counted rather than treated as one.
+dest_case "a comma is not a clause boundary" \
+    'sentry: none does not get, or need, a blind-spot row' '0 1'
+dest_case "a parenthetical insertion is skipped, not bounded" \
+    'sentry: none is not, as of #261, given a blind-spot row' '0 1'
+
+# Direction 2: a genuine double negation INSIDE one clause still cancels. These
+# are what a boundary check bolted on carelessly breaks, and each is prose this
+# repo actually writes — the file header cites `is exempt from` as its own.
+dest_case "an adjacent second negator still cancels" \
+    'sentry: none is not exempt from a blind-spot row' '1 0'
+dest_case "a second negator four back still cancels" \
+    'none of them is exempt from a blind-spot row' '1 0'
+# The lexical half of the negator set, cancelled by the core half: the boundary
+# check now sits above both arms, so a fix that returned early on the wrong
+# token would take this one out with it.
+dest_case "a never/excluded pair still cancels" \
+    'sentry: none is never excluded from a blind-spot row' '1 0'
 
 # The other pair of mutually exclusive outcomes in this file: a refresh either
 # RE-DERIVES a value or CARRIES it forward. Same classifier, same reason.
