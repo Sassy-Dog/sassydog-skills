@@ -193,6 +193,14 @@
 #      the part that can drift, so it stays short and each addition must be
 #      justified by prose in the tree. Neither substitutes for POLARITY, which is
 #      what handles composition ("not exempt") that a list of any length cannot.
+#      All three of its scans stop at ONE shared clause boundary (issue #270).
+#      Two did and `cancelled` did not, which reads as deliberate and was not: a
+#      negator in a PREVIOUS clause cancelled a real negation, so the sentence
+#      read AFFIRMED and could satisfy the very must-affirm veto meant to catch
+#      it. They stay COUNT-bounded; bounding by clause is #271. The classifier
+#      now carries a battery of its own — fixed strings, both directions, each
+#      case proved load-bearing by a mutation — because until then its behaviour
+#      lived only in comments, and a comment does not redden.
 #      Windows need structural bounds rather than byte
 #      counts; a veto over a rule that STATES a negative must require the
 #      negation, since silence satisfies "nothing affirmed"; and every table row
