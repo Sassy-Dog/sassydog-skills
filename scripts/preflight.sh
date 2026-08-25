@@ -247,7 +247,12 @@
 #      with no ceiling it otherwise fired on any participle in its clause and
 #      read the #261 rule and its inverse alike. A PREPOSITION is deliberately
 #      not a stop there, and a case pins why: it is the copula after it that
-#      decides. `clause_break` also gained the two separators this repo's own
+#      decides. The gate has a SECOND AXIS besides which verbs count: a
+#      participle with NO auxiliary. A comma- or dash-set-off APPOSITIVE is
+#      predicated of the destination and is admitted, but only when it opens
+#      immediately after it — that position is the whole of what separates it
+#      from a reduced relative modifying the nearer noun, and a looser rule
+#      re-opens what the copula gate closes. `clause_break` also gained the two separators this repo's own
 #      prose writes, the rule arrow and the markdown cell wall `|`; without them
 #      the scan crosses live tracked text in two of the eight files, and since
 #      neither drift reddens anything both arms are pinned by fixed strings

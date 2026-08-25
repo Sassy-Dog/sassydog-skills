@@ -965,13 +965,59 @@ dest_tally() {
         # absent error monitoring…`, both reddening correct prose. Only
         # post-positional participles count, and the scan stops at the same
         # clause boundaries.
-        function post_negated(rest,   nw, w, i, t, b, seen, copula) {
+        function first_i(w, nw,   k) {
+            for (k = 1; k <= nw; k++) if (w[k] != "") return k
+            return 0
+        }
+        function post_negated(rest,   nw, w, i, t, b, seen, copula, appos) {
             nw = split(rest, w, / +/)
-            seen = 0; copula = 0
+            seen = 0; copula = 0; appos = 0
             for (i = 1; i <= nw; i++) {
                 t = w[i]
                 if (t == "") continue
                 b = bare(t)
+                # THE COPULA GATE HAS A SECOND AXIS, and the known-limit block
+                # above is thorough about WHICH VERBS count while saying nothing
+                # about a participle that has NONE. A comma- or dash-set-off
+                # participial APPOSITIVE is predicated of the destination with
+                # no auxiliary at all: `the blind-spot row, dropped from §6, is
+                # gone` is a negation, and it read 1/0 here against 0/1 on main
+                # until this block existed. Four shapes, all quiet, all on a
+                # `+` veto.
+                #
+                # IT OPENS ONLY AS THE FIRST TOKEN AFTER THE DESTINATION, which
+                # is the whole of what keeps it from re-opening the defect the
+                # copula gate exists to close. An appositive attaches to the
+                # noun it abuts; a participle further right does not, and the
+                # narrow rule is what separates them. Measured, the two shapes
+                # differ by nothing but that position: `the blind-spot row, with
+                # its posthog target dropped, is kept` and `keeps a blind-spot
+                # row with the mobile lane skipped` are REDUCED RELATIVES
+                # modifying the nearer noun, both stay 1/0, and a rule keyed on
+                # "a comma appears somewhere to the left" flips the first of
+                # them. Do NOT widen this to a participle anywhere.
+                #
+                # SHIPPED RATHER THAN STATED BECAUSE IT MEASURED CLEAN: the
+                # decision rule was that the fix ships only if it moves none of
+                # the live call sites, and instrumenting `dest_tally` over a
+                # full run put it at 0 of 77 shared (haystack, dest) pairs. The
+                # trigger it forecloses is already one row away from live --
+                # `skills/survey-work/SKILL.md:237` is a table cell reading
+                # `Deliberately dropped — not a plate item`, a bare participle
+                # in a cell the four-key loop classifies per cell through
+                # `dest_affirmed`, wanting only a destination in the same cell.
+                if (i == first_i(w, nw) && (t == "," || t == "-" || tail(t, "\342\200\224") || tail(t, "\342\200\223"))) {
+                    appos = 1
+                    continue
+                }
+                if (appos && b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/) {
+                    if (cancelled(w, i)) return 0
+                    return 1
+                }
+                if (appos && (t ~ /,$/ || t == "-" || tail(t, "\342\200\224") || tail(t, "\342\200\223"))) {
+                    appos = 0
+                    continue
+                }
                 if (clause_break(t, b)) return 0
                 # A NEW SUBJECT ends this scan. `whose` is the one relativizer
                 # that always introduces one, so a participle past it predicates
@@ -1035,6 +1081,19 @@ dest_tally() {
                 # though it cannot fire either. Do not read the unfireable
                 # members as evidence the exemption generalises -- the five
                 # above are the test of that.
+                #
+                # KNOWN LIMIT, worded the way `am` is, so the next reader does
+                # not re-run the probe and reach a different answer. `why` and
+                # `whereupon` DO regress -- measured, both 1/0 on main and 0/1
+                # here -- and are deliberately absent anyway: neither can take
+                # the destination as antecedent, `why` requiring a reason head
+                # (`the reason why`, never `the row why`) and `whereupon` being
+                # archaic in this register. Adding them would enumerate members
+                # the construction cannot produce, which is the fitted reading.
+                # `in which` and `for which` need nothing: the `seen` rule
+                # already handles them, since the preposition is a content word
+                # and `which` is therefore not first. Measured, both 1/0 in
+                # both editions.
                 #
                 # A SINGLE FIRST-WORD EXEMPTION OVER THE WHOLE CLASS IS WRONG,
                 # and wrong exactly where a restrictive relative is most
@@ -1116,12 +1175,13 @@ dest_tally() {
                 # measured.
                 #
                 # TRIMMING IS NOT THE SAFE DIRECTION HERE, which is worth saying
-                # because eight of these were once pinned by nothing and looked
-                # like padding. Measured one member at a time: removing ANY of
-                # the ten flips its own ordinary sentence from 0/1 to 1/0 -- `the
-                # blind-spot rows are dropped`, `has been dropped`, `gets
-                # dropped` -- and that is the QUIET direction on a rule that
-                # STATES a negative. Each member now carries a case.
+                # because most of these were once pinned by nothing and looked
+                # like padding -- a reading that has since been closed, since
+                # every member carries a case now. Measured one member at a
+                # time: removing ANY member flips its own ordinary sentence
+                # from 0/1 to 1/0 -- `the blind-spot rows are dropped`, `has
+                # been dropped`, `gets dropped` -- and that is the QUIET
+                # direction on a rule that STATES a negative.
                 if (b ~ /^(is|was|are|were|be|been|being|gets|get|got|getting|gotten)$/ ||
                     b ~ /^(remains|remain|stays|stay|becomes|become|became)$/)
                     copula = 1
@@ -1547,13 +1607,66 @@ dest_case "a reduced clause modifies the nearer noun, not the row" \
     'the blind-spot row for sentry, with its posthog target dropped, is kept' '1 0'
 dest_case "a trailing reduced clause does not negate the row" \
     'sentry keeps a blind-spot row with the mobile lane skipped' '1 0'
-# ONE CASE PER MEMBER, for both tiers, and NO COUNT IS WRITTEN DOWN -- the
+# THE OTHER AXIS OF THE COPULA GATE: a participle with NO auxiliary at all. A
+# comma- or dash-set-off APPOSITIVE is predicated of the destination, and all
+# four of these read 1/0 against main 0/1 until the gate grew that case --
+# quiet, on a `+` veto, and invisible from every case above, which all vary the
+# VERB rather than remove it.
+dest_case "a comma-set-off appositive negates the row" \
+    'the blind-spot row, dropped from §6, is gone' '0 1'
+dest_case "an appositive with an adverb still negates" \
+    'a blind-spot row, deliberately dropped — not a plate item' '0 1'
+dest_case "a dash-set-off appositive negates the row" \
+    'the blind-spot row — dropped in #261 — is gone' '0 1'
+dest_case "an appositive closing on its own comma negates" \
+    'the blind-spot row, omitted on refresh, no longer renders' '0 1'
+# ...and the appositive runs the SAME polarity flip the auxiliary path does, so
+# a negated appositive affirms. It has its own `cancelled` call and therefore
+# its own way to lose it: a mutation of the auxiliary path alone leaves this
+# one standing, which is exactly how the polarity mutant went undetected once
+# the second call site existed. Better than main here, which reads 0/1.
+dest_case "a negated appositive affirms the row" \
+    'the blind-spot row, never dropped, is kept' '1 0'
+# ...and the pair that keeps it narrow. These are REDUCED RELATIVES modifying
+# the nearer noun, not appositives on the destination, and they differ from the
+# four above by POSITION alone -- the set-off does not abut the destination. A
+# rule keyed on "a comma somewhere to the left" flips the first of them, which
+# is how this fix would have re-opened what the copula gate closed.
+dest_case "a reduced relative after an intervening phrase does not negate" \
+    'the blind-spot row for sentry, with its posthog target dropped, is kept' '1 0'
+# ONE CASE PER MEMBER, for both tiers, and NO BARE COUNT IS WRITTEN DOWN -- the
 # cases ARE the inventory, and `grep -c '^dest_case "passive auxiliary:'` plus
 # its `copular verb:` sibling re-derives it from the tree. A number here would
 # be the thing the next editor trusts instead of re-measuring, which is why
-# #268 stripped one from CLAUDE.md; this set has already changed size twice
-# under review, and both times the prose stating its old size survived the
+# #268 stripped one from CLAUDE.md; this set has now changed size THREE times
+# under review, and every time the prose stating its old size survived the
 # change and contradicted the code beside it.
+#
+# THE RULE IS SHARPER THAN "NO NUMBERS", because a blanket ban would strip
+# counts that are perfectly safe. A count is safe when its MEMBERS ARE
+# ENUMERATED BESIDE IT -- `six arms ... the ASCII dash, the en dash and all
+# four of and/but/so/then` cannot go stale silently, because the list is right
+# there to check against. A count with no enumeration beside it is the unsafe
+# shape, and both stale ones were exactly that: `removing ANY of the ten` and
+# `eight of the ten are pinned by nothing`, each floating free four lines from
+# a set that had grown.
+#
+# AND THE PROBE FOR THEM MUST SEARCH THE CONCEPT, NOT THE PHRASING. Two
+# separate checks reported this file clean while both stale counts sat in it,
+# because both greps looked for `ten-member` and `any of the ten` -- the
+# wordings we remembered writing. That is negation-blindness one level up: a
+# probe shaped by what the author expected to have written cannot find what the
+# author actually wrote. The probe that works sweeps for the SHAPE and is read
+# rather than counted:
+#
+#   grep -oniE '\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven| \
+#     twelve)[ -](of[ -]the[ -])?[a-z]* ?(member|set|list|paradigm|arm|case| \
+#     entr)[a-z]*' scripts/test-sentry-verification.sh scripts/preflight.sh \
+#     CLAUDE.md
+#
+# It returns roughly two dozen hits across the three files, nearly all of them
+# safe by the enumeration rule above. READ THEM. Counting them, or grepping for
+# the phrasing you think you used, is how this was missed twice.
 #
 # TIER 1 IS COMPLETE PARADIGMS. `be` and the get-passive are closed, so
 # enumerating them terminates -- but the licence only holds if each is WHOLE,
