@@ -75,7 +75,8 @@
 #                 "why":"..."}]}
 #
 # Exit: 0 no likely-drift · 3 likely-drift found · 10 skipped · 64 usage.
-# Read-only: never writes, never touches the network beyond one `gh issue view`.
+# Read-only with respect to the TREE and the network: it writes nothing but one
+# temp file holding the symbol pool, and makes no call beyond one `gh issue view`.
 set -euo pipefail
 
 REPO="${REPO:-}"
@@ -140,14 +141,326 @@ fi
 # candidate pool full of call sites makes every near-match plausible.
 #
 # The word boundary is spelled as an explicit character class, NOT `\b`. git's
-# regex engine accepts `\b` in an -E pattern and matches NOTHING with it, so the
-# obvious spelling harvests an empty pool, every near-match lookup comes back
-# empty, and every unresolved symbol is tiered `likely-new` — the checker keeps
-# running and silently stops finding the thing it exists to find. Verified
-# against a real tree: `\b` → 0 symbols, this form → ~3000.
-SYMBOLS="$(git -C "$TREE_ROOT" grep -hoE \
+# regex engine accepts `\b` in an -E pattern and — where it was first measured,
+# see the platform split below — matches NOTHING with it, so the obvious
+# spelling harvests an empty pool, every near-match lookup comes back empty, and
+# every unresolved symbol is tiered `likely-new` — the checker keeps running and
+# silently stops finding the thing it exists to find. Verified against a real
+# tree: `\b` → 0 symbols, this form → ~3000. (Since #263 the pool has a second
+# half, so `\b` here empties the KEYWORD half specifically; on a shell-primary
+# repo the merged pool would still be non-empty, which makes that failure
+# quieter rather than smaller.)
+#
+# That measurement is PLATFORM-SPECIFIC, which makes the character class more
+# necessary rather than less (measured 2026-08-24, issue #263): on macOS 26.6
+# with git 2.55 `\b` matches nothing, while on Linux — git 2.54/musl and git
+# 2.47/glibc, i.e. what CI and every cloud session run — it matches normally.
+# So `\b` here would not fail loudly anywhere; it would harvest a full pool on
+# one machine and an empty one on another. Read the same way, `resolve_symbol`'s
+# mention fallback below still spells its probe `\b`, so on macOS it answers
+# "not mentioned" for every reference and on Linux it answers truthfully. That
+# is a separate defect from the harvest fixed here, it changes which findings
+# are reported rather than which names exist, and it is deliberately NOT changed
+# in this pass — do not read the two spellings as an inconsistency to tidy.
+#
+# An empty pool is not the worst shape it can take, though. A pool full of the
+# WRONG LANGUAGES is (issue #263), and the harvest below produces one on any
+# shell-primary repo: it is keyword-led, and a POSIX shell function definition
+# carries no keyword at all. `name() { … }` matches none of that alternation;
+# bash's optional `function name()` form does, and almost nobody writes it.
+# Measured on Sassy-Dog/platform, whose primary language is bash: 368 names in
+# the pool, and 257 DISTINCT POSIX-form definition names across 330 definition
+# lines in tracked `*.sh`, not one of them harvested. (Issue #263's table counts
+# 253. That is the same tree on the same day, and the difference is the METRIC:
+# 253 is the distinct names of definitions at COLUMN 0 — 323 such lines — while
+# 257 includes indented ones. Every figure here therefore names its unit.)
+# That does not degrade to silence, it degrades in both directions at once. A
+# correct `read_monitors()` was reported DRIFT suggesting `readMonitorsBody` —
+# an unrelated TypeScript function, because near-match scoring ran against a
+# pool made of other languages' names — and a genuinely renamed shell function
+# has no near match in that pool either, so it tiers `likely-new`, which
+# groom-backlog §6 documents as NOT a defect, and passes the gate silently.
+# Hence the second harvest below.
+KEYWORD_SYMBOLS="$(git -C "$TREE_ROOT" grep -hoE \
     '(^|[^A-Za-z0-9_])(fn|def|function|class|struct|enum|trait|type|interface|const)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' \
     -- . 2>/dev/null | awk '{print $NF}' | sort -u | head -5000 || true)"
+
+# POSIX shell function definitions. A second PATTERN rather than another branch
+# of the alternation above, because the shape is positional — `name()` at the
+# head of a line — not keyword-led.
+#
+# FOUR scoping rules, each earned, because the same shape means something else
+# somewhere else and every leak restores #263 through a different door:
+#
+#   1. Only shell FILES are read: a tracked `*.sh`/`*.bash`, or a tracked file
+#      whose FIRST line is a shell shebang (repos keep real entry points at
+#      `run`, `dev`, `preflight` with no extension). `  render() {` is a method
+#      shorthand in JS/TS and `poll()` at column 0 is a K&R definition in C, so
+#      a tree-wide harvest puts other languages' names straight back in.
+#   2. HEREDOC bodies inside those files are skipped, because scoping by file is
+#      not enough on its own. Generators — this repo's included — write `.ts`,
+#      `.c` and `.sh` payloads inside `<<EOF` blocks in shell scripts. Measured
+#      here: a TypeScript method and a K&R C definition, each sitting in a
+#      heredoc inside a real `*.sh` file, both RESOLVED CLEAN before the skip —
+#      a false resolve, #263's silent half restored one door over. This repo's
+#      own before/after count is deliberately NOT quoted: the gate's fixtures
+#      are themselves heredoc payloads, so the number moves whenever a case is
+#      added, and it moved inside the PR that introduced it. Measured on a tree
+#      that is not measuring itself, the cost is now ZERO — Sassy-Dog/platform
+#      harvests 255 distinct names with the skip and 255 without it, because the
+#      one name it used to drop (`print`, out of an awk payload) is already
+#      excluded by rule 4. The skip earns its place in the INVENT direction, not
+#      by what it removes from a healthy tree. It is also why
+#      the shebang probe reads line 1 rather than trusting `git grep '^#!'`: a
+#      shebang inside a heredoc is a payload, not a script.
+#   3. The file list is read NUL-separated and handed to awk as ABSOLUTE PATHS,
+#      never as git pathspecs, and only REGULAR NON-SYMLINK files are opened.
+#      `--` stops option parsing but not pathspec MAGIC: one tracked
+#      `:(weird)name.sh` makes `git grep -- <list>` exit 128, and a harvest that
+#      empties on error is indistinguishable to the resolver from a repo with no
+#      shell in it — the fail-open shape `resolve_symbol` already refuses when it
+#      answers "unknown, not absent". The symlink half is why `-f` and `! -L` are
+#      both there: a tracked `zero.sh -> /dev/zero` satisfies `[[ -r ]]`, and awk
+#      reading it never returns — under `dispatch-ready`'s `/loop 5m` that stacks
+#      one hung awk per tick, and no documented exit code can express a run that
+#      does not end. A symlink OUT of the checkout is the same door in reverse:
+#      it puts another codebase's identifiers into a `did you mean` line that
+#      this org pastes into issue bodies in a PUBLIC repo. `git grep` never had
+#      either problem for the FINAL component; a symlinked parent DIRECTORY over
+#      a tracked path escapes both, which HEAD does too (`git grep` reads the
+#      working tree, not blobs) — pre-existing, widened here from keyword-form
+#      to POSIX-form names, and worth its own issue rather than a wider claim. Absolute paths also keep a
+#      leading `-` or an embedded `=` from reaching awk as an option or an
+#      assignment, and `-z` keeps git from C-quoting a non-ASCII name into one
+#      that no longer opens.
+#   4. A definition must carry a BODY — `()` followed by `{` or `(` on the same
+#      line. Without it a bare `flush()` CALL SITE inside a quoted `awk '…'`
+#      program reads as a definition, and that is not hypothetical: it put a
+#      fabricated `flush` into the shell half of the pool on the very repo #263
+#      was measured on (`platform/scripts/lint-token-scope-sync.sh:82`), where no
+#      shell `flush()` exists at all. The tracker skips heredocs but has no
+#      notion of a multi-line quoted string, and this rule closes that door
+#      without one. Measured across platform, this repo and velovate-app — 823
+#      definitions — it drops exactly one name, that `flush`, and no real
+#      definition anywhere: the `name()` newline `{` style is legal shell and
+#      simply does not occur, and if it did the cost would be a SKIP.
+#
+# WHAT THIS DOES NOT FIX, stated because it looks like a regression and is not:
+# the pool is one flat set, so a near-match suggestion can come from a language
+# the reference is not. That predates this change and is not introduced by it —
+# measured both ways on a mixed tree whose only near neighbour is a RUST
+# `render_page`, HEAD already answers `render_panel()` with "did you mean
+# `render_page`?" and exits 3. What changes here is that SHELL names now behave
+# the way every other language's already did. Making the scoring origin-aware
+# would change how every language scores, i.e. the tiering contract
+# `dispatch-ready` consumes — the blast radius #263's decision holds out of
+# scope, and the right shape for its own issue.
+#
+# KNOWN LIMITATION, and it now degrades in the safe direction ONLY. The heredoc
+# tracker is a line scanner, so a `<<` that opens no heredoc can still start one
+# and skip to EOF. What it must never do is END one early, or MISS one, because
+# either scans a payload as code and INVENTS a name — the false resolve above.
+# Three shapes did exactly that and are fixed here rather than documented away:
+#   * an indented terminator now closes only a `<<-` heredoc, which is the only
+#     form that permits one. A plain `<<EOF` whose payload contains an indented
+#     `EOF` used to close early and scan the rest of the payload as code.
+#   * the arithmetic VETO is gone. It skipped tracking for any line containing
+#     `$((`, so `n=$(( 1 + 1 )); cat > z.ts <<EOF` opened no heredoc at all and
+#     scanned the payload as code. What replaces it is narrower and had to be
+#     found by measurement: an ALL-DIGIT delimiter is refused, so `$(( 1 << 2 ))`
+#     opens nothing, while `<<2EOF` — which bash accepts — still does.
+#   * every opener on a line is queued, not just the first, so `cat <<A <<B`
+#     tracks B after A closes instead of scanning B's payload as code.
+# What remains is skip-direction, and it is worth naming precisely, because a
+# PHANTOM heredoc costs every definition BELOW it in that file — not one name:
+#   * a `<<` that opens no heredoc but is shaped like one, which costs every
+#     definition BELOW it in that file rather than one name.
+#   * a `<<` inside a quoted string. This tracker has no notion of one, which is
+#     also why rule 4 exists. Rule 4 covers only the BODYLESS half, though: a
+#     brace-carrying definition of another language inside a multi-line quoted
+#     payload (`JS='… render() { …'`) is harvested, which is invent-direction and
+#     not fixable without real quote tracking — its own issue, not this one.
+#   * a delimiter carrying a space (`<<'MY EOF'`), which truncates at the space.
+#   * an arithmetic operand that is not a plain numeral — `$(( x << n ))`,
+#     `$(( 1 << 0x02 ))`, `$(( 1 << 2, 3 ))`, `2#10` — each of which opens a
+#     phantom and skips the rest of that file.
+#   * a trailing inline comment mentioning a heredoc (a whole-line comment is
+#     already excluded), and a terminator that never appears at all.
+#   * `foo ( ) {` — a space between the parens — which rule 4's literal `()`
+#     does not match. Zero occurrences across every Sassy Dog repo, measured.
+# Each of these skips definitions and lands back on the pre-#263 behaviour of
+# reporting `likely-new` and gating nothing.
+# Same word-boundary rule as the harvest above: no `\b` anywhere in here.
+SHELL_SHEBANG_RE='^#!.*[/[:space:]](ba|da|k|z|a)?sh([[:space:]]|$)'
+# Rule order is load-bearing. The definition rule runs BEFORE the heredoc rule
+# and does not consume the line, so `foo() { cat <<EOF` yields `foo` and still
+# opens the heredoc. The comment rule sits between them because its only job is
+# to stop a comment OPENING one; a commented-out definition is already unmatched,
+# the definition regex requiring an identifier at the head of the line.
+#
+# The program carries no single quote, which is what lets it be a single-quoted
+# shell string — hence the quote characters are compared through `sprintf("%c")`
+# rather than written as literals. The delimiter keeps every OTHER character it
+# has: `<<MY-DELIM` must be recorded with its hyphen or its terminator never
+# matches, so only POSIX's three quoting forms come off (`'`, `"`, `\`).
+# Stripping the rest is `MUTANT_MANGLE`, an explicitly rejected design.
+SHELL_DEF_AWK='
+FNR == 1 { inhd = 0; qn = 0; qi = 0 }
+inhd {
+    line = $0
+    if (qdash[qi]) sub(/^\t+/, "", line)
+    if (line == qterm[qi]) {
+        if (qi < qn) { qi++ } else { inhd = 0; qn = 0; qi = 0 }
+    }
+    next
+}
+match($0, /^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\(\)[ \t]*[{(]/) {
+    name = substr($0, RSTART, RLENGTH)
+    sub(/^[ \t]*/, "", name)
+    sub(/[ \t]*\(\).*$/, "", name)
+    print name
+}
+/^[ \t]*#/ { next }
+{
+    probe = $0
+    gsub(/<<</, "@@", probe)
+    qn = 0
+    while (match(probe, /<<-?[ \t]*[^ \t;&|<>()]+/)) {
+        tok = substr(probe, RSTART, RLENGTH)
+        probe = substr(probe, RSTART + RLENGTH)
+        d = (substr(tok, 3, 1) == "-")
+        sub(/^<<-?[ \t]*/, "", tok)
+        gsub(/\\/, "", tok)
+        sq = sprintf("%c", 39); dq = sprintf("%c", 34)
+        if (substr(tok, 1, 1) == sq || substr(tok, 1, 1) == dq) tok = substr(tok, 2)
+        if (length(tok) > 0) {
+            last = substr(tok, length(tok), 1)
+            if (last == sq || last == dq) tok = substr(tok, 1, length(tok) - 1)
+        }
+        if (tok ~ /^[A-Za-z0-9_]/ && tok !~ /^[0-9]+$/) { qn++; qterm[qn] = tok; qdash[qn] = d }
+    }
+    if (qn > 0) { inhd = 1; qi = 1 }
+}
+'
+# A function, not an inline `<( { … } )` group, and the reason is measured: bash
+# 3.2 — macOS system bash, which `#!/usr/bin/env bash` still selects on a Mac
+# without Homebrew — does not recognise `#` comments inside a process
+# substitution. An apostrophe or a stray `(` in one is then read as syntax, and
+# the whole script dies at `bad substitution: no closing )` before it runs a
+# line. Verified four ways on 3.2.57: no comment passes, a comment with neither
+# character passes, a comment containing `consumer's` fails, a comment
+# containing `(` fails. Comments in a function body are ordinary comments.
+shell_file_candidates() {
+    # Stage 1 is a fixed pathspec. Stage 2 matches `#!` on ANY line, so every
+    # doc that merely quotes a shebang is a candidate; line 1 is then read with
+    # the `read` BUILTIN rather than a `head -1` fork. Measured on a tree of
+    # 12,001 shebang-quoting files: 33.3s of forks against 0.9s of builtin
+    # reads, i.e. ~2.8ms per candidate against ~0.08ms, and this runs unattended
+    # once per issue per tick.
+    #
+    # Stage 2 also skips what stage 1 already emitted. Without that every shell
+    # file is listed twice, and since the cap counts entries rather than unique
+    # files, a 5000 bound becomes an effective 2500 — dropping precisely the
+    # extensionless entry points stage 2 exists to find.
+    local rc=0 cand=0 c first
+    git -C "$TREE_ROOT" ls-files -z -- '*.sh' '*.bash' 2>/dev/null || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        echo "verify-issue-refs: ls-files failed (exit $rc) — shell file list is incomplete" >&2
+    fi
+    while IFS= read -r -d '' c; do
+        [[ -n "$c" ]] || continue
+        case "$c" in *.sh|*.bash) continue ;; esac
+        cand=$((cand + 1))
+        if [[ "$cand" -gt 5000 ]]; then break; fi
+        # Same predicate as the consumer below, applied BEFORE the open — this
+        # is the first thing that opens a candidate by path, so "regular,
+        # non-symlink files only" has to hold here too. `-n 512` bounds it: a
+        # shebang lives in the first few dozen bytes, and a one-line 80MB file
+        # would otherwise be slurped whole.
+        [[ -f "$TREE_ROOT/$c" && ! -L "$TREE_ROOT/$c" && -r "$TREE_ROOT/$c" ]] || continue
+        first=""
+        IFS= read -r -n 512 first 2>/dev/null < "$TREE_ROOT/$c" || true
+        if [[ "$first" =~ $SHELL_SHEBANG_RE ]]; then printf '%s\0' "$c"; fi
+    done < <(shebang_scan)
+}
+
+shebang_scan() {
+    # git grep exits 1 for "nothing matched", which is ordinary, and >1 for a
+    # real failure, which is not. Collapsing the two is the same fail-open the
+    # third scoping rule refuses: the harvest would silently revert to the
+    # pre-#263 pool with nothing on stderr to say so.
+    local rc=0
+    git -C "$TREE_ROOT" grep -lIzE '^#!.*sh' -- . 2>/dev/null || rc=$?
+    if [[ "$rc" -gt 1 ]]; then
+        echo "verify-issue-refs: shebang scan failed (git exit $rc) — shell file list is incomplete" >&2
+    fi
+}
+
+SHELL_FILES=()
+SHELL_FILE_COUNT=0
+while IFS= read -r -d '' _f; do
+    [[ -n "$_f" ]] || continue
+    # Regular files only, and never a symlink — see scoping rule 3.
+    [[ -f "$TREE_ROOT/$_f" && ! -L "$TREE_ROOT/$_f" && -r "$TREE_ROOT/$_f" ]] || continue
+    SHELL_FILES+=("$TREE_ROOT/$_f")
+    SHELL_FILE_COUNT=$((SHELL_FILE_COUNT + 1))
+    # Bounded for the same reason the symbol pools are: argv, not correctness.
+    if [[ "$SHELL_FILE_COUNT" -ge 5000 ]]; then break; fi
+done < <(shell_file_candidates)
+
+SHELL_SYMBOLS=""
+if [[ "$SHELL_FILE_COUNT" -gt 0 ]]; then
+    # The guard is not cosmetic, and it protects against more than one thing:
+    # bash 3.2 aborts on "${arr[@]}" for an EMPTY array under `set -u`, so a tree
+    # with no shell in it would kill the run on macOS system bash. On bash 5 the
+    # same expansion yields NO arguments, and `awk PROG` with no file operands
+    # reads STDIN — which under an unattended `/loop 5m` tick is a process that
+    # never returns and no exit code can describe. Measured: removing this guard
+    # hung a run for ten minutes before it was killed. `</dev/null` closes that
+    # door a second time, because a guard is a line someone can delete.
+    #
+    # A failed awk keeps whatever it DID emit. It exits 2 on one unopenable file
+    # while still printing every other file's names, so discarding its output
+    # would trade one missing file for the entire pool.
+    if _shell_raw="$(awk "$SHELL_DEF_AWK" "${SHELL_FILES[@]}" 2>/dev/null </dev/null)"; then
+        :
+    else
+        echo "verify-issue-refs: shell definition harvest incomplete (awk exit $?) — near-match pool may be missing names" >&2
+    fi
+    SHELL_SYMBOLS="$(printf '%s\n' "$_shell_raw" | grep -v '^$' | sort -u | head -5000 || true)"
+fi
+
+# The union carries NO third cap, and that is the whole point. Each half is
+# already bounded at 5000; capping the merge as well is an ALPHABETICAL
+# truncation of a set that just grew, so on a repo whose keyword half saturates
+# it silently EVICTS names the pre-#263 pool contained. Measured on
+# velovate-app (2797 files, 8627 distinct keyword names): the third cap dropped
+# 95 names HEAD resolved — each one now unresolved, near-matched, and answered
+# with a confident wrong suggestion at exit 3 — while 88 of the 189 new shell
+# names never reached the pool at all. That is #263's loud half reintroduced on
+# exactly the largest repos, and it breaks the "existing behaviour unchanged"
+# acceptance item.
+#
+# The cap existed for ARGV, so the pool stops travelling on argv. It goes to a
+# temp file, which is also the only bound that is stated in the right unit:
+# Linux caps a single argv element at 131,072 BYTES regardless of name count,
+# and velovate-app's pool is already 113,361 bytes — 86.5% of that ceiling, and
+# an overrun is `Argument list too long`, exit 126, which is not one of the
+# documented 0/3/10/64 and reads to a caller branching on "not 3" as no drift.
+SYMBOLS="$(printf '%s\n%s\n' "$KEYWORD_SYMBOLS" "$SHELL_SYMBOLS" | grep -v '^$' | sort -u || true)"
+SYMBOLS_FILE="$(mktemp)" || { echo "skipped: could not create a temp file for the symbol pool" >&2; exit 10; }
+# The BODY travels the same way, and for a stronger reason: the pool is derived
+# from the tree, while the body is whatever an issue says. GitHub caps a body at
+# 65,536 CHARACTERS and Linux caps one argv element at 131,072 BYTES, so ~44k
+# CJK codepoints clears the second while sitting inside the first — and the
+# failure is `Argument list too long`, exit 126, which is not one of the
+# documented 0/3/10/64 and which `groom-backlog` §6 and `dispatch-ready` read as
+# "not 3", i.e. promote and dispatch. Moving the pool off argv without moving
+# the body would have hardened the half that was never attacker-influenced.
+BODY_FILE_ARG="$(mktemp)" || { echo "skipped: could not create a temp file for the issue body" >&2; exit 10; }
+trap 'rm -f "$SYMBOLS_FILE" "$BODY_FILE_ARG"' EXIT
+printf '%s\n' "$SYMBOLS" > "$SYMBOLS_FILE"
+printf '%s' "$BODY" > "$BODY_FILE_ARG"
 
 # Package names. Cargo first (the org's Rust repos), then node workspaces.
 PACKAGES=""
@@ -173,11 +486,15 @@ fi
 
 export VIR_TREE_ROOT="$TREE_ROOT"
 
-python3 - "$BODY" "$SYMBOLS" "$PACKAGES" "$ISSUE" "$TREE_ROOT" "$FORMAT" <<'PY'
+python3 - "$BODY_FILE_ARG" "$SYMBOLS_FILE" "$PACKAGES" "$ISSUE" "$TREE_ROOT" "$FORMAT" <<'PY'
 import difflib, json, os, re, subprocess, sys
 
-body, symbols_raw, packages_raw, issue, tree_root, fmt = sys.argv[1:7]
-symbols = {s for s in symbols_raw.splitlines() if s}
+body_path, symbols_path, packages_raw, issue, tree_root, fmt = sys.argv[1:7]
+# Both the body and the pool arrive as FILES, not argv elements: Linux caps one
+# argv string at 131,072 bytes, the pool is unbounded by design (see the merge
+# above), and an issue body is whatever someone wrote.
+body = open(body_path).read()
+symbols = {s for s in open(symbols_path).read().splitlines() if s}
 packages = {p for p in packages_raw.splitlines() if p}
 
 # ── extraction ──────────────────────────────────────────────────────────────

@@ -83,17 +83,32 @@
 #      hard-wraps prose and a line-scoped grep for forbidden wording turns a
 #      wrap into a false PASS. Reads two tracked files: no gh, no network.
 #  13. verify-issue-refs tests (scripts/test-verify-issue-refs.sh) — the
-#      grooming-drift checker. Two of its failure modes are SILENT and neither
-#      changes an exit code: `\b` in a git -E harvest pattern matches nothing,
-#      which empties the near-match pool so every unresolved reference tiers as
-#      `likely-new` and the checker quietly stops finding drift; and a
-#      suggestion ranked on raw edit distance answers the shortest neighbour
-#      (`open`) instead of the actual rename (`open_in`), which is worse than
-#      no suggestion because it is the line a reader acts on without
-#      re-checking. Also pins the NEGATIVE cases — a clean body and a
-#      new-subtree body must stay quiet — since a checker that fires on
-#      everything is muted within a day and then gates nothing at all.
-#      Fixture tree is synthetic and built in a tmpdir: no gh, no network.
+#      grooming-drift checker. THREE of its failure modes are SILENT and none
+#      changes an exit code. (a) `\b` in a git -E harvest pattern empties the
+#      near-match pool, so every unresolved reference tiers `likely-new` and the
+#      checker quietly stops finding drift — and that measurement is PLATFORM-
+#      SPECIFIC: `\b` matches nothing on macOS (git 2.55) and matches normally
+#      on the Linux git that runs this gate (2.54/musl, 2.47/glibc), so the
+#      wrong spelling would be green here and broken on the machine doing the
+#      grooming. (b) A suggestion ranked on raw edit distance answers the
+#      shortest neighbour (`open`) instead of the actual rename (`open_in`),
+#      which is worse than no suggestion because it is the line a reader acts on
+#      without re-checking. (c) A pool full of the WRONG LANGUAGES (issue #263):
+#      the harvest was keyword-led and POSIX shell functions carry no keyword, so
+#      on a bash repo a correct `read_monitors()` drew a confident TypeScript
+#      suggestion while real drift tiered `likely-new` and passed. Also pins the
+#      NEGATIVE cases — a clean body and a new-subtree body must stay quiet —
+#      since a checker that fires on everything is muted within a day and then
+#      gates nothing at all. THREE synthetic trees now — non-shell,
+#      shell-majority, and one real script beside three hostile FILENAMES —
+#      because a shell-blind harvest is invisible to every case in the first,
+#      and a pathspec-magic name empties the pool with nothing else to show for
+#      it. Ten mutants, each proved applied before its proofs run,
+#      plus source-level assertions for the three rules no Linux run can
+#      observe: the `\b` spelling itself, which is green on Linux and empties
+#      the KEYWORD half on macOS so CI cannot see it go wrong; the empty-array
+#      test; and the process-substitution comment trap.
+#      Built in a tmpdir: no gh, no network.
 #  14. stale-issues tests (scripts/test-stale-issues.sh) — the
 #      tracking-parent-complete detector (issue #198). An epic that splits into
 #      children can never close itself: GitHub moves an issue only on a merged
@@ -380,6 +395,11 @@ cd "$ROOT" || exit 1
 
 fail=0
 pass() { echo "PASS  $1" >&2; }
+# Gates are non-interactive by contract, and one of them harvests with `awk`,
+# which reads STDIN when it is handed no file operands. A regression there should
+# redden this run rather than hang it — measured: exactly that hung a run for ten
+# minutes before the gate grew its own `</dev/null` (issue #263).
+exec </dev/null
 failed() { echo "FAIL  $1" >&2; fail=1; }
 skip() { echo "SKIP  $1" >&2; }
 
