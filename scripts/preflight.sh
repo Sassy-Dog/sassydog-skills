@@ -173,17 +173,32 @@
 #      trained its reader to skim the heading a dark Sentry lives under. The
 #      four-key table is checked by COUNTING rows, not by looking the four names
 #      up: a lookup passes just as happily on a table that grew a fifth key.
-#      Its own assertions have been the hard part: three review rounds each found
-#      some of them passing on sources stating the inverse, and the author's
-#      mutation set kept reporting "all detected" because every mutation deleted
-#      the exact literal its assertion grepped for — tautologically caught. The
-#      lesson generalises to every prose gate here: mutate the MEANING, worded as
-#      a tidying editor would word it. Re-measured that way, the two outcomes need
-#      mutually exclusive vocabularies (enumerating negations is unwinnable),
-#      windows need structural bounds rather than byte counts, and every table row
-#      must be classified rather than tallied. Source-level, must-not-exist checks
-#      run on flattened and emphasis-stripped copies. No gh, no network: eight
-#      tracked files.
+#      Its own assertions have been the hard part: every review round so far has
+#      found some of them passing on sources stating the inverse, and the
+#      author's mutation set kept reporting "all detected" because every mutation
+#      deleted the exact literal its assertion grepped for — tautologically
+#      caught. The lesson generalises to every prose gate here: mutate the
+#      MEANING, worded as a tidying editor would word it. Re-measured that way,
+#      the mutually-exclusive-vocabularies rule still governs the PROSE — each
+#      rule must speak exactly one outcome's vocabulary — but it is NOT
+#      sufficient on its own, and that distinction is the one a later reader will
+#      collapse. What cannot be enumerated is how negation is PHRASED ("never
+#      given", "is exempt from", "no longer keeps", "aligned with the other
+#      three"): an open semantic class English extends faster than any list
+#      absorbs it, which is what the six-verb affirmative kept losing to. What
+#      the classifier enumerates instead is NEGATORS — a closed grammatical core
+#      (no, not, never, neither, nor, without, nothing) plus a deliberately short
+#      set of lexical ones this repo's prose actually uses (exempt, excluded,
+#      omitted, instead, rather). Only the first is truly closed; the second is
+#      the part that can drift, so it stays short and each addition must be
+#      justified by prose in the tree. Neither substitutes for POLARITY, which is
+#      what handles composition ("not exempt") that a list of any length cannot.
+#      Windows need structural bounds rather than byte
+#      counts; a veto over a rule that STATES a negative must require the
+#      negation, since silence satisfies "nothing affirmed"; and every table row
+#      must be classified rather than tallied. Source-level, must-not-exist
+#      checks run on flattened and emphasis-stripped copies. The run prints its
+#      own assertion count. No gh, no network: eight tracked files.
 #  21. sentry-counts tests (scripts/test-sentry-counts.sh) — sentry-triage may
 #      only gate on counts it CONFIRMED as lifetime (issue #218). `count`/
 #      `userCount` mean different things per transport under identical labels:
@@ -768,8 +783,12 @@ fi
 # the gate reads the instructions themselves. Every failure it guards is silent by
 # construction — a mis-configured Sentry project produces a plate that looks
 # complete in both repos, and a `none` form flattened to symmetry produces a plate
-# that looks complete on a repo whose Sentry nothing is watching. Two decisions:
-# #213's culprit verification, and #261's deliberately ASYMMETRIC four-key `none`.
+# that looks complete on a repo whose Sentry nothing is watching. Four decisions:
+# #213's culprit verification, `sentry: none` as the contract's first documented
+# exception, #261's deliberately ASYMMETRIC four-key `none`, and #268's
+# carry-forward split — the `none` carve-out covers three keys and NOT `sentry:`,
+# asserted at all four sites that state it. The run prints its own assertion
+# count, so no inventory number here can go stale.
 # Eight tracked files: no gh, no network.
 if bash scripts/test-sentry-verification.sh; then
     pass "sentry-verification tests (scripts/test-sentry-verification.sh)"

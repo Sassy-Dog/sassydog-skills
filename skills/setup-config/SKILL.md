@@ -193,8 +193,8 @@ in every run's output. If live visibility no longer matches what the configured 
 user decide. If the key is absent because the config predates it, propose the seeded value as an
 addition and say so in the preview; until then the reading skills default it to `agent`.
 
-**The three `none` answers are carried forward, not re-asked** — but an **absent** one is asked, and
-`sentry: none` is not one of them. `testflight: none`, `posthog: none` and `mobile: none` each record
+**The three `none` answers are carried forward, not re-asked** — but an **absent** one is asked.
+**`sentry: none` is not one of them.** `testflight: none`, `posthog: none` and `mobile: none` each record
 a human's confirmation, so re-litigating them on every refresh reopens exactly what the form closed.
 The one signal that reaches an existing value is *positive* evidence — an iOS target under a
 `mobile: none`, a PostHog SDK under a `posthog: none` — and that is a **stop and surface** like any
@@ -244,8 +244,11 @@ user approves** — writing into a product repo is outward-facing and never sile
 - Never delete a directory lacking a `generated-by:` marker.
 - Never delete generated skills before their config is written and verified.
 - Never copy a fact forward without re-verifying it against live state — except `review_site:`,
-  which is seeded once and carried forward by design, and the four confirmed-absent `none` forms
-  (`sentry:`, `testflight:`, `posthog:`, `mobile:`), which record a check that already happened; a
+  which is seeded once and carried forward by design, and the three confirmed-absent `none` forms
+  (`testflight:`, `posthog:`, `mobile:`), which record a check that already happened.
+  **`sentry: none` is not one of them**: it is re-derived on every refresh, because it is also
+  written when the culprit check merely could not run, so freezing it would retire the plate's
+  highest-signal surface with no path back (Phase 4, `references/update-mode.md`). A
   live-visibility mismatch is surfaced, never applied.
 - Prose in `##` sections is user-owned: carried across verbatim, never rewritten or summarised.
 - This skill always runs from the plugin; it is never copied into a consumer repo.

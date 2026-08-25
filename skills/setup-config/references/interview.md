@@ -69,11 +69,13 @@ row this form exists to clear. (Probed 2026-08-25: no Sassy-Dog consumer config 
 the five that set `posthog` all set `true` — so this is latent rather than live. It is still the
 cheaper half to get right now than to diagnose later.)
 
-**All three modes reach this question.** In **create** mode: every key with no positive evidence, and
-every key whose only evidence the user dismisses. In **update** mode: every key missing from the
-existing config, or carrying `posthog: false`. In **migrate** mode: every one of the three, always —
-a legacy generated skill has no way to express a `none`, so a migrated config arrives in exactly the
-pre-#261 state (`references/migrate-mode.md`).
+**All four generator modes reach this question.** In **create** mode: ask for every key with no
+positive evidence, and for every key whose only evidence the user dismisses. In **update** mode: ask
+for every key missing from the existing config, or carrying `posthog: false`. In **migrate** mode:
+ask for every one of the three, always — a legacy generated skill has no way to express a `none`, so
+a migrated config arrives in exactly the pre-#261 state (`references/migrate-mode.md`). In **adopt**
+mode: ask for every one of the three, always, and for the same reason — a hand-written skill has no
+way to express a `none` either (`references/update-mode.md`, "Adopt mode" step 2b).
 
 It is the only way a repo ever gets a `none` on these three: **never default one, and never infer one
 from a quiet tree.** `none` asserts that a human checked, so a guessed `none` retires a real blind
