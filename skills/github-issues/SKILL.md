@@ -100,9 +100,34 @@ and #334 (Windows + Authenticode) remain" for nine days after all three closed
 **Callers inject the text between the SAFE GOTCHAS markers, never the raw field.**
 Exit `3` means at least one claim was dropped. A claim citing `#N` survives only
 when its asserted state is explicit and currently true; wrong, ambiguous, and
-**unresolvable** all drop. There is deliberately **no skip exit** — a missing
-`gh` or an undetermined repo makes every citing claim unresolvable, so unknown is
-held rather than passed through. Claims citing no issue are invariants and are
+**unresolvable** all drop. So does **malformed** — a field carrying an unpaired
+backtick run cannot be parsed, so all of it drops (issue #262). Inline code is
+*parsed* before the sentence split, pairing spans by backtick run, so a `;`,
+`.`, `!` or `?` inside `` `code=0; cmd || code=$?` `` no longer ends a claim,
+and the fragments of one sentence are **linked into a group that is kept or
+dropped together** — so a **span mis-parse or a clause boundary** costs a drop
+rather than a half-sentence presented as verified. Splitting requires positive
+evidence of a sentence start, so text after an abbreviation-shaped token
+(`U.S.`, `No.`, `SHA.`) stays welded: **that over-links, and a neighbouring
+invariant can be dropped for a citation that is not its own.**
+
+**The class is bounded, not closed.** Two residuals remain, both known:
+
+- A sentence whose **referent** was dropped can survive — `Always export it.`
+  after the clause defining "it" has gone. Resolving that needs anaphora.
+- A terminator mid-sentence after a token that is **longer than four
+  characters, not dotted, and not a single letter** reads as a real sentence
+  start, so the head is certified: `The output is truncated... then per #N …`
+  certifies `The output is truncated...`. Likelihood is low — ellipses and
+  `Assoc.` are rare in terse invariant prose, and the surviving text visibly
+  signals incompleteness — but it is a half-sentence, so do not read the
+  guarantee above as absolute.
+
+A fourth exit `3` cause is a **splitter failure**: it reports `the claim
+splitter failed` and certifies nothing, so exit 3 with an empty block is never
+"nothing to verify". There is
+deliberately **no skip exit** — a missing `gh` or an undetermined repo makes
+every citing claim unresolvable, so unknown is held rather than passed through. Claims citing no issue are invariants and are
 kept, annotated `KEEP time-varying` when they carry a date or a roadmap position
 that nothing here can resolve.
 
@@ -209,7 +234,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate
 | `scripts/board-snapshot.sh` | ProjectV2 snapshot grouped by status. Read-only. Guards the `--limit` truncation trap. |
 | `scripts/queue-snapshot.sh` | Boardless fill/drain queue read: ready/in-flight/blocked buckets + parsed `touches:` and `Depends on #N` body contracts. Read-only. Exit 10 skip convention. |
 | `scripts/verify-issue-refs.sh` | Resolves a body's paths, symbols, and `-p` package args against a checkout. Tiers each miss `likely-drift` (something close exists — a near-match symbol, package, or sibling file) vs `likely-new` (nothing resembles it, or the path came from `touches:`), and suggests the near match. Read-only. Exit 0 clean / 3 drift / 10 skipped / 64 usage. |
-| `scripts/verify-gotcha-claims.sh` | Resolves a `groom-backlog` config's `gotcha_summary` against issue state and emits only the claims that survive, between SAFE GOTCHAS markers. Fail-closed: wrong state, ambiguous assertion, and unresolvable all drop, so there is no skip exit. `--lint` reports time-varying shapes offline. Read-only. Exit 0 clean / 3 dropped or found / 64 usage. |
+| `scripts/verify-gotcha-claims.sh` | Resolves a `groom-backlog` config's `gotcha_summary` against issue state and emits only the claims that survive, between SAFE GOTCHAS markers. Fail-closed: wrong state, ambiguous assertion, unresolvable, and malformed (an unpaired backtick run, which drops the whole field) all drop, so there is no skip exit. Inline code is parsed, spans paired by backtick run, before the sentence split, and the fragments of a sentence are committed as one group, so shell punctuation inside a span never ends a claim and a mis-parse degrades to a drop rather than a certified fragment. A splitter failure is its own exit 3, never a clean empty field. `--lint` reports time-varying shapes offline. Read-only. Exit 0 clean / 3 dropped or found / 64 usage. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body + tracking-parent-complete detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. Detector 3 reads the epic-split `Part of #<parent>` convention with a prefix guard (`#28` never claims `#283`'s children) and reports `truncated: true` — never a clean-looking empty result — when its all-state pull hits `ALL_LIMIT` (default 500). |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
 | `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote), plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
