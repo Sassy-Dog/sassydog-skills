@@ -15,7 +15,11 @@
 # Usage: bash scripts/preflight.sh [--fix]
 #
 # Gates, in CI order:
-#   1. shellcheck -S warning over every tracked *.sh
+#   1. shellcheck -S warning over every tracked *.sh, PLUS a second pass for
+#      SC2006 alone. SC2006 is `style`, so the first pass cannot see it, and the
+#      gap shipped a real defect twice: an unescaped backtick in a double-quoted
+#      test label is command substitution, and three labels in
+#      test-sentry-verification.sh were executing `which`, `that` and `where`.
 #   2. frontmatter sanity (scripts/check-frontmatter.sh) — two layers. LOADER
 #      requirements on every tracked skill/agent file: opening `---` on line 1,
 #      `name`/`description` present, `name` matching the directory (skills) or
@@ -193,14 +197,82 @@
 #      the part that can drift, so it stays short and each addition must be
 #      justified by prose in the tree. Neither substitutes for POLARITY, which is
 #      what handles composition ("not exempt") that a list of any length cannot.
-#      All three of its scans stop at ONE shared clause boundary (issue #270).
-#      Two did and `cancelled` did not, which reads as deliberate and was not: a
-#      negator in a PREVIOUS clause cancelled a real negation, so the sentence
-#      read AFFIRMED and could satisfy the very must-affirm veto meant to catch
-#      it. They stay COUNT-bounded; bounding by clause is #271. The classifier
-#      now carries a battery of its own — fixed strings, both directions, each
-#      case proved load-bearing by a mutation — because until then its behaviour
-#      lived only in comments, and a comment does not redden.
+#      All three of its scans stop at ONE shared clause boundary (issue #270),
+#      and since #271 that boundary is their only BOUND as well. Two checked it
+#      and `cancelled` did not, which reads as deliberate and was not: a negator
+#      in a PREVIOUS clause cancelled a real negation, so the sentence read
+#      AFFIRMED and could satisfy the very must-affirm veto meant to catch it.
+#      The count bound all three carried is gone — four content words in the two
+#      look-around scans, four POSITIONS in the cancellation scan, a real
+#      difference and not a wording slip — because the unit was wrong in both
+#      directions at once and no value of it works: too short let a
+#      qualifier-heavy negator escape and read AFFIRMED, too long reached
+#      negators in OTHER clauses, and raising it from four to six reddened the
+#      PRE-#271 gate (no count of reddened assertions is quoted anywhere, and
+#      after merge there is no bound left to raise — the live proof is that
+#      restoring a count bound to any one scan reddens that scan's own case).
+#      Dropping the counts is what made the three dead dash arms have to work,
+#      an unfired boundary now costing the whole previous clause rather than a
+#      word of window; it is what dissolved the `:` arm cost PR #272 accepted,
+#      by giving the cancellation scan the parenthetical skip the left-context
+#      one always had; and it removed three guards the distance had been
+#      supplying by accident, every one of them failing QUIETLY. A skip region
+#      now honours `hard_break`, the subset of the boundary set an aside cannot
+#      contain (`.` and `;`), written as an expression of `clause_break` rather
+#      than beside it and asserted at SOURCE level, since nothing behavioural
+#      can tell a shared subset from two matching transcriptions. The
+#      comma-bearing token is tested before it opens a skip, an odd comma having
+#      otherwise consumed the negator itself — wrong on the pre-#271 source too.
+#      And `post_negated` performs the same polarity flip `governed` does,
+#      stops at a RELATIVIZER — and that class SPLITS: a possessive (`whose`),
+#      locative (`where`) or temporal (`when`) names a new subject in its own
+#      right and stops unconditionally, while the subject relatives
+#      (`which|that|who|whom`) carry the antecedent forward and are exempt when
+#      one heads the destination directly. A single whole-class exemption is
+#      wrong exactly where a restrictive relative is most natural, immediately
+#      after the destination, and each member that can fire has its own case;
+#      the split was mis-drawn twice before it was right, so sort members by
+#      what they DO and not by how the rule reads. It also
+#      counts a participle only once a PASSIVE AUXILIARY or COPULAR verb has
+#      re-attached it. That set is TWO-TIER, on the split the negator set
+#      already uses: tier 1 is the two closed passive paradigms (`be` and the
+#      get-passive), enumerated on the terminating argument; tier 2 is copular
+#      and aspectual verbs, admitted only on the file's other rule — a lexical
+#      addition justified by prose in the tree — with the wider copular class
+#      (`seem|appear|look|…`) stated as a known limit rather than enumerated.
+#      Every member carries its own case and NO COUNT IS WRITTEN DOWN: the set
+#      has changed size twice under review and the prose stating its old size
+#      survived both times. Trimming is the unsafe direction — removing any
+#      member flips its own ordinary sentence to AFFIRMED, quietly — since
+#      with no ceiling it otherwise fired on any participle in its clause and
+#      read the #261 rule and its inverse alike. A PREPOSITION is deliberately
+#      not a stop there, and a case pins why: it is the copula after it that
+#      decides. The gate has a SECOND AXIS besides which verbs count: a
+#      participle with NO auxiliary. A comma- or dash-set-off APPOSITIVE is
+#      predicated of the destination and is admitted, but only when it opens
+#      immediately after it — that position is the whole of what separates it
+#      from a reduced relative modifying the nearer noun, and a looser rule
+#      re-opens what the copula gate closes. `clause_break` also gained the two separators this repo's own
+#      prose writes, the rule arrow and the markdown cell wall `|`; without them
+#      the scan crosses live tracked text in two of the eight files, and since
+#      neither drift reddens anything both arms are pinned by fixed strings
+#      alone. The negator sets are factored core-and-full, the full one an
+#      expression of the core, because a comma-bearing token is tested against
+#      the CORE only — an adverb scopes over what follows it, a participle
+#      predicates on the subject to its left. ONE limit is STATED rather than
+#      fixed, in a known-limit block, and it has two faces: comma parity is a
+#      guess, so a comma-joined subordinate clause is unbounded and a third
+#      comma inverts the aside pairing. The block also records the fix that does
+#      NOT work, measured — subordinators in `clause_break` change neither
+#      string, the subordinator sitting left of the negator where a backward
+#      scan meets the negator first. `hard_break` bounds both at the nearest
+#      sentence, which is why it is a limit and not a hole. No count beyond that
+#      is written down: two copies of this paragraph once disagreed about one,
+#      which is the failure this gate refuses everywhere else. The
+#      classifier carries a battery of its own — fixed strings, both directions,
+#      every arm of the boundary set and every scan's bound and guard proved
+#      load-bearing by a mutation — because until then its behaviour lived only
+#      in comments, and a comment does not redden.
 #      Windows need structural bounds rather than byte
 #      counts; a veto over a rule that STATES a negative must require the
 #      negation, since silence satisfies "nothing affirmed"; and every table row
@@ -455,6 +527,46 @@ if command -v shellcheck >/dev/null 2>&1; then
         pass "shellcheck -S warning"
     else
         failed "shellcheck -S warning"
+    fi
+    # SC2006 IS A SEPARATE PASS BECAUSE IT IS `style`, AND THE ONE ABOVE STOPS
+    # AT `warning`. That severity gap is the whole reason a real defect shipped
+    # twice: an UNESCAPED backtick inside a double-quoted test label is command
+    # substitution, so `dest_case "a `which` clause …"` runs `which` and prints
+    # the label with its identifying word eaten. It happened in
+    # test-sentry-verification.sh, was documented in CLAUDE.md, and then
+    # happened again in the same file — three labels, executing `which`, `that`
+    # and `where`, which is how a mutation of one rule produced three
+    # indistinguishable FAIL lines in the gate that exists to say which rule
+    # broke. Prose did not stop the recurrence; this does.
+    #
+    # A BESPOKE GREP WAS TRIED AND REJECTED: distinguishing a backtick inside a
+    # double-quoted argument from one inside a single-quoted string is a
+    # quoting-context question, and a hand-rolled scan of this repo produced 3
+    # true positives against 7 false ones. shellcheck already parses the shell,
+    # so it answers exactly that question — measured on a two-line fixture, the
+    # unescaped form is flagged and the escaped form is not.
+    #
+    # NEITHER ONE-PASS SHORTCUT WORKS, both measured, so that the next person
+    # weighing this does not re-derive them. Adding `--include=SC2006` to the
+    # pass above reports NOTHING: the severity filter still applies to an
+    # included check, so `-S warning` suppresses a `style` rule even when it is
+    # named. And dropping the tree-wide run to `-S style` yields 208 findings
+    # across 11 rules on this tree, which is not adoptable today. Two passes is
+    # the cheap option, not the lazy one.
+    #
+    # COST, measured: the SC2006 pass is ~5s against a ~48s preflight, about
+    # 11%. It re-parses all 60 files, which is the price of shellcheck having
+    # no way to ask one question of an existing parse.
+    #
+    # Bare `xargs` here and in the pass above ASSUMES no tracked `*.sh` path
+    # contains whitespace — verified, 0 of 60 today. If that ever changes both
+    # call sites need `-0` with `git ls-files -z`.
+    if [ -n "$sh_files" ]; then
+        if echo "$sh_files" | xargs shellcheck --include=SC2006; then
+            pass "shellcheck SC2006 (unescaped backticks in strings)"
+        else
+            failed "shellcheck SC2006 (unescaped backticks in strings)"
+        fi
     fi
 else
     skip "shellcheck (not installed — CI still enforces)"
