@@ -61,9 +61,14 @@ After the script, verify in the session (cheap, parallel):
 
   **Verification failing writes `sentry: none`, never a guessed block.** Failing includes: no MCP
   server connected, no recent issues to sample, and culprits that do not resolve here. `sentry: none`
-  is the confirmed-absent form — "this repo has no error monitoring" — and it is a different claim
-  from omitting the key, which means "never checked". See `config-contract.md`, "Governing
-  principle: presence is the toggle", for the three states.
+  is the confirmed-absent form — "no error-monitoring project is **verified** for this repo" — and it
+  is a different claim from omitting the key, which means "never checked". **It is deliberately not
+  the stronger claim.** Two of the three failure modes above are unfinished verifications, not
+  absences, so `sentry: none` must never be glossed as "this repo has no error monitoring": nothing
+  downstream can tell an absence from a check that could not run, which is also why its
+  `survey-work` row survives while the three sibling `none` keys lose theirs. See
+  `config-contract.md`, "Governing principle: presence is the toggle", for the three states and the
+  asymmetry.
 
   The cost of guessing is invisible after the fact: the wrong repo claims another codebase's P0s,
   two repos double-report the same Sentry issues, `take-it` is dispatched against a repo holding no

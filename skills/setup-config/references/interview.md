@@ -52,6 +52,68 @@ A *miss* here asks nothing and blocks nothing. The scan is secondary by design: 
 no sibling checkouts on disk, so it finds nothing there — which is exactly why the culprit check,
 not this question, is the guard that has to hold.
 
+### 2c. Confirmed-absent product surfaces — `testflight`, `posthog`, `mobile`
+
+**Asked for each of the three keys this run would otherwise leave ABSENT — or leave carrying a value
+the contract no longer defines.** That is the trigger, and both halves are load-bearing.
+
+It is not "keys detection could not establish", which silently excluded `posthog`: its detector
+always answers, `true` or `false`, so the key that motivated this form would have been unreachable on
+the very path that writes it.
+
+And it is not "absent" alone. `posthog: false` is a legal *detection result* and an illegal *config
+value* (`config-contract.md`), and a pre-existing config can carry one — `main`'s template rendered
+`posthog: {{POSTHOG}}` straight from the detector. Such a key is neither absent nor valid, so an
+absent-only trigger drops it during frontmatter regeneration, never asks, and leaves the blind-spot
+row this form exists to clear. (Probed 2026-08-25: no Sassy-Dog consumer config carries one today —
+the five that set `posthog` all set `true` — so this is latent rather than live. It is still the
+cheaper half to get right now than to diagnose later.)
+
+**All three modes reach this question.** In **create** mode: every key with no positive evidence, and
+every key whose only evidence the user dismisses. In **update** mode: every key missing from the
+existing config, or carrying `posthog: false`. In **migrate** mode: every one of the three, always —
+a legacy generated skill has no way to express a `none`, so a migrated config arrives in exactly the
+pre-#261 state (`references/migrate-mode.md`).
+
+It is the only way a repo ever gets a `none` on these three: **never default one, and never infer one
+from a quiet tree.** `none` asserts that a human checked, so a guessed `none` retires a real blind
+spot with nothing announcing it — the mirror of the failure the form exists to fix.
+
+Ask once per key, naming the exact value it writes and what that value claims:
+
+- `testflight: none` — this product has no beta channel
+- `posthog: none` — this product has no product analytics
+- `mobile: none` — this product has no mobile app
+
+**Not skipped on a refresh** — unlike §1 and §3b. A key missing from the config is a key left
+absent, which is the state every consumer repo configured before this form existed is in, so a
+refresh that skipped the question would leave the blind-spot rows exactly where they were
+(`references/update-mode.md`).
+
+Detection may *propose* the answer, as everywhere else in this interview, but check what it actually
+gives you: `scripts/detect-capabilities.sh` derives `posthog` (a tracked-tree grep — so a repo that
+merely *documents* PostHog trips it; say which file matched) and `testflight_bundle_id` (only when an
+`ios/` path or an `app.json` is tracked). **There is no "has a mobile target" field**, so a `mobile`
+proposal comes from checking the tree yourself — `ios/`, `android/`, `app.json`, `pubspec.yaml`. The
+user's answer is what writes the key; a quiet tree never is.
+
+| Answer | Written | What `survey-work` does |
+|---|---|---|
+| Confirmed: this product has no such surface | `<key>: none` | one `(n/a)` token on `✓ Clean today:` — **no** blind-spot row |
+| Not sure / not decided yet | key omitted | a blind-spot row on every plate until someone answers |
+| It has one | the block, with its facts | the surface runs |
+
+State the stakes plainly, because "not sure" is the safe answer and it should stay available: an
+omitted key costs a recurring row, a wrong `none` costs the row *forever* on a surface that later
+exists. An infra repo with no app carried three unclearable rows on every plate before this
+question existed ([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)).
+
+**Do not offer the same question for `sentry:`.** Its `none` is not an interview answer at all — it
+is what `setup-config` writes when culprit verification fails (§2b, `references/detection.md`), and
+it keeps its blind-spot row deliberately: absent error monitoring is a gap somebody could close, an
+absent mobile app is a product fact (`references/config-contract.md`, "The one exception"). Offering
+"confirm this repo has no Sentry" would read as a way to clear that row. It is not one.
+
 ### 3. Merge policy — always confirm, never trust the probe alone
 
 Show the detected value (`merge_queue: true/false/null` + repo settings) and have the user confirm queue vs direct. State the stakes: a wrong "queue" guess means `--auto` calls that silently never merge; a wrong "direct" guess bypasses queue serialization. Sets `IF:MERGE_QUEUE` and `{{MERGE_POLICY_NOTE}}`.
@@ -99,4 +161,4 @@ Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfac
 
 ## Defaults summary (when the user says "just use defaults")
 
-delegation: plugin-backed · take-it: yes (if Issues + Actions) · survey-work: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · tidy-repo: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · **stacked PRs: off** · no project-specific extras.
+delegation: plugin-backed · take-it: yes (if Issues + Actions) · survey-work: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · tidy-repo: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · **stacked PRs: off** · **confirmed-absent surfaces (§2c): never defaulted — "just use defaults" omits the key, it does not write a `none`** · no project-specific extras.

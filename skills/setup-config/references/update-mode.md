@@ -46,11 +46,66 @@ from the short list silently drops two slots.
 
 A fact that cannot be verified is surfaced to the user, never carried forward silently.
 
+**A `none` is an answer already given — carry it forward, never re-ask.** This covers exactly three
+values: `testflight: none`, `posthog: none`, and `mobile: none`. Each records a human's confirmation
+that this product has no such surface (`config-contract.md`, "The one exception"). What step 3
+cannot re-derive is the **confirmation**, and that is the precise claim — detection reads this tree,
+so it can find evidence a surface is *present*, and it can never produce evidence that somebody
+looked and concluded it is absent. A quiet tree is not an answer. So step 3's *re-verify every fact
+against live state* does not reach these three values; the carve-out is scoped to them and to nothing
+else in the frontmatter. Re-asking on every refresh reopens exactly what the form closed: a finished
+check made indistinguishable from one that never ran.
+
+**`sentry: none` is NOT in that carve-out — it is re-derived on every refresh, as it always was.**
+The four `none` values look interchangeable and are not, and this is the second place that matters
+(the first is which of them an interview writes). `references/detection.md` writes `sentry: none`
+when the culprit check fails **or could not run at all** — no MCP server connected, no recent issues
+to sample. Those are conditions of the *session*, not facts about the repo. Freezing the value would
+let one unlucky `setup-config` run permanently retire the highest-signal surface on the plate, and
+there would be no way back: the only evidence that could contradict it is the culprit check that the
+carve-out just excluded. So re-run it, exactly as step 3 says, and treat a newly verified project as
+the ordinary old → new fact it is.
+
+**Do not read that as "detection says nothing about these keys" — it says plenty, and the tree is
+what you check against.** `scripts/detect-capabilities.sh` derives `posthog` outright (a tracked-tree
+grep) and `testflight_bundle_id` when an `ios/` path or an `app.json` is tracked. There is no
+"has a mobile target" field at all, so a `mobile: none` is checked against the tree directly — the
+same `ios/` / `app.json` test, plus `pubspec.yaml` and `android/`. Do the grep; do not infer from a
+missing field that there was nothing to look for.
+
+**Positive evidence against a `none` is a stop and surface, never a rewrite.** If the tree now
+carries the surface the config says is absent — an iOS target under a `mobile: none`, a PostHog SDK
+under a `posthog: none` — report both sides and let the user decide, exactly as a `merge_queue`
+disagreement is handled. Never silently rewrite a `none` into a block, and never silently keep one
+the tree contradicts. Note `posthog`'s derivation is a bare substring grep, so a repo that merely
+*documents* PostHog trips it; say which file matched, so the user can dismiss it.
+
+**An ABSENT one of these keys is the rollout path, and it is the half a refresh must not skip.**
+Every consumer repo was configured before this form existed, so on the first refresh after it lands
+each of the three keys is simply missing — and missing means "nobody has checked", which is what
+renders the blind-spot row this form exists to clear. A key carrying `posthog: false` counts as
+missing for this purpose: it is a detection result the contract does not define as a config value, so
+regeneration drops it, and an absent-only rule would never ask about it. A refresh that only carries existing values
+forward therefore changes nothing anywhere. So: **whenever one of `testflight:`, `posthog:` or
+`mobile:` is absent, put interview §2c to the user for that key** and record the answer, naming it in
+the preview like any other addition. Do not gate that on the tree being quiet — the case this repo's
+own config demonstrates is a detection *hit* the user dismisses (`posthog`'s bare grep matches a repo
+that merely documents PostHog), and gating on silence skips exactly it. "Not sure" is a valid answer
+and leaves the key absent. This mirrors `review_site:`, which is likewise proposed as an addition
+when a config predates it.
+
 **`stacked_prs` is policy, not a detected fact — never add it on a refresh.** Absent means the repo
 has not opted in, which is the correct state for every repo that has not asked for it, and an update
 must leave it absent. Carry an existing block across verbatim; do not "helpfully" add one because
 `stack-probe.sh` reports the repo is now enabled. Enablement is availability; the block is consent.
 Raise it as a suggestion if the user asks what is new, and route them through interview §3c.
+
+**Migrate mode inherits all of this, and needs it most.** `references/migrate-mode.md` extracts
+config from generated skills, and a legacy generated skill has no way to express a `none` — so a
+migrated config arrives with all three keys absent, every time. Run §2c for all three at its
+interview step. That instruction also lives in `migrate-mode.md` itself, because this file's own
+opening says migrate mode is covered there, and a rule stated only here is a rule that path never
+reads.
 
 ## Adopt mode (no marker — legacy hand-written skills)
 

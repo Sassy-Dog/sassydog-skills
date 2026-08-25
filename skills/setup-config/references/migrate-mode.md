@@ -156,6 +156,22 @@ The one poisoned fact is indistinguishable from the other five by inspection —
 confident, specific statement. Only the live check separates them, which is why this step is not
 optional and not a "when in doubt" measure.
 
+## Step 2b — ask §2c for the three confirmed-absent keys, always
+
+A generated skill has no way to express a `none`, so **extraction can never produce one**. Every
+migrated config therefore arrives with `testflight:`, `posthog:` and `mobile:` absent — which means
+"nobody has checked" and renders a `survey-work` blind-spot row for each, permanently, with no config
+that clears it (issue [#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)).
+
+So put **interview §2c** to the user for all three, here, as part of this mode. This is the one
+question migrate mode must ask rather than infer: Step 1's "ask only about what the render cannot
+supply" applies, and a `none` is precisely what a legacy render cannot supply.
+
+Two things not to shortcut. A quiet tree is **not** an answer — `none` asserts that a human checked,
+so it is never defaulted or inferred. And `sentry:` is **not** part of this question: its `none` is
+written by the culprit check in `references/detection.md`, and it keeps its blind-spot row
+deliberately (`references/config-contract.md`, "The one exception").
+
 ## Step 3 — the renames: legacy names map to current names
 
 Four of the six skills have been renamed since the generated era (`fill-it` twice, via `groom-it`).

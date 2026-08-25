@@ -146,6 +146,12 @@ Read `references/interview.md`. Ask only policy questions and unconfirmable fact
 **always** confirmed against live state, never asked from memory — a wrong merge policy is the most
 expensive mistake this generator can make.
 
+**Never default a confirmed-absent `none`.** `testflight: none`, `posthog: none` and `mobile: none`
+are written only on an explicit answer to interview §2c — detection may propose one, but a quiet
+tree is not a confirmation, and a guessed `none` retires a real blind spot with nothing announcing
+it. (`sentry: none` is the exception in the other direction: it is never asked, it is what a failed
+culprit check records.)
+
 In migrate mode most answers come from the existing render; ask only about what it cannot supply.
 
 ## Phase 3 — migrate mode
@@ -179,13 +185,29 @@ state, and diff the result against the committed config.
 **Frontmatter is regenerated; `##` prose sections are carried across verbatim.** That split is the
 whole point of the format — prose is the thing a refresh must never rewrite.
 
-**`review_site:` is the one fact this phase must NOT re-derive.** It was seeded from visibility at
+**`review_site:` is a fact this phase must NOT re-derive.** It was seeded from visibility at
 setup and is carried forward unchanged; re-reading visibility here is precisely what would flip a
 repo's review architecture on the first refresh after a visibility change, with the change invisible
 in every run's output. If live visibility no longer matches what the configured value implies,
 **stop and surface both sides** — the same shape a `merge_queue` disagreement gets — and let the
 user decide. If the key is absent because the config predates it, propose the seeded value as an
 addition and say so in the preview; until then the reading skills default it to `agent`.
+
+**The three `none` answers are carried forward, not re-asked** — but an **absent** one is asked, and
+`sentry: none` is not one of them. `testflight: none`, `posthog: none` and `mobile: none` each record
+a human's confirmation, so re-litigating them on every refresh reopens exactly what the form closed.
+The one signal that reaches an existing value is *positive* evidence — an iOS target under a
+`mobile: none`, a PostHog SDK under a `posthog: none` — and that is a **stop and surface** like any
+other disagreement, never a silent rewrite. **Where one of the three is missing entirely (or carries
+a `posthog: false`), put interview §2c to the user for that key**: every consumer repo predates this
+form, so absent is the state they are all in, and a refresh that only carries values forward would
+change nothing anywhere.
+
+**`sentry: none` is re-derived on every refresh, like any other fact.** It is written when the
+culprit check fails *or could not run* — no MCP server, no issues to sample — which are conditions of
+the session, not facts about the repo. Freezing it would let one unlucky run permanently retire the
+plate's highest-signal surface with no path back, since the only contradicting evidence is the check
+that was skipped. See `references/update-mode.md`.
 
 Apply per file, on approval only.
 
@@ -222,7 +244,8 @@ user approves** — writing into a product repo is outward-facing and never sile
 - Never delete a directory lacking a `generated-by:` marker.
 - Never delete generated skills before their config is written and verified.
 - Never copy a fact forward without re-verifying it against live state — except `review_site:`,
-  which is seeded once and carried forward by design; a live-visibility mismatch is surfaced, never
-  applied.
+  which is seeded once and carried forward by design, and the four confirmed-absent `none` forms
+  (`sentry:`, `testflight:`, `posthog:`, `mobile:`), which record a check that already happened; a
+  live-visibility mismatch is surfaced, never applied.
 - Prose in `##` sections is user-owned: carried across verbatim, never rewritten or summarised.
 - This skill always runs from the plugin; it is never copied into a consumer repo.

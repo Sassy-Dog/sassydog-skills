@@ -162,8 +162,28 @@
 #      "presence is the toggle" — prose a later consistency sweep reads as drift
 #      and deletes — and keeps the sibling prior-claim scan SECONDARY, since a
 #      cloud session has no sibling checkouts and would lose the guard silently.
-#      Source-level, must-not-exist checks run on a flattened copy. No gh, no
-#      network: six tracked files.
+#      The `none` form now spans FOUR keys and is deliberately ASYMMETRIC across
+#      them (issue #261): `sentry: none` keeps its blind-spot row, while
+#      `testflight`/`posthog`/`mobile: none` take one `(n/a)` token on the clean
+#      line and no row. A four-key form with one key behaving differently reads
+#      as a plain inconsistency, so a tidying sweep breaks it in either
+#      direction and both are silent — collapsing sentry onto the clean line
+#      restores #213's gap, promoting the other three restores #261, where an
+#      infra repo carried three permanently unclearable rows on every plate and
+#      trained its reader to skim the heading a dark Sentry lives under. The
+#      four-key table is checked by COUNTING rows, not by looking the four names
+#      up: a lookup passes just as happily on a table that grew a fifth key.
+#      Its own assertions have been the hard part: three review rounds each found
+#      some of them passing on sources stating the inverse, and the author's
+#      mutation set kept reporting "all detected" because every mutation deleted
+#      the exact literal its assertion grepped for — tautologically caught. The
+#      lesson generalises to every prose gate here: mutate the MEANING, worded as
+#      a tidying editor would word it. Re-measured that way, the two outcomes need
+#      mutually exclusive vocabularies (enumerating negations is unwinnable),
+#      windows need structural bounds rather than byte counts, and every table row
+#      must be classified rather than tallied. Source-level, must-not-exist checks
+#      run on flattened and emphasis-stripped copies. No gh, no network: eight
+#      tracked files.
 #  21. sentry-counts tests (scripts/test-sentry-counts.sh) — sentry-triage may
 #      only gate on counts it CONFIRMED as lifetime (issue #218). `count`/
 #      `userCount` mean different things per transport under identical labels:
@@ -744,10 +764,13 @@ else
 fi
 
 # --- 20. sentry-verification tests -------------------------------------------
-# The decision under test is prose an agent follows, not code a script runs, so
-# the gate reads the instruction itself. Every failure it guards is silent by
+# The decisions under test are prose an agent follows, not code a script runs, so
+# the gate reads the instructions themselves. Every failure it guards is silent by
 # construction — a mis-configured Sentry project produces a plate that looks
-# complete in both repos. Six tracked files: no gh, no network.
+# complete in both repos, and a `none` form flattened to symmetry produces a plate
+# that looks complete on a repo whose Sentry nothing is watching. Two decisions:
+# #213's culprit verification, and #261's deliberately ASYMMETRIC four-key `none`.
+# Eight tracked files: no gh, no network.
 if bash scripts/test-sentry-verification.sh; then
     pass "sentry-verification tests (scripts/test-sentry-verification.sh)"
 else

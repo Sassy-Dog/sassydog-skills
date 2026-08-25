@@ -68,9 +68,12 @@ sentry:                     # present  -> the Sentry surface runs
 ```
 
 Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry: false` — the one
-documented exception to this principle is `sentry: none`, below. The same
-holds for `board`, `testflight`, `mobile`, `migrations`, `codegen`, `secret_bootstrap`,
-`review_surfaces`, and `claim_label`.
+documented exception to this principle is `sentry: none`, below, a form three sibling keys now share
+(`testflight: none`, `posthog: none`, `mobile: none`) with a deliberately *different* consequence.
+The same holds for `board`, `testflight`, `mobile`,
+`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, and `claim_label`. Presence remains
+the toggle for the four `none` keys too — `none` is an *additional* value on them, never a
+replacement for presence, so a key that is simply absent is still off.
 
 Four keys are genuine scalars rather than blocks, because they carry no sub-facts:
 
@@ -93,8 +96,8 @@ Four keys are genuine scalars rather than blocks, because they carry no sub-fact
 
 **`sentry: none` is the FIRST documented exception to presence-is-the-toggle, and it is deliberate.**
 It is not a `false` flag by another name and it does not reopen paired state: it carries a fact the
-absence of the key cannot carry — that someone **checked**, and this repo genuinely has no error
-monitoring to point at.
+absence of the key cannot carry — that someone **checked**, and no error-monitoring project could be
+verified for this repo. (Not the stronger claim that the repo has none; see the second reason below.)
 
 The reason the exception is worth its cost: `setup-config` may only write a `sentry:` block for a
 project it has **verified by culprit** against this repo's own code (`references/detection.md`,
@@ -109,12 +112,100 @@ Three states, all distinct:
 | Config | Meaning | `survey-work` behaviour |
 | --- | --- | --- |
 | `sentry:` block with `org`/`projects` | verified project | surface runs |
-| `sentry: none` | confirmed: this repo has no error monitoring | reported as a blind spot |
+| `sentry: none` | confirmed: no error-monitoring project is verified here | reported as a blind spot |
 | key absent | never configured / unknown | reported as a blind spot (unconfirmed) |
 
-The exception is scoped to `sentry:` alone. No other key has a `none` form, and adding one requires
-the same justification: a confirmed-absent state that a reader would otherwise mistake for an
-unfinished check.
+The exception is **the `none` form itself**, and it is scoped to the four keys whose absence
+`survey-work` renders as a blind-spot row: `sentry:`, `testflight:`, `posthog:`, and `mobile:`. A
+fifth key needs both halves of the justification, not one — a confirmed-absent state a reader would
+otherwise mistake for an unfinished check, **and** a surface whose absence already costs that reader
+something to read. The keys deliberately left out are listed below.
+
+#### The four keys, and why `none` is ASYMMETRIC across them
+
+| Config | Meaning | `survey-work` behaviour |
+| --- | --- | --- |
+| `sentry: none` | confirmed: no *verified* error-monitoring project | **blind-spot row — kept** |
+| `testflight: none` | confirmed: no beta channel | on the clean line, no row |
+| `posthog: none` | confirmed: no product analytics | on the clean line, no row |
+| `mobile: none` | confirmed: no mobile app | on the clean line, no row |
+
+`survey-work` §6 owns the exact rendering — the `(n/a)` marker and the `✓ Clean today:` line — and
+this table deliberately does not transcribe it; a third copy of a format is the #167 shape.
+
+**Absent error monitoring is a gap somebody could close; an absent mobile app is a product fact.**
+That single sentence is the whole asymmetry. A repo with no Sentry should keep being told so on
+every plate: the row is the only place anything says the production errors are not merely unseen by
+this plate but unrecorded anywhere, and it is a decision somebody can revisit tomorrow. A repo with
+no mobile target should not: no plate will ever change that, and there is no configuration that
+clears the row.
+
+**A second reason, and it applies to `sentry:` alone.** The three sibling keys mean exactly one
+thing. `sentry: none` means **two**: this repo has no error monitoring, *or* the culprit check could
+not run — no MCP server connected, no recent issues to sample (`references/detection.md`). The
+second is not a confirmed absence at all, it is an unfinished verification wearing the same value,
+and nothing downstream can tell them apart. That alone disqualifies the clean line: a surface whose
+state is *unknown* must not be reported as one somebody checked and cleared. So the row is worded as
+*confirmed at setup that no project is verified* — confirmed of the verification, never of the
+absence — and the sources-line token beside it reads `recorded at setup`. Precise rather than
+tactful; "this repo has no Sentry" is the one thing neither may say.
+
+**The failure this closes is a trained reader, not an untidy plate**
+([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)). `survey-work` §6 orders
+blind-spot rows by what the darkness costs, customer pain first, so an infra repo with no app —
+`Sassy-Dog/platform`, observed 2026-08-24 — rendered `testflight`, `posthog` and `mobile` rows on
+**every** plate, two of them in the loudest position the section has, with no config that could
+clear them. A reader who meets the same three unactionable rows every time learns to skim the
+heading, and the row that should stop them — a genuinely dark Sentry on a repo that has one — is
+then sitting in a list they have been trained to ignore.
+
+**Do not "align the `none` forms."** A four-key form where one key behaves differently reads as a
+plain inconsistency, which is exactly why the asymmetry is pinned in CI
+(`scripts/test-sentry-verification.sh`) and not merely written here. Collapsing `sentry: none` onto
+the clean line re-creates the silent gap [#213](https://github.com/Sassy-Dog/sassydog-skills/issues/213)
+opened this form to close; promoting the other three back into rows re-creates #261.
+
+**Where each `none` comes from differs too.** `setup-config` writes `sentry: none` itself, as the
+recorded outcome of a culprit verification that failed (`references/detection.md`). The other three
+are never derived and never defaulted — they are written only on an explicit answer in the
+interview (`references/interview.md` §2c), because `none` asserts that a human checked, and a
+guessed `none` retires a real blind spot with nothing announcing it. A refresh carries all four
+forward rather than re-asking (`references/update-mode.md`).
+
+**Deliberately not extended further.** Each new `none` is one more state a reader has to hold, so
+the form is scoped to keys whose absence is *loud*:
+
+- **`board:` is excluded.** `survey-work` §3B already ships a boardless form that reads open issues
+  directly, so an absent `board:` selects a documented alternative path rather than going dark. It
+  renders no blind-spot row today and needs no opt-out.
+- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:` and `review_surfaces:` are
+  excluded.** None of them render a blind-spot row, so their absence costs a reader nothing and a
+  `none` would only add a state to get wrong.
+- **`stacked_prs:` is excluded, and for a third reason.** Its absence already means something
+  specific — the repo has not opted in — and a refresh is forbidden from adding it at all
+  (`references/update-mode.md`). Enablement is availability; the block is consent. A `none` there
+  would be a second way to spell "no consent", which is not a state anyone needs.
+- **`ci_workflow:` is excluded**, even though its absence *does* render a blind-spot row, which makes
+  it the one apparent counter-example to the criterion above. The difference is what the absence
+  means: a missing `ci_workflow` is a missing **fact the skill needs** — it cannot guess a workflow
+  filename — so the row is a request for configuration and clears the moment the key is filled in. It
+  is never a statement about the product. There is nothing for a `none` to confirm.
+- **`review_agent:` and `review_site:` are excluded for a different reason.** They are not
+  presence-toggled at all — they carry defaults — and `review_agent`'s opt-out is spelled `skip`
+  precisely so that it is not mistaken for this form. See `review_agent` below.
+
+#### Why this section is still headed `sentry: none`
+
+The heading names one key while the body scopes the form to four. That is deliberate. One CI gate
+anchors the heading line verbatim — `scripts/test-review-gate-decisions.sh` asserts it, anchored, as
+a link target for the `review_agent: skip`-not-`none` decision (#237, tracked as
+[#247](https://github.com/Sassy-Dog/sassydog-skills/issues/247)) — while
+`scripts/test-sentry-verification.sh` extracts this section by a prefix of it, and four prose
+cross-references point at it by name.
+Renaming it to cover the four would redden a gate whose failure message points a reader at #248's
+review architecture instead of at this section. `sentry: none` is also still the *first* documented
+exception and the one whose justification the others inherit, so the name is accurate as a
+citation even where it is incomplete as a summary. Leave it.
 
 ## Shared blocks
 
@@ -131,15 +222,15 @@ board:
   backlog_option_id: f75ad846
   in_progress_option_id: 98236657
 
-sentry:
+sentry:                     # or `sentry: none` — no verified project (see the exception below)
   org: sassy-dog
   projects: [qrninja-web, qrninja-mobile]
   gate: defaults            # or an explicit override of the qualifying gate
 
-testflight:
+testflight:                 # or `testflight: none` — confirmed: no beta channel
   bundle_id: com.sassy-dog.qrninja
 
-mobile:
+mobile:                     # or `mobile: none` — confirmed: no mobile app
   release_workflow: mobile-release.yml
   path_prefix: apps/mobile/
 
@@ -162,12 +253,23 @@ review_surfaces:                            # optional; steers the shipped orche
   "ops/**": sassy-dog:infra-platform-reviewer
 review_site: agent                          # where the gate runs on the dispatching paths
 claim_label: in-progress
-posthog: true
+posthog: true                               # or `none` — confirmed: no product analytics
 merge_queue: false
 ```
 
 Omit any block the repo doesn't use — with two exceptions, `review_agent:` and `review_site:`,
-where omitting the key selects a default rather than disabling anything.
+where omitting the key selects a default rather than disabling anything. Four of these keys —
+`sentry:`, `testflight:`, `posthog:`, `mobile:` — additionally accept the scalar `none`, the
+confirmed-absent form above. For the first three that replaces a block; `posthog` is already a
+scalar, so `none` simply joins `true` as one of its values. Omitted means nobody has checked; `none`
+means somebody has, and only `sentry: none` still renders a blind-spot row.
+
+**`posthog: false` is not one of the forms.** `scripts/detect-capabilities.sh` reports the
+capability as `true`/`false`, but that is a detection *result*, not a config value: a render writes
+`posthog: true`, or `posthog: none` on a confirmed absence, or omits the key. Writing the `false`
+through would re-create exactly the paired state this section's principle removes — a flag that can
+disagree with the facts beside it — and `survey-work` branches on `true` and on the key's absence, so
+a `false` behaves as absent while reading like a decision.
 
 ### `review_agent` — read by `send-it`
 
