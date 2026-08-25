@@ -1002,12 +1002,29 @@ dest_tally() {
                 # token that was dropped` are affirmations.
                 #
                 # THE CLASS SPLITS IN TWO, and the split is grammatical. A
-                # POSSESSIVE (`whose`) and a LOCATIVE (`where`) name a new
-                # subject in their OWN right -- `whose target`, `where the key`
-                # -- so they stop unconditionally. The SUBJECT relatives carry
-                # the antecedent forward instead, so when one heads the
-                # destination directly its subject IS the destination and `the
-                # blind-spot row that is dropped` is a real negation.
+                # POSSESSIVE (`whose`), a LOCATIVE (`where`) and a TEMPORAL
+                # (`when`) each name a new subject in their OWN right -- `whose
+                # target`, `where the key`, `when the key` -- so they stop
+                # unconditionally. The SUBJECT relatives carry the antecedent
+                # forward instead, so when one heads the destination directly
+                # its subject IS the destination and `the blind-spot row that is
+                # dropped` is a real negation.
+                #
+                # THE SPLIT WAS WRONG TWICE BEFORE IT WAS RIGHT, which is the
+                # reason to distrust a shorter version of it. It began as
+                # `whose` alone, then as one whole-class first-word exemption --
+                # each time the members that name their own subject were sorted
+                # by how the rule READ rather than by what they DO. `when`
+                # travelled with the subject relatives for exactly that reason
+                # and was the last one out: measured, `a blind-spot row when the
+                # key is dropped` read 0/1 against 1/0 on main.
+                #
+                # `who|whom` CAN NEVER FIRE in the exempt half and are kept for
+                # completeness of the class, not for behaviour: a blind-spot row
+                # is not a person, so a first-position `who` has no antecedent
+                # to take. Nothing pins them and nothing can. Do not read their
+                # presence as evidence that the exemption generalises -- the
+                # three members above are the test of that, not these two.
                 #
                 # A SINGLE FIRST-WORD EXEMPTION OVER THE WHOLE CLASS IS WRONG,
                 # and wrong exactly where a restrictive relative is most
@@ -1015,8 +1032,8 @@ dest_tally() {
                 # was dropped is kept` and its `where` variant both read 0/1
                 # under it, against 1/0 on main. Nothing in the non-first cases
                 # above can see that, which is why each half has its own case.
-                if (b == "whose" || b == "where") return 0
-                if (seen && b ~ /^(which|that|when|who|whom)$/) return 0
+                if (b ~ /^(whose|where|when)$/) return 0
+                if (seen && b ~ /^(which|that|who|whom)$/) return 0
                 # ONLY A REAL WORD COUNTS AS HAVING BEEN SEEN. A token baring to
                 # nothing spent the exemption once: measured, `the blind-spot
                 # row #261 that is dropped` read 1/0, because `#261` is not a
@@ -1041,9 +1058,21 @@ dest_tally() {
                 # closed -- English does not coin a third -- so enumerating them
                 # terminates, which is the same argument the header makes for
                 # `no/not/never/...` and NOT the argument it refuses for a verb
-                # list. First-person `am` is the one paradigm member left out,
-                # because rule prose has no first person and a case for it would
-                # be invented rather than measured.
+                # list. BOTH PARADIGMS MUST BE COMPLETE FOR THAT LICENCE TO
+                # HOLD, and the first draft honoured it for one and not the
+                # other: `be` was 7 of 8 with `am` named as a deliberate
+                # absence, while the get-passive shipped as 3 of 5 with
+                # `getting` and `gotten` missing and NOTHING said about them --
+                # a stated omission and an unstated one, side by side. The gap
+                # bites exactly where the missing member is the only auxiliary
+                # present, which `has gotten dropped` and `keeps getting
+                # dropped` produce: both read 1/0 against 0/1 on main, quietly.
+                # (`is getting dropped` and `has been dropped` were fine, since
+                # `is` and `been` carry them -- which is why the omission was
+                # invisible from the cases that existed.) First-person `am`
+                # remains the ONE member deliberately absent, rule prose having
+                # no first person and a case for it being invented rather than
+                # measured.
                 #
                 # TRIMMING IS NOT THE SAFE DIRECTION HERE, which is worth saying
                 # because eight of these were once pinned by nothing and looked
@@ -1052,7 +1081,7 @@ dest_tally() {
                 # blind-spot rows are dropped`, `has been dropped`, `gets
                 # dropped` -- and that is the QUIET direction on a rule that
                 # STATES a negative. Each member now carries a case.
-                if (b ~ /^(is|was|are|were|be|been|being|gets|get|got)$/)
+                if (b ~ /^(is|was|are|were|be|been|being|gets|get|got|getting|gotten)$/)
                     copula = 1
                 if (b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/) {
                     if (!copula) continue
@@ -1448,6 +1477,13 @@ dest_case "a first-position possessive relative is still a new subject" \
     'the blind-spot row whose posthog target was dropped is kept' '1 0'
 dest_case "a first-position locative relative is still a new subject" \
     'the blind-spot row where the key was dropped is kept' '1 0'
+# `when` is the THIRD member of this defect, and it travelled with the subject
+# relatives through two earlier versions of the split because it reads like one.
+# It is a temporal subordinator: `when the key` names its own subject exactly as
+# `where the key` does. Measured 0/1 against main`s 1/0 while it sat in the
+# exempt half, and neither case above can see it.
+dest_case "a first-position temporal relative is still a new subject" \
+    'a blind-spot row when the key is dropped' '1 0'
 # ...and a token baring to NOTHING does not spend the exemption either. Same
 # empty-bare trap as the dash arms, one function along: `#261` is not a word, so
 # `that` is still the first one.
@@ -1461,9 +1497,13 @@ dest_case "a reduced clause modifies the nearer noun, not the row" \
     'the blind-spot row for sentry, with its posthog target dropped, is kept' '1 0'
 dest_case "a trailing reduced clause does not negate the row" \
     'sentry keeps a blind-spot row with the mobile lane skipped' '1 0'
-# EVERY PASSIVE AUXILIARY, one case each. English has two closed paradigms for
-# the passive -- `be` and the get-passive -- which is the licence on which this
-# set is enumerated at all; see the note at the call site. The cases exist
+# EVERY PASSIVE AUXILIARY, one case each, and BOTH PARADIGMS COMPLETE. English
+# has two closed paradigms for the passive -- `be` and the get-passive -- which
+# is the licence on which this set is enumerated at all; see the note at the
+# call site. The licence only holds if each paradigm is whole, and the first
+# draft shipped `be` at 7 of 8 (with `am` named as a deliberate absence) beside
+# a get-passive at 3 of 5 with nothing said. `getting` and `gotten` cost two
+# quiet misses where they are the only auxiliary present. The cases exist
 # because the alternative reading of a ten-member list is that it was fitted,
 # and because TRIMMING is the unsafe direction: measured one member at a time,
 # removing any of the ten flips its own ordinary sentence to AFFIRMED, quietly,
@@ -1488,6 +1528,10 @@ dest_case "passive auxiliary: get" \
     'the blind-spot row will get dropped' '0 1'
 dest_case "passive auxiliary: got" \
     'the blind-spot row got dropped' '0 1'
+dest_case "passive auxiliary: getting" \
+    'the blind-spot row keeps getting dropped' '0 1'
+dest_case "passive auxiliary: gotten" \
+    'the blind-spot row has gotten dropped' '0 1'
 dest_case "a negated participle affirms the row (never/omitted)" \
     'the blind-spot row for these three keys is never omitted' '1 0'
 dest_case "a negated participle affirms the row (across an aside)" \

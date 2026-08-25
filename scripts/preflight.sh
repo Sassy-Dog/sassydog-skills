@@ -15,7 +15,11 @@
 # Usage: bash scripts/preflight.sh [--fix]
 #
 # Gates, in CI order:
-#   1. shellcheck -S warning over every tracked *.sh
+#   1. shellcheck -S warning over every tracked *.sh, PLUS a second pass for
+#      SC2006 alone. SC2006 is `style`, so the first pass cannot see it, and the
+#      gap shipped a real defect twice: an unescaped backtick in a double-quoted
+#      test label is command substitution, and three labels in
+#      test-sentry-verification.sh were executing `which`, `that` and `where`.
 #   2. frontmatter sanity (scripts/check-frontmatter.sh) — two layers. LOADER
 #      requirements on every tracked skill/agent file: opening `---` on line 1,
 #      `name`/`description` present, `name` matching the directory (skills) or
@@ -220,13 +224,15 @@
 #      comma-bearing token is tested before it opens a skip, an odd comma having
 #      otherwise consumed the negator itself — wrong on the pre-#271 source too.
 #      And `post_negated` performs the same polarity flip `governed` does,
-#      stops at a RELATIVIZER — and that class SPLITS: a possessive (`whose`)
-#      or locative (`where`) names a new subject in its own right and stops
-#      unconditionally, while the subject relatives (`which|that|when|who|whom`)
-#      carry the antecedent forward and are exempt when one heads the
-#      destination directly. A single whole-class exemption is wrong exactly
-#      where a restrictive relative is most natural, immediately after the
-#      destination, and each half has its own case. It also
+#      stops at a RELATIVIZER — and that class SPLITS: a possessive (`whose`),
+#      locative (`where`) or temporal (`when`) names a new subject in its own
+#      right and stops unconditionally, while the subject relatives
+#      (`which|that|who|whom`) carry the antecedent forward and are exempt when
+#      one heads the destination directly. A single whole-class exemption is
+#      wrong exactly where a restrictive relative is most natural, immediately
+#      after the destination, and each member that can fire has its own case;
+#      the split was mis-drawn twice before it was right, so sort members by
+#      what they DO and not by how the rule reads. It also
 #      counts a participle only once a PASSIVE AUXILIARY has re-attached it,
 #      that ten-member set being enumerated on the same licence as the core
 #      negators rather than the lexical ones (English has exactly two passive
@@ -512,6 +518,30 @@ if command -v shellcheck >/dev/null 2>&1; then
         pass "shellcheck -S warning"
     else
         failed "shellcheck -S warning"
+    fi
+    # SC2006 IS A SEPARATE PASS BECAUSE IT IS `style`, AND THE ONE ABOVE STOPS
+    # AT `warning`. That severity gap is the whole reason a real defect shipped
+    # twice: an UNESCAPED backtick inside a double-quoted test label is command
+    # substitution, so `dest_case "a `which` clause …"` runs `which` and prints
+    # the label with its identifying word eaten. It happened in
+    # test-sentry-verification.sh, was documented in CLAUDE.md, and then
+    # happened again in the same file — three labels, executing `which`, `that`
+    # and `where`, which is how a mutation of one rule produced three
+    # indistinguishable FAIL lines in the gate that exists to say which rule
+    # broke. Prose did not stop the recurrence; this does.
+    #
+    # A BESPOKE GREP WAS TRIED AND REJECTED: distinguishing a backtick inside a
+    # double-quoted argument from one inside a single-quoted string is a
+    # quoting-context question, and a hand-rolled scan of this repo produced 3
+    # true positives against 7 false ones. shellcheck already parses the shell,
+    # so it answers exactly that question — measured on a two-line fixture, the
+    # unescaped form is flagged and the escaped form is not.
+    if [ -n "$sh_files" ]; then
+        if echo "$sh_files" | xargs shellcheck --include=SC2006; then
+            pass "shellcheck SC2006 (unescaped backticks in strings)"
+        else
+            failed "shellcheck SC2006 (unescaped backticks in strings)"
+        fi
     fi
 else
     skip "shellcheck (not installed — CI still enforces)"
