@@ -193,14 +193,71 @@
 #      the part that can drift, so it stays short and each addition must be
 #      justified by prose in the tree. Neither substitutes for POLARITY, which is
 #      what handles composition ("not exempt") that a list of any length cannot.
-#      All three of its scans stop at ONE shared clause boundary (issue #270).
-#      Two did and `cancelled` did not, which reads as deliberate and was not: a
-#      negator in a PREVIOUS clause cancelled a real negation, so the sentence
-#      read AFFIRMED and could satisfy the very must-affirm veto meant to catch
-#      it. They stay COUNT-bounded; bounding by clause is #271. The classifier
-#      now carries a battery of its own — fixed strings, both directions, each
-#      case proved load-bearing by a mutation — because until then its behaviour
-#      lived only in comments, and a comment does not redden.
+#      All three of its scans stop at ONE shared clause boundary (issue #270),
+#      and since #271 that boundary is their only BOUND as well. Two checked it
+#      and `cancelled` did not, which reads as deliberate and was not: a negator
+#      in a PREVIOUS clause cancelled a real negation, so the sentence read
+#      AFFIRMED and could satisfy the very must-affirm veto meant to catch it.
+#      The count bound all three carried is gone — four content words in the two
+#      look-around scans, four POSITIONS in the cancellation scan, a real
+#      difference and not a wording slip — because the unit was wrong in both
+#      directions at once and no value of it works: too short let a
+#      qualifier-heavy negator escape and read AFFIRMED, too long reached
+#      negators in OTHER clauses, and raising it from four to six reddened the
+#      PRE-#271 gate (no count of reddened assertions is quoted anywhere, and
+#      after merge there is no bound left to raise — the live proof is that
+#      restoring a count bound to any one scan reddens that scan's own case).
+#      Dropping the counts is what made the three dead dash arms have to work,
+#      an unfired boundary now costing the whole previous clause rather than a
+#      word of window; it is what dissolved the `:` arm cost PR #272 accepted,
+#      by giving the cancellation scan the parenthetical skip the left-context
+#      one always had; and it removed three guards the distance had been
+#      supplying by accident, every one of them failing QUIETLY. A skip region
+#      now honours `hard_break`, the subset of the boundary set an aside cannot
+#      contain (`.` and `;`), written as an expression of `clause_break` rather
+#      than beside it and asserted at SOURCE level, since nothing behavioural
+#      can tell a shared subset from two matching transcriptions. The
+#      comma-bearing token is tested before it opens a skip, an odd comma having
+#      otherwise consumed the negator itself — wrong on the pre-#271 source too.
+#      And `post_negated` performs the same polarity flip `governed` does,
+#      stops at a RELATIVIZER — and that class SPLITS: a possessive (`whose`)
+#      or locative (`where`) names a new subject in its own right and stops
+#      unconditionally, while the subject relatives (`which|that|when|who|whom`)
+#      carry the antecedent forward and are exempt when one heads the
+#      destination directly. A single whole-class exemption is wrong exactly
+#      where a restrictive relative is most natural, immediately after the
+#      destination, and each half has its own case. It also
+#      counts a participle only once a PASSIVE AUXILIARY has re-attached it,
+#      that ten-member set being enumerated on the same licence as the core
+#      negators rather than the lexical ones (English has exactly two passive
+#      auxiliaries, `be` and the get-passive, both closed paradigms, so
+#      enumerating them terminates) and each member carrying its own case,
+#      because trimming is the unsafe direction: removing any one of them flips
+#      its own ordinary sentence to AFFIRMED, quietly — since
+#      with no ceiling it otherwise fired on any participle in its clause and
+#      read the #261 rule and its inverse alike. A PREPOSITION is deliberately
+#      not a stop there, and a case pins why: it is the copula after it that
+#      decides. `clause_break` also gained the two separators this repo's own
+#      prose writes, the rule arrow and the markdown cell wall `|`; without them
+#      the scan crosses live tracked text in two of the eight files, and since
+#      neither drift reddens anything both arms are pinned by fixed strings
+#      alone. The negator sets are factored core-and-full, the full one an
+#      expression of the core, because a comma-bearing token is tested against
+#      the CORE only — an adverb scopes over what follows it, a participle
+#      predicates on the subject to its left. ONE limit is STATED rather than
+#      fixed, in a known-limit block, and it has two faces: comma parity is a
+#      guess, so a comma-joined subordinate clause is unbounded and a third
+#      comma inverts the aside pairing. The block also records the fix that does
+#      NOT work, measured — subordinators in `clause_break` change neither
+#      string, the subordinator sitting left of the negator where a backward
+#      scan meets the negator first. `hard_break` bounds both at the nearest
+#      sentence, which is why it is a limit and not a hole. No count beyond that
+#      is written down: two copies of this paragraph once disagreed about one,
+#      which is the failure this gate refuses everywhere else. The
+#      classifier carries a battery of its own — fixed strings, both directions,
+#      every arm of the boundary set and every scan's bound and guard proved
+#      load-bearing by a mutation — because until then its behaviour lived only
+#      in comments, and a comment does not redden.
 #      Windows need structural bounds rather than byte
 #      counts; a veto over a rule that STATES a negative must require the
 #      negation, since silence satisfies "nothing affirmed"; and every table row
