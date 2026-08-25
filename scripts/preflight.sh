@@ -233,13 +233,17 @@
 #      after the destination, and each member that can fire has its own case;
 #      the split was mis-drawn twice before it was right, so sort members by
 #      what they DO and not by how the rule reads. It also
-#      counts a participle only once a PASSIVE AUXILIARY has re-attached it,
-#      that ten-member set being enumerated on the same licence as the core
-#      negators rather than the lexical ones (English has exactly two passive
-#      auxiliaries, `be` and the get-passive, both closed paradigms, so
-#      enumerating them terminates) and each member carrying its own case,
-#      because trimming is the unsafe direction: removing any one of them flips
-#      its own ordinary sentence to AFFIRMED, quietly — since
+#      counts a participle only once a PASSIVE AUXILIARY or COPULAR verb has
+#      re-attached it. That set is TWO-TIER, on the split the negator set
+#      already uses: tier 1 is the two closed passive paradigms (`be` and the
+#      get-passive), enumerated on the terminating argument; tier 2 is copular
+#      and aspectual verbs, admitted only on the file's other rule — a lexical
+#      addition justified by prose in the tree — with the wider copular class
+#      (`seem|appear|look|…`) stated as a known limit rather than enumerated.
+#      Every member carries its own case and NO COUNT IS WRITTEN DOWN: the set
+#      has changed size twice under review and the prose stating its old size
+#      survived both times. Trimming is the unsafe direction — removing any
+#      member flips its own ordinary sentence to AFFIRMED, quietly — since
 #      with no ceiling it otherwise fired on any participle in its clause and
 #      read the #261 rule and its inverse alike. A PREPOSITION is deliberately
 #      not a stop there, and a case pins why: it is the copula after it that
@@ -536,6 +540,22 @@ if command -v shellcheck >/dev/null 2>&1; then
     # true positives against 7 false ones. shellcheck already parses the shell,
     # so it answers exactly that question — measured on a two-line fixture, the
     # unescaped form is flagged and the escaped form is not.
+    #
+    # NEITHER ONE-PASS SHORTCUT WORKS, both measured, so that the next person
+    # weighing this does not re-derive them. Adding `--include=SC2006` to the
+    # pass above reports NOTHING: the severity filter still applies to an
+    # included check, so `-S warning` suppresses a `style` rule even when it is
+    # named. And dropping the tree-wide run to `-S style` yields 208 findings
+    # across 11 rules on this tree, which is not adoptable today. Two passes is
+    # the cheap option, not the lazy one.
+    #
+    # COST, measured: the SC2006 pass is ~5s against a ~48s preflight, about
+    # 11%. It re-parses all 60 files, which is the price of shellcheck having
+    # no way to ask one question of an existing parse.
+    #
+    # Bare `xargs` here and in the pass above ASSUMES no tracked `*.sh` path
+    # contains whitespace — verified, 0 of 60 today. If that ever changes both
+    # call sites need `-0` with `git ls-files -z`.
     if [ -n "$sh_files" ]; then
         if echo "$sh_files" | xargs shellcheck --include=SC2006; then
             pass "shellcheck SC2006 (unescaped backticks in strings)"

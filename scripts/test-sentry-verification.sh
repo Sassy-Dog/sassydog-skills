@@ -1019,12 +1019,22 @@ dest_tally() {
                 # and was the last one out: measured, `a blind-spot row when the
                 # key is dropped` read 0/1 against 1/0 on main.
                 #
-                # `who|whom` CAN NEVER FIRE in the exempt half and are kept for
-                # completeness of the class, not for behaviour: a blind-spot row
-                # is not a person, so a first-position `who` has no antecedent
-                # to take. Nothing pins them and nothing can. Do not read their
-                # presence as evidence that the exemption generalises -- the
-                # three members above are the test of that, not these two.
+                # THE CLASS IS ENUMERATED WHOLE, INCLUDING MEMBERS THAT CANNOT
+                # FIRE, and the reason is a defect this split already shipped:
+                # `whereby` and `wherein` are `where` with a preposition baked
+                # in, they introduce a new subject exactly as it does, and they
+                # were simply MISSING -- measured, both read 0/1 against 1/0 on
+                # main. Meanwhile `who|whom` were being kept for completeness
+                # though neither can ever fire here, a blind-spot row not being
+                # a person. Keeping the unfireable members while omitting two
+                # that fire AND regress is the inconsistency to refuse: a class
+                # is enumerated by what it IS, and then behaviour follows.
+                # `who` stays in the exempt half as a subject relative and
+                # nothing pins it; `whom` is an OBJECT relative, so the split
+                # own principle puts it with the unconditional group even
+                # though it cannot fire either. Do not read the unfireable
+                # members as evidence the exemption generalises -- the five
+                # above are the test of that.
                 #
                 # A SINGLE FIRST-WORD EXEMPTION OVER THE WHOLE CLASS IS WRONG,
                 # and wrong exactly where a restrictive relative is most
@@ -1032,8 +1042,8 @@ dest_tally() {
                 # was dropped is kept` and its `where` variant both read 0/1
                 # under it, against 1/0 on main. Nothing in the non-first cases
                 # above can see that, which is why each half has its own case.
-                if (b ~ /^(whose|where|when)$/) return 0
-                if (seen && b ~ /^(which|that|who|whom)$/) return 0
+                if (b ~ /^(whose|where|whereby|wherein|when|whom)$/) return 0
+                if (seen && b ~ /^(which|that|who)$/) return 0
                 # ONLY A REAL WORD COUNTS AS HAVING BEEN SEEN. A token baring to
                 # nothing spent the exemption once: measured, `the blind-spot
                 # row #261 that is dropped` read 1/0, because `#261` is not a
@@ -1050,15 +1060,46 @@ dest_tally() {
                 # PREPOSITION is not the stop here -- it is the auxiliary after
                 # it that decides, not the preposition.
                 #
-                # THIS SET IS ENUMERATED ON THE SAME LICENCE AS THE CORE
-                # NEGATORS, and the distinction matters because the file
-                # otherwise requires every lexical addition to be justified by
-                # prose in the tree. English has exactly TWO passive
-                # auxiliaries: `be` and the get-passive. Both paradigms are
-                # closed -- English does not coin a third -- so enumerating them
-                # terminates, which is the same argument the header makes for
-                # `no/not/never/...` and NOT the argument it refuses for a verb
-                # list. BOTH PARADIGMS MUST BE COMPLETE FOR THAT LICENCE TO
+                # THE LICENCE IS TWO-TIER, and collapsing it into one is how
+                # this set goes wrong in either direction. The file already
+                # runs exactly this split on the NEGATOR set, whose core is a
+                # closed grammatical class and whose remainder is a short
+                # tree-justified lexical half; the same two arguments apply
+                # here and neither covers the other.
+                #
+                # TIER 1, the two PASSIVE AUXILIARIES: `be` and the get-passive.
+                # Both paradigms are closed -- English does not coin a third --
+                # so enumerating them terminates, which is the same argument
+                # the header makes for `no/not/never/...` and NOT the argument
+                # it refuses for a verb list.
+                #
+                # TIER 2, COPULAR AND ASPECTUAL verbs, admitted on the OTHER
+                # rule: a lexical addition justified by prose in the tree. They
+                # are not auxiliaries and the closed-paradigm argument does not
+                # reach them -- `seem`, `appear`, `look`, `prove`, `grow`,
+                # `turn` all qualify grammatically, so claiming closure here
+                # would be the fitted reading this file refuses. They are needed
+                # because `post_negated` asks whether a participle is PREDICATED
+                # of the destination, and a copular verb takes a participial
+                # complement predicated of its subject just as `be` does:
+                # measured, `the blind-spot row remains dropped`, `stays
+                # dropped` and `becomes dropped` each read 1/0 against 0/1 on
+                # main. Quiet, on a `+` veto. Only forms the TREE WRITES are
+                # enumerated -- 20 occurrences of this family across the eight
+                # files, one of them fifteen words from a blind-spot mention in
+                # survey-work.
+                #
+                # KNOWN LIMIT, worded the way `am` is: the wider copular class
+                # is NOT covered. `seem|appear|look|prove|grow|turn|sound|feel`
+                # are absent because the tree does not write them in this
+                # construction -- `looks` and `appears` occur, but as `look for`
+                # and `appears in`, never with a participial complement -- and
+                # admitting them would be enumeration without justification,
+                # which is the move tier 2 exists to avoid. Unattested
+                # INFLECTIONS of the tier-2 verbs (`remained`, `stayed`) are out
+                # for the same reason. Each is a quiet miss if the prose ever
+                # changes, and the fix is to add the form WITH its case once the
+                # tree writes it, not to pre-enumerate the class. BOTH PARADIGMS MUST BE COMPLETE FOR THAT LICENCE TO
                 # HOLD, and the first draft honoured it for one and not the
                 # other: `be` was 7 of 8 with `am` named as a deliberate
                 # absence, while the get-passive shipped as 3 of 5 with
@@ -1081,7 +1122,8 @@ dest_tally() {
                 # blind-spot rows are dropped`, `has been dropped`, `gets
                 # dropped` -- and that is the QUIET direction on a rule that
                 # STATES a negative. Each member now carries a case.
-                if (b ~ /^(is|was|are|were|be|been|being|gets|get|got|getting|gotten)$/)
+                if (b ~ /^(is|was|are|were|be|been|being|gets|get|got|getting|gotten)$/ ||
+                    b ~ /^(remains|remain|stays|stay|becomes|become|became)$/)
                     copula = 1
                 if (b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/) {
                     if (!copula) continue
@@ -1484,6 +1526,14 @@ dest_case "a first-position locative relative is still a new subject" \
 # exempt half, and neither case above can see it.
 dest_case "a first-position temporal relative is still a new subject" \
     'a blind-spot row when the key is dropped' '1 0'
+# `whereby` and `wherein` are `where` with a preposition baked in. They were
+# simply MISSING from the class rather than mis-placed in it, which is the
+# harder omission to see: the split was three-way and correct for the members
+# present, so nothing about its SHAPE was wrong. Both regressed against main.
+dest_case "a first-position \`whereby\` is still a new subject" \
+    'the blind-spot row whereby the key was dropped is kept' '1 0'
+dest_case "a first-position \`wherein\` is still a new subject" \
+    'the blind-spot row wherein the key was dropped is kept' '1 0'
 # ...and a token baring to NOTHING does not spend the exemption either. Same
 # empty-bare trap as the dash arms, one function along: `#261` is not a word, so
 # `that` is still the first one.
@@ -1497,17 +1547,25 @@ dest_case "a reduced clause modifies the nearer noun, not the row" \
     'the blind-spot row for sentry, with its posthog target dropped, is kept' '1 0'
 dest_case "a trailing reduced clause does not negate the row" \
     'sentry keeps a blind-spot row with the mobile lane skipped' '1 0'
-# EVERY PASSIVE AUXILIARY, one case each, and BOTH PARADIGMS COMPLETE. English
-# has two closed paradigms for the passive -- `be` and the get-passive -- which
-# is the licence on which this set is enumerated at all; see the note at the
-# call site. The licence only holds if each paradigm is whole, and the first
-# draft shipped `be` at 7 of 8 (with `am` named as a deliberate absence) beside
-# a get-passive at 3 of 5 with nothing said. `getting` and `gotten` cost two
-# quiet misses where they are the only auxiliary present. The cases exist
-# because the alternative reading of a ten-member list is that it was fitted,
+# ONE CASE PER MEMBER, for both tiers, and NO COUNT IS WRITTEN DOWN -- the
+# cases ARE the inventory, and `grep -c '^dest_case "passive auxiliary:'` plus
+# its `copular verb:` sibling re-derives it from the tree. A number here would
+# be the thing the next editor trusts instead of re-measuring, which is why
+# #268 stripped one from CLAUDE.md; this set has already changed size twice
+# under review, and both times the prose stating its old size survived the
+# change and contradicted the code beside it.
+#
+# TIER 1 IS COMPLETE PARADIGMS. `be` and the get-passive are closed, so
+# enumerating them terminates -- but the licence only holds if each is WHOLE,
+# and the first draft shipped `be` missing only `am` (named as a deliberate
+# absence) beside a get-passive missing `getting` and `gotten` with nothing
+# said. Those two cost quiet misses wherever they were the only auxiliary
+# present. TIER 2 IS TREE-JUSTIFIED, so it is enumerated by what the prose
+# writes and its residual gap is stated at the call site instead. The cases exist
+# because the alternative reading of an enumerated set is that it was fitted,
 # and because TRIMMING is the unsafe direction: measured one member at a time,
-# removing any of the ten flips its own ordinary sentence to AFFIRMED, quietly,
-# on a rule that states a negative.
+# removing ANY member flips its own ordinary sentence to AFFIRMED, quietly, on
+# a rule that states a negative.
 dest_case "passive auxiliary: is" \
     'the blind-spot row is dropped' '0 1'
 dest_case "passive auxiliary: are" \
@@ -1532,6 +1590,26 @@ dest_case "passive auxiliary: getting" \
     'the blind-spot row keeps getting dropped' '0 1'
 dest_case "passive auxiliary: gotten" \
     'the blind-spot row has gotten dropped' '0 1'
+# TIER 2, the copular and aspectual verbs, admitted on the OTHER rule -- prose
+# in the tree, not a closed paradigm. They matter because this scan asks whether
+# a participle is PREDICATED of the destination, and a copular verb takes a
+# participial complement predicated of its subject exactly as `be` does. Each
+# read 1/0 here against 0/1 on main while the set was auxiliaries-only: the
+# auxiliary ceiling that fixed one class of quiet miss opened another.
+dest_case "copular verb: remains" \
+    'the blind-spot row remains dropped' '0 1'
+dest_case "copular verb: remain" \
+    'the blind-spot rows remain dropped' '0 1'
+dest_case "copular verb: stays" \
+    'the blind-spot row stays dropped' '0 1'
+dest_case "copular verb: stay" \
+    'the blind-spot rows stay dropped' '0 1'
+dest_case "copular verb: becomes" \
+    'the blind-spot row becomes dropped' '0 1'
+dest_case "copular verb: become" \
+    'the blind-spot rows become dropped' '0 1'
+dest_case "copular verb: became" \
+    'the blind-spot row became dropped' '0 1'
 dest_case "a negated participle affirms the row (never/omitted)" \
     'the blind-spot row for these three keys is never omitted' '1 0'
 dest_case "a negated participle affirms the row (across an aside)" \
