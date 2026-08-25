@@ -118,6 +118,17 @@ For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>
 2. Run create mode's detect + interview, pre-answered from what the legacy files reveal — write
    gates, merge policy, and pre-flight commands are usually stated in them. Re-verify each against
    live state regardless; a legacy file is the least trustworthy source of a current fact.
+   **Step 2b — ask §2c for the three confirmed-absent keys, always.** A hand-written skill has no
+   way to express a `none`, so extraction can never produce one and create mode's §2c trigger —
+   which fires only where evidence is absent or dismissed — is *conditional* where this path needs
+   it unconditional. Every adopted config therefore arrives with `testflight:`, `posthog:` and
+   `mobile:` absent, meaning "nobody has checked", which renders a permanent `survey-work`
+   blind-spot row for each with no config that clears it
+   ([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)). So put **interview §2c** to
+   the user for all three, here, as part of this mode — the same step migrate mode carries for the
+   same reason (`references/migrate-mode.md`, "Step 2b"). A quiet tree is **not** an answer, and
+   `sentry:` is **not** part of this question: its `none` is written by the culprit check in
+   `references/detection.md` and it keeps its blind-spot row deliberately.
 3. Render config.
 4. **Side-by-side review per skill.** List every hand-written section with no equivalent in the
    config — repo-specific traps, war stories, special recipes. For each the user picks: fold into a

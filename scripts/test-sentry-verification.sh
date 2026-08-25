@@ -18,7 +18,7 @@
 # dispatched at a repo holding no such route — and BOTH plates still render
 # complete, so nothing signals the error.
 #
-# Three decisions are pinned, and the last two are the fragile ones:
+# Four decisions are pinned, and the last three are the fragile ones:
 #
 #   A. Verification is by CULPRIT, not by name, and a failed verification writes
 #      `sentry: none` rather than a guessed block.
@@ -30,6 +30,17 @@
 #      them (issue #261): `sentry: none` keeps its blind-spot row, while
 #      `testflight: none`, `posthog: none` and `mobile: none` render one `(n/a)`
 #      token on the clean line and no row at all.
+#   D. The CARRY-FORWARD carve-out covers those same three and NOT `sentry:`
+#      (issue #268). `setup-config` writes `sentry: none` when the culprit check
+#      merely COULD NOT RUN — no MCP server, no issues to sample — so freezing it
+#      lets one unlucky session permanently retire the plate's highest-signal
+#      surface, the only contradicting evidence being the check the carve-out
+#      just skipped. The three/four split is asserted on all four sites that
+#      state it: `SKILL.md`'s Guardrails list (which CLAUDE.md names as the copy
+#      to trust), `SKILL.md` Phase 4, `config-contract.md`, and `update-mode.md`.
+#      #267 added `sentry:` to the guardrail list while removing it from the
+#      other two, so the same file contradicted itself forty lines apart and
+#      nothing here noticed.
 #
 # Why C needs a gate rather than a paragraph. A four-key form where one key
 # behaves differently reads as a plain inconsistency, so it is precisely what a
@@ -45,9 +56,22 @@
 # names — a lookup passes just as happily on a table that grew a fifth key or
 # lost one, and "how many keys behave which way" is the whole decision.
 #
-# Four ways this gate was MEASURED reporting a clean tree on a source stating the
+# SIX ways this gate was MEASURED reporting a clean tree on a source stating the
 # inverse. Every one is a scoping error, and every fix is the same shape:
 #
+#   * §6's Confirmed-N/A rule stated BOTH outcomes inside ONE window, so neither
+#     was pinned (issue #268). Replacing "**`sentry: none` is the deliberate
+#     exception and keeps its blind-spot row**" with "…is aligned with the other
+#     three and takes the clean line too" left this gate GREEN — deleting
+#     sentry's affirmation made the three-key row veto MORE likely to pass, not
+#     less. #213's gap restored in the one section an agent follows when
+#     rendering, and §3A was already carrying the identical lesson. The block is
+#     now cut at the key literal, sentry's half carrying the INVERTED
+#     expectations, and that half must never be folded back into the loop.
+#   * The `### Blind spots` rules were checked by CO-OCCURRENCE — `sentry: none`
+#     anywhere in the subsection AND `produces a row` anywhere in it — so
+#     swapping which key gets the row satisfied both halves and stayed GREEN.
+#     Split per key, same shape as §6.
 #   * §3A's `sentry:` rule was covered by nothing, because the per-key loop runs
 #     over the three clean-line keys only. Rewriting §3A to put `sentry: none` on
 #     the clean line left this gate GREEN — the headline decision unpinned in the
@@ -64,26 +88,58 @@
 #     requires the literal `<key>: none` the question actually writes.
 #
 # HOW THIS GATE WAS MEASURED, and the methodology lesson, which is the part worth
-# keeping. Three review rounds each found assertions here passing on sources that
-# state the inverse, and the reason the author's own mutation set kept reporting
-# "all detected" is that every mutation was written by deleting the exact literal
-# its assertion greps for. Such a set is tautologically caught: it proves `grep`
-# works, not that the assertion pins a decision. A mutation must invert the
-# MEANING and be worded the way a tidying editor would word it — different verb,
-# different emphasis, different sentence shape. Re-measured that way, four
-# assertions that had "passed" 50 literal mutations were undetected.
+# keeping. FOUR review rounds have each found assertions here passing on sources
+# that state the inverse, and the reason the author's own mutation set kept
+# reporting "all detected" is that every mutation was written by deleting the
+# exact literal its assertion greps for. Such a set is tautologically caught: it
+# proves `grep` works, not that the assertion pins a decision. A mutation must
+# invert the MEANING and be worded the way a tidying editor would word it —
+# different verb, different emphasis, different sentence shape.
 #
-# What the three rounds found, all of it the same family:
+# **NO INVENTORY NUMBER IS CARRIED HERE, DELIBERATELY.** This header used to
+# claim a mutation count and an assertion count; both were wrong, and CLAUDE.md
+# repeated one of them into the one place a future editor trusts instead of
+# re-measuring (issue #268). A number nobody can re-derive from the tree is not
+# worth carrying. The run prints its own assertion count, and the mutation
+# batteries live in the PR that added them — re-measure rather than transcribe.
 #
-#   * NEGATION-BLINDNESS. `grep -qi 'blind-spot row'` matches inside "**no**
-#     blind-spot row"; the fix for that matched inside "never given a blind-spot
-#     row", "is exempt from", and "aligned with the other three". Enumerating
-#     negations is unwinnable, which is why the two outcomes now have MUTUALLY
-#     EXCLUSIVE vocabularies and each rule must speak exactly one.
+# The failure family is always the same:
+#
+#   * NEGATION-BLINDNESS, and the two failed attempts at fixing it. `grep -qi
+#     'blind-spot row'` matches inside "**no** blind-spot row". Vetoing the word
+#     `no` anywhere in the window was tried three times and defeated each time,
+#     because it vetoed a negator that merely SHARED the window rather than one
+#     GOVERNING the mention. The six-verb affirmative that replaced it enumerated
+#     an OPEN class, so `plus a blind-spot row in §6` and `also produces` evaded
+#     it while the correct rewords `keeps a blind-spot row` and `gets its own
+#     blind-spot row` reddened the gate on prose that was RIGHT — measured, six
+#     correct edits turned `main` red. Destinations are now matched
+#     verb-independently and each mention is classified against its own bounded
+#     left context, against a negator set whose CORE is a closed grammatical
+#     class, resolved by polarity rather than by list length. See `dest_tally`.
+#   * A MARKER IS NOT A DESTINATION. `\(n/a\)` sat inside the clean-line
+#     vocabulary, so "they appear under Blind spots with an explicit `(n/a)`
+#     marker" satisfied a clean-line assertion, and §3A's Sentry rule reddened
+#     the moment it named the marker it must not use. Separate constants now.
+#   * POLARITY, NOT A LONGER LIST. `is not exempt from a blind-spot row` AFFIRMS
+#     the row, and `exempt`/`excluded`/`omitted` are words this file's own header
+#     cites as natural here — so reading them as negations put the inverse of
+#     #261 past both the `'0'` and the stricter `'-'` veto at every call site.
+#     The fix is `cancelled()`: a second negator governing the first flips the
+#     polarity back. Adding words to the negator list is the move that feels
+#     like the fix and is not — that is what the six-verb `BLIND_AFFIRM` did.
+#   * SILENCE IS NOT A NEGATION. `'0'` tested only "nothing affirmed", so a rule
+#     whose negative clause drifted out of its window scored 0/0 and the veto
+#     printed `ok` while measuring nothing. Rules that STATE a negative now use
+#     `'-'`, which requires the negation to be present and measured.
 #   * WINDOW SIZING, wrong in both directions: 460 bytes read half of a ~930-byte
 #     rule and a must-not-exist slipped past; 400 bytes let one key's assertions
 #     be satisfied by the next key's rule, ~158 bytes away. Hence `window_between`
-#     and the structural `No key at all` bound.
+#     and the structural `No key at all` bound. And a cap that binds BEFORE its
+#     stop marker is the same defect wearing the other face — `carry_win`'s last
+#     asserted phrase ended at byte 933 of a 937-byte window — so
+#     `window_is_bounded` now asserts every such window ends where it says it
+#     does.
 #   * A WINDOW THAT IS RIGHT FOR ONE CHECK IS WRONG FOR ANOTHER. The `none`
 #     clause is the right scope for "does it keep its row"; it is the wrong scope
 #     for "does this rule ever mention the clean line", because a contradictory
@@ -147,8 +203,9 @@ MIGRATE="skills/setup-config/references/migrate-mode.md"
 PLATE="skills/survey-work/SKILL.md"
 
 fails=0
-ok()  { echo "  ok    $1"; }
-bad() { echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
+asserts=0
+ok()  { asserts=$((asserts + 1)); echo "  ok    $1"; }
+bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 
 echo "Sentry verification + the four-key \`none\` form (issues #213, #261)"
 
@@ -274,7 +331,7 @@ presence_section="$(awk '/^## Governing principle: presence is the toggle/{f=1; 
 [ -n "$presence_section" ] || bad "cannot locate the presence-is-the-toggle section"
 
 exception_section="$(printf '%s\n' "$presence_section" |
-    awk '/^### The one exception/{f=1; next} /^#{2,3} /{f=0} f')"
+    awk '/^### The one exception/{f=1; next} /^## / || /^### /{f=0} f')"
 
 if [ -n "$exception_section" ]; then
     ok "config-contract.md documents the \`sentry: none\` exception"
@@ -391,8 +448,19 @@ fi
 # --- H. survey-work renders confirmed-absent distinctly -----------------------
 
 plate_blind="$(awk '/^## ⚠️ Blind spots/{f=1; next} /^## /{f=0} f' "$PLATE")"
-none_row="$(printf '%s\n' "$plate_blind" | grep 'sentry: none')"
-absent_row="$(printf '%s\n' "$plate_blind" | grep 'no `sentry:` block')"
+# Each `- ` row re-joined into ONE record before it is matched, the same unit
+# detection.md's hand-check bullets get above. A line-scoped `grep` over this
+# block was a false PASS waiting to happen: MD013 is off in this repo and the
+# `sentry: none` row is 261 characters, so rewrapping it across the phrase an
+# assertion greps for reports the row as compliant when it no longer is.
+# ...and EMPHASIS-STRIPPED, like `contract_bare` and `template_bare`. The two
+# must-not-exist vetoes below are defeated by bold otherwise: `has **no** error
+# monitoring` passes where the plain spelling fails. Measured both ways.
+blind_rows="$(printf '%s\n' "$plate_blind" |
+    awk '/^- /{if (b != "") print b; b=$0; next} {b = b " " $0} END{if (b != "") print b}' |
+    tr -s ' ' | tr -d '*_')"
+none_row="$(printf '%s\n' "$blind_rows" | grep 'sentry: none')"
+absent_row="$(printf '%s\n' "$blind_rows" | grep 'no `sentry:` block')"
 
 if [ -n "$none_row" ]; then
     ok "survey-work renders a \`sentry: none\` blind-spot row"
@@ -446,34 +514,338 @@ fi
 # asserted — never "the three behave alike" on its own, which a table that also
 # moved `sentry` onto the clean line would satisfy.
 #
-# HOW THE ASYMMETRY IS TESTED, and why it is not a negation check. Three separate
-# attempts at "assert the phrase, then veto the word `no`" were each defeated by a
-# rewording: `**no** blind-spot row`, then `never`, `does not`, `no such`, and
-# `aligned with the other three`. Enumerating negations is unwinnable. So the two
-# outcomes are given MUTUALLY EXCLUSIVE vocabularies instead, and every rule is
-# required to speak exactly one of them: a rule that routes a key to the clean
-# line cannot avoid naming the clean line, and a rule that keeps a row cannot
-# avoid the affirmative "gets/keeps a blind-spot row". Rewording inside one
-# vocabulary is free; crossing into the other is what fails.
-CLEAN_VOCAB='\(n/a\)|clean line|Clean today'
-BLIND_AFFIRM='(gets|keeps|renders|carries|receives|earns)( its own)?( a| one)? ?blind-spot row'
+# HOW THE ASYMMETRY IS TESTED (issue #268 rewrote this; read before changing it).
+#
+# A rule is classified by the DESTINATION it sends a key to — the blind-spot row
+# or the clean line — and each destination is a noun phrase naming a place. Two
+# earlier designs are recorded here because both are tempting and both failed.
+#
+#   1. "Assert the phrase, then veto the word `no`", tried three times, defeated
+#      each time by a rewording: `**no** blind-spot row`, `never`, `does not`,
+#      `no such`, `aligned with the other three`. It vetoed a negator ANYWHERE in
+#      the window rather than one GOVERNING the mention, so it was wrong in both
+#      directions at once.
+#   2. The six-verb affirmative `(gets|keeps|renders|carries|receives|earns)…`
+#      that replaced it. Verbs are an OPEN class, so `plus a blind-spot row in
+#      §6`, `also produces a blind-spot row`, `they get a blind-spot row` and
+#      `are given a blind-spot row` all evade it — every one of them correct
+#      English — while the two natural rewords `keeps a blind-spot row` and
+#      `gets its own blind-spot row` reddened the gate on prose that was RIGHT.
+#      A gate that fails on a correct edit teaches the next author to loosen it.
+#
+# So: the destination is matched verb-independently, and each occurrence is then
+# classified AFFIRMED or NEGATED against its own bounded left context. Requiring
+# a negator to GOVERN the mention is what the three earlier attempts lacked.
+#
+# BE PRECISE ABOUT WHY THIS ENUMERATION IS ALLOWED WHEN THE VERB LIST WAS NOT,
+# because "the list works after all" is the reading that walks straight back into
+# `BLIND_AFFIRM`. The negator set has two parts. Its CORE — no / not / never /
+# neither / nor / without / nothing — is a closed GRAMMATICAL class: English does
+# not coin new ones, so enumerating it terminates. The rest — exempt / excluded /
+# omitted / instead / rather — are lexical, chosen because this repo's prose
+# actually uses them, and that half is NOT closed. It is kept short on purpose,
+# every addition has to be justified by prose in the tree, and it is never the
+# thing doing the work: POLARITY is, which is what resolves `not exempt` and what
+# no list of any length can do. Growing the lexical half in place of fixing
+# polarity is the failure mode to refuse.
+#
+# `none` is deliberately NOT a negator. The literal key value sits immediately
+# before its own destination in the one rule this gate exists for (``sentry: none`
+# … keeps its blind-spot row``), so reading it as a negation inverts that rule.
+# Contractions are left out for the same reason: `n.t` also matches `net`, and
+# "the net effect is a blind-spot row" would classify as negated. This repo's
+# rules are written without contractions; `does not` is covered by `not`.
+#
+# The marker is NOT a destination. `\(n/a\)` used to sit inside the clean-line
+# vocabulary, which let "they appear under Blind spots with an explicit `(n/a)`
+# marker" satisfy a clean-line assertion, and made §3A's Sentry rule redden the
+# moment it mentioned the marker it must NOT use. It is its own constant now.
+ROW_DEST='blind[- ]spot row'
+CLEAN_DEST='clean[- ]line|clean today'
+NA_MARKER='(n/a)'
+
+# Tally the destination mentions matching ERE $2 in text $1, split into AFFIRMED
+# and NEGATED. Prints "<affirmed> <negated>". Emphasis and backticks are stripped
+# so `**no**` reads as `no`, and the haystack is lower-cased because awk's ERE
+# has no case-insensitive flag.
+#
+# A negator GOVERNS a mention when it is one of the FOUR words before it, no
+# clause boundary intervenes, and it is not itself the head of a prepositional
+# phrase about some other noun. Every clause of that rule was forced by a
+# measured counterexample, so none of it is decoration:
+#
+#   * FOUR, not three. `**\`sentry: none\` no longer renders a blind-spot row**`
+#     puts the negator four tokens back and is the most ordinary way English
+#     writes this inversion. A three-token budget read it AFFIRMED and left §6's
+#     headline decision invertible green — the very defect #268 exists to close,
+#     and a REGRESSION against the flat regex this function replaced.
+#   * The PREPOSITION test is what four costs. `a repo with no Sentry keeps a
+#     blind-spot row` also puts a negator four back, but it negates `Sentry`, not
+#     the row. A negator headed by `with`/`in`/`of`/`for`/… is skipped.
+#   * CLAUSE BOUNDARIES, but only strong ones. `render \`skipped — not
+#     configured\` **and a blind-spot row in §6**` is the LIVE §3A absent-key
+#     rule and is an affirmation; `and` ends the search so it reads that way.
+#     `,` and `or` are deliberately NOT boundaries — `does not get, or need, a
+#     blind-spot row` is one negation, and treating either as a boundary stops
+#     the scan inside the clause it belongs to.
+#   * PARENTHETICAL INSERTIONS are skipped without being counted, reading
+#     right-to-left: the token bearing the closing comma opens the skip and the
+#     token bearing the opening comma closes it and is itself counted. Without
+#     this, `is not, as of #261, given a blind-spot row` and `never, in ordinary
+#     practice, renders a blind-spot row` both read AFFIRMED.
+#   * `instead`/`rather`/`excluded`/`omitted` count as negators, because
+#     `instead of a blind-spot row` and `rather than a blind-spot row` are how
+#     this repo actually writes the negative half, and reading them as
+#     affirmations turned correct prose RED.
+#
+# BOTH tallies are printed, and every caller accounts for both, because a probe
+# for one of them is the "tallying is not classifying" failure this file already
+# learned once on the four-key table. This is not the place to grow a parser:
+# the aim is that where the rule is wrong it is wrong in the LOUD direction, and
+# `assert_dest`'s `'-'` want exists so a rule that states a negative must be
+# measurably negated rather than merely silent.
+#
+# KNOWN LIMIT, stated rather than implied, because an aim is not a guarantee and
+# the previous wording read as one. The backward scan is bounded to four content
+# words, so a negation whose negator sits further left than that reads AFFIRMED:
+# measured, `The three keys do not, in current practice, ever actually produce a
+# blind-spot row` returns 1/0. Two adverbs before the destination are enough. It
+# is a QUIET miss on a `'+'` check, which is the direction that matters, and it
+# is recorded here because it cannot be fixed by widening the budget — six was
+# measured and it reddens the gate and four mutation batteries, since a wider
+# window starts reaching negators that belong to other clauses. Fixing it
+# properly means bounding by clause rather than by count, which is its own
+# change with its own measurement, not a constant to nudge.
+dest_tally() {
+    printf '%s' "$1" | tr -d '*_`' | tr '[:upper:]' '[:lower:]' |
+        awk -v dest="$2" '
+        function bare(t) { gsub(/^[^a-z]+|[^a-z]+$/, "", t); return t }
+        # Is there a SECOND negator governing the one at position `at`? Double
+        # negation cancels, and the cancelling word is not always adjacent:
+        # `none of them is exempt from a blind-spot row` puts it four back.
+        # `none` counts here ONLY as `none of` — bare `none` is the config value
+        # this whole file is about and sits beside its own destination
+        # constantly.
+        function cancelled(w, at,   j, b2) {
+            for (j = at - 1; j >= 1 && j >= at - 4; j--) {
+                b2 = bare(w[j])
+                if (b2 == "") continue
+                if (b2 ~ /^(no|not|never|neither|nor|without|nothing)$/) return 1
+                if (b2 == "none" && j < at && bare(w[j + 1]) == "of") return 1
+            }
+            return 0
+        }
+        function governed(ctx,   nw, w, i, cnt, t, b, p, skipping, scanned) {
+            nw = split(ctx, w, / +/)
+            cnt = 0; skipping = 0; scanned = 0
+            for (i = nw; i >= 1 && cnt < 4 && scanned < 16; i--) {
+                t = w[i]
+                if (t == "") continue
+                scanned++
+                if (t ~ /,$/) {
+                    if (!skipping) { skipping = 1; continue }
+                    skipping = 0
+                } else if (skipping) continue
+                b = bare(t)
+                if (b == "") continue
+                cnt++
+                if (t ~ /[;:.]$/ || b == "and" || b == "but" || b == "so" ||
+                    b == "then" || t == "-" || t == "\342\200\224" ||
+                    t == "\342\200\223")
+                    return 0
+                if (b ~ /^(no|not|never|neither|nor|without|nothing|exempt|instead|rather|excluded|omitted)$/) {
+                    p = (i > 1) ? bare(w[i - 1]) : ""
+                    # A negator inside a prepositional phrase negates that
+                    # phrase, not the destination: `a repo with no Sentry keeps
+                    # a blind-spot row` is an affirmation.
+                    #
+                    # PREPOSITIONS ONLY. `has`/`have`/`having` were here once and
+                    # are VERBS, and `X has no Y` is the most ordinary way English
+                    # writes this negation — so `` `sentry: none` has no
+                    # blind-spot row `` read as AFFIRMED and defeated every
+                    # must-affirm site at once (§3A, §6 and the Blind spots
+                    # bullet) — the #213 gap restored three times over through
+                    # one word. It also reddened the correct three-key half the
+                    # moment it said `have no` instead of `get no`. The case
+                    # they appeared to protect is already carried by the real
+                    # prepositions:
+                    # `a repo with no Sentry keeps a blind-spot row` classifies
+                    # AFFIRMED on `with` alone. Measured both ways.
+                    if (p ~ /^(with|in|of|for|on|at|by|from|under|inside|despite)$/)
+                        continue
+                    # POLARITY FLIP. A second negator governing the first cancels
+                    # it: `is not exempt from a blind-spot row` and `is never
+                    # excluded from a blind-spot row` AFFIRM the row, and
+                    # `exempt`/`excluded` are exactly the words this repo reaches
+                    # for — its own header cites `is exempt from`. Read as
+                    # negations they satisfied the plain veto AND the stricter
+                    # must-be-negated one, so
+                    # the inverse of #261 passed every veto meant to catch it.
+                    #
+                    # Deliberately a polarity rule and NOT a longer negator list
+                    # or a wider budget: enumerating negations is what the
+                    # six-verb `BLIND_AFFIRM` already failed at, and #268 exists
+                    # because that approach does not converge.
+                    if (cancelled(w, i))
+                        return 0
+                    return 1
+                }
+            }
+            return 0
+        }
+        # English negates a noun phrase from the RIGHT too, in the passive: `the
+        # blind-spot row is dropped`. A look-left-only classifier read those as
+        # AFFIRMED, so `**for `sentry: none` the blind-spot row is dropped**`
+        # passed every must-affirm site silently — the quiet direction, on the
+        # one decision this gate exists for.
+        #
+        # This set is its own, and NARROWER than the left one on purpose. The
+        # left-side `rather` would fire on the live Blind-spots clause
+        # (`produces a row, worded as confirmed rather than unchecked`), and
+        # `absent` would fire on the live §6 text `keeps its blind-spot row —
+        # absent error monitoring…`, both reddening correct prose. Only
+        # post-positional participles count, and the scan stops at the same
+        # clause boundaries.
+        function post_negated(rest,   nw, w, i, cnt, t, b) {
+            nw = split(rest, w, / +/)
+            cnt = 0
+            for (i = 1; i <= nw && cnt < 4; i++) {
+                t = w[i]
+                if (t == "") continue
+                b = bare(t)
+                if (b == "") continue
+                cnt++
+                if (t ~ /[;:.]$/ || b == "and" || b == "but" || b == "so" ||
+                    b == "then" || t == "-" || t == "\342\200\224" ||
+                    t == "\342\200\223")
+                    return 0
+                if (b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/)
+                    return 1
+            }
+            return 0
+        }
+        {
+            s = $0
+            while (match(s, dest)) {
+                ctx = substr(s, 1, RSTART - 1)
+                rest = substr(s, RSTART + RLENGTH)
+                if (governed(ctx) || post_negated(rest)) n++; else a++
+                s = rest
+            }
+        }
+        END { printf "%d %d", a + 0, n + 0 }'
+}
+dest_affirmed() { local t; t="$(dest_tally "$1" "$2")"; printf '%s' "${t%% *}"; }
+
+# The other pair of mutually exclusive outcomes in this file: a refresh either
+# RE-DERIVES a value or CARRIES it forward. Same classifier, same reason.
+#
+# `carve-out` on its own is deliberately NOT a carry-forward token. It is the
+# ordinary noun both rules use to talk ABOUT the carve-out — "the culprit check
+# that the carve-out just excluded" is the sentence arguing sentry stays out of
+# it — so a bare `carve-out` veto reddens the correct source. Only membership
+# phrasings count.
+REDERIVE_VOCAB='re-derived|re-derive|re-run it'
+CARRY_VOCAB='carried forward|carry (it|them|these) forward|not re-asked|never re-ask|(in|into|joins) (that|the) carve-out'
+
+# Sentences of $1 that mention the literal $2, one per line. The boundary is
+# `. `, which is crude — but the alternative is a window keyed on the rule's own
+# wording, and that is what reddens the gate on a correct reword. A sentence is
+# the unit here because "is NOT re-derived" and "is re-derived" differ by one
+# word that a file-wide `grep -qi 're-derived'` cannot see: that check is what
+# stood at both sites before issue #268.
+sentences_about() {
+    printf '%s' "$1" | awk -v key="$2" '
+        {
+            n = split($0, parts, /\. /)
+            for (i = 1; i <= n; i++) if (index(parts[i], key) > 0) print parts[i]
+        }'
+}
+
+# At least one sentence about $2 must AFFIRM vocabulary $3.
+assert_sentence_affirms() {
+    local label="$1" hay="$2" key="$3" vocab="$4" hits found=0 s
+    hits="$(sentences_about "$hay" "$key")"
+    while IFS= read -r s; do
+        [ -n "$s" ] || continue
+        [ "$(dest_affirmed "$s" "$vocab")" -gt 0 ] && found=1
+    done <<EOF
+$hits
+EOF
+    if [ "$found" = 1 ]; then ok "$label"; else bad "$label"; fi
+}
+
+# NO sentence about $2 may AFFIRM vocabulary $3.
+#
+# ZERO sentences is a FAILURE, not a pass. A veto over an empty set is satisfied
+# by nothing at all, so a key that stopped being mentioned — a rename, a section
+# lost to an extractor change — would report every rule about it as clean. Its
+# sibling above fails on an empty set for free (nothing affirms), which is why
+# only this one needs the guard stated.
+assert_no_sentence_affirms() {
+    local label="$1" hay="$2" key="$3" vocab="$4" hits offender="" seen=0 s
+    hits="$(sentences_about "$hay" "$key")"
+    while IFS= read -r s; do
+        [ -n "$s" ] || continue
+        seen=$((seen + 1))
+        [ "$(dest_affirmed "$s" "$vocab")" -gt 0 ] && offender="$s"
+    done <<EOF
+$hits
+EOF
+    if [ "$seen" -eq 0 ]; then
+        bad "$label: no sentence mentions \`$key\` at all — the veto would pass vacuously"
+    elif [ -z "$offender" ]; then ok "$label ($seen sentence(s) checked)"
+    else bad "$label (offending sentence: ${offender:0:120})"; fi
+}
+
+# Assert a window's destination profile.
+#
+#   '+'  at least one AFFIRMED mention.
+#   '-'  at least one NEGATED mention and no affirmed one. For a rule that
+#        STATES the negative ("get **no** blind-spot row"). This is the want
+#        that `'0'` alone could not express, and the gap was measurable: `'0'`
+#        tests only `a -eq 0`, so a rule whose negative clause moved out of the
+#        window scored 0/0 and the veto printed `ok` while measuring nothing.
+#        Every `'0'` veto in this file was convertible that way by a cosmetic
+#        edit that shifted a window boundary.
+#   '0'  no affirmed mention, and silence is legitimate. Only for whole-rule
+#        scopes where the destination may simply never come up — §6's sentry
+#        half never mentions the clean line at all, and must not be forced to.
+#
+# An EMPTY haystack is a failure in every mode: a window whose marker stopped
+# matching would otherwise report each veto over it as clean.
+assert_dest() {
+    local label="$1" hay="$2" dest="$3" want="$4" t a n
+    if [ -z "$hay" ]; then
+        bad "$label: the text under test is EMPTY — an extractor is matching nothing"
+        return
+    fi
+    t="$(dest_tally "$hay" "$dest")"; a="${t%% *}"; n="${t##* }"
+    case "$want" in
+        '+') if [ "$a" -gt 0 ]; then ok "$label"
+             else bad "$label (affirmed=$a negated=$n)"; fi ;;
+        '-') if [ "$a" -eq 0 ] && [ "$n" -gt 0 ]; then ok "$label"
+             else bad "$label (affirmed=$a negated=$n; the rule must STATE the negative, not omit it)"; fi ;;
+        '0') if [ "$a" -eq 0 ]; then ok "$label"
+             else bad "$label (affirmed=$a negated=$n)"; fi ;;
+        *) bad "assert_dest: bad want '$want'" ;;
+    esac
+}
 
 echo "-- the four-key \`none\` form, and its deliberate asymmetry (#261)"
 
-# Window of flattened text starting at a literal marker, empty when the marker is
-# absent. Pure parameter expansion — no awk, no regex — because the markers carry
-# backticks and colons, the haystacks are single ~40KB lines, and `#*` takes the
-# SHORTEST match, i.e. the FIRST occurrence. Verified under bash 3.2 (macOS
-# /bin/bash) as well as 5.x, so no awk-dialect or long-line buffer question
-# arises between a local run and CI's.
-window_after() {
-    local hay="$1" mark="$2" n="$3" rest
-    rest="${hay#*"$mark"}"
-    [ "$rest" = "$hay" ] && return 0
-    printf '%s' "$mark${rest:0:n}"
-}
-
-# Same, but ALSO cut at the first of any number of stop markers. A constant
+# Window of flattened text from a literal marker, ALSO cut at the first of any
+# number of stop markers. Pure parameter expansion — no awk, no regex — because
+# the markers carry backticks and colons, the haystacks are single ~40KB lines,
+# and `#*` takes the SHORTEST match, i.e. the FIRST occurrence. Verified under
+# bash 3.2 (macOS /bin/bash) as well as 5.x, so no awk-dialect or long-line
+# buffer question arises between a local run and CI's.
+#
+# (A stop-marker-less `window_after` used to sit here; it had no call sites and
+# a nine-line rationale that read as load-bearing. Every window in this file is
+# structurally bounded, which is the rule — see `window_is_bounded`.)
+#
+# A constant
 # length is wrong in both directions, and both were measured on this file: too
 # short turns a must-not-exist into a false pass (§3A's Sentry rule is ~930B and
 # a 460B window read half of it, so appending a clean-line clause passed), too
@@ -495,6 +867,26 @@ window_between() {
         case "$cut" in *"$stop"*) cut="${cut%%"$stop"*}" ;; esac
     done
     printf '%s' "$mark$cut"
+}
+
+# A window must end at its STOP MARKER, never at its byte cap — the cap is a
+# backstop against a missing stop marker running the window to EOF, not the bound
+# itself. Measured (#268): `carry_win`'s last asserted phrase ended at byte 933
+# of a 937-byte window, so one sentence inserted above it would have carried the
+# phrase out of scope and reddened the gate on an edit that changed nothing.
+# Structural bounds are the file's own rule; this asserts the rule was kept.
+window_is_bounded() {
+    local label="$1" hay="$2" mark="$3" n="$4"; shift 4
+    local capped uncapped
+    capped="$(window_between "$hay" "$mark" "$n" "$@")"
+    uncapped="$(window_between "$hay" "$mark" 999999 "$@")"
+    if [ -z "$capped" ]; then
+        bad "$label: window marker not found"
+    elif [ "${#capped}" -lt "${#uncapped}" ]; then
+        bad "$label: the $n-byte cap binds $(( ${#uncapped} - ${#capped} )) bytes before the stop marker"
+    else
+        ok "$label: window ends at its stop marker, not at a byte cap"
+    fi
 }
 
 # Data rows of a markdown table: leading `|`, minus the header and the `---`
@@ -532,15 +924,17 @@ while IFS= read -r row; do
     k="$(cell "$row" 2)"
     b="$(cell "$row" 4)"
     asym_keys="${asym_keys}[$k]"
-    # A table cell has no verb, so its affirmative marker is `kept`. A negated
-    # cell ("**no** blind-spot row (aligned with the other three)") lacks it.
-    if printf '%s' "$b" | grep -qi 'blind-spot row' &&
-       printf '%s' "$b" | grep -qi 'kept' &&
-       ! printf '%s' "$b" | grep -qiE "$CLEAN_VOCAB"; then
+    # A cell is classified by which destination it AFFIRMS, exactly as a prose
+    # rule is. The `kept` literal this replaced was the same closed-verb-list
+    # mistake one layer down: a cell reading `blind-spot row — retained` was a
+    # correct edit that reddened the gate. A negated cell ("**no** blind-spot row
+    # (aligned with the other three)") affirms neither and lands in `n_other`.
+    if [ "$(dest_affirmed "$b" "$ROW_DEST")" -gt 0 ] &&
+       [ "$(dest_affirmed "$b" "$CLEAN_DEST")" -eq 0 ]; then
         n_blind=$((n_blind + 1))
         blind_key="$k"
-    elif printf '%s' "$b" | grep -qiE "$CLEAN_VOCAB" &&
-         ! printf '%s' "$b" | grep -qi 'blind-spot row'; then
+    elif [ "$(dest_affirmed "$b" "$CLEAN_DEST")" -gt 0 ] &&
+         [ "$(dest_affirmed "$b" "$ROW_DEST")" -eq 0 ]; then
         n_clean=$((n_clean + 1))
     else
         n_other=$((n_other + 1))
@@ -637,6 +1031,16 @@ if printf '%s' "$contract_flat" | grep -qi 'unfinished verification wearing the 
 else
     bad "the contract no longer distinguishes confirmed-absent from could-not-verify"
 fi
+
+# The contract must agree with `update-mode.md` about what a REFRESH does with
+# each `none`. It did not: the contract said "A refresh carries all four forward
+# rather than re-asking (`references/update-mode.md`)" while the cited document
+# says the opposite for `sentry:` (#268). Hard-wrapped across the line break, so
+# a line-scoped grep could not see it — and nothing checked it either way.
+assert_sentence_affirms "the contract says \`sentry: none\` is re-derived on a refresh" \
+    "$contract_flat" 'sentry: none' "$REDERIVE_VOCAB"
+assert_no_sentence_affirms "the contract never carries \`sentry: none\` forward" \
+    "$contract_flat" 'sentry: none' "$CARRY_VOCAB"
 
 if printf '%s' "$contract_flat" | grep -qi 'Why this section is still headed'; then
     ok "the contract records why the heading still names \`sentry: none\` alone"
@@ -751,26 +1155,20 @@ for key in testflight posthog mobile; do
         posthog)    s1="$K_SENTRY" s2="$K_TF"  s3="$K_MO" ;;
         mobile)     s1="$K_SENTRY" s2="$K_TF"  s3="$K_PH" ;;
     esac
+    window_is_bounded "§3's \`$key: none\` window" \
+        "$plate_pulls" "\`$key: none\`" 1200 "$K_END" "$s1" "$s2" "$s3"
     win="$(window_between "$plate_pulls" "\`$key: none\`" 1200 "$K_END" "$s1" "$s2" "$s3")"
     if [ -z "$win" ]; then
         bad "survey-work's §3 pull rule states nothing for \`$key: none\`"
         continue
     fi
-    if printf '%s' "$win" | grep -qiE "$CLEAN_VOCAB"; then
-        ok "\`$key: none\` routes to the clean line"
-    else
-        bad "\`$key: none\` no longer routes to the clean line"
-    fi
-    if printf '%s' "$win" | grep -qi '(n/a)'; then
+    assert_dest "\`$key: none\` routes to the clean line" "$win" "$CLEAN_DEST" '+'
+    if printf '%s' "$win" | grep -qiF "$NA_MARKER"; then
         ok "\`$key: none\` carries the \`(n/a)\` marker"
     else
         bad "\`$key: none\` lost the \`(n/a)\` marker that distinguishes it from empty"
     fi
-    if printf '%s' "$win" | grep -qiE "$BLIND_AFFIRM"; then
-        bad "\`$key: none\` claims a blind-spot row — that is \`sentry: none\`'s behaviour"
-    else
-        ok "\`$key: none\` claims no blind-spot row"
-    fi
+    assert_dest "\`$key: none\` states it takes no blind-spot row" "$win" "$ROW_DEST" '-'
     # The collapse this whole form exists to prevent, in the other direction: a
     # confirmed absence described as something the plate failed to look at.
     if printf '%s' "$win" | grep -qi 'not checked'; then
@@ -786,21 +1184,17 @@ done
 # decision unpinned in the very section the loop declares authoritative. The two
 # vetoes below are the exclusive-vocabulary test, not a negation check; the
 # affirmative pattern is what a table cell's `kept` is for prose.
+window_is_bounded "§3's \`sentry: none\` window" \
+    "$plate_pulls" "$K_SENTRY" 1600 "$K_END" "$K_TF" "$K_PH" "$K_MO"
 sentry_win="$(window_between "$plate_pulls" "$K_SENTRY" 1600 "$K_END" "$K_TF" "$K_PH" "$K_MO")"
 if [ -z "$sentry_win" ]; then
     bad "survey-work's §3 pull rule states nothing for \`sentry: none\` — it reads as unconfigured"
 else
     ok "survey-work's §3 pull rule states the \`sentry: none\` case"
-    if printf '%s' "$sentry_win" | grep -qiE "$BLIND_AFFIRM"; then
-        ok "\`sentry: none\` affirmatively keeps its blind-spot row in §3"
-    else
-        bad "\`sentry: none\` no longer affirmatively keeps a blind-spot row in §3"
-    fi
-    if printf '%s' "$sentry_win" | grep -qiE "$CLEAN_VOCAB"; then
-        bad "\`sentry: none\` was moved onto the clean line — it speaks the clean-line vocabulary"
-    else
-        ok "\`sentry: none\` speaks none of the clean-line vocabulary"
-    fi
+    assert_dest "\`sentry: none\` affirmatively keeps its blind-spot row in §3" \
+        "$sentry_win" "$ROW_DEST" '+'
+    assert_dest "\`sentry: none\` states it is not a clean-line token in §3" \
+        "$sentry_win" "$CLEAN_DEST" '-'
     # Anchored to the phrase, not to the bare word `confirmed`, which the
     # neighbouring "§6's *Confirmed N/A* rule" reference supplies for free.
     if printf '%s' "$sentry_win" | grep -qi 'worded as confirmed'; then
@@ -817,16 +1211,15 @@ fi
 # Measured: that mutation was undetected against the windowed veto alone. Sentry
 # never reaches the clean line in EITHER state, so the whole rule may not speak
 # that vocabulary.
+window_is_bounded "§3A's whole-Sentry-rule window" \
+    "$plate_pulls" '**Sentry** —' 2200 '**GitHub bugs**'
 sentry_rule="$(window_between "$plate_pulls" '**Sentry** —' 2200 '**GitHub bugs**')"
 if [ -z "$sentry_rule" ]; then
     bad "cannot locate survey-work's §3A Sentry rule"
 else
     ok "located survey-work's §3A Sentry rule"
-    if printf '%s' "$sentry_rule" | grep -qiE "$CLEAN_VOCAB"; then
-        bad "§3A's Sentry rule speaks the clean-line vocabulary somewhere — Sentry never goes there"
-    else
-        ok "§3A's Sentry rule never routes Sentry to the clean line, in either state"
-    fi
+    assert_dest "§3A's Sentry rule states Sentry is not a clean-line token, in either state" \
+        "$sentry_rule" "$CLEAN_DEST" '-'
 fi
 
 # --- I5. survey-work's §6 render rules ----------------------------------------
@@ -846,27 +1239,79 @@ fi
 # The RENDER RULE itself, which an agent follows — not merely the sentence that
 # announces it. Measured: rewriting this to "get a blind-spot row like any other
 # dark surface" left every other §6 assertion satisfied.
-na_rule="$(window_between "$plate_flat" 'Confirmed N/A is a THIRD state' 1400 'Skip empty P-buckets')"
+#
+# AND IT MUST BE CUT IN TWO. §6's Confirmed-N/A block states BOTH outcomes — the
+# three keys' clean line, then sentry's surviving row — so one window over the
+# whole block pins neither. Measured on `main` (issue #268): replacing
+# "**`sentry: none` is the deliberate exception and keeps its blind-spot row**"
+# with "**`sentry: none` is aligned with the other three and takes the clean line
+# too**" left this gate GREEN. The three-key assertions were satisfied by the
+# three-key half, and deleting sentry's affirmation made the row veto MORE likely
+# to pass, not less. That is #213's gap restored in the one section an agent
+# follows when rendering, and §3A was already carrying the same lesson two
+# hundred lines up.
+#
+# The cut is at the KEY LITERAL, which is structural — the key name, not the
+# decision — so a rewrite of the decision cannot move it. If the literal is gone
+# the sentry half is empty and its must-exist assertion fails loudly.
+#
+# WHY THIS SPLIT IS NOT THE ONE `b_clause` USES, and why that is deliberate. This
+# is a PARTITION: `na_three` is the prefix and `na_sentry` the suffix, so every
+# byte of the rule lands in exactly one half and nothing is discarded. The
+# `### Blind spots` bullet needed `sentences_about` instead because its old cut
+# took the text up to the first `. ` and THREW THE REST AWAY, so re-punctuating
+# "`sentry: none` is the exception. It produces a row…" moved the row clause into
+# the discarded tail and reddened the gate on correct prose. Different failure
+# modes, not one shape implemented twice — do not "align" them. A partition has
+# no discarded tail to lose a clause into, and every perturbation tried against
+# it fails through the empty-haystack guard rather than silently.
+plate_out="$(awk '/^## 6\. Output format/{f=1; next} /^## 🔥/{f=0} f' "$PLATE" | tr '\n' ' ' | tr -s ' ')"
+if [ -z "$plate_out" ]; then
+    bad "cannot locate survey-work's '## 6. Output format' section"
+fi
+window_is_bounded "§6's Confirmed-N/A window" \
+    "$plate_out" 'Confirmed N/A is a THIRD state' 1800 'Skip empty P-buckets'
+na_rule="$(window_between "$plate_out" 'Confirmed N/A is a THIRD state' 1800 'Skip empty P-buckets')"
 if [ -z "$na_rule" ]; then
     bad "cannot locate §6's Confirmed-N/A rule body"
 else
-    if printf '%s' "$na_rule" | grep -qiE "$CLEAN_VOCAB"; then
-        ok "§6's Confirmed-N/A rule routes the three keys to the clean line"
+    na_three="${na_rule%%'`sentry: none`'*}"
+    na_sentry="${na_rule#"$na_three"}"
+
+    if [ -n "$na_sentry" ]; then
+        ok "§6's Confirmed-N/A rule states the \`sentry: none\` case"
     else
-        bad "§6's Confirmed-N/A rule no longer routes the three keys to the clean line"
+        bad "§6's Confirmed-N/A rule never names \`sentry: none\` — the exception is gone"
     fi
-    if printf '%s' "$na_rule" | grep -qiE "$BLIND_AFFIRM"; then
-        bad "§6's Confirmed-N/A rule now gives the three keys a blind-spot row"
+
+    # The three-key half.
+    assert_dest "§6 routes the three keys to the clean line" "$na_three" "$CLEAN_DEST" '+'
+    assert_dest "§6 states the three keys get no blind-spot row" "$na_three" "$ROW_DEST" '-'
+    if printf '%s' "$na_three" | grep -qiF "$NA_MARKER"; then
+        ok "§6's three-key rule carries the \`(n/a)\` marker"
     else
-        ok "§6's Confirmed-N/A rule gives the three keys no blind-spot row"
+        bad "§6's three-key rule lost the \`(n/a)\` marker"
     fi
     for k in testflight posthog mobile; do
-        if printf '%s' "$na_rule" | grep -qF "\`$k: none\`"; then
+        if printf '%s' "$na_three" | grep -qF "\`$k: none\`"; then
             ok "§6's Confirmed-N/A rule names \`$k: none\`"
         else
             bad "§6's Confirmed-N/A rule no longer names \`$k: none\`"
         fi
     done
+
+    # The sentry half, with the expectations INVERTED. This block must never be
+    # folded back into the loop above: that is exactly the shape that let the
+    # inversion through.
+    assert_dest "§6's \`sentry: none\` rule affirmatively keeps its blind-spot row" \
+        "$na_sentry" "$ROW_DEST" '+'
+    assert_dest "§6's \`sentry: none\` rule affirms no clean-line destination" \
+        "$na_sentry" "$CLEAN_DEST" '0'
+    if printf '%s' "$na_sentry" | grep -qiF "$NA_MARKER"; then
+        bad "§6 gives \`sentry: none\` the \`(n/a)\` marker — that is the three keys' form"
+    else
+        ok "§6 gives \`sentry: none\` no \`(n/a)\` marker"
+    fi
 fi
 
 # The `✓ Clean today:` template line is the literal block a plate is copied from.
@@ -888,25 +1333,82 @@ else
     bad "survey-work lost the ban on widening \`sentry: none\` into a no-Sentry claim"
 fi
 
-plate_rules="$(awk '/^### Blind spots/{f=1; next} /^#{1,3} /{f=0} f' "$PLATE" | tr '\n' ' ' | tr -s ' ')"
+plate_rules="$(awk '/^### Blind spots/{f=1; next} /^# / || /^## / || /^### /{f=0} f' "$PLATE" | tr '\n' ' ' | tr -s ' ')"
 if [ -n "$plate_rules" ]; then
     ok "located survey-work's Blind spots rules"
 else
     bad "cannot locate survey-work's '### Blind spots' subsection"
 fi
 
-if printf '%s' "$plate_rules" | grep -qi 'A confirmed absence is not a dark surface' &&
-   printf '%s' "$plate_rules" | grep -qi 'no row at all'; then
+if printf '%s' "$plate_rules" | grep -qi 'A confirmed absence is not a dark surface'; then
     ok "the Blind spots rules exclude a confirmed absence from the section"
 else
     bad "the Blind spots rules no longer exclude a confirmed absence"
 fi
 
-if printf '%s' "$plate_rules" | grep -q 'sentry: none' &&
-   printf '%s' "$plate_rules" | grep -qi 'produces a row'; then
-    ok "the Blind spots rules keep \`sentry: none\` as the one exception"
+# The exception bullet, split at the key literal like §6's rule — and for the
+# same reason. What stood here was a CO-OCCURRENCE check: `sentry: none` anywhere
+# in the subsection AND `produces a row` anywhere in it. Swapping which key gets
+# the row satisfies both halves, so the swap stayed GREEN (issue #268).
+#
+# Inside `### Blind spots` the destination is named `row`, not `blind-spot row` —
+# the section IS the blind spots — so this one check widens the destination, and
+# only here.
+#
+# It is the ONE destination pattern that needs word boundaries, and without them
+# it is a false GREEN, not merely noise: `row` is a substring of `grow`, `throw`,
+# `narrow` and `borrow`, so "`sentry: none` is aligned with the other three, so
+# the section does not grow" would AFFIRM a row and pass the assertion that
+# exists to catch exactly that sentence. Verified with awk before and after.
+# `blind[- ]spot row` and `clean[- ]line` need no such guard — neither is a
+# substring of an English word — and boundaries elsewhere would break the
+# inflections the other vocabularies match on (`re-derives`, `re-asking`).
+ROW_DEST_LOCAL='(^|[^a-z])(blind[- ]spot )?rows?([^a-z]|$)'
+window_is_bounded "the Blind spots confirmed-absence bullet window" \
+    "$plate_rules" 'A confirmed absence is not a dark surface' 1600 \
+    'Order by what the darkness costs'
+bullet="$(window_between "$plate_rules" 'A confirmed absence is not a dark surface' 1600 \
+    'Order by what the darkness costs')"
+if [ -z "$bullet" ]; then
+    bad "cannot locate the Blind spots confirmed-absence bullet"
 else
-    bad "the Blind spots rules dropped \`sentry: none\`'s surviving row"
+    b_three="${bullet%%'`sentry: none`'*}"
+    b_sentry="${bullet#"$b_three"}"
+    # Sentry's own CLAUSE, and separately the whole remainder. A window right for
+    # "does it keep its row" is wrong for "does this bullet ever send sentry to
+    # the clean line": a contradictory clause appended later lands outside the
+    # clause and inside the remainder. Both scopes are asserted — the lesson this
+    # file already recorded for §3A.
+    #
+    # The clause is every SENTENCE mentioning the key, not the text up to the
+    # first `. `. That cut reddened the gate on a benign re-punctuation:
+    # "`sentry: none` is the exception. It produces a row, worded as confirmed"
+    # moves the row clause into a sentence the cut discarded, and the run failed
+    # with `affirmed=0 negated=0` on correct prose.
+    b_clause="$(sentences_about "$b_sentry" 'sentry: none')"
+
+    if [ -n "$b_sentry" ]; then
+        ok "the Blind spots bullet states the \`sentry: none\` case"
+    else
+        bad "the Blind spots bullet no longer names \`sentry: none\`"
+    fi
+    for k in testflight posthog mobile; do
+        if printf '%s' "$b_three" | grep -qF "\`$k: none\`"; then
+            ok "the Blind spots bullet names \`$k: none\` among the excluded"
+        else
+            bad "the Blind spots bullet no longer excludes \`$k: none\` from the section"
+        fi
+    done
+    assert_dest "the Blind spots bullet sends the three keys to the clean line" \
+        "$b_three" "$CLEAN_DEST" '+'
+    assert_dest "the Blind spots bullet states the three keys get no row" \
+        "$b_three" "$ROW_DEST_LOCAL" '-'
+    assert_dest "the Blind spots bullet affirmatively keeps \`sentry: none\`'s row" \
+        "$b_clause" "$ROW_DEST_LOCAL" '+'
+    assert_dest "\`sentry: none\`'s clause affirms no clean-line destination" \
+        "$b_clause" "$CLEAN_DEST" '0'
+    assert_dest "nothing after \`sentry: none\` sends it to the clean line either" \
+        "$b_sentry" "$CLEAN_DEST" '0'
 fi
 
 # The example block is what an agent copies. FLATTENED, per this script's own rule
@@ -954,12 +1456,28 @@ else
     bad "§2c no longer explains why a detection-based trigger excluded \`posthog\`"
 fi
 
-# All THREE generator modes must reach it. Migrate mode is the one most likely to
-# need it — a legacy render can never supply a `none` — and it was unreachable.
+# All FOUR generator modes must reach it — `setup-config` has create, update,
+# migrate and adopt, and §2c claimed "all three" while omitting adopt (#268).
+# Migrate and adopt are the two most likely to need it (neither a legacy render
+# nor a hand-written skill can supply a `none`) and adopt reached it via nothing.
 # Emphasis-stripped: the modes are named as **create** mode / **update** mode,
 # so a plain-substring check for "create mode" misses them.
 q2c_bare="$(printf '%s' "$q2c" | tr -d '*_')"
-for mode in create update migrate; do
+# A mode's BODY, not just its heading. `In **migrate** mode: **skip it**` keeps
+# the list entry and passes a presence check — the heading survives while the
+# rule under it is reversed.
+#
+# Each clause must AFFIRM that it asks. The first cut of this vetoed a
+# skip/inherit vocabulary instead, which is the closed-enumeration mistake this
+# same diff removed from `BLIND_AFFIRM` one section up: measured, rewriting
+# adopt's clause to "the question is deferred to the next refresh" evaded every
+# term and stayed GREEN. Ways of not asking are an open class; asking is a
+# single act, so the affirmative is the half worth requiring. The veto is kept
+# beside it — a clause that says both is a contradiction, not a pass.
+ASK_VOCAB='ask|asks|asked|asking'
+SKIP_VOCAB='skip it|skipped|does not apply|not applicable|exempt|inherits whatever|leave (it|them) alone|never asked|no need to ask|deferred|postponed'
+Q2C_END='It is the only way'
+for mode in create update migrate adopt; do
     # The LIST ENTRY, not a mention. A bare `grep "migrate mode"` is satisfied by
     # a sentence that demotes the mode ("Migrate mode inherits whatever the
     # legacy render supplied"), which is the inversion this must catch.
@@ -967,7 +1485,19 @@ for mode in create update migrate; do
         ok "§2c commits to asking in $mode mode"
     else
         bad "§2c does not commit to asking in $mode mode — that path leaves the keys absent"
+        continue
     fi
+    # Every mode marker is passed as a stop — the window's own mark is consumed
+    # before the cut, so listing it here is harmless and keeps the call uniform.
+    window_is_bounded "§2c's $mode-mode clause window" \
+        "$q2c_bare" "In $mode mode:" 900 "$Q2C_END" \
+        "In create mode:" "In update mode:" "In migrate mode:" "In adopt mode:"
+    mode_win="$(window_between "$q2c_bare" "In $mode mode:" 900 "$Q2C_END" \
+        "In create mode:" "In update mode:" "In migrate mode:" "In adopt mode:")"
+    assert_dest "§2c's $mode-mode clause affirmatively asks" \
+        "$mode_win" "$ASK_VOCAB" '+'
+    assert_dest "§2c's $mode-mode clause does not exempt the mode from asking" \
+        "$mode_win" "$SKIP_VOCAB" '0'
 done
 
 if printf '%s' "$q2c" | grep -qi 'never default'; then
@@ -1000,7 +1530,9 @@ fi
 
 update_flat="$(tr '\n' ' ' < "$UPDATE" | tr -s ' ')"
 
-carry_win="$(window_between "$update_flat" '**A `none` is an answer already given' 900 '**Do not read that')"
+window_is_bounded "update mode's carry-forward window" \
+    "$update_flat" '**A `none` is an answer already given' 2400 '**Do not read that'
+carry_win="$(window_between "$update_flat" '**A `none` is an answer already given' 2400 '**Do not read that')"
 if [ -z "$carry_win" ]; then
     bad "update mode has no carry-a-\`none\`-forward rule"
 else
@@ -1017,18 +1549,27 @@ else
     else
         bad "the rule no longer says it is the confirmation that cannot be re-derived"
     fi
-    # `sentry: none` must NOT be in this carve-out: detection.md writes it when
-    # there is no MCP server or no issues to sample, both transient session
-    # conditions, so freezing it would let one unlucky run permanently retire the
-    # highest-signal surface with no recovery path.
-    if printf '%s' "$carry_win" | grep -qi 're-derived on every refresh'; then
-        ok "\`sentry: none\` is re-derived on a refresh, not frozen"
-    else
-        bad "\`sentry: none\` is frozen by the carve-out — one bad session retires Sentry forever"
-    fi
 fi
 
-pos_win="$(window_between "$update_flat" '**Positive evidence against a `none`' 700 '**An ABSENT one')"
+# `sentry: none` must NOT be in that carve-out: detection.md writes it when there
+# is no MCP server or no issues to sample, both transient session conditions, so
+# freezing it would let one unlucky run permanently retire the highest-signal
+# surface with no recovery path.
+#
+# Read from the WHOLE file by sentence, not from `carry_win`. Two defects were
+# measured here (#268). The check was `carry_win | grep -qi 're-derived on every
+# refresh'`, which is satisfied by "is NOT re-derived on every refresh" — the
+# exact inversion it exists to catch. And the phrase sat at byte 933 of a
+# 937-byte window, so one sentence inserted above it would have moved it out of
+# scope and reddened the gate on an edit that changed nothing.
+assert_sentence_affirms "update mode says \`sentry: none\` is re-derived, not frozen" \
+    "$update_flat" 'sentry: none' "$REDERIVE_VOCAB"
+assert_no_sentence_affirms "update mode never carries \`sentry: none\` forward" \
+    "$update_flat" 'sentry: none' "$CARRY_VOCAB"
+
+window_is_bounded "update mode's positive-evidence window" \
+    "$update_flat" '**Positive evidence against a `none`' 900 '**An ABSENT one'
+pos_win="$(window_between "$update_flat" '**Positive evidence against a `none`' 900 '**An ABSENT one')"
 if [ -z "$pos_win" ]; then
     bad "update mode has no rule for positive evidence against a \`none\`"
 else
@@ -1045,7 +1586,9 @@ else
     fi
 fi
 
-absent_win="$(window_between "$update_flat" '**An ABSENT one of these keys' 1200 '**Migrate mode inherits')"
+window_is_bounded "update mode's absent-key window" \
+    "$update_flat" '**An ABSENT one of these keys' 2400 '**Migrate mode inherits'
+absent_win="$(window_between "$update_flat" '**An ABSENT one of these keys' 2400 '**Migrate mode inherits')"
 if [ -z "$absent_win" ]; then
     bad "update mode has no path to WRITE a \`none\` — the rollout is a no-op"
 else
@@ -1097,6 +1640,41 @@ else
     bad "migrate-mode.md has no §2c step — every migrated repo keeps the rows"
 fi
 
+# ADOPT mode needs the identical step, and for a reason that is easy to miss:
+# `SKILL.md` Phase 5 routes adopt through this file, but this file's Adopt mode
+# step 2 says "Run create mode's detect + interview", and create mode's §2c
+# trigger is CONDITIONAL ("every key with no positive evidence"). So the routing
+# is real and the always-ask is not inherited — the gap migrate closed with its
+# own Step 2b. Without this, `interview.md` §2c's "always" for adopt is prose no
+# instruction implements, which is the shape this file exists to refuse.
+adopt_sec="$(awk '/^## Adopt mode/{f=1; next} /^## /{f=0} f' "$UPDATE" | tr '\n' ' ' | tr -s ' ')"
+if [ -z "$adopt_sec" ]; then
+    bad "cannot locate update-mode.md's Adopt mode section"
+else
+    ok "located update-mode.md's Adopt mode section"
+    if printf '%s' "$adopt_sec" | grep -q '§2c'; then
+        ok "adopt mode names interview §2c"
+    else
+        bad "adopt mode names no §2c step — every adopted repo keeps the three rows"
+    fi
+    assert_dest "adopt mode's §2c step affirmatively asks" "$adopt_sec" "$ASK_VOCAB" '+'
+    if printf '%s' "$adopt_sec" | grep -qi 'always'; then
+        ok "adopt mode's §2c step is unconditional"
+    else
+        bad "adopt mode's §2c step is conditional — create mode's trigger does not reach it"
+    fi
+    # Emphasis-stripped: the source writes `**not** part of this question`, and a
+    # plain-substring check for the phrase misses it — the trap already recorded
+    # for §2c's mode names.
+    adopt_bare="$(printf '%s' "$adopt_sec" | tr -d '*_')"
+    if printf '%s' "$adopt_bare" | grep -qi 'sentry' &&
+       printf '%s' "$adopt_bare" | grep -qi 'not part of this question'; then
+        ok "adopt mode keeps \`sentry:\` out of the confirmed-absent question"
+    else
+        bad "adopt mode does not exclude \`sentry:\` from the §2c question"
+    fi
+fi
+
 # --- I8. setup-config/SKILL.md carries the three rules too --------------------
 #
 # SKILL.md is loaded on EVERY invocation while `references/` are read on demand,
@@ -1104,7 +1682,9 @@ fi
 # deletes these. Measured: inverting all three left this gate green, because §F
 # above greps `skill_flat` only for #213's strings.
 
-nodefault_win="$(window_between "$skill_flat" '**Never default a confirmed-absent `none`.**' 700 '## Phase 3')"
+window_is_bounded "Phase 2's never-default window" \
+    "$skill_flat" '**Never default a confirmed-absent `none`.**' 900 '## Phase 3'
+nodefault_win="$(window_between "$skill_flat" '**Never default a confirmed-absent `none`.**' 900 '## Phase 3')"
 if [ -z "$nodefault_win" ]; then
     bad "setup-config/SKILL.md has no never-default-a-\`none\` rule"
 else
@@ -1121,7 +1701,9 @@ else
     fi
 fi
 
-phase4_win="$(window_between "$skill_flat" '**The three `none` answers are carried forward' 900 'Apply per file')"
+window_is_bounded "setup-config Phase 4's \`none\` window" \
+    "$skill_flat" '**The three `none` answers are carried forward' 1600 'Apply per file'
+phase4_win="$(window_between "$skill_flat" '**The three `none` answers are carried forward' 1600 'Apply per file')"
 if [ -z "$phase4_win" ]; then
     bad "setup-config/SKILL.md Phase 4 states nothing about the \`none\` answers"
 else
@@ -1136,14 +1718,31 @@ else
     else
         bad "Phase 4 has no path to write a \`none\` for a missing key"
     fi
-    if printf '%s' "$phase4_win" | grep -qi 'sentry' &&
-       printf '%s' "$phase4_win" | grep -qi 're-derived'; then
-        ok "Phase 4 keeps \`sentry: none\` out of the carve-out"
-    else
-        bad "Phase 4 does not exclude \`sentry: none\` from the carry-forward carve-out"
-    fi
+    # Per SENTENCE, not per window. What stood here was `grep -qi 'sentry'` AND
+    # `grep -qi 're-derived'` over the whole window — two independent substring
+    # hits that "`sentry: none` is **not** re-derived on every refresh" satisfies
+    # exactly as well as the rule it inverts (#268).
+    assert_sentence_affirms "Phase 4 says \`sentry: none\` is re-derived, not carried forward" \
+        "$phase4_win" 'sentry: none' "$REDERIVE_VOCAB"
+    # ...AND the veto. Without it Phase 4 could state decision D and its inverse
+    # at once — measured: appending "In practice a refresh keeps whatever
+    # `sentry: none` the previous run recorded and never re-asks it." left the
+    # gate GREEN. That is #267's shape exactly, in the file CLAUDE.md names as
+    # the copy to trust and the one loaded on every `setup-config` run.
+    assert_no_sentence_affirms "Phase 4 never carries \`sentry: none\` forward" \
+        "$phase4_win" 'sentry: none' "$CARRY_VOCAB"
 fi
 
+# The guardrail list, which CLAUDE.md names as the copy to trust. Its carve-out
+# is read as a MEMBER LIST and every member is accounted for, because the check
+# that stood here was `grep -q '\`none\`'` — satisfied by any mention of the word
+# — and #267 had quietly added `sentry:` to the list, contradicting the same
+# file two paragraphs up and `update-mode.md` outright (#268). Freezing
+# `sentry: none` lets one session with no MCP server retire the plate's
+# highest-signal surface permanently, since the only evidence that could
+# contradict the value is the check the carve-out skips.
+skill_guard="$(awk '/^## Guardrails/{f=1; next} /^## /{f=0} f' "$SKILL" | tr '\n' ' ' | tr -s ' ')"
+[ -n "$skill_guard" ] || bad "cannot locate setup-config/SKILL.md's Guardrails section"
 nevercopy="$(printf '%s' "$skill_flat" |
     grep -oE 'Never copy a fact forward without re-verifying it against live state[^.]*\.')"
 if [ -z "$nevercopy" ]; then
@@ -1155,6 +1754,34 @@ else
     else
         bad "the never-copy guardrail no longer excepts the \`none\` answers"
     fi
+    carveout_list="$(printf '%s' "$nevercopy" | grep -oE '\(`[^)]*`\)' | tail -1)"
+    if [ -z "$carveout_list" ]; then
+        bad "the never-copy guardrail no longer enumerates which \`none\` forms it excepts"
+    else
+        cm_n=0 cm_sentry=0
+        for cm in $(printf '%s' "$carveout_list" | tr -d '()`' | tr ',' ' '); do
+            cm_n=$((cm_n + 1))
+            case "$cm" in sentry*) cm_sentry=1 ;; esac
+        done
+        if [ "$cm_n" = 3 ]; then
+            ok "the guardrail's carve-out names exactly three \`none\` forms"
+        else
+            bad "the guardrail's carve-out names $cm_n \`none\` forms, not three: $carveout_list"
+        fi
+        if [ "$cm_sentry" = 0 ]; then
+            ok "the guardrail's carve-out excludes \`sentry:\`"
+        else
+            bad "the guardrail's carve-out includes \`sentry:\` — one bad session retires Sentry forever"
+        fi
+    fi
+    # ...and the exclusion is stated INLINE, beside the list. A reader who stops
+    # at the guardrail must not have to reach Phase 4 to learn sentry is out.
+    # Both halves, for the reason given at the Phase 4 site: a must-exist alone
+    # lets the same list state the rule and its inverse.
+    assert_sentence_affirms "the guardrail says \`sentry: none\` is re-derived, inline" \
+        "$skill_guard" 'sentry: none' "$REDERIVE_VOCAB"
+    assert_no_sentence_affirms "the guardrail never carries \`sentry: none\` forward" \
+        "$skill_guard" 'sentry: none' "$CARRY_VOCAB"
 fi
 
 # --- I9. The rendered template names the form and its asymmetry --------------
@@ -1171,8 +1798,27 @@ else
     bad "the template header no longer states which key keeps its blind-spot row"
 fi
 
-if [ "$fails" -ne 0 ]; then
-    echo "test-sentry-verification: FAILED ($fails)" >&2
+# A VACUITY FLOOR, and it is worth being exact about what it does and does not
+# catch. A broken EXTRACTOR already fails loudly here: every window has a `-z`
+# guard, and `assert_dest` refuses an empty haystack outright. What nothing else
+# sees is a whole assertion BLOCK deleted in a refactor — the count drops and the
+# run still says "all green". So the floor is coarse on purpose, set well below
+# today's total: it catches a collapse, not a trim, and a floor tuned to today's
+# exact number is one more inventory that rots.
+#
+# The count itself is PRINTED, never transcribed. That is issue #268's sixth
+# acceptance item taken literally: a number nobody can re-derive from the tree is
+# not worth carrying, and CLAUDE.md carried a wrong one ("39 semantic mutations,
+# 0 stale and 0 undetected, 59 assertions measured load-bearing") for exactly
+# that reason, in the one place a future editor trusts instead of re-measuring.
+ASSERT_FLOOR=120
+if [ "$asserts" -lt "$ASSERT_FLOOR" ]; then
+    echo "test-sentry-verification: only $asserts assertions ran (floor $ASSERT_FLOOR) — an extractor is silently matching nothing" >&2
     exit 1
 fi
-echo "Sentry verification tests: all green"
+
+if [ "$fails" -ne 0 ]; then
+    echo "test-sentry-verification: FAILED ($fails of $asserts assertions)" >&2
+    exit 1
+fi
+echo "Sentry verification tests: all green ($asserts assertions)"

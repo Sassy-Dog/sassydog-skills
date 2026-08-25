@@ -169,8 +169,10 @@ opened this form to close; promoting the other three back into rows re-creates #
 recorded outcome of a culprit verification that failed (`references/detection.md`). The other three
 are never derived and never defaulted — they are written only on an explicit answer in the
 interview (`references/interview.md` §2c), because `none` asserts that a human checked, and a
-guessed `none` retires a real blind spot with nothing announcing it. A refresh carries all four
-forward rather than re-asking (`references/update-mode.md`).
+guessed `none` retires a real blind spot with nothing announcing it. A refresh carries **those
+three** forward rather than re-asking, and re-derives `sentry: none` like any other fact: it is also
+written when the culprit check merely could not run, so freezing it would let one unlucky session
+retire the plate's highest-signal surface with no path back (`references/update-mode.md`).
 
 **Deliberately not extended further.** Each new `none` is one more state a reader has to hold, so
 the form is scoped to keys whose absence is *loud*:
@@ -200,12 +202,15 @@ The heading names one key while the body scopes the form to four. That is delibe
 anchors the heading line verbatim — `scripts/test-review-gate-decisions.sh` asserts it, anchored, as
 a link target for the `review_agent: skip`-not-`none` decision (#237, tracked as
 [#247](https://github.com/Sassy-Dog/sassydog-skills/issues/247)) — while
-`scripts/test-sentry-verification.sh` extracts this section by a prefix of it, and four prose
-cross-references point at it by name.
-Renaming it to cover the four would redden a gate whose failure message points a reader at #248's
-review architecture instead of at this section. `sentry: none` is also still the *first* documented
-exception and the one whose justification the others inherit, so the name is accurate as a
-citation even where it is incomplete as a summary. Leave it.
+`scripts/test-sentry-verification.sh` extracts this section by a prefix of it, and five prose
+cross-references point at it by name (`references/update-mode.md`, `references/migrate-mode.md`,
+`references/interview.md`, and `survey-work`'s §6 twice).
+Renaming it to cover the four would redden a gate whose failure message points a reader at the
+review-gate decisions (#237, tracked as
+[#247](https://github.com/Sassy-Dog/sassydog-skills/issues/247)) instead of at this section.
+`sentry: none` is also still the *first* documented exception and the one whose justification the
+others inherit, so the name is accurate as a citation even where it is incomplete as a summary.
+Leave it.
 
 ## Shared blocks
 

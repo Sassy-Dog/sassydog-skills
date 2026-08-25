@@ -399,11 +399,19 @@ else
     ok "located setup-config Phase 4 (update mode)"
     assert_in "$phase4" 're-verify every fact against live state' \
         "Phase 4 still states update mode's re-verify-every-fact rule"
-    # "the one fact" was dropped, deliberately: issue #261 added four more
-    # non-re-derived frontmatter values (the `none` forms), and the same file's
-    # guardrail list already named them beside `review_site`, so the uniqueness
-    # claim was false nine lines from where it was made. The DECISION this pins
-    # is that Phase 4 exempts `review_site` — not that it is the only exemption.
+    # "the one fact" was dropped, deliberately: issue #261 added THREE more
+    # non-re-derived frontmatter values (`testflight: none`, `posthog: none`,
+    # `mobile: none`), and the same file's guardrail list already named them
+    # beside `review_site`, so the uniqueness claim was false nine lines from
+    # where it was made. The DECISION this pins is that Phase 4 exempts
+    # `review_site` — not that it is the only exemption.
+    #
+    # Three, not four: `sentry: none` is NOT in that carve-out and is re-derived
+    # on every refresh, because it is also written when the culprit check merely
+    # could not run (issue #268; `scripts/test-sentry-verification.sh` decision
+    # D owns that split and asserts it at all four sites). #267 briefly wrote
+    # `sentry:` into the guardrail list while removing it everywhere else, and
+    # this comment repeated the wrong count.
     assert_in "$phase4" '`review_site:` is a fact this phase must NOT re-derive' \
         "Phase 4 exempts review_site from the re-verify rule"
     assert_in "$phase4" 'stop and surface both sides' \
