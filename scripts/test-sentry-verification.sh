@@ -965,6 +965,39 @@ dest_tally() {
         # absent error monitoring…`, both reddening correct prose. Only
         # post-positional participles count, and the scan stops at the same
         # clause boundaries.
+        # THE APPOSITIVE REGION, and the discipline INSIDE it. Opening on
+        # position alone was not enough: the first version tested the participle
+        # and returned unconditionally, so nothing inside the region consulted
+        # the copula rule, the preposition rule or the relativizer stop -- and
+        # `the blind-spot row, with the mobile lane skipped, is fine` read 0/1
+        # against main 1/0. That is the SAME reduced relative the copula gate
+        # exists to reject, admitted through a door that never asked.
+        #
+        # WHAT SEPARATES THEM IS A SUBJECT. A participial appositive has none of
+        # its own -- it is the participle, optionally behind adverbs, predicated
+        # on the noun it abuts. The moment a NEW SUBJECT appears inside the
+        # region (a relativizer, a preposition heading a fresh noun phrase, or a
+        # determiner opening one) it is a clause with its own subject, and the
+        # whole region becomes an ASIDE to be skipped rather than an appositive
+        # to be read. `appos == 2` is that degraded state; it runs to the
+        # closing delimiter and resumes after it, which is why `— the mobile
+        # lane was skipped — is fine` reaches `is fine` and finds nothing.
+        #
+        # The three word classes are closed enough to enumerate: relativizers
+        # and prepositions are the sets this file already carries, and
+        # determiners are a closed grammatical class. ADVERBS are deliberately
+        # not enumerated -- an open class -- which is why the rule tests for
+        # what DISQUALIFIES an appositive rather than for what an adverb is, and
+        # why `, deliberately dropped —` and `, never dropped,` still read.
+        function appos_edge(t) {
+            return (t == "," || t ~ /,$/ || t == "-" || t ~ /-$/ ||
+                    tail(t, "\342\200\224") || tail(t, "\342\200\223"))
+        }
+        function new_subject(b) {
+            return (b ~ /^(which|that|who|whom|whose|where|whereby|wherein|when)$/ ||
+                    b ~ /^(with|in|of|for|on|at|by|from|under|inside|despite)$/ ||
+                    b ~ /^(the|a|an|this|these|those|its|his|her|their|our|my|your)$/)
+        }
         function first_i(w, nw,   k) {
             for (k = 1; k <= nw; k++) if (w[k] != "") return k
             return 0
@@ -1006,17 +1039,24 @@ dest_tally() {
                 # `Deliberately dropped — not a plate item`, a bare participle
                 # in a cell the four-key loop classifies per cell through
                 # `dest_affirmed`, wanting only a destination in the same cell.
-                if (i == first_i(w, nw) && (t == "," || t == "-" || tail(t, "\342\200\224") || tail(t, "\342\200\223"))) {
+                if (i == first_i(w, nw) && appos_edge(t)) {
                     appos = 1
                     continue
                 }
-                if (appos && b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/) {
-                    if (cancelled(w, i)) return 0
-                    return 1
-                }
-                if (appos && (t ~ /,$/ || t == "-" || tail(t, "\342\200\224") || tail(t, "\342\200\223"))) {
-                    appos = 0
+                if (appos == 2) {
+                    if (appos_edge(t)) appos = 0
                     continue
+                }
+                if (appos == 1) {
+                    if (new_subject(b)) {
+                        if (appos_edge(t)) appos = 0; else appos = 2
+                        continue
+                    }
+                    if (b ~ /^(dropped|omitted|suppressed|excluded|removed|withheld|skipped|retired)$/) {
+                        if (cancelled(w, i)) return 0
+                        return 1
+                    }
+                    if (appos_edge(t)) { appos = 0; continue }
                 }
                 if (clause_break(t, b)) return 0
                 # A NEW SUBJECT ends this scan. `whose` is the one relativizer
@@ -1386,7 +1426,7 @@ dest_case "\`then\` alone bounds the scan" \
 # reddens the em- and en-dash attached ones, and ONLY those. The ASCII attached
 # case survives that mutation, because the ASCII arm is the `[;:.-]$` regex
 # rather than a `tail()` call; it is pinned instead by dropping `-` from that
-# class. Two mechanisms, one behaviour, and a fixture set covering either one
+# class (`[:|-]$` today -- the `;` and `.` moved into `hard_break`). Two mechanisms, one behaviour, and a fixture set covering either one
 # alone reads complete. FOUR of the six
 # read WRONG on main, in both directions. The other two — the standalone em and
 # en dashes — read RIGHT there, and that is the trap in this block rather than a
@@ -1634,6 +1674,32 @@ dest_case "a negated appositive affirms the row" \
 # is how this fix would have re-opened what the copula gate closed.
 dest_case "a reduced relative after an intervening phrase does not negate" \
     'the blind-spot row for sentry, with its posthog target dropped, is kept' '1 0'
+# ...and these four are the discipline INSIDE the region, which the pair above
+# cannot see: both of them sit where the appositive never opens, so position was
+# carrying the entire separation and nothing tested the interior. Each reads 1/0
+# on main. The third is the one that decides it -- the same construction as the
+# counter-case above with the comma moved to abut the destination, which is what
+# proves position alone is not a rule.
+dest_case "a clause with its own subject is an aside, not an appositive" \
+    'the blind-spot row — the mobile lane was skipped — is fine' '1 0'
+dest_case "a determiner inside the region opens a new subject" \
+    'the blind-spot row, the mobile lane having been skipped, is fine' '1 0'
+dest_case "a preposition inside the region opens a new subject" \
+    'the blind-spot row, with the mobile lane skipped, is fine' '1 0'
+dest_case "a relativizer inside the region opens a new subject" \
+    'the blind-spot row, which sentry has dropped, is kept' '1 0'
+# The preposition arm needs a string with NO determiner in it, or the determiner
+# arm covers for it and the two cannot be told apart -- measured, dropping the
+# preposition arm alone left the whole gate green while `with the mobile lane`
+# still fired on `the`.
+dest_case "a preposition alone opens a new subject" \
+    'the blind-spot row, with sentry dropped, is fine' '1 0'
+# ...and the degraded aside RESUMES at its closing delimiter rather than
+# swallowing the rest. Without that, a real negation after the aside is lost --
+# and the loss is invisible from every case above, since they all want AFFIRMED
+# and a scan that gives up returns exactly that.
+dest_case "a degraded aside resumes and still finds a real negation" \
+    'the blind-spot row, with the mobile lane skipped, is dropped' '0 1'
 # ONE CASE PER MEMBER, for both tiers, and NO BARE COUNT IS WRITTEN DOWN -- the
 # cases ARE the inventory, and `grep -c '^dest_case "passive auxiliary:'` plus
 # its `copular verb:` sibling re-derives it from the tree. A number here would
@@ -1644,7 +1710,12 @@ dest_case "a reduced relative after an intervening phrase does not negate" \
 #
 # THE RULE IS SHARPER THAN "NO NUMBERS", because a blanket ban would strip
 # counts that are perfectly safe. A count is safe when its MEMBERS ARE
-# ENUMERATED BESIDE IT -- `six arms ... the ASCII dash, the en dash and all
+# ENUMERATED BESIDE IT, or when A GATE RE-DERIVES IT -- `CLAUDE.md`s "whose
+# transcription of the nine is the third-copy shape" floats free of any list
+# and is safe anyway, because `scripts/test-review-orchestrator-allowlist.sh`
+# recomputes the nine in CI and reddens if it drifts. Cite the gate by filename
+# when relying on that, so a later sweep does not rewrite a count something is
+# already holding -- `six arms ... the ASCII dash, the en dash and all
 # four of and/but/so/then` cannot go stale silently, because the list is right
 # there to check against. A count with no enumeration beside it is the unsafe
 # shape, and both stale ones were exactly that: `removing ANY of the ten` and
@@ -1656,17 +1727,35 @@ dest_case "a reduced relative after an intervening phrase does not negate" \
 # because both greps looked for `ten-member` and `any of the ten` -- the
 # wordings we remembered writing. That is negation-blindness one level up: a
 # probe shaped by what the author expected to have written cannot find what the
-# author actually wrote. The probe that works sweeps for the SHAPE and is read
-# rather than counted:
+# author actually wrote.
 #
-#   grep -oniE '\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven| \
-#     twelve)[ -](of[ -]the[ -])?[a-z]* ?(member|set|list|paradigm|arm|case| \
-#     entr)[a-z]*' scripts/test-sentry-verification.sh scripts/preflight.sh \
-#     CLAUDE.md
+# THE FIRST REPLACEMENT WAS THE SAME MISTAKE ONE GENERATION DOWN, which is why
+# this paragraph is long. It swept for a number ADJACENT to a counted noun,
+# from a closed list -- `member|set|list|paradigm|arm|case|entr` -- and so it
+# could only ever find counts of the SAFE shape, since the rule above defines
+# the unsafe one as a count floating FREE of its noun. Measured against the two
+# wordings it was written for, it found nothing on one and, on the other, only
+# the safe `one member` earlier in the same sentence: a decoy that a reader
+# obeying READ THEM would read, judge safe, and move past with `the ten` four
+# words away. A closed noun list is also an open class in disguise -- `face`,
+# `guard`, `verb`, `form`, `word`, `string`, `fixture`, `scan`, `rule` are all
+# counted things this file writes today and none was in it. That is the
+# six-verb `BLIND_AFFIRM` lesson, committed inside the probe enforcing the rule
+# against it.
 #
-# It returns roughly two dozen hits across the three files, nearly all of them
-# safe by the enumeration rule above. READ THEM. Counting them, or grepping for
-# the phrasing you think you used, is how this was missed twice.
+# THE PROBE THAT WORKS CARRIES NO NOUN LIST AND NO VERB LIST. It sweeps for the
+# number used AS the noun -- a partitive, which is the surface form of a count
+# floating free of its set:
+#
+#   grep -oniE "\\b(of|among|across) (the |these |those |them )?(one|two| \
+#     three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen| \
+#     fourteen|fifteen|twenty)\\b" scripts/test-sentry-verification.sh \
+#     scripts/preflight.sh CLAUDE.md
+#
+# It finds BOTH original wordings (`ANY of the ten`, `eight of the ten`) and
+# returns a couple of dozen hits across the three files -- few enough to READ,
+# which is the point and the instruction. Counting them, or grepping for the
+# phrasing you think you used, is how this was missed twice.
 #
 # TIER 1 IS COMPLETE PARADIGMS. `be` and the get-passive are closed, so
 # enumerating them terminates -- but the licence only holds if each is WHOLE,
