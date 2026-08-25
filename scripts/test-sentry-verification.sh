@@ -983,17 +983,67 @@ dest_tally() {
         # closing delimiter and resumes after it, which is why `— the mobile
         # lane was skipped — is fine` reaches `is fine` and finds nothing.
         #
-        # The three word classes are closed enough to enumerate: relativizers
-        # and prepositions are the sets this file already carries, and
-        # determiners are a closed grammatical class. ADVERBS are deliberately
-        # not enumerated -- an open class -- which is why the rule tests for
-        # what DISQUALIFIES an appositive rather than for what an adverb is, and
-        # why `, deliberately dropped —` and `, never dropped,` still read.
+        # Relativizers and prepositions are the sets this file already carries.
+        # ADVERBS are deliberately not enumerated -- an open class -- which is
+        # why the rule tests for what DISQUALIFIES an appositive rather than for
+        # what an adverb is, and why `, deliberately dropped —` and `, never
+        # dropped,` still read.
+        #
+        # A COORDINATED adverb pair does NOT read, and that is stated rather
+        # than fixed: `, quietly and deliberately dropped,` returns 1/0,
+        # because `and` is a clause boundary and terminates the scan before the
+        # participle. It is the natural extension of the two adverb examples
+        # just cited, so a reader will expect it to work. It is not a
+        # regression -- main returns 1/0 too -- and the fix would be to teach
+        # the scan that a conjunction inside a bracketed region is not a clause
+        # boundary, which is a change to `clause_break` and not to this block.
+        #
+        # KNOWN LIMIT, and it replaces a CLAIM THAT WAS FALSE. This block used
+        # to say "determiners are a closed grammatical class", offered as the
+        # licence for enumerating them. The class is closed; the ENUMERATION
+        # below is not the class, and saying otherwise is the exact shape this
+        # file diagnoses 750 lines further down about a different list -- "a
+        # closed noun list is also an open class in disguise". The claim is
+        # gone rather than the list being lengthened, because a longer list
+        # under the same false claim is no better.
+        #
+        # Measured, these determiners are absent and each one leaves a
+        # participle admitted that should not be: `each`, `every`, `both`,
+        # `either`, `neither`, `some`, `any`, `no`, `all`, `another`, `such`,
+        # `several`, and possessive noun phrases (`sentry-s target dropped`).
+        # NONE OF THEM IS A REGRESSION -- main reads them the same way, because
+        # main had no appositive path at all -- so they are completeness gaps
+        # in a new feature rather than something this change broke. They are
+        # STATED here in the idiom `am`, `looks`/`appears` and `why`/`whereupon`
+        # already use in this file, and the fix for any one of them is to add
+        # the word WITH its case when prose in the tree needs it, not to
+        # pre-enumerate the class.
+        # THE EDGE IS A COMMA OR A DASH, ATTACHED OR STANDALONE -- said
+        # precisely, because the block above used to say "a comma or a dash"
+        # while the code also accepted any token ending in a hyphen. They now
+        # agree, and the ATTACHED form is deliberate rather than an accident:
+        # it is the same trailing-dash treatment `clause_break` carries, for
+        # the same reason (`special-` ends a clause), and narrowing it here
+        # would leave the two disagreeing in the other direction. The cost is
+        # that a token merely ending in a hyphen opens or closes a region;
+        # nothing in the tree does, and the dash cases below pin the forms that
+        # matter.
         function appos_edge(t) {
             return (t == "," || t ~ /,$/ || t == "-" || t ~ /-$/ ||
                     tail(t, "\342\200\224") || tail(t, "\342\200\223"))
         }
-        function new_subject(b) {
+        function new_subject(b, nxt) {
+            # THE DETERMINER ARM HAS ONE EXEMPTION, and it is a coreference
+            # rather than a longer list. A determiner opens a new subject
+            # UNLESS what it determines is the pro-form `one`/`ones`, which
+            # corefers with the noun already named: `the blind-spot row, the
+            # one dropped in #261, is gone` is a real negation about the ROW,
+            # while `the blind-spot row, the mobile lane dropped, is fine` is
+            # not. That distinction is the whole of the exemption -- one arm,
+            # not a widening -- and without it the first string read 1/0
+            # against main 0/1, quietly.
+            if (b ~ /^(the|a|an|this|these|those|its|his|her|their|our|my|your)$/ &&
+                nxt ~ /^(one|ones)$/) return 0
             return (b ~ /^(which|that|who|whom|whose|where|whereby|wherein|when)$/ ||
                     b ~ /^(with|in|of|for|on|at|by|from|under|inside|despite)$/ ||
                     b ~ /^(the|a|an|this|these|those|its|his|her|their|our|my|your)$/)
@@ -1043,12 +1093,22 @@ dest_tally() {
                     appos = 1
                     continue
                 }
+                # KNOWN LIMIT: the degraded region does NOT consult
+                # `clause_break`, so a `.` or `;` inside it does not stop the
+                # scan -- it runs to the closing delimiter regardless. That is
+                # the same shape `hard_break` exists for one function over,
+                # which is the reason to write it down rather than assume it is
+                # fine. It is tolerated here because the region is bounded by a
+                # delimiter that in practice arrives well before a sentence
+                # end, nothing in the tree triggers it, and no live call site
+                # moves. If it ever bites, the fix is a `hard_break` check in
+                # this branch -- not a wider `appos_edge`.
                 if (appos == 2) {
                     if (appos_edge(t)) appos = 0
                     continue
                 }
                 if (appos == 1) {
-                    if (new_subject(b)) {
+                    if (new_subject(b, (i < nw) ? bare(w[i + 1]) : "")) {
                         if (appos_edge(t)) appos = 0; else appos = 2
                         continue
                     }
@@ -1700,6 +1760,15 @@ dest_case "a preposition alone opens a new subject" \
 # and a scan that gives up returns exactly that.
 dest_case "a degraded aside resumes and still finds a real negation" \
     'the blind-spot row, with the mobile lane skipped, is dropped' '0 1'
+# ...and the determiner arm has ONE exemption, which is a coreference rather
+# than a longer list: the pro-form `one`/`ones` corefers with the noun already
+# named, so `the one dropped` still predicates on the row while `the mobile
+# lane dropped` does not. The pair is the whole of it -- the same determiner,
+# opposite verdicts, decided by the word after it.
+dest_case "a determiner before a pro-form does not open a new subject" \
+    'the blind-spot row, the one dropped in #261, is gone' '0 1'
+dest_case "a determiner before a real noun still opens one" \
+    'the blind-spot row, the mobile lane dropped, is fine' '1 0'
 # ONE CASE PER MEMBER, for both tiers, and NO BARE COUNT IS WRITTEN DOWN -- the
 # cases ARE the inventory, and `grep -c '^dest_case "passive auxiliary:'` plus
 # its `copular verb:` sibling re-derives it from the tree. A number here would
@@ -1756,6 +1825,22 @@ dest_case "a degraded aside resumes and still finds a real negation" \
 # returns a couple of dozen hits across the three files -- few enough to READ,
 # which is the point and the instruction. Counting them, or grepping for the
 # phrasing you think you used, is how this was missed twice.
+#
+# WHAT IT CANNOT SEE, stated rather than fixed, because widening a probe until
+# the next reader finds the next surface form is the loop that produced the two
+# before it. Keying on the PARTITIVE narrows it to one surface form, and the
+# two wordings it was validated against both happened to share that form --
+# which is exactly how each earlier probe was built, and the reason to write
+# the blind spot down instead of adding an alternation. It misses:
+#
+#   * NON-PARTITIVE free-floating counts -- `the eight files`, `the four
+#     names`, `the six-verb affirmative`. The number sits beside a noun, so it
+#     reads safe by shape while the SET it counts may be elsewhere entirely.
+#   * DIGIT forms -- `all 12 are pinned`. The sweep is spelled-out words only.
+#
+# A probe with a stated blind spot is honest about what a clean run means. The
+# instruction stands: READ the hits, and do not assume a clean sweep is a clean
+# tree.
 #
 # TIER 1 IS COMPLETE PARADIGMS. `be` and the get-passive are closed, so
 # enumerating them terminates -- but the licence only holds if each is WHOLE,
