@@ -928,6 +928,39 @@ dest_tally() {
                     # prepositions:
                     # `a repo with no Sentry keeps a blind-spot row` classifies
                     # AFFIRMED on `with` alone. Measured both ways.
+                    #
+                    # KNOWN LIMIT: THE TEST CANNOT REACH A CLAUSE-INITIAL
+                    # NEGATOR, and it is filed here rather than with the
+                    # comma-parity limits because the cause is POSITIONAL and
+                    # filing it there would misattribute it. `p` is the token
+                    # BEFORE the negator; at clause-initial position there is
+                    # none, `p` is the empty string, and no preposition can
+                    # match it. This is structural -- no addition to the list
+                    # above can reach a negator with nothing in front of it.
+                    #
+                    # Measured, all three AFFIRMED on main and NEGATED here:
+                    #
+                    #   no config key is read before survey-work renders a
+                    #     blind-spot row
+                    #   nothing in the contract prevents survey-work from
+                    #     rendering a blind-spot row
+                    #   never mind the four keys sentry still renders a
+                    #     blind-spot row
+                    #
+                    # DIRECTION: AFFIRMED -> NEGATED, which is LOUD on a `+`
+                    # want and QUIET on a `-` one. It moves none of the 77 live
+                    # call sites.
+                    #
+                    # IT IS STATED RATHER THAN FIXED, and the header at the top
+                    # of this file credits the preposition test with carrying
+                    # this whole class -- which is exactly why it cannot stay
+                    # unstated. The canonical case that sentence cites (`a repo
+                    # with no Sentry keeps a blind-spot row`) works; the
+                    # clause-initial variant of the same class does not. No
+                    # bounded arm reaches it: `nothing in the contract prevents
+                    # X from rendering Y` is a double negation over a control
+                    # verb, and any rule that resolves it is a new inference
+                    # layer rather than a longer list.
                     prepositional = (p ~ /^(with|in|of|for|on|at|by|from|under|inside|despite)$/)
                     # POLARITY FLIP. A second negator governing the first cancels
                     # it: `is not exempt from a blind-spot row` and `is never
@@ -1011,6 +1044,10 @@ dest_tally() {
         # participle admitted that should not be: `each`, `every`, `both`,
         # `either`, `neither`, `some`, `any`, `no`, `all`, `another`, `such`,
         # `several`, and possessive noun phrases (`sentry-s target dropped`).
+        # `much`, `many`, `enough` and `whichever` are the obvious remainder of
+        # that list and are CONSIDERED AND DECLINED for the same reason as the
+        # twelve: NOT REGRESSIONS, and adding them would lengthen a list whose
+        # false closure claim is the thing that was actually wrong.
         # NONE OF THEM IS A REGRESSION -- main reads them the same way, because
         # main had no appositive path at all -- so they are completeness gaps
         # in a new feature rather than something this change broke. They are
@@ -1042,6 +1079,13 @@ dest_tally() {
             # not. That distinction is the whole of the exemption -- one arm,
             # not a widening -- and without it the first string read 1/0
             # against main 0/1, quietly.
+            #
+            # CONSIDERED AND DECLINED: it over-fires on the NUMERAL `one`, so
+            # `the one lane dropped` is exempted too and the participle is
+            # admitted. NOT A REGRESSION -- main reads that string the same
+            # way -- and separating the numeral from the pro-form needs to know
+            # whether a noun follows, which is an inference layer rather than an
+            # arm. Recorded so the next reader does not re-derive it.
             if (b ~ /^(the|a|an|this|these|those|its|his|her|their|our|my|your)$/ &&
                 nxt ~ /^(one|ones)$/) return 0
             return (b ~ /^(which|that|who|whom|whose|where|whereby|wherein|when)$/ ||
@@ -1247,6 +1291,13 @@ dest_tally() {
                 # enumerated -- 20 occurrences of this family across the eight
                 # files, one of them fifteen words from a blind-spot mention in
                 # survey-work.
+                #
+                # THE LIST BELOW IS ILLUSTRATIVE, NOT EXHAUSTIVE, which matters
+                # for the phrasal aspectuals: `end up dropped` is inside this
+                # limit general sentence and absent from its examples.
+                # CONSIDERED AND DECLINED as an addition -- NOT A REGRESSION,
+                # main reads it identically -- because enumerating phrasal verbs
+                # is the open class this limit exists to refuse.
                 #
                 # KNOWN LIMIT, worded the way `am` is: the wider copular class
                 # is NOT covered. `seem|appear|look|prove|grow|turn|sound|feel`
@@ -1833,9 +1884,20 @@ dest_case "a determiner before a real noun still opens one" \
 # which is exactly how each earlier probe was built, and the reason to write
 # the blind spot down instead of adding an alternation. It misses:
 #
-#   * NON-PARTITIVE free-floating counts -- `the eight files`, `the four
-#     names`, `the six-verb affirmative`. The number sits beside a noun, so it
-#     reads safe by shape while the SET it counts may be elsewhere entirely.
+#   * NON-PARTITIVE free-floating counts -- the number sits beside a noun, so
+#     it reads safe by shape while the SET it counts may be elsewhere entirely.
+#     THE LIVE INSTANCE is in `scripts/preflight.sh`, gate 26s closing
+#     summary: "the five decisions, six tracked files" -- two counts floating
+#     free, re-derived by no gate, and invisible to this sweep. Cited by its
+#     CONTENT rather than a line number, because the number moved by 368 lines
+#     the moment this branch added a gate above it, which is the same rot one
+#     level down. It is named because the illustrative
+#     examples that used to stand here alone (`the eight files`, `the four
+#     names`, `the six-verb affirmative`) are every one of them gate-pinned or
+#     adjacent-enumerated TODAY, so a reader checking the blind spot against
+#     the tree would find nothing wrong and conclude it was theoretical. It is
+#     not. That file is OUT OF SCOPE for this changeset and is being filed
+#     separately; do not fix it from here.
 #   * DIGIT forms -- `all 12 are pinned`. The sweep is spelled-out words only.
 #
 # A probe with a stated blind spot is honest about what a clean run means. The
