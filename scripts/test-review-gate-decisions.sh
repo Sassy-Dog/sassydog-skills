@@ -143,13 +143,27 @@
 # No gh, no network, no repo mutation. It reads the documents the decisions
 # live in, plus the three files that restate this gate's two summary counts —
 # its own source, scripts/preflight.sh and CLAUDE.md — which section 7 checks
-# against the numbers it re-derives. Nine tracked files in all.
+# against the numbers it re-derives: nine tracked files, and separately a sweep
+# of every tracked Markdown and shell file asking which of them carry the
+# summary phrase. The nine are the ASSERTED read set; the sweep opens far more
+# and asserts nothing about their content beyond that one phrase, so it is named
+# apart from the count, the way CLAUDE.md's gate-27 entry names its read set and
+# its tracked-Markdown sweep separately rather than adding them together. (That
+# entry's own wording is deliberately not quoted here: it carries a spelled
+# count, and quoting it would put a competing one inside this very window —
+# measured, it reddened this gate on the first run.)
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-review-gate-decisions.sh
 set -uo pipefail
 export LC_ALL=C
 
+# Resolved BEFORE the `cd` below, because the caller's path is relative to the
+# caller's cwd: comparing it afterwards false-fails from every directory but the
+# repo root, including `cd scripts && bash test-review-gate-decisions.sh` — the
+# most natural invocation there is, given every gate script lives there. Same
+# idiom, and the same reason, as scripts/test-sentry-verification.sh.
+SELF_ABS="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/$(basename "${BASH_SOURCE[0]:-$0}")"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && { echo "test-review-gate-decisions: not in a git repo" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
@@ -645,7 +659,7 @@ fi
 #     three sites actually use, and not of every form one could write.
 #   * A correct BREAKDOWN reddens. Every spelled `<number> decisions` in a
 #     region must equal the summary, so "three decisions from #237 and two
-#     decisions from #248" fails on a sentence that is true. Both governed
+#     decisions from #248" fails on a sentence that is true. All three governed
 #     regions write "three from #237" today, with the noun unattached. The fix,
 #     if that ever stops being the natural wording, is to classify each hit
 #     against a bounded left context — the machinery the negation classifier in
@@ -655,6 +669,14 @@ fi
 #     fourth file restating only the tracked-file count is not found by it.
 #     That count has no phrasing distinctive enough to sweep for: `N tracked
 #     files` is how nearly every entry in preflight's gate list ends.
+#   * The tracked-path scan spans five directory prefixes and the .md and .sh
+#     extensions, so a read of `.github/workflows/ci.yml` or
+#     `.claude-plugin/plugin.json` would join the read set unseen. It also
+#     matches path LITERALS only: a glob read (`for g in skills/*/SKILL.md`) is
+#     invisible to it, while the same path spelled out reddens.
+#   * check_count matches its noun EXACTLY, so a restatement that varies the
+#     noun — "six documents", "six settled decisions" — sits beside a correct
+#     count unseen by both halves of the check.
 echo "-- summary counts: re-derived from this file, not transcribed"
 
 # Running from a COPY would measure the tracked file rather than the copy: SELF
@@ -663,10 +685,10 @@ echo "-- summary counts: re-derived from this file, not transcribed"
 # aimed at the one gate whose subject is itself. A mutation harness must edit
 # the tracked file in place and restore it, which is what the battery in the PR
 # that added this section does; this precondition is what says so out loud.
-if [ "${BASH_SOURCE[0]}" -ef "$SELF" ]; then
+if [ "$SELF_ABS" -ef "$SELF" ]; then
     ok "running from the tracked path, so section 7 measures the file it is in"
 else
-    bad "this gate is running from a copy — section 7 would measure $SELF, not ${BASH_SOURCE[0]}; mutate the tracked file in place and restore it"
+    bad "this gate is running from $SELF_ABS but would measure $SELF — mutate the tracked file in place and restore it, never a copy"
 fi
 
 # One list, two uses: the spelled form of a re-derived number, and the
@@ -691,8 +713,9 @@ num_word() {
 # same miss wearing a different hat, and CLAUDE.md bolds numerals constantly.
 # test-sentry-verification.sh runs an emphasis-stripped copy for exactly this.
 normalize_region() {
-    sed -E -e 's/^[[:space:]]*(>[[:space:]]?)+//' -e 's/^[[:space:]]*#[[:space:]]?//' <<<"$1" \
-        | tr -d '*_' | tr '\n' ' ' | tr -s ' '
+    sed -E -e 's/^[[:space:]]*(>[[:space:]]?)+//' -e 's/^[[:space:]]*#[[:space:]]?//' \
+           -e 's/\*//g' -e 's/(^|[[:space:]])_+/\1/g' -e 's/_+([[:space:]]|\$)/\1/g' <<<"$1" \
+        | tr '\n' ' ' | tr -s ' '
 }
 
 # check_count <label> <region> <noun> <expected word> — every spelled count of
@@ -804,26 +827,43 @@ fi
 # the sites checked below. One awk pass, flattening per file as it goes, so a
 # wrapped or bolded restatement in a fourth file cannot hide from it.
 sweep_phrase="decisions settled about the review gate"
-sweep_extra=""
-sweep_hits="$(git ls-files -z '*.md' '*.sh' | xargs -0 awk -v phrase="$sweep_phrase" '
-    { s = $0
-      sub(/^[[:space:]]*(> ?)+/, "", s); sub(/^[[:space:]]*#[ ]?/, "", s)
-      gsub(/[*_]/, "", s)
-      buf[FILENAME] = buf[FILENAME] " " s }
-    END { for (f in buf) { t = tolower(buf[f]); gsub(/  +/, " ", t)
-                           if (index(t, phrase)) print f } }' | sort)"
-while IFS= read -r hit; do
-    [ -n "$hit" ] || continue
-    known=0
-    for d in "${COUNT_SITES[@]}"; do
-        [ "$hit" = "$d" ] && known=1
-    done
-    [ "$known" -eq 1 ] || sweep_extra="$sweep_extra $hit"
-done <<<"$sweep_hits"
-if [ -n "$sweep_extra" ]; then
-    bad "the summary phrase is restated in a file this gate does not check:$sweep_extra — add it to COUNT_SITES"
+# Regular, non-symlink files handed to awk directly, never raw git pathspec
+# output: CLAUDE.md records the #263 measurement that a tracked symlink to
+# /dev/zero satisfies a readability test and awk reading it never returns, which
+# in a required gate is a hang with no diagnostic — the worst shape CI has.
+sweep_files=()
+while IFS= read -r -d '' f; do
+    if [ -f "$f" ] && [ ! -L "$f" ]; then sweep_files+=("$f"); fi
+done < <(git ls-files -z '*.md' '*.sh')
+sweep_hits=""
+if [ "${#sweep_files[@]}" -gt 0 ]; then
+    sweep_hits="$(awk -v phrase="$sweep_phrase" '
+        /sweep_phrase=/ { next }
+        { s = $0
+          sub(/^[[:space:]]*(> ?)+/, "", s); sub(/^[[:space:]]*#[ ]?/, "", s)
+          gsub(/\*/, "", s)
+          buf[FILENAME] = buf[FILENAME] " " s }
+        END { for (f in buf) { t = tolower(buf[f]); gsub(/  +/, " ", t)
+                               if (index(t, phrase)) print f } }' "${sweep_files[@]}" | sort)"
+fi
+# The line DEFINING the phrase is skipped, and that skip is what keeps this
+# file's own membership honest: without it the sweep matched its own assignment,
+# so this file was found whatever the marker-stripping did — a mutation
+# neutering that stripping was measured UNDETECTED. With the skip, this file
+# matches only through its header prose, where the phrase wraps across two
+# comment lines and only the stripping can join it.
+#
+# The floor is set EQUALITY against COUNT_SITES, not "no extras". Every one of
+# the checked sites carries the phrase today, so a sweep that finds NOTHING — a
+# reworded phrase, a pathspec matching nothing, an awk that never ran — is the
+# vacuous green this whole section exists to refuse, and a no-extras test
+# reports it as success. Both directions are named, since a site that stopped
+# carrying the phrase and a file that started are different defects.
+sweep_expected="$(printf '%s\n' "${COUNT_SITES[@]}" | sort)"
+if [ "$sweep_hits" = "$sweep_expected" ]; then
+    ok "the site sweep finds exactly the $(grep -c . <<<"$sweep_expected") checked sites, across ${#sweep_files[@]} tracked files"
 else
-    ok "every tracked file restating the summary phrase is one of the checked sites"
+    bad "the site sweep found [$(tr '\n' ' ' <<<"$sweep_hits")] but the checked sites are [$(tr '\n' ' ' <<<"$sweep_expected")] — a file restating the phrase must join COUNT_SITES, and a sweep finding nothing is measuring nothing"
 fi
 
 dec_word="$(num_word "$n_dec")"
@@ -833,7 +873,7 @@ file_word="$(num_word "$n_files")"
 # cost one assertion, not nine, and the locators are what say WHERE a later
 # rewording moved a site to.
 self_head="$(normalize_region "$(awk '/^#/{print; next} {exit}' "$SELF")")"
-assert_in "$self_head" 'decisions settled about the review gate' \
+assert_in "$self_head" "$sweep_phrase" \
     "this file's header carries the phrase the site sweep keys on"
 
 # preflight's gate entry, anchored on the SCRIPT NAME and never on the gate
@@ -851,6 +891,16 @@ pf_region="$(normalize_region "$(awk '
     /^#[ ]+[0-9]+\. / { if (f) exit; if (index($0, "test-review-gate-decisions.sh")) f = 1 }
     !/^#/ { if (f) exit }
     f { print }' "$PREFLIGHT")")"
+# Every entry in that list introduces its gate as an open paren before the
+# script path, so a window holding more than one has overrun — the same guard
+# the CLAUDE.md window carries, and an asymmetry that would otherwise read as
+# deliberate. It fires if preflight's next banner ever stops matching.
+n_pf_intro="$(grep -oF -- '(scripts/test-' <<<"$pf_region" | grep -c .)"
+if [ "$n_pf_intro" -eq 1 ]; then
+    ok "preflight window stops before the next gate is introduced"
+else
+    bad "preflight window holds $n_pf_intro gate introductions — it has overrun its entry"
+fi
 
 # CLAUDE.md's gate description. One enormous line, so the window is cut in awk
 # rather than by prefix-stripping a 96KB string, which costs seconds. It is
@@ -883,7 +933,7 @@ if [ -n "$claude_region" ]; then
     assert_not_in "$claude_region" '\(`scripts/' \
         "CLAUDE.md window stops before the next gate is introduced"
 else
-    bad "CLAUDE.md's gate description is empty or has no no-network terminator — the window is unbounded"
+    bad "CLAUDE.md's gate description did not resolve: either its no-network terminator is gone, or the description now spans more than one line and the cut is line-scoped"
 fi
 
 if [ -z "$dec_word" ] || [ -z "$file_word" ]; then

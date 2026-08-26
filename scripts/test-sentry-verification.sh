@@ -1890,13 +1890,19 @@ dest_case "a determiner before a real noun still opens one" \
 #     used to stand here as an illustration of the SHAPE and is in fact an
 #     instance of it. Measured: the read set is eight variables iterated as
 #     literals in a `for` loop, with no array length derived anywhere, and the
-#     count is restated in this header, twice in `scripts/preflight.sh` and in
-#     `CLAUDE.md`, with no member list beside any of them and no gate
-#     recomputing it. `the four names` genuinely is pinned, by a row count in
+#     count is restated at several sites across this file, `scripts/preflight.sh`
+#     and `CLAUDE.md`, with no member list beside any of them and no gate
+#     recomputing it. Issue #278 enumerates the sites rather than this block,
+#     because an inventory written from memory here would be the same defect one
+#     level down -- and a first draft of this sentence was short by four of
+#     them, which is the measurement that settled it. `the four names` genuinely is pinned, by a row count in
 #     this file; `the six-verb affirmative` enumerates its members beside it.
 #     So the example this bullet needs is the one it was using as a decoy, and
 #     it is left standing rather than fixed from here: this file is not the
-#     subject of the changeset that found it, and remediation is a follow-up.
+#     subject of the changeset that found it, and remediation is issue #278.
+#     That number matters: an untracked follow-up is indistinguishable from a
+#     decision not to fix, which is the deliberate-absence shape that rots
+#     quietest -- and the wording this replaced was backed by an issue too.
 #
 #     THE INSTANCE PREVIOUSLY NAMED HERE IS NOW HISTORICAL, and how it was
 #     cited is worth more than the citation was. It was the closing summary of

@@ -473,9 +473,11 @@
 #      file count is the length of the array the existence loop iterates. A
 #      stale restatement in the gate's header, in this list or in CLAUDE.md
 #      fails the gate — in the SPELLED forms those sites use; a digit form is a
-#      stated blind spot, as it is for gate 22's probe. Section 7 carries its
+#      stated blind spot, as it is for the free-floating-count probe in
+#      scripts/test-sentry-verification.sh. Section 7 carries its
 #      own mutation battery in the PR that added it. Twenty-one mutations
-#      across the five decisions, nine tracked files, no gh, no network.
+#      across the five decisions, nine tracked files plus a tracked-source
+#      sweep for a fourth site, no gh, no network.
 #  30. pipefail-grep guard (scripts/test-pipefail-grep.sh) — no script under
 #      `pipefail` may feed an UNBOUNDED writer into `grep -q` (issue #256,
 #      generalising #172). grep -q closes the pipe on its first match, the
@@ -1073,11 +1075,14 @@ else
 fi
 
 # --- 29. review-gate decision tests -------------------------------------------
-# Three prose decisions from #237 that each read as drift: the gate is
+# The prose decisions from #237 and #248 that each read as drift: the gate is
 # unconditional (and the SKIPPED line survives the default), `review_agent` is
-# deliberately not presence-is-the-toggle, and the opt-out is `skip`, not `none`.
-# Must-not-exist checks run flattened — this repo hard-wraps. Three tracked
-# files, no gh, no network.
+# deliberately not presence-is-the-toggle, the opt-out is `skip` and not `none`,
+# `review_site` is configured rather than derived, and a Blocking finding blocks
+# the merge with exactly one redispatch. Must-not-exist checks run flattened —
+# this repo hard-wraps. This banner deliberately carries NO counts: it is out of
+# reach of both windows section 7 checks, so a count here is one nothing holds.
+# The counts live in the gate list above, where the gate re-derives them.
 if bash scripts/test-review-gate-decisions.sh; then
     pass "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
 else
