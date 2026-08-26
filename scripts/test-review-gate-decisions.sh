@@ -325,6 +325,19 @@ orch_flat="$(flatten "$ORCH")"
 #     leaving this gate exit 0. The counts bound the two channels #273 measured;
 #     the open class is bounded by the prohibition's own literal beside them.
 #
+#     KNOWN LIMIT, stated rather than patched, in the idiom the sibling gates
+#     use for `am` and for `why`/`whereupon`: an ADDITIVE channel that deletes
+#     no literal and names neither counted token is invisible to both halves.
+#     Measured — appending `If ending on it is not practical in your harness,
+#     ask the coordinator to pass it along instead.` keeps SendMessage:1 and
+#     relay:1, deletes nothing, and leaves this gate green. (That reword is one
+#     of the shapes the discarded veto walked past, which is why removing the
+#     veto did not cost coverage here: nothing ever covered it.) Closing it
+#     needs a rule about what the bullet may CONTAIN rather than what it must
+#     say — a different change, and a real one. A clean run of this gate is
+#     therefore not proof that the delivery contract is unweakened; it is proof
+#     that the two measured channels and the stated prohibitions are intact.
+#
 # The known limit is stated rather than patched, in the idiom the sibling gates
 # use: this pins the WORDING of each prohibition, so a legitimate reword of one
 # reddens the gate and must be made in both places at once. That is the trade
@@ -808,6 +821,14 @@ else
         "take-it's DISPATCHED PROMPT reads the final text and never blocks on it"
     assert_has "$takeit_prompt" "$NOREPORT" \
         "take-it's DISPATCHED PROMPT carries the verbatim NO REPORT line"
+    # The DESTINATION, not merely the presence. dispatch-ready reads the PR body
+    # and states flatly that it reads no RESULT lines, so a line written only to
+    # the RESULT line reaches that loop nowhere — measured green before this
+    # assertion existed, which is a contract satisfied on paper and broken in
+    # the one consumer that has to read it.
+    assert_in "$takeit_prompt" \
+        'in the PR body and `review=no-report` on your RESULT line' \
+        "take-it's PROMPT writes the NO REPORT line to the PR BODY, not only the RESULT line"
     assert_in "$takeit_prompt" \
         'review=no-report' \
         "take-it's DISPATCHED PROMPT reports no-report on its RESULT line"
@@ -862,6 +883,15 @@ else
     # only one of them reaches the opposite conclusion about the very same
     # sub-agent's output — and dispatch-ready dispatches take-it's prompt
     # verbatim, so that is one sub-agent, judged two ways.
+    # The SCOPE CLAUSE is part of the rule, not preamble. Measured: rewriting
+    # `on EITHER site` to `when review_site: coordinator` leaves the paragraph
+    # physically outside the coordinator subsection — so a placement-only check
+    # still passes — while scoping the rule away from the default site, which
+    # is the entire reason the placement check exists. Decision 5's assertion
+    # already carries its scope clause for the same reason.
+    assert_in "$takeit_outside" \
+        'on EITHER site: a sub-agent whose RESULT line reported' \
+        "take-it's default-site hold keeps its EITHER-site scope clause"
     assert_in "$takeit_outside" \
         '`review=no-report` OR `review=skipped` is held, never merged' \
         "take-it holds BOTH unreviewed outcomes OUTSIDE the coordinator-only subsection"
@@ -930,11 +960,45 @@ else
     assert_in "$disp_merge" \
         'Hand it only the PRs the review bullets below have cleared' \
         "dispatch-ready's MERGING bullet withholds PRs the review has not cleared"
+    assert_in "$disp_merge" \
+        'is withheld from this hand-off, on either `review_site`' \
+        "dispatch-ready's withhold keeps its either-site scope clause"
+fi
+
+# The COMPLEMENT of dispatch-ready's coordinator-scoped bullets, mirroring
+# `takeit_outside` above and for the identical reason. Measured: both default-
+# site rules were asserted against the WHOLE flattened file, so relocating them
+# verbatim into a `when review_site: coordinator` bullet — the natural
+# "consolidate the NO REPORT handling" tidy — kept both literals present and
+# left this gate at exit 0 with zero FAILs; combined with narrowing the merging
+# bullet, dispatch-ready lost EVERY default-site hold and `preflight.sh` still
+# exited 0. That is decision 6's third part deleted from the unattended loop on
+# the fail-safe default site, with CI green — the identical defect this file
+# already records catching in take-it's first edition. A whole-file assertion
+# cannot tell prose that governs the default site from prose that excludes it.
+#
+# The bullets to exclude are found by their own `when review_site: coordinator`
+# marker rather than by a transcribed list, so a new coordinator-scoped bullet
+# joins the exclusion automatically and a bullet that LOSES its marker is not
+# silently excluded.
+dispatch_outside="$(awk '
+    /^- / { skip = (index($0, "when `review_site: coordinator`") > 0) }
+    !skip { print }' "$DISPATCH" | sed -E 's/^[[:space:]]*(> ?)+//' | tr '\n' ' ' | tr -s ' ')"
+n_coord_bullets="$(grep -cE '^- .*when `review_site: coordinator`' "$DISPATCH")"
+if [ "$n_coord_bullets" -ge 2 ]; then
+    ok "dispatch-ready marks $n_coord_bullets bullets coordinator-only, so the complement is real"
+else
+    bad "dispatch-ready marks only $n_coord_bullets bullets coordinator-only — the complement below is the whole file and measures nothing"
+fi
+if [ -z "$dispatch_outside" ]; then
+    bad "dispatch-ready's non-coordinator region did not slice — the default-site checks would pass vacuously"
+else
+    ok "located dispatch-ready's region OUTSIDE its coordinator-only bullets"
 fi
 
 # The DEFAULT site again: on `agent` this loop never dispatches a review of its
 # own, so the only way an outcome reaches it is a sub-agent's RESULT line.
-assert_in "$dispatch_flat" \
+assert_in "$dispatch_outside" \
     'equally when its PR body carries the `NO REPORT` line' \
     "dispatch-ready holds a no-report PR on the DEFAULT agent site too"
 # The TRIGGER above is not the rule; the CONSEQUENCE is. Measured: rewriting the
@@ -944,7 +1008,7 @@ assert_in "$dispatch_flat" \
 # whose review reached nobody, which is the entire harm of #273 surviving in
 # the path carrying the most PR volume. Both sibling sites were already pinned
 # on their consequence; this one was pinned on its trigger alone.
-assert_in "$dispatch_flat" \
+assert_in "$dispatch_outside" \
     'held and never merged on it' \
     "dispatch-ready's DEFAULT-site rule states the CONSEQUENCE, not only its trigger"
 # EVERY copy of the contract line, tree-wide, must be byte-identical. README
@@ -958,7 +1022,18 @@ assert_in "$dispatch_flat" \
 # cross-reference and must not be held to byte-identity. Comparison runs
 # FLATTENED, because a copy routinely wraps mid-line — the config contract's
 # does, and a line-scoped compare reported that correct copy as drifted.
-nr_files="$(git ls-files '*.md' | xargs grep -lF 'review: NO REPORT —' | sort)"
+# Regular, non-symlink files by ABSOLUTE path, never raw `git ls-files | xargs`:
+# that word-splits on a path containing whitespace and follows tracked symlinks,
+# so one tracked `.md -> /dev/zero` makes this gate hang with no diagnostic —
+# the worst shape CI has. Same precedent as test-verify-issue-refs.sh.
+nr_scan=()
+while IFS= read -r -d '' f; do
+    if [ -f "$f" ] && [ ! -L "$f" ]; then nr_scan+=("$REPO_ROOT/$f"); fi
+done < <(git ls-files -z '*.md')
+nr_files=""
+if [ "${#nr_scan[@]}" -gt 0 ]; then
+    nr_files="$(grep -lF -- 'review: NO REPORT —' "${nr_scan[@]}" | sed "s|^$REPO_ROOT/||" | sort)"
+fi
 NR_COPY_SITES=("$SKILL" "$TAKEIT" "$DISPATCH" "$CONTRACT" "$READMEMD")
 nr_expected="$(printf '%s\n' "${NR_COPY_SITES[@]}" | sort)"
 if [ "$nr_files" = "$nr_expected" ]; then

@@ -152,8 +152,10 @@ review: NO REPORT — <agent> dispatched, no report returned (lint/type/test onl
 
 — never as the SKIPPED line above, which says no agent ran at all. In the two **dispatching** paths
 (`take-it`, `dispatch-ready`) a PR whose review reached nobody is additionally **held** rather than
-merged, on either `review_site:`; `send-it` reviews before the commit exists, so there is nothing
-yet to hold — it records the outcome and carries on.
+merged, on either `review_site:`. The discriminator is **unattended merging**, not whether a PR
+exists yet: those two go on to merge with nobody reading along, so a lost report there becomes an
+unreviewed merge. `send-it` hands its run back to the person who started it, who is reading the
+output, so it records the outcome and carries on.
 
 ## Installation
 

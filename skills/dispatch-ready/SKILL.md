@@ -97,7 +97,10 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
   local default branch. **Hand it only the PRs the review bullets below have cleared** — a PR whose
   review reported `NO REPORT` or `SKIPPED`, or carries a Blocking finding, is withheld from this
-  hand-off, on either `review_site`. This exception is stated here rather than three bullets down
+  hand-off, on either `review_site` — with one carve-out, `review_agent: skip`, whose every run
+  legitimately reports `SKIPPED`, so holding on it would turn the documented opt-out into a blanket
+  merge freeze. `take-it` draws the same line for the same reason. This exception is stated here
+  rather than three bullets down
   because this is the bullet that merges: a corrective a reader reaches only after the merge has
   been ordered is a corrective that never runs. **How a tick learns the outcome: read the PR
   body**, where take-it's step 6 requires the sub-agent to have written the verbatim line — this
@@ -135,7 +138,8 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   dispatchable. On the `agent` site this rarely fires, because findings were fixed before the PR
   existed — but it still fires when a sub-agent could not resolve a reviewer at all, and equally
   when its PR body carries the `NO REPORT` line: the agent ran and its report reached nobody, so
-  the PR is held and never merged on it. Those are exactly the cases that must not pass silently, and on the
+  the PR is held and never merged on it. Those are exactly the cases that must not pass silently,
+  and on the
   default `agent` site they are the ONLY way a review outcome reaches this loop — a rule stated
   only in the `coordinator` bullets above would leave the default site merging unreviewed work.
   **Read that outcome from the PR body**, where take-it's step 6 requires the sub-agent to have
@@ -358,7 +362,8 @@ Plus one line per failure with its next action. Drop the `unannotated` line on t
 nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the `review:` line on
 ticks with no review outcome to report — but never drop a Blocking finding or a
 `review: SKIPPED` from it, nor a `review: NO REPORT`, which are outcomes, not noise. The
-`collision sources:` line renders whenever anything is in flight and names every in-flight issue's source, since a `pr` source is
+`collision sources:` line renders whenever anything is in flight and names every in-flight issue's
+source, since a `pr` source is
 what proves the filter saw real files; drop it only on a tick with nothing in flight, and never
 drop a `declared (PR read failed)` entry — a degraded check is an outcome too. When a chain was
 declared but the repo is not enabled for the preview, say so once rather than every tick:

@@ -494,8 +494,8 @@
 #      stale restatement in the gate's header, in this list or in CLAUDE.md
 #      fails the gate — in the SPELLED forms those sites use; a digit form is a
 #      stated blind spot, as it is for the free-floating-count probe in
-#      scripts/test-sentry-verification.sh. Section 8 carries its
-#      own mutation battery in the PR that added it. Every decision here is
+#      scripts/test-sentry-verification.sh. Its count-re-derivation section
+#      carries its own mutation battery in the PR that added it. Every decision here is
 #      mutation-proved, each battery living in the PR that added it rather than
 #      as a total transcribed here to go stale. Eleven tracked files plus a
 #      tracked-source sweep for a fourth site, no gh, no network.
@@ -1104,7 +1104,8 @@ fi
 # agent's final text — with a lost one held as its own outcome rather than
 # merged past or folded into the SKIPPED line. Must-not-exist checks run
 # flattened — this repo hard-wraps. This banner deliberately carries NO counts:
-# it is out of reach of both windows section 8 checks, so a count here is one
+# it is out of reach of both windows the count re-derivation checks, so a count
+# here is one
 # nothing holds. The counts live in the gate list above, where the gate
 # re-derives them.
 if bash scripts/test-review-gate-decisions.sh; then

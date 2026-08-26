@@ -303,6 +303,15 @@ context, and keep the PR out of the list you hand to `sassy-dog:pr-shepherd` bel
 failure gets the `blocked` label plus a comment naming the outcome, and a human decides; never
 park it back in Ready.
 
+**One carve-out, and without it this rule freezes merges: `review_agent: skip`.** That opt-out is
+the ONLY configuration whose every run legitimately reports `review=skipped`, so holding on
+`skipped` alone would turn the documented opt-out into a blanket merge freeze — every PR held,
+redispatched, then `blocked`. §1 already resolves the agent once per invocation, so it knows which
+case this is: when the repo configured the explicit opt-out, `skipped` is the expected outcome and
+holds nothing. **Every OTHER `skipped`** — the agent did not exist, the plugin did not load, the
+dispatch errored — is a review nobody ran, and is held. `dispatch-ready` §2 draws the same line for
+the same reason.
+
 ### Review gate on the coordinator site (ONLY when `review_site: coordinator`)
 
 **With `review_site: agent` — the default, and the value an absent key selects — this section does
