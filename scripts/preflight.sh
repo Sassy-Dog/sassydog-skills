@@ -677,10 +677,17 @@
 #      pinned one — equality bounds the paragraph it holds and says nothing
 #      about the one next to it. So: (1) CANON, decision paragraphs compared for
 #      equality after flattening, bounding rewording; (2) INVENTORY, the ordered
-#      list of paragraph openers, bullet openers and headings, itself canonical,
-#      bounding insertion, deletion and reordering; (3) CONSUMPTION, every canon
-#      key consumed by exactly one assertion, so deleting an assertion block
-#      fails even when its section registration goes with it. The claim is
+#      list of paragraph openers, bullet openers, TABLE ROWS and headings,
+#      itself canonical, bounding insertion, deletion and reordering; (3)
+#      CONSUMPTION, every canon key consumed by exactly one assertion, so
+#      deleting an assertion block fails even when its section registration goes
+#      with it. Layer 2's reach is stated as MEASURED, not as intended: its first
+#      edition missed a two-space nested bullet, a row appended to §7's
+#      stop-path table, and a paragraph glued to a closing fence — all three
+#      wrote #282's bug back at exit 0, and all three are covered now. The canon
+#      also holds the BRANCH BULLETS an agent executes, not only the rationale
+#      paragraphs, after a review deleted the two-tick clock by rewriting one
+#      while the paragraph mandating it stayed pinned. The claim is
 #      "identical after flattening", NOT "byte-identical" — a re-wrap passes, a
 #      reword does not — and the inventory keeps each opener's first words only.
 #      Must-not-exist checks run against a flattened AND an emphasis-stripped
@@ -693,10 +700,15 @@
 #      ITS VACUITY FLOOR IS A SECTION REGISTRY WITH PER-SECTION MINIMUMS —
 #      `name:count`, members enumerated beside their counts, with the floor
 #      DERIVED as their sum — because a bare number was measured not binding
-#      twice over. KNOWN LIMITS are stated in its header rather than patched:
-#      a reword inside an unpinned paragraph, and the three coordinated
-#      deletions (block, registry entry, canon entries) that would be needed to
-#      remove a section quietly. THE PREMISE IS ASSERTED, NOT ASSUMED:
+#      three times over: two whole blocks deleted, and a prologue of window
+#      checks that ran with no section open at all, so no minimum covered them.
+#      The prologue and the registry block are declared members now. FOUR known
+#      limits are stated in its header rather than patched, and that enumeration
+#      and this one must agree: an APPENDED SENTENCE to a paragraph no canon key
+#      holds; the three coordinated deletions (block, registry entry, canon
+#      entries) needed to remove a section quietly; inventory keys regenerated
+#      by hand; and the registry block's own removal, which the derived floor
+#      catches but no layer beneath it can. THE PREMISE IS ASSERTED, NOT ASSUMED:
 #      `issue-claim.sh`'s `block` case is read for the one fact everything rests
 #      on — that it strips BOTH labels — since if it stripped only `ready` the
 #      whole account of the bug would be wrong with every prose assertion still
