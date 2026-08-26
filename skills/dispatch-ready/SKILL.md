@@ -83,7 +83,12 @@ every invocation is noise. If declined, carry on and don't raise it again.
 Find work this loop already started.
 
 **With `board:`** — the board snapshot is the source of truth: cards in **In progress** / **In
-review** with assignee @me are in-flight.
+review** with assignee @me **and not carrying `blocked`** are in-flight. That exclusion is
+load-bearing, and it is the one place the two paths differ in mechanism rather than in wording:
+`issue-claim.sh block` writes labels and never moves a card, so without it a demoted issue stays
+in-flight on a board repo permanently — in-flight never reaches zero, STALLED's first conjunct is
+never satisfied, and #282's forever-tick survives the whole fix on exactly the repos §2 claims to
+cover. `board-snapshot.sh` returns `labels` per item, so the data is already there.
 
 **Without a board** — live issue state is the source of truth. Snapshot the queue via
 `sassy-dog:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]`,
@@ -95,7 +100,9 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
 
 - **Open PRs from those branches** → delegate to `sassy-dog:pr-shepherd`: mergeable check,
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
-  local default branch. **Hand it only the PRs the review bullets below have cleared** — a PR whose
+  local default branch. **Hand it only the PRs the review bullets below have cleared, and never one whose
+  issue carries `blocked`** — a human's demotion is not a merge instruction, and §4's `blocked`
+  filter governs Ready SELECTION rather than this hand-off, so it does not cover this. A PR whose
   review reported `NO REPORT` or `SKIPPED`, or carries a Blocking finding, is withheld from this
   hand-off, on either `review_site` — with one carve-out, `review_agent: skip`, whose every run
   legitimately reports `SKIPPED`, so holding on it would turn the documented opt-out into a blanket
@@ -111,9 +118,12 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
 - **Open PRs on blocked issues** → resolve these too, and hand them to nobody. **With `board:`**
   the blocked set is the board's items carrying the `blocked` label, **plus any `blocked`-labelled
   issue the board does not carry at all** — `issue-claim.sh block` writes labels and never cards, so
-  an issue blocked by hand, archived, or past the board query's own limit is on no card. Take the
-  union: an issue the board cannot see is precisely the one whose PR would otherwise veto nothing
-  and never reach the held set. **Without a board** it is `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in
+  an issue blocked by hand, archived, or past the board query's own limit is on no card. Read that
+  second half with
+  `gh issue list --repo "$REPO" --state open --label blocked --limit 200 --json number`; without a
+  named command this half is an instruction nobody can execute, and it is the half #282's own state
+  consists of. Take the union: an issue the board cannot see is precisely the one whose PR would
+  otherwise veto nothing and never reach the held set. **Without a board** it is `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in
   §4 — a bullet written for one path only is invisible on the other, and the half it omits is the
   half that goes dark. `issue-claim.sh block` strips `in-progress`, so a blocked issue is not
   in-flight and the branch query above cannot see its PR at all;
@@ -124,9 +134,9 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   read an empty result as "no PR" — an unenumerated PR is silent and terminal. **Bounded** like
   §4's sibling lookup, and stated honestly: up to TWO calls per blocked issue per tick where the
   branch fallback is needed; the snapshot's `--limit` bounds the boardless path, and the board path
-  is bounded by the board query's own limit plus the label query above it. The set grows
-  monotonically — `promote` adds `ready` and strips nothing — so a repo that accumulates blocked
-  issues pays for all of them every tick; if that cost ever bites under `/loop`, it degrades into "live state could not be
+  is bounded by the board query's own limit plus the `--limit` on the label query named above. The set grows
+  monotonically — nothing removes `blocked` but a human, and `promote` never does — so a repo that
+  accumulates blocked issues pays for all of them every tick; if that cost ever bites under `/loop`, it degrades into "live state could not be
   verified", which is this fix's own failure mode wearing the bug's face. This loop may not advance
   these PRs, so they are never handed to `sassy-dog:pr-shepherd` — they are read so **§7 can see
   them**. A human-gated PR that nobody enumerated is not a smaller version of the §7 gap, it is a
@@ -387,9 +397,9 @@ nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the
 ticks with no review outcome to report — but never drop a Blocking finding or a
 `review: SKIPPED` from it, nor a `review: NO REPORT`, which are outcomes, not noise. The
 `holds:` line carries **held PRs alongside held issues**, in the same reason-per-item shape, drawn
-from §2's enumeration and classified by §7's table — from §2 rather than from §7 because §7 does
-not run on a tick with work in flight, and a held PR is worth seeing on every tick, not only on the
-one that ends the loop. The
+from §2's enumeration and classified by §7's table — from §2 rather than from §7 because §2 is
+where the PRs are resolved and §6 renders before any terminal state is decided, and a held PR is
+worth seeing on every tick, not only on the one that ends the loop. The
 `collision sources:` line renders whenever anything is in flight and names every in-flight issue's
 source, since a `pr` source is
 what proves the filter saw real files; drop it only on a tick with nothing in flight, and never
@@ -464,8 +474,9 @@ and the check counts in one pass; the judgement below stays here, the way §4 ke
 judgement while borrowing `gh pr view`. **Both halves of that invocation are load-bearing.**
 Without `--once` it is watch mode, which blocks for up to an hour — the "a tick that waits is a
 loop that stopped" rule two sections up. Without the explicit PR numbers `--once` falls back to
-the fifty most recently updated open PRs in the repo, which is both the widening the paragraph
-above forbids and a silently truncated read of it.
+whatever fifty open PRs `gh pr list` returns first — no sort is specified, so a long-lived held PR,
+which is exactly #282's shape, is as likely to fall outside the fifty as inside. That is both the
+widening the paragraph above forbids and a silently truncated read of it.
 
 **That union is also the set COMPLETE's veto ranges over, and the identity is the invariant.** A PR
 that can veto COMPLETE but can never enter the held set gives Ready empty, in-flight zero and a
@@ -525,7 +536,7 @@ conflicted PR stops CI firing at all, and `no checks reported` is indistinguisha
 PR matches "checks still running" and is answered with something that can never happen: §6's
 `holds:` line would report it as advancing on every tick, and the rails would read it as a PR this
 loop may still advance. It is NOT what lets a stalled queue confirm — at STALLED-decision time the
-paragraph below applies and row 1 has already matched — and saying so here would contradict it.
+paragraph above applies and row 1 has already matched — and saying so here would contradict it.
 
 **The redispatch budget is the hinge on both failure rows**, so read this before "simplifying" the
 rows into fewer. §2 grants exactly ONE redispatch per issue, taken on a later tick; while it is
