@@ -95,7 +95,14 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
 
 - **Open PRs from those branches** → delegate to `sassy-dog:pr-shepherd`: mergeable check,
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
-  local default branch. **Keep the issue → open-PR mapping this step produces** — §4's Collision
+  local default branch. **Hand it only the PRs the review bullets below have cleared** — a PR whose
+  review reported `NO REPORT` or `SKIPPED`, or carries a Blocking finding, is withheld from this
+  hand-off, on either `review_site`. This exception is stated here rather than three bullets down
+  because this is the bullet that merges: a corrective a reader reaches only after the merge has
+  been ordered is a corrective that never runs. **How a tick learns the outcome: read the PR
+  body**, where take-it's step 6 requires the sub-agent to have written the verbatim line — this
+  loop reads no RESULT lines, and a later tick is a different session from the one that dispatched.
+  **Keep the issue → open-PR mapping this step produces** — §4's Collision
   filter reads those PRs' actual changed files, and re-deriving the mapping there costs a second
   round of lookups.
 - **Failed or red PRs** → surface in the tick report with the failing check named, and comment
@@ -111,6 +118,14 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   `review: SKIPPED — no review_agent resolved (lint/type/test only)` with the cause, and is held,
   not merged on an unreported review. Under `review_site: agent` this bullet does not run: the
   sub-agent reviewed before its PR existed.
+- **A review dispatched that never came back, when `review_site: coordinator`** → a review report is
+  the *return value* of the agent this tick dispatched, read from that agent's final text. A tick
+  never blocks, polls or idles waiting for a notification to carry one in — a tick that waits is a
+  loop that stopped waiting for the review. When nothing readable came back, report
+  `review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)` naming the
+  agent, and **hold the PR** exactly as above — never merge it, and never hand it to
+  `sassy-dog:pr-shepherd` this tick. **Never fold that into the SKIPPED line**: that line says no
+  agent ran, and here one did (#273).
 - **PRs carrying a Blocking review finding** → **never merge past one.** This is the existing
   failure path, not new machinery: surface it in the tick report with the finding named, comment
   `dispatch-ready: attempt 1 failed — review: <finding>` on the issue, and allow ONE redispatch
@@ -118,8 +133,16 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   check gets. A second failure demotes to `blocked` the same way, with the finding in the comment,
   and a human decides. **Never park it back in Ready**: Ready must stay synonymous with
   dispatchable. On the `agent` site this rarely fires, because findings were fixed before the PR
-  existed — but it still fires when a sub-agent could not resolve a reviewer at all, which is
-  exactly the case that must not pass silently.
+  existed — but it still fires when a sub-agent could not resolve a reviewer at all, and equally
+  when its PR body carries the `NO REPORT` line: the agent ran and its report reached nobody, so
+  the PR is held and never merged on it. Those are exactly the cases that must not pass silently, and on the
+  default `agent` site they are the ONLY way a review outcome reaches this loop — a rule stated
+  only in the `coordinator` bullets above would leave the default site merging unreviewed work.
+  **Read that outcome from the PR body**, where take-it's step 6 requires the sub-agent to have
+  written the verbatim line: this loop does not read RESULT lines, and a later tick is a different
+  session from the one that dispatched. The comment template on this path names the outcome rather
+  than a finding — `dispatch-ready: attempt 1 failed — review: no report returned` — since a lost
+  report has no finding to name.
 - **`CONFLICTING` PRs** → never auto-rebase; surface and hold.
 
 ## 3. Compute capacity
@@ -299,6 +322,12 @@ review each PR in §2 of a later tick instead, before it merges. **Never drop it
 never substitute a different agent for the one `review_agent:`'s order resolves — this key chooses
 the site alone.
 
+**Step 6's delivery half travels with the gate, whichever site is configured.** A sub-agent reads
+its review's final text itself, never blocks waiting on a notification to deliver one, and reports a
+dispatch that came back with nothing as `review: NO REPORT`, never as a skip. Under
+`review_site: coordinator` that half does not disappear with the step — it moves here, to §2, which
+owes the PRs it reviews exactly the same three outcomes.
+
 Those two gates are the ones most easily lost here, because these agents open their own PRs from a
 cold worktree and never see an interactive session's instructions: a gate that lives only in
 `send-it` never runs for them at all. That is why the review gate is a config key read here rather
@@ -328,8 +357,8 @@ review: #1709 BLOCKING (unvalidated path join in scripts/render.sh) — redispat
 Plus one line per failure with its next action. Drop the `unannotated` line on ticks that dispatch
 nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the `review:` line on
 ticks with no review outcome to report — but never drop a Blocking finding or a
-`review: SKIPPED` from it, which are outcomes, not noise. The `collision sources:` line renders
-whenever anything is in flight and names every in-flight issue's source, since a `pr` source is
+`review: SKIPPED` from it, nor a `review: NO REPORT`, which are outcomes, not noise. The
+`collision sources:` line renders whenever anything is in flight and names every in-flight issue's source, since a `pr` source is
 what proves the filter saw real files; drop it only on a tick with nothing in flight, and never
 drop a `declared (PR read failed)` entry — a degraded check is an outcome too. When a chain was
 declared but the repo is not enabled for the preview, say so once rather than every tick:
@@ -433,8 +462,9 @@ cancellation are no-ops, not errors: each re-runs this section and retries.
 - **Single-writer**: only the coordinator merges or enqueues; max one redispatch per issue without
   a human.
 - **Never merge past a Blocking review finding**, and never park one back in Ready — one redispatch
-  carrying the finding, then `blocked`. A review that could not run is reported and held, never
-  passed over in silence.
+  carrying the finding, then `blocked`. A review that could not run, or that ran and never came
+  back, is reported under its own name and the PR is held — never passed over in silence, and
+  never waited out.
 - If `sassy-dog:pr-shepherd` or take-it is missing, STOP and say so — do not improvise
   dispatch or merge mechanics.
 

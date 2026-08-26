@@ -292,7 +292,25 @@ the plugin and nothing else, which is what makes default-on statable as a rule i
 per-repo opt-in. No `send-it` run can therefore silently ship unreviewed. The accepted cost is one
 extra review pass of latency and tokens on every `send-it` run in every consumer repo.
 
-**That claim scopes to `send-it`, and a companion key extends it.** `take-it` and `dispatch-ready`
+**A named agent inherits the delivery contract, whoever wrote it.** Whatever a repo names here must
+return its report as its **final text** — the shipping paths read the value the agent returns and
+nothing else, and they never wait on a message or a notification to bring one in. An agent that
+delivers any other way is classified `review: NO REPORT — <agent> dispatched, no report returned
+(lint/type/test only)` on every run — and in the two dispatching paths that PR is held rather than
+merged. **The discriminator is UNATTENDED MERGING, not whether a PR exists at gate time**, and
+getting that wrong is the trap: under the default `review_site: agent`, `take-it`'s sub-agent runs
+its gate at step 6 — before its commit and before its PR — exactly like `send-it`, so a reader
+applying "does a PR exist yet?" concludes the agent site has nothing to hold either, which is the
+one conclusion these paths were changed to prevent. What separates them is what happens NEXT:
+`take-it` and `dispatch-ready` go on to merge that PR with no human reading along, so a lost
+report there becomes an unreviewed merge. `send-it` hands its run back to the person who started
+it, so it records the outcome and carries on. That is the intended behaviour on a lost
+report, not a bug to work around by making a dispatcher wait. This is the one
+obligation that *does* reach outside the shipped orchestrator — unlike `review_surfaces:`, whose
+contract stops at it (below) — because the failure it prevents is a PR merged on a review nobody
+read.
+
+**The default-on claim above scopes to `send-it`, and a companion key extends it.** `take-it` and `dispatch-ready`
 dispatch sub-agents that open their own PRs from a cold worktree and never invoke `send-it`, so
 this default cannot reach them on its own. `review_site` below is what carries the gate into those
 two paths; `review_agent` still decides *which* agent runs once it does.
@@ -316,9 +334,13 @@ has exactly one site, its own run, and always reviews there.
 
 | Config | Where the review happens |
 | --- | --- |
-| `review_site: agent` | each dispatched sub-agent reviews **its own diff before it opens a PR** — `send-it`'s posture exactly: Blocking findings are fixed and re-reviewed before the PR body is drafted, so nothing unreviewed reaches GitHub |
+| `review_site: agent` | each dispatched sub-agent reviews **its own diff before it opens a PR** — `send-it`'s TIMING exactly: Blocking findings are fixed and re-reviewed before the PR body is drafted, so nothing unreviewed reaches GitHub. Its NO REPORT handling differs — the dispatching path still holds the PR, being the one that would otherwise merge it unattended |
 | `review_site: coordinator` | the dispatching loop reviews each PR **after it opens**, before it merges — centralised, single writer, one place to read every outcome |
 | key absent | `agent` — the fail-safe site, for the same reason an absent `review_agent` selects an agent rather than none |
+
+On the `agent` site the gate's TIMING matches `send-it`'s, but its NO REPORT handling does not:
+the dispatching path still holds the PR, because it is the one that would otherwise merge it
+unattended.
 
 **This key chooses the site, never the agent and never whether.** Which agent runs is
 `review_agent`'s resolution order in the section above — unchanged by this key, and deliberately

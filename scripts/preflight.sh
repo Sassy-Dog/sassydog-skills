@@ -426,9 +426,9 @@
 #      rule, the injection step, and the template slot — flattened, this repo
 #      hard-wraps. Mock gh: no repo, no network.
 #  29. review-gate decision tests (scripts/test-review-gate-decisions.sh) — the
-#      five decisions settled about the review gate, all prose and every one of
+#      six decisions settled about the review gate, all prose and every one of
 #      them reading like drift to an "align with the governing principle" sweep
-#      (three from #237, issue #247; two from #248, issue #255).
+#      (three from #237, issue #247; two from #248, issue #255; one from #273).
 #      (a) The gate is UNCONDITIONAL: an absent
 #      `review_agent:` resolves the shipped `sassy-dog:pr-review-orchestrator`,
 #      and #235's verbatim `review: SKIPPED` line survives that default as the
@@ -455,6 +455,26 @@
 #      blocks the merge with exactly ONE redispatch, then `blocked`; never
 #      merged past, never parked back in Ready. The rationale for the number is
 #      pinned with it, since "one" alone reads as an arbitrary retry count.
+#      (f) A review report is DELIVERED as the reviewing agent's final text —
+#      its return value — and the message tool is not a delivery mechanism for
+#      one, since sending needs an address the reviewer cannot reliably resolve:
+#      on 2026-08-25, five occurrences across three issues and not one reaching
+#      the session that dispatched it — three landed in a coordinator's session,
+#      one round lost 2 of 5 dispatches that never returned, and one was
+#      addressed to an agent TYPE rather than an address (#273). The dispatching
+#      side is pinned in all three shipping paths, because a rule living only in
+#      send-it never runs for take-it or dispatch-ready: no path may block, poll
+#      or idle while a review it dispatched is outstanding — an implementing
+#      agent deadlocked on a report already delivered elsewhere and lost a
+#      completed review cycle — and a dispatch that SUCCEEDED whose report never
+#      arrived is a THIRD outcome with its own verbatim `review: NO REPORT`
+#      line, never #235's SKIPPED line, which says no agent ran at all. THREE
+#      parts, pinned separately: RETURNED, never BLOCKED on, and the PR HELD
+#      rather than merged. The return-value rule alone still permits a
+#      dispatcher that waits forever, and the first two together still permit
+#      merging the PR whose review reached nobody — which is the harm itself,
+#      so the hold is pinned in both dispatching paths and on the DEFAULT
+#      `review_site: agent`, not only inside the coordinator-only sections.
 #      Source-level like gates 12, 20, 21, 22 and 24; its must-not-exist checks
 #      run flattened (proved: the same forbidden wording, hard-wrapped between
 #      `codegen` and `review_agent`, is invisible to a line-scoped grep and
@@ -474,10 +494,11 @@
 #      stale restatement in the gate's header, in this list or in CLAUDE.md
 #      fails the gate — in the SPELLED forms those sites use; a digit form is a
 #      stated blind spot, as it is for the free-floating-count probe in
-#      scripts/test-sentry-verification.sh. Section 7 carries its
-#      own mutation battery in the PR that added it. Twenty-one mutations
-#      across the five decisions, nine tracked files plus a tracked-source
-#      sweep for a fourth site, no gh, no network.
+#      scripts/test-sentry-verification.sh. Section 8 carries its
+#      own mutation battery in the PR that added it. Every decision here is
+#      mutation-proved, each battery living in the PR that added it rather than
+#      as a total transcribed here to go stale. Eleven tracked files plus a
+#      tracked-source sweep for a fourth site, no gh, no network.
 #  30. pipefail-grep guard (scripts/test-pipefail-grep.sh) — no script under
 #      `pipefail` may feed an UNBOUNDED writer into `grep -q` (issue #256,
 #      generalising #172). grep -q closes the pipe on its first match, the
@@ -1075,14 +1096,17 @@ else
 fi
 
 # --- 29. review-gate decision tests -------------------------------------------
-# The prose decisions from #237 and #248 that each read as drift: the gate is
-# unconditional (and the SKIPPED line survives the default), `review_agent` is
+# The prose decisions from #237, #248 and #273 that each read as drift: the gate
+# is unconditional (and the SKIPPED line survives the default), `review_agent` is
 # deliberately not presence-is-the-toggle, the opt-out is `skip` and not `none`,
-# `review_site` is configured rather than derived, and a Blocking finding blocks
-# the merge with exactly one redispatch. Must-not-exist checks run flattened —
-# this repo hard-wraps. This banner deliberately carries NO counts: it is out of
-# reach of both windows section 7 checks, so a count here is one nothing holds.
-# The counts live in the gate list above, where the gate re-derives them.
+# `review_site` is configured rather than derived, a Blocking finding blocks the
+# merge with exactly one redispatch, and a review report is RETURNED as the
+# agent's final text — with a lost one held as its own outcome rather than
+# merged past or folded into the SKIPPED line. Must-not-exist checks run
+# flattened — this repo hard-wraps. This banner deliberately carries NO counts:
+# it is out of reach of both windows section 8 checks, so a count here is one
+# nothing holds. The counts live in the gate list above, where the gate
+# re-derives them.
 if bash scripts/test-review-gate-decisions.sh; then
     pass "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
 else

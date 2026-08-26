@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# test-review-gate-decisions.sh — pins the FIVE decisions settled about the
-# review gate: three from #237 (PR #243, issue #247), and two more from #248
-# (PR #250, issue #255) covering the gate's two DISPATCHING paths.
+# test-review-gate-decisions.sh — pins the SIX decisions settled about the
+# review gate: three from #237 (PR #243, issue #247), two more from #248
+# (PR #250, issue #255) covering the gate's two DISPATCHING paths, and one from
+# #273 covering how a report is DELIVERED once the gate has run.
 #
-# All five decisions are prose, none of them derivable from anything a script
+# All six decisions are prose, none of them derivable from anything a script
 # can run, and every one of them reads to a future "align with the governing
 # principle" sweep like drift that ought to be tidied away:
 #
@@ -70,6 +71,33 @@
 #      because these two skills dispatch sub-agents that open PRs from a cold
 #      worktree and never see an interactive session's instructions.
 #
+#   6. THE REPORT IS RETURNED, AND A LOST ONE IS ITS OWN OUTCOME. A review
+#      report is delivered as the reviewing agent's FINAL TEXT — its return
+#      value — and `SendMessage` is not a delivery mechanism for it, because
+#      sending needs an address the reviewer cannot reliably resolve. Measured
+#      on 2026-08-25: five occurrences across three issues, not one of them
+#      reaching the session that dispatched it. THREE landed in a coordinator's
+#      session instead, one round lost 2 of 5 dispatches that never returned at
+#      all, and one was addressed to an agent TYPE rather than an address
+#      (#273). Every report that arrived at all did so because a human
+#      coordinator relayed it by hand, which is exactly what an unattended
+#      `dispatch-ready` loop does not have. The DISPATCHING half cost the most:
+#      no shipping path may tell an agent to block, poll or idle while a review
+#      it dispatched is outstanding — one implementing agent that did deadlocked
+#      and lost a completed review cycle — and a dispatch that SUCCEEDED whose
+#      report never arrived is a THIRD outcome carrying its own reported
+#      wording, the verbatim `review: NO REPORT` line. Folding it into decision
+#      1's `review: SKIPPED — no review_agent resolved` line is the tidy that
+#      re-creates the very ambiguity that line was added to remove: SKIPPED says
+#      NO AGENT RAN, and here one ran. Decision 1 pins that the line survives;
+#      this one pins that it is not stretched to cover a different fact. THREE
+#      parts, separable, each pinned on its own: the report is RETURNED, no
+#      dispatcher BLOCKS on one, and a PR whose review reached nobody is HELD
+#      rather than merged. A repo could adopt the first and still ship a
+#      dispatcher that waits forever; it could adopt the first two and still
+#      merge the PR the third exists to stop — which is the harm itself, so the
+#      hold is the part that must never be left to a guardrail list alone.
+#
 # Why source-level. There is no renderer and no runtime to test: the artifact IS
 # the instruction an agent follows. Same shape as test-visibility-preconditions.sh
 # (the credential's two preconditions), test-sentry-verification.sh (verify-by-
@@ -105,15 +133,15 @@
 # THE TWO SUMMARY COUNTS IN THIS HEADER ARE RE-DERIVED, NEVER TRANSCRIBED
 # (issue #276). The decision count and the tracked-file count are restated in
 # this header, in scripts/preflight.sh's gate list and in CLAUDE.md, and until
-# section 7 existed nothing recomputed either of them — while the recent edits
-# to this gate have each moved one. Section 7 derives both from this file and
+# section 8 existed nothing recomputed either of them — while the recent edits
+# to this gate have each moved one. Section 8 derives both from this file and
 # fails when any of those sites disagrees, so a new decision reddens CI until
 # every restatement is updated instead of leaving stale sentences behind.
 #
 # THE DISCRIMINATOR IS THE PART TO GET RIGHT, and it is deliberate rather than
 # obvious. Counting the numbered section banners does NOT answer "how many
 # decisions": the banners run past the decisions into the must-not-exist sweep
-# and into section 7 itself, so a bare count answers a different question, and
+# and into section 8 itself, so a bare count answers a different question, and
 # answers it high enough to redden against every site on its first run. A
 # decision section is one whose banner CARRIES ITS OWN NUMBER BACK as a
 # `(decision N)` suffix; the two trailing sections carry none, which is exactly
@@ -127,25 +155,26 @@
 # existence loop iterates, so a document cannot join the read set without
 # moving the number. A tracked path read WITHOUT joining that array is caught
 # separately, by a scan of this source that spans every tracked shape the gate
-# could read rather than skills/ alone — #276 names agents/ as the next entry
-# it expects, and a scan narrowed to today's read set would not see it. That
+# could read rather than skills/ alone — #273 has since made agents/ a member,
+# the very entry #276 anticipated, and a scan narrowed to today's read set
+# would not have seen it arrive. That
 # scan reads CODE LINES ONLY, so a header comment citing a path it does not
 # read stays a cross-reference rather than becoming a count.
 #
-# The mutation battery for section 7 lives in the PR that added it (issue
+# The mutation battery for section 8 lives in the PR that added it (issue
 # #276), not in-script: the bare banner count, a discriminator matching
 # nothing, one more decision, one more document, a document read outside the
 # read set, a fourth file restating the summary phrase, a wrapped count, a
 # bolded count, and a stale count at each of the sites above. The battery
 # mutates the tracked file in place and restores it, which is what the
-# running-from-a-copy precondition in section 7 exists to insist on.
+# running-from-a-copy precondition in section 8 exists to insist on.
 #
 # No gh, no network, no repo mutation. It reads the documents the decisions
 # live in, plus the three files that restate this gate's two summary counts —
-# its own source, scripts/preflight.sh and CLAUDE.md — which section 7 checks
-# against the numbers it re-derives: nine tracked files, and separately a sweep
+# its own source, scripts/preflight.sh and CLAUDE.md — which section 8 checks
+# against the numbers it re-derives: eleven tracked files, and separately a sweep
 # of every tracked Markdown and shell file asking which of them carry the
-# summary phrase. The nine are the ASSERTED read set; the sweep opens far more
+# summary phrase. The eleven are the ASSERTED read set; the sweep opens far more
 # and asserts nothing about their content beyond that one phrase, so it is named
 # apart from the count, the way CLAUDE.md's gate-27 entry names its read set and
 # its tracked-Markdown sweep separately rather than adding them together. (That
@@ -180,10 +209,20 @@ TEMPLATE="skills/setup-config/references/templates/send-it.config.md"
 SETUP="skills/setup-config/SKILL.md"
 TAKEIT="skills/take-it/SKILL.md"
 DISPATCH="skills/dispatch-ready/SKILL.md"
-# The documents the decisions live in. Section 7 derives the tracked-file count
+# Decision 6 (#273). The reviewing agent's own delivery contract lives here, and
+# it is the read set's first entry under agents/. Section 8's stray-path scan
+# already spanned every tracked shape BEFORE this entry existed — the breadth is
+# not a consequence of it, so narrowing back to skills/ would not become safe if
+# this entry ever left.
+ORCH="agents/pr-review-orchestrator.md"
+# README carries a COPY of the contract line, so it is read here too — and a
+# copy nothing compares is a copy free to drift, which is what the sweep below
+# exists to refuse.
+READMEMD="README.md"
+# The documents the decisions live in. Section 8 derives the tracked-file count
 # from the arrays below, so a further document cannot join the read set without
 # moving every restatement of that number with it.
-DOCS=("$SKILL" "$CONTRACT" "$TEMPLATE" "$SETUP" "$TAKEIT" "$DISPATCH")
+DOCS=("$SKILL" "$CONTRACT" "$TEMPLATE" "$SETUP" "$TAKEIT" "$DISPATCH" "$ORCH" "$READMEMD")
 # Read for their restated counts alone, never for a decision's prose: this
 # file's own header, preflight's gate list, and CLAUDE.md's gate description.
 SELF="scripts/test-review-gate-decisions.sh"
@@ -204,12 +243,20 @@ assert_in() {
 assert_not_in() {
     if grep -qE -- "$2" <<<"$1"; then bad "$3"; else ok "$3"; fi
 }
+# assert_has <haystack> <FIXED string> <label> — fixed-string, for a literal
+# carrying regex metacharacters. The NO REPORT line ends in
+# `(lint/type/test only)`, whose parentheses are an ERE group: matched as a
+# pattern it silently tests something else entirely, so the contract line is
+# compared as bytes.
+assert_has() {
+    if grep -qF -- "$2" <<<"$1"; then ok "$3"; else bad "$3"; fi
+}
 # assert_line <file> <ERE> <label>        — line-scoped; file input, no pipe
 assert_line() {
     if grep -qE -- "$2" "$1"; then ok "$3"; else bad "$3"; fi
 }
 
-echo "review-gate decisions from #237/PR #243 (issue #247) and #248/PR #250 (issue #255)"
+echo "review-gate decisions from #237/PR #243 (issue #247), #248/PR #250 (issue #255) and #273"
 
 for f in "${READS[@]}"; do
     [ -r "$f" ] || bad "missing file: $f"
@@ -225,6 +272,99 @@ template_flat="$(flatten "$TEMPLATE")"
 setup_flat="$(flatten "$SETUP")"
 takeit_flat="$(flatten "$TAKEIT")"
 dispatch_flat="$(flatten "$DISPATCH")"
+orch_flat="$(flatten "$ORCH")"
+
+# ---------------------------------------------------------------------------
+# Decision 6's negatives are checked by ACCOUNTING and by PAIRED MUST-EXISTS,
+# never by a prose veto. That is a deliberate reversal, and the reason is
+# measured rather than stylistic.
+#
+# The first two editions of this gate tried a veto — an enumerated ERE for the
+# forbidden instruction shape, then the same thing with a polarity classifier
+# in front of it. Both were wrong in BOTH directions at once, which is the
+# family CLAUDE.md documents at length about test-sentry-verification.sh:
+#
+#   * INERT WHERE IT MATTERS. The polarity edition suppressed any mention with
+#     a negator to its left in the same clause — and `no` is a negator, while
+#     every window it guarded is REQUIRED by the must-exists below to contain
+#     the literal `no report returned`. Measured minimal pair through the
+#     shipped code: `Print the NO REPORT line, then merge it.` scored ZERO
+#     hits; the identical sentence with the literal swapped for `FOO BAR`
+#     scored one. The veto could not fire in the only place it was aimed.
+#   * UNBOUNDED. With no boundary at `,`, `:` or a coordinating conjunction,
+#     one leading negator shielded every later mention in the sentence:
+#     `Never fold that into the SKIPPED line: merge it as usual.` scored zero
+#     on all four arms.
+#   * NARROW. It was an enumeration with no stated limit, so the natural
+#     reword walked past it — `Pause until the report arrives`, `SendMessage
+#     the report to the session that dispatched you`, `Ask the coordinator to
+#     pass it along` all scored zero.
+#   * LEFT-ONLY, so correct DESCRIPTIVE prose reddened: these four files
+#     describe the incident at length, and `a tick that waits for the review is
+#     a loop that stopped` had to have its object deleted to keep the gate
+#     green. Prose contorted around a gate is the anti-pattern, not the fix.
+#
+# A veto that is right needs the forward segmentation pass CLAUDE.md describes
+# and a battery that exercises SUPPRESSION rather than only clean strings —
+# a dedicated issue, not a helper smuggled into this one. What replaces it is
+# what decision 5 already uses successfully two sections up, plus counting:
+#
+#   * The PROHIBITION IS ASSERTED BY ITS OWN LITERAL, region-scoped. Softening
+#     `**hold the PR** — never merge it, and never hand it to pr-shepherd` into
+#     `hold it one tick, then merge it as usual` DELETES that literal, so a
+#     must-exist catches the softening a veto could not. No polarity is
+#     involved, because the asserted string carries its own negation.
+#   * TOKENS ARE COUNTED, not pattern-matched. `SendMessage` and `relay` may
+#     each appear EXACTLY ONCE in the orchestrator — inside the sentence that
+#     forbids them. A readmitting fallback (`If you truly cannot end on it,
+#     SendMessage the report to the dispatcher instead`) ADDS an occurrence and
+#     is caught by arithmetic, which has no vocabulary to walk past and no
+#     polarity to be shielded by. COUNTING ALONE IS NOT ENOUGH, and an earlier
+#     draft of this header claimed it was: a fallback that writes the report to
+#     a file and returns a pointer names NEITHER counted token, and was measured
+#     leaving this gate exit 0. The counts bound the two channels #273 measured;
+#     the open class is bounded by the prohibition's own literal beside them.
+#
+# The known limit is stated rather than patched, in the idiom the sibling gates
+# use: this pins the WORDING of each prohibition, so a legitimate reword of one
+# reddens the gate and must be made in both places at once. That is the trade
+# decision 5 already accepts, it fails LOUDLY, and a loud false red is the
+# direction this repo prefers over a veto that reports clean on an inverted
+# source — which is exactly what the two previous editions did.
+
+# Region helpers. flatten() strips `>` markers, which is right for reading the
+# text but blind to WHERE it sits: measured, lifting the whole delivery rule
+# out of take-it's §5 blockquote and into its coordinator section left this
+# gate green — and dispatch-ready reuses that prompt VERBATIM, so one such edit
+# strips the rule from both dispatching paths' sub-agents at once.
+# quoted_prompt <file> <exact heading line> — the `>` lines of ONE section.
+# Scoped to a section rather than the whole file: take-it carries a second
+# blockquote for the stacked variant, so a file-wide sweep would let an
+# assertion labelled "dispatched prompt" be satisfied by the other one.
+quoted_prompt() {
+    awk -v h="$2" '
+        $0 == h { f = 1; next }
+        f && /^#+ / { exit }
+        f && /^[[:space:]]*>/ { sub(/^[[:space:]]*(> ?)+/, ""); print }' "$1" \
+        | tr '\n' ' ' | tr -s ' '
+}
+# section_slice <file> <exact heading line> [<literal stop line>] — to the next
+# heading of any level, or to an earlier explicit stop. The stop exists because
+# take-it's coordinator section runs on into its pr-shepherd hand-off block,
+# which legitimately talks about merging: a window that swallows it makes any
+# merge-related assertion answer a question about the wrong text.
+section_slice() {
+    awk -v h="$2" -v stop="${3:-}" '
+        $0 == h { f = 1; next }
+        f && /^#+ / { exit }
+        f && stop != "" && index($0, stop) == 1 { exit }
+        f { print }' "$1" | tr '\n' ' ' | tr -s ' '
+}
+# bullet_slice <file> <literal bullet opening> — to the next top-level bullet.
+bullet_slice() {
+    awk -v b="$2" 'index($0, b) == 1 { f = 1; print; next } f && /^- / { exit } f { print }' "$1" \
+        | tr '\n' ' ' | tr -s ' '
+}
 
 # ---------------------------------------------------------------------------
 # 1. The review gate is unconditional (decision 1)
@@ -574,7 +714,297 @@ assert_in "$takeit_flat" \
     "take-it's dispatched prompt fixes Blocking findings before committing"
 
 # ---------------------------------------------------------------------------
-# 6. Must-not-exist: the pre-#243 wordings, the `none` form that never was, and
+# 6. The report is RETURNED; a lost one is its own outcome (decision 6, #273)
+# ---------------------------------------------------------------------------
+echo "-- decision 6: the report is a return value; a lost one is not a skip"
+
+NOREPORT='review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)'
+
+# --- PART ONE: the reviewing agent's delivery contract ----------------------
+# `return` was already the verb on the bullet below this one, and it was
+# already correct for an Agent; what was missing is that it is the ONLY verb,
+# so the contract could be satisfied by a mechanism whose addressing the
+# reviewer cannot resolve.
+assert_in "$orch_flat" \
+    'Your report is your RETURN VALUE' \
+    "orchestrator states the report is its return value"
+assert_in "$orch_flat" \
+    'SendMessage. is not a delivery mechanism' \
+    "orchestrator states the message tool is not how a report is delivered"
+# The case-3 shape: an address the reviewer cannot resolve must not become a
+# reason to stop, to ask for a relay, or to park the report somewhere else.
+assert_in "$orch_flat" \
+    'an unresolvable dispatcher changes nothing' \
+    "orchestrator returns the report even with no resolvable dispatcher"
+assert_in "$orch_flat" \
+    'the return \*\*is\*\* the delivery' \
+    "orchestrator states the return is the delivery"
+# Strengthened, never replaced: the pre-#273 verb has to survive, or the fix
+# reads as a swap of one delivery mechanism for another.
+assert_line "$ORCH" \
+    '^- Return \*\*exactly one\*\* report:' \
+    "orchestrator still returns exactly one report"
+
+# --- PART TWO: no dispatcher blocks, in all three shipping paths ------------
+# A rule living only in send-it never runs for take-it or dispatch-ready, which
+# carry most of this repo's PR volume and dispatch from a cold worktree that
+# never sees an interactive session's instructions (#220 and #248 closed gaps
+# of exactly this shape).
+assert_in "$skill_flat" \
+    'The gate has THREE outcomes, not two' \
+    "send-it states the gate has three outcomes"
+assert_in "$skill_flat" \
+    'Read the report yourself; never wait to be told' \
+    "send-it has the dispatcher read the report itself"
+assert_line "$SKILL" \
+    "^review: NO REPORT — <agent> dispatched, no report returned \(lint/type/test only\)\$" \
+    "send-it prints the verbatim NO REPORT line"
+assert_in "$skill_flat" \
+    'It is not the SKIPPED line and must never be folded into it' \
+    "send-it keeps the third outcome out of the SKIPPED line"
+
+# send-it's OUTCOME TABLE is what an agent reads when rendering, so it is
+# accounted for rather than spot-checked: pinning the row on its first cell
+# alone let the third cell be rewritten to the SKIPPED line, leaving the table
+# ordering the exact fold the prose two paragraphs below forbids — and every
+# other send-it assertion green.
+outcome_rows="$(awk '/^\| Outcome \|/ { f = 1; next } f && !/^\|/ { exit } f && !/^\| *-+ *\|/ { print }' "$SKILL")"
+n_rows="$(grep -c . <<<"$outcome_rows")"
+if [ "$n_rows" -eq 3 ]; then
+    ok "send-it's outcome table carries exactly 3 rows, matching its THREE-outcomes prose"
+else
+    bad "send-it's outcome table carries $n_rows rows but the prose states three outcomes"
+fi
+nr_row="$(grep -F 'dispatched, no report returned |' <<<"$outcome_rows")"
+if [ -z "$nr_row" ]; then
+    bad "send-it's outcome table has no dispatched-but-no-report row"
+else
+    ok "located send-it's dispatched-but-no-report row"
+    # The row's RENDERED value — the cell that says what the agent prints.
+    assert_in "$nr_row" 'NO REPORT line' \
+        "send-it's no-report row renders the NO REPORT line"
+    assert_not_in "$nr_row" 'SKIPPED' \
+        "send-it's no-report row does not route to the SKIPPED line"
+fi
+# One row per destination, so a table that grew a second SKIPPED row — the fold
+# wearing an extra line — is caught by counting rather than by lookup.
+n_nr="$(grep -cF 'NO REPORT line' <<<"$outcome_rows")"
+n_sk="$(grep -cF 'SKIPPED line' <<<"$outcome_rows")"
+if [ "$n_nr" -eq 1 ] && [ "$n_sk" -eq 1 ]; then
+    ok "send-it's outcome table routes exactly one row to each of the two lines"
+else
+    bad "send-it's outcome table routes $n_nr rows to NO REPORT and $n_sk to SKIPPED — expected one each"
+fi
+
+# take-it carries the rule in BOTH sites `review_site:` can select, and the
+# prompt half must be pinned INSIDE the blockquote it is handed in.
+takeit_prompt="$(quoted_prompt "$TAKEIT" "## 5. Dispatch sub-agents in parallel")"
+if [ -z "$takeit_prompt" ]; then
+    bad "take-it's blockquote prompt region is empty — every prompt assertion below would pass vacuously"
+else
+    ok "located take-it's blockquote prompt region"
+    assert_in "$takeit_prompt" \
+        'Read the review.s final text yourself, and never block on it' \
+        "take-it's DISPATCHED PROMPT reads the final text and never blocks on it"
+    assert_has "$takeit_prompt" "$NOREPORT" \
+        "take-it's DISPATCHED PROMPT carries the verbatim NO REPORT line"
+    assert_in "$takeit_prompt" \
+        'review=no-report' \
+        "take-it's DISPATCHED PROMPT reports no-report on its RESULT line"
+fi
+
+takeit_coord="$(section_slice "$TAKEIT" '### Review gate on the coordinator site (ONLY when `review_site: coordinator`)' 'Use the capability skill for ALL polling')"
+if [ -z "$takeit_coord" ]; then
+    bad "take-it's coordinator-site section did not slice — its assertions below would pass vacuously"
+else
+    ok "located take-it's coordinator-site section"
+    assert_in "$takeit_coord" \
+        '\*\*Dispatched, but no report came back\*\*' \
+        "take-it's COORDINATOR SITE has its own dispatched-but-no-report outcome"
+    assert_has "$takeit_coord" "$NOREPORT" \
+        "take-it's COORDINATOR SITE prints the verbatim NO REPORT line"
+    # The HOLD is the part that prevents the harm, and it was pinned by nothing
+    # in the first edition: rewriting it to `merge it as usual` left every
+    # decision-6 assertion and all three vetoes green.
+    assert_in "$takeit_coord" '\*\*hold the PR\*\*' \
+        "take-it's COORDINATOR SITE holds the PR on a lost report"
+    # The PROHIBITION's own literal, not a veto. Softening the hold to `hold it
+    # one tick, then merge it as usual` deletes this string, which a must-exist
+    # sees and a polarity veto provably could not — the `no report returned`
+    # literal these windows must contain carries a negator that suppressed it.
+    assert_in "$takeit_coord" 'never merge it, and never hand it to' \
+        "take-it's COORDINATOR SITE forbids merging and handing on a lost report"
+    # Decision 3's producer count must stay at two here, or the third outcome
+    # has been absorbed into the SKIPPED line. Paired with the veto below.
+    assert_in "$takeit_coord" 'name which of the two it' \
+        "take-it's COORDINATOR SITE still names TWO producers of the SKIPPED line"
+fi
+
+# The DEFAULT site is `agent`, where the coordinator section never runs at all,
+# so a hold stated only inside it leaves the default merging PRs whose review
+# reached nobody. That rule has to live outside the coordinator-only section.
+# Asserted against the COMPLEMENT of the coordinator-only subsection, never the
+# whole file: the first edition stated this rule "outside the coordinator-only
+# section" while sitting INSIDE it, and a whole-file assertion under a label
+# naming the placement could not tell the difference. The complement is what
+# an agent reads under the DEFAULT review_site, where that subsection is
+# explicitly skipped.
+takeit_outside="$(awk '
+    /^### Review gate on the coordinator site/ { skip = 1; next }
+    skip && /^#+ / { skip = 0 }
+    !skip { print }' "$TAKEIT" | sed -E 's/^[[:space:]]*(> ?)+//' | tr '\n' ' ' | tr -s ' ')"
+if [ -z "$takeit_outside" ]; then
+    bad "take-it's non-coordinator region did not slice — the placement checks would pass vacuously"
+else
+    ok "located take-it's region OUTSIDE the coordinator-only subsection"
+    # BOTH outcomes, because neither PR's diff was read by anybody and the
+    # sibling rule in dispatch-ready §2 withholds the same two. A path holding
+    # only one of them reaches the opposite conclusion about the very same
+    # sub-agent's output — and dispatch-ready dispatches take-it's prompt
+    # verbatim, so that is one sub-agent, judged two ways.
+    assert_in "$takeit_outside" \
+        '`review=no-report` OR `review=skipped` is held, never merged' \
+        "take-it holds BOTH unreviewed outcomes OUTSIDE the coordinator-only subsection"
+    assert_in "$dispatch_flat" \
+        'reported `NO REPORT` or `SKIPPED`, or carries a Blocking finding, is withheld' \
+        "dispatch-ready withholds the same two outcomes, so the paths agree"
+    assert_in "$takeit_outside" \
+        'keep the PR out of the list you hand to `sassy-dog:pr-shepherd`' \
+        "take-it keeps a no-report PR out of the shepherd hand-off, outside that subsection"
+fi
+# Every NO REPORT site accounted for, never looked up: take-it carries the line
+# twice — prompt and coordinator — so a presence check is satisfied by either,
+# and reverting just ONE was measured undetected. Same defect the RESULT enum
+# had, one layer over.
+n_takeit_nr="$(grep -cF "$NOREPORT" "$TAKEIT")"
+if [ "$n_takeit_nr" -ge 2 ]; then
+    ok "take-it carries the verbatim NO REPORT line at all $n_takeit_nr of its sites"
+else
+    bad "take-it carries the NO REPORT line at only $n_takeit_nr site(s) — the prompt and the coordinator each need one"
+fi
+# The reported enum, accounted for the same way: take-it has TWO RESULT lines,
+# the single-issue one and the stacked variant, and a lookup passes on either.
+takeit_enums="$(grep -oE 'review=<[a-z|-]+>' "$TAKEIT" | sort)"
+n_takeit_enums="$(grep -c . <<<"$takeit_enums")"
+if [ "$n_takeit_enums" -ge 2 ]; then
+    stale_enums="$(grep -vF 'no-report' <<<"$takeit_enums" | tr '\n' ' ')"
+    if [ -n "$stale_enums" ]; then
+        bad "a take-it RESULT enum omits the no-report value: $stale_enums"
+    else
+        ok "all $n_takeit_enums take-it RESULT review enums carry the no-report value"
+    fi
+else
+    bad "take-it exposes only $n_takeit_enums RESULT review enum(s) — expected the single-issue one and the stacked variant"
+fi
+
+# dispatch-ready: the unattended loop, where no human coordinator is reading
+# along to relay anything — the case that turns a lost report into a merged
+# unreviewed PR, and a waiting agent into a stopped loop.
+disp_nr="$(bullet_slice "$DISPATCH" '- **A review dispatched that never came back')"
+if [ -z "$disp_nr" ]; then
+    bad "dispatch-ready's lost-report bullet did not slice — its assertions below would pass vacuously"
+else
+    ok "located dispatch-ready's lost-report bullet"
+    assert_in "$disp_nr" 'A tick never blocks, polls or idles' \
+        "dispatch-ready never blocks a tick on a review report"
+    assert_in "$disp_nr" 'a tick that waits is a loop that stopped' \
+        "dispatch-ready states why a waiting tick is the worse failure"
+    assert_has "$disp_nr" "$NOREPORT" \
+        "dispatch-ready reports the verbatim NO REPORT line"
+    assert_in "$disp_nr" '\*\*hold the PR\*\*' \
+        "dispatch-ready holds the PR on a lost report"
+    assert_in "$disp_nr" 'never merge it, and never hand it to' \
+        "dispatch-ready forbids merging and handing on a lost report"
+    assert_in "$disp_nr" '\*\*Never fold that into the SKIPPED line\*\*' \
+        "dispatch-ready keeps the third outcome out of the SKIPPED line"
+fi
+# ORDERING. §2's first bullet is the one that merges, and it is reached ~18
+# lines before the lost-report bullet and ~33 before the default-site hold. A
+# corrective a reader meets only after the merge has been ordered is one that
+# never runs, so the exception has to live in the merging bullet itself.
+disp_merge="$(bullet_slice "$DISPATCH" '- **Open PRs from those branches**')"
+if [ -z "$disp_merge" ]; then
+    bad "dispatch-ready's merging bullet did not slice — the ordering check would pass vacuously"
+else
+    ok "located dispatch-ready's merging bullet"
+    assert_in "$disp_merge" \
+        'Hand it only the PRs the review bullets below have cleared' \
+        "dispatch-ready's MERGING bullet withholds PRs the review has not cleared"
+fi
+
+# The DEFAULT site again: on `agent` this loop never dispatches a review of its
+# own, so the only way an outcome reaches it is a sub-agent's RESULT line.
+assert_in "$dispatch_flat" \
+    'equally when its PR body carries the `NO REPORT` line' \
+    "dispatch-ready holds a no-report PR on the DEFAULT agent site too"
+# The TRIGGER above is not the rule; the CONSEQUENCE is. Measured: rewriting the
+# clause that follows it to `the agent ran, which is what the gate asks, so the
+# PR is merged as usual once its checks are green` left this gate exit 0 and
+# ALL GREEN — the unattended loop, on the default site, ordered to merge a PR
+# whose review reached nobody, which is the entire harm of #273 surviving in
+# the path carrying the most PR volume. Both sibling sites were already pinned
+# on their consequence; this one was pinned on its trigger alone.
+assert_in "$dispatch_flat" \
+    'held and never merged on it' \
+    "dispatch-ready's DEFAULT-site rule states the CONSEQUENCE, not only its trigger"
+# EVERY copy of the contract line, tree-wide, must be byte-identical. README
+# and the config contract carry it too and neither is in the read set for it, so
+# a drift in one of those copies is invisible to a per-file lookup — the same
+# reason section 8 SWEEPS for its summary phrase rather than trusting its site
+# list. Files are found rather than enumerated, and the floor refuses a sweep
+# that found nothing, which is how this check would otherwise pass vacuously.
+# A COPY is distinguished from a mere REFERENCE by the em-dash continuation:
+# CLAUDE.md names the line twice without reproducing it, which is a
+# cross-reference and must not be held to byte-identity. Comparison runs
+# FLATTENED, because a copy routinely wraps mid-line — the config contract's
+# does, and a line-scoped compare reported that correct copy as drifted.
+nr_files="$(git ls-files '*.md' | xargs grep -lF 'review: NO REPORT —' | sort)"
+NR_COPY_SITES=("$SKILL" "$TAKEIT" "$DISPATCH" "$CONTRACT" "$READMEMD")
+nr_expected="$(printf '%s\n' "${NR_COPY_SITES[@]}" | sort)"
+if [ "$nr_files" = "$nr_expected" ]; then
+    ok "exactly the $(grep -c . <<<"$nr_expected") expected documents carry a copy of the NO REPORT line"
+else
+    bad "documents carrying the NO REPORT line are [$(tr '\n' ' ' <<<"$nr_files")] but the expected copy sites are [$(tr '\n' ' ' <<<"$nr_expected")] — a new copy must join NR_COPY_SITES, and a site that lost its copy is a deleted contract"
+fi
+nr_drift=""
+while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    grep -qF -- "$NOREPORT" <<<"$(flatten "$f")" || nr_drift="$nr_drift $f"
+done <<<"$nr_files"
+if [ -n "$nr_drift" ]; then
+    bad "a copy of the NO REPORT line has drifted from the contract wording:$nr_drift"
+else
+    ok "every tracked copy of the NO REPORT line is byte-identical to the contract"
+fi
+
+# The config contract is the ONLY site binding an agent this plugin did not
+# write — the case where the return-value assumption cannot be checked by
+# reading the agent — and until now nothing asserted it, so deleting it reddened
+# nothing. Read flattened: the literal hard-wraps.
+assert_in "$contract_flat" \
+    'must\s*return its report as its \*\*final text\*\*' \
+    "the config contract binds a repo-owned review_agent to the return-value delivery"
+assert_in "$contract_flat" \
+    'never wait on a message or a notification to bring one in' \
+    "the config contract states the shipping paths do not wait for a report"
+# The DISCRIMINATOR for the send-it carve-out. Stating it as "a PR already
+# exists" is false on the default site — take-it's sub-agent gates at step 6,
+# before its commit and before its PR, exactly like send-it — so a reader
+# applying that test concludes the agent site has nothing to hold either, which
+# is the one conclusion these paths were changed to prevent.
+assert_in "$contract_flat" \
+    'discriminator is UNATTENDED MERGING, not whether a PR exists at gate time' \
+    "the config contract gives the send-it carve-out its TRUE discriminator"
+
+# The prompt this loop BUILDS is where the rule reaches its sub-agents, and
+# under review_site: coordinator the step is dropped — so the delivery half has
+# to be stated as travelling with the gate rather than with the step.
+assert_in "$dispatch_flat" \
+    'Step 6.s delivery half travels with the gate' \
+    "dispatch-ready carries the delivery half into the prompt it builds"
+
+# ---------------------------------------------------------------------------
+# 7. Must-not-exist: the pre-#243 wordings, the `none` form that never was, and
 #    the two #250 decisions reverted. All flattened — see the header note on
 #    false passes.
 # ---------------------------------------------------------------------------
@@ -632,6 +1062,64 @@ for pair in "contract:$contract_flat" "setup-config:$setup_flat" \
         "${pair%%:*} reports no redispatch budget past 1"
 done
 
+# Decision 6, reverted. The two shapes that need no polarity to detect, because
+# neither is a wording question: an extra occurrence of a token the correct text
+# uses exactly once, and a widened producer count.
+#
+# TOKEN ACCOUNTING. The orchestrator names the message tool once, to forbid it,
+# and names relaying once, to forbid that. A fallback readmitting either — the
+# shape #273 measured, and the shape a later "be pragmatic when you cannot
+# resolve an address" edit reaches for — necessarily ADDS an occurrence.
+# Counting is what a veto could not do: there is no vocabulary to walk past and
+# no negator to be shielded by.
+for probe in "SendMessage:1" "relay:1"; do
+    tok="${probe%%:*}"; want="${probe#*:}"
+    n_tok="$(grep -oiF -- "$tok" "$ORCH" | grep -c .)"
+    if [ "$n_tok" -eq "$want" ]; then
+        ok "orchestrator names '$tok' exactly $want time — inside the sentence forbidding it"
+    else
+        bad "orchestrator names '$tok' $n_tok times, expected $want — a second mention readmits the mechanism #273 measured"
+    fi
+done
+# COUNTING IS NOT ENOUGH, and the claim that it was is the kind this repo exists
+# to refuse. A readmitting fallback needs NEITHER counted token: measured, a
+# tail rewritten to `if the report is long, or if you cannot end on it, write it
+# to tmp/review.md, post it as a PR comment, and return a one-line pointer
+# instead` kept SendMessage:1 and relay:1, kept every other guarded literal, and
+# left this gate exit 0. Arithmetic bounds the two channels #273 measured; the
+# OPEN class of channels is bounded by the prohibition's own literal, which that
+# mutation deletes. Both are needed, and neither substitutes for the other.
+assert_in "$orch_flat" \
+    'never leave it in a file and return a pointer to it' \
+    "orchestrator forbids parking the report and returning a pointer to it"
+assert_in "$orch_flat" \
+    'never end a run with the report unstated because delivery failed' \
+    "orchestrator forbids ending a run with the report unstated"
+
+# The one occurrence must be the FORBIDDING one, or the count above is
+# satisfied by a file that permits it in a single sentence instead.
+assert_in "$orch_flat" \
+    'SendMessage. is not a delivery mechanism' \
+    "orchestrator's single message-tool mention is the one that forbids it"
+assert_in "$orch_flat" \
+    'Never hand it to another session to relay' \
+    "orchestrator's single relay mention is the one that forbids it"
+
+# The FOLD, checked where each path counts the producers of the SKIPPED line.
+# Widening that count from two is precisely how the third outcome gets absorbed
+# into the second, and it is the one edit that leaves both files reading
+# plausibly. Each veto is PAIRED with a must-exist on the same sentence —
+# send-it's in section 1, take-it's in section 6 — so a reword fails loudly in
+# one place rather than passing quietly in both. The first edition claimed that
+# pairing for take-it and did not have it, and rewriting take-it's bullet to
+# `name which of them it was` was measured leaving the whole gate green.
+assert_not_in "$skill_flat" \
+    'name which of the three produced it' \
+    "send-it does not widen the SKIPPED line to a third producer"
+assert_not_in "$takeit_flat" \
+    'which of the three it was' \
+    "take-it does not widen the SKIPPED line to a third producer"
+
 # take-it's derived-never-configured list is where a "this is derivable" sweep
 # would move the key. Scoped, so a mention of `review_site` elsewhere in the
 # file cannot mask it.
@@ -645,7 +1133,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. The two summary counts are RE-DERIVED, never transcribed (issue #276)
+# 8. The two summary counts are RE-DERIVED, never transcribed (issue #276)
 # ---------------------------------------------------------------------------
 # This section carries no `(decision N)` suffix on purpose — it is not one of
 # the decisions, and the discriminator below is what keeps it out of the count.
@@ -686,7 +1174,7 @@ echo "-- summary counts: re-derived from this file, not transcribed"
 # the tracked file in place and restore it, which is what the battery in the PR
 # that added this section does; this precondition is what says so out loud.
 if [ "$SELF_ABS" -ef "$SELF" ]; then
-    ok "running from the tracked path, so section 7 measures the file it is in"
+    ok "running from the tracked path, so section 8 measures the file it is in"
 else
     bad "this gate is running from $SELF_ABS but would measure $SELF — mutate the tracked file in place and restore it, never a copy"
 fi
@@ -747,7 +1235,7 @@ head_dec="$(awk '
     /^#/ { if ($0 ~ /^#   [0-9]+\. /) { n = $2; sub(/\.$/, "", n); print n }; next }
     { exit }' "$SELF" | sort -n)"
 # Derivation B — the body banners that carry their own number back as a
-# `(decision N)` suffix. Section 6 (the must-not-exist sweep) and section 7
+# `(decision N)` suffix. Section 7 (the must-not-exist sweep) and section 8
 # (this one) carry none, which is what keeps a bare banner count — a different
 # question, answered too high — out of this one.
 body_dec="$(awk '
@@ -794,8 +1282,8 @@ n_dec="$n_head"
 n_files="${#READS[@]}"
 
 # A document read WITHOUT joining READS is a document the count cannot see, and
-# the read set is no longer `skills/` alone — #276 names `agents/` as the next
-# entry it expects. So the scan spans every tracked shape this gate could read
+# the read set is no longer `skills/` alone — #273 made `agents/` a member,
+# which is the entry #276 anticipated. So the scan spans every shape it reads
 # and compares against READS, not DOCS. It reads CODE LINES ONLY: a header
 # comment citing a path it does not read is a cross-reference, not a read, and
 # failing on one would push the next editor to "fix" it by inflating the count.

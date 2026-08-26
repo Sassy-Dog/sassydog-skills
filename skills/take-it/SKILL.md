@@ -213,6 +213,18 @@ same thing to the reader.
 >    put `review: SKIPPED — no review_agent resolved (lint/type/test only)` and the cause in the PR
 >    body and on your RESULT line. A review that printed nothing is indistinguishable from a clean
 >    one.
+>    **Read the review's final text yourself, and never block on it.** Its report is the return
+>    value of the agent you dispatched, not a message that will come find you. The observable is
+>    that returned text: either you are holding it, or the dispatch came back with nothing and you
+>    take the NO REPORT branch below. There is no third state to sit in, so never stop, idle or
+>    wait for one to arrive. On 2026-08-25 an
+>    implementing agent deadlocked on a report that had already been delivered to a different
+>    session, and lost a completed review cycle (#273). **If it was dispatched and nothing
+>    readable came back**, that is a THIRD outcome and not a skip — the agent ran, it simply never
+>    came back — so put
+>    `review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)` in the PR
+>    body and `review=no-report` on your RESULT line. Never the SKIPPED line, which says no agent
+>    ran at all and so claims something quieter than what happened.
 > 7. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
 >    you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
 >    your change just made untrue, in this same PR. A stale doc is a defect in your change, not
@@ -229,7 +241,7 @@ same thing to the reader.
 > 9. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
 >    {pr_template_sections from config}.
 > 10. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name>
->     status=<opened|skipped|failed> review=<clean|nits|skipped> note=<one-line>`
+>     status=<opened|skipped|failed> review=<clean|nits|no-report|skipped> note=<one-line>`
 
 ### Stacked variant (ONLY for a chain resolved in §2)
 
@@ -271,12 +283,25 @@ stack is reviewed layer by layer, because a layer's diff is what its own PR carr
 > coordinator link them. **A failed link is recoverable; a wrong base is not.**
 >
 > **Do NOT merge any layer.** Report back one line:
-> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|skipped> note=<one-line>`
+> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|no-report|skipped> note=<one-line>`
 
 If a middle layer fails, the layers below it are still valid, independent PRs. Report the partial
 stack rather than discarding the work — the coordinator can land what exists and re-dispatch the rest.
 
 ## 6. Coordinator: watch + merge (delegated)
+
+**Before handing anything onward, on EITHER site: a sub-agent whose RESULT line reported
+`review=no-report` OR `review=skipped` is held, never merged.** Both, and for one reason — neither
+PR's diff was read by anybody — so they are held identically; the sibling rule in
+`dispatch-ready` §2 withholds the same two, and a path that held only one of them would reach the
+opposite conclusion about the very same sub-agent's output. This sits ABOVE the coordinator-only
+subsection deliberately: under the default `review_site: agent` that subsection does not run at
+all, so a rule stated inside it would leave the default site merging PRs whose review reached
+nobody, which is the whole of #273 one layer out. Either outcome gets the same treatment a
+Blocking finding gets — name it in the §7 report, allow ONE redispatch carrying the outcome as
+context, and keep the PR out of the list you hand to `sassy-dog:pr-shepherd` below. A second
+failure gets the `blocked` label plus a comment naming the outcome, and a human decides; never
+park it back in Ready.
 
 ### Review gate on the coordinator site (ONLY when `review_site: coordinator`)
 
@@ -291,6 +316,11 @@ versus the derived default branch. Then:
   allow ONE redispatch carrying it as context. A second failure gets the `blocked` label plus a
   comment naming the finding, and a human decides.
 - **Nits** → note them in the report; they never hold a merge.
+- **Dispatched, but no report came back** → print
+  `review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)`, name the
+  agent, and **hold the PR** — never merge it, and never hand it to `sassy-dog:pr-shepherd`. Never
+  hold the run open until one arrives, and never call this a skip: the agent ran, so it is a third
+  outcome rather than the line below wearing a different cause.
 - **No agent resolved, or the dispatch failed** → print
   `review: SKIPPED — no review_agent resolved (lint/type/test only)` and name which of the two it
   was. Never merge on a review that was never reported.
@@ -343,7 +373,8 @@ for unshipped issues) and a next-action one-liner per failure.
 - **Single-writer**: sub-agents never merge or enqueue; only the coordinator does, and only for
   green PRs.
 - **Never merge past a Blocking review finding**, on either `review_site`. One redispatch carrying
-  the finding, then `blocked` — and a review that could not run is reported, never passed over.
+  the finding, then `blocked` — and a review that could not run, or that ran and never came back,
+  is reported under its own name, never passed over and never waited out.
 - **Never auto-rebase a CONFLICTING PR** — surface it. Expect an upper stack layer to go
   `CONFLICTING` after the layer below squash-merges; that is the normal shape, not a fault.
 - Cap parallelism at 5. Don't dispatch on stubs or `blocked` issues.
