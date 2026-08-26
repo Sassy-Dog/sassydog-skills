@@ -1886,18 +1886,32 @@ dest_case "a determiner before a real noun still opens one" \
 #
 #   * NON-PARTITIVE free-floating counts -- the number sits beside a noun, so
 #     it reads safe by shape while the SET it counts may be elsewhere entirely.
-#     THE LIVE INSTANCE is in `scripts/preflight.sh`, gate 26s closing
-#     summary: "the five decisions, six tracked files" -- two counts floating
-#     free, re-derived by no gate, and invisible to this sweep. Cited by its
-#     CONTENT rather than a line number, because the number moved by 368 lines
-#     the moment this branch added a gate above it, which is the same rot one
-#     level down. It is named because the illustrative
-#     examples that used to stand here alone (`the eight files`, `the four
-#     names`, `the six-verb affirmative`) are every one of them gate-pinned or
-#     adjacent-enumerated TODAY, so a reader checking the blind spot against
-#     the tree would find nothing wrong and conclude it was theoretical. It is
-#     not. That file is OUT OF SCOPE for this changeset and is being filed
-#     separately; do not fix it from here.
+#     THE LIVE INSTANCE IS IN THIS FILE, and it is `the eight files`, which
+#     used to stand here as an illustration of the SHAPE and is in fact an
+#     instance of it. Measured: the read set is eight variables iterated as
+#     literals in a `for` loop, with no array length derived anywhere, and the
+#     count is restated in this header, twice in `scripts/preflight.sh` and in
+#     `CLAUDE.md`, with no member list beside any of them and no gate
+#     recomputing it. `the four names` genuinely is pinned, by a row count in
+#     this file; `the six-verb affirmative` enumerates its members beside it.
+#     So the example this bullet needs is the one it was using as a decoy, and
+#     it is left standing rather than fixed from here: this file is not the
+#     subject of the changeset that found it, and remediation is a follow-up.
+#
+#     THE INSTANCE PREVIOUSLY NAMED HERE IS NOW HISTORICAL, and how it was
+#     cited is worth more than the citation was. It was the closing summary of
+#     the review-gate decision gate -- "the five decisions, six tracked files",
+#     restated in that gate header, in `scripts/preflight.sh` and in
+#     `CLAUDE.md`, re-derived by nothing. Issue #276 moved it onto the OTHER
+#     safe form named above: section 7 of
+#     `scripts/test-review-gate-decisions.sh` re-derives both numbers from its
+#     own source and reddens every site that disagrees. Two things outlive it.
+#     First, this bullet cited it as gate 26 while the gate was numbered 29 in
+#     the very commit that wrote the citation -- measured, not inferred: it was
+#     never 26, so the number was unverifiable AT THE POINT OF WRITING rather
+#     than rotted, which is the stronger argument for the content handle the
+#     quoted wording gives. Second, the probe never found that instance; a
+#     reader did, which is the instruction this block closes with.
 #   * DIGIT forms -- `all 12 are pinned`. The sweep is spelled-out words only.
 #
 # A probe with a stated blind spot is honest about what a clean run means. The
