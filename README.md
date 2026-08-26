@@ -157,6 +157,14 @@ exists yet: those two go on to merge with nobody reading along, so a lost report
 unreviewed merge. `send-it` hands its run back to the person who started it, who is reading the
 output, so it records the outcome and carries on.
 
+**The same rule binds the fan-out one level down.** Each of the nine reviewers returns its finding
+list as its own final text — an empty list included — because a reviewer can no more reliably
+address the orchestrator that dispatched it than the orchestrator can address the session that
+dispatched *it*, and the fan-out brief carries that rule down as one of its enumerated items rather
+than assuming each agent's own file gets read. It does not make the hop reliable and is not meant
+to: a reviewer that errors, times out, or comes back unparseable is still scored `!` and named on
+every run, never rolled into Clean.
+
 ## Installation
 
 ### Claude Code
