@@ -638,59 +638,71 @@
 #      2026-08-26 on #273 / PR #279; cancelled by hand).
 #      THE ENUMERATION IS PART OF THE FIX, not a detail of it, and the first
 #      edition of that fix omitted it and was WORSE THAN THE BUG: §2's only PR
-#      discovery is the branches of IN-FLIGHT issues, and `block` strips
-#      `in-progress`, so in #282's own state the tick enumerates zero PRs. A
+#      discovery was the branches of IN-FLIGHT issues, and `block` strips
+#      `in-progress`, so in #282's own state the tick enumerated zero PRs. A
 #      held set empty because nothing was looked at is indistinguishable from
 #      one empty because nothing is held — STALLED is then forbidden by the
 #      non-empty rule while COMPLETE is admitted, and the loop announces DRAIN
 #      COMPLETE and self-cancels with a human-gated PR still open. The
-#      forever-tick at least never claimed to be finished. So §2 resolves open
-#      PRs for `blocked[]` too and §7 consumes that union; both halves pinned.
+#      forever-tick at least never claimed to be finished.
+#      THE SET HAS TO BE ONE SET: COMPLETE's veto and §7's held set must range
+#      over the SAME PRs, since any PR that vetoes COMPLETE but can never enter
+#      the held set gives Ready-empty + in-flight-zero + held-empty — #282 one
+#      shape over, which an unqualified "any open PR vetoes COMPLETE" produces
+#      the moment a Dependabot or hand-opened PR is sitting there. And BOTH
+#      HALVES SPAN BOTH PATHS, because the blocked set is `blocked[]` only
+#      without a board and a bullet written for one path is invisible on the
+#      other — which is how a board repo would have kept the bug with every
+#      assertion green.
 #      THE FIX IS A DISCRIMINATOR, NOT A DELETED CONJUNCT, and the deletion is
 #      what a later "this conjunct does nothing" sweep re-derives: an open PR is
 #      not automatically a human gate — one whose checks are running or red can
-#      still advance on its own, and firing STALLED there cancels a loop that
-#      was about to make progress. So the third conjunct is "nothing this loop
-#      is permitted to advance" and a table decides which side an open PR falls
-#      on, hinged on §2's ONE redispatch: spent means held, unspent means the
-#      loop still has an action of its own. ITS LAST ROW IS A DEFAULT and is
-#      pinned as one — §2 holds a PR for more reasons than the rows enumerate
-#      (`CONFLICTING`, a held `SKIPPED`, a held `NO REPORT`), and a table that
-#      silently answers "alive" for a shape it does not know re-creates #282 one
-#      shape at a time. `CONFLICTING` is the measured case: it stops CI firing
-#      at all and `no checks reported` reads exactly like `CI hasn't started`,
-#      so without its own row ABOVE the checks rows it matches "checks still
-#      running" and is answered with something that can never happen.
-#      HOW IT IS BOUND: this gate's first edition asserted presence only, and a
-#      review measured meaning-inverting rewrites passing it at exit 0 —
-#      including writing the bug back as `Ready **non-empty**`, which a plain
-#      flatten cannot see, and appending a fifth table row licensing a merge
-#      past a `blocked` issue. Every one KEPT the sentence an assertion greps
-#      for and QUALIFIED it, which is the edit a tidying sweep makes and the one
-#      a must-exist cannot see. So the decision surface is pinned by CANONICAL
-#      LITERALS held in the gate — whole paragraphs, compared for equality after
-#      flattening, never by keyword and never by comparing the file to itself,
-#      which bounds divergence rather than content. The claim is "identical
-#      after flattening", NOT "byte-identical": the comparison runs after the
-#      flatten, so a re-wrap passes and a reword does not — the weaker true
-#      claim being worth more than the stronger false one. Must-not-exist checks
-#      run against a flattened AND an emphasis-stripped copy, and every
-#      line-scoped check runs against an already-resolved window, never
-#      file-wide (measured: COMPLETE's condition could be cancelled inside
-#      COMPLETE's own section with the assertion still green). ITS VACUITY FLOOR
-#      IS A SECTION REGISTRY: a bare number was measured not binding — deleting
-#      five assertion blocks left 46 of 80 and a floor of 45 — so `SECTIONS`
-#      declares the inventory, each section registers against it, a declared
-#      section that never ran or ran too few assertions FAILS, and the declared
-#      count is re-derived from the file's own call sites. THE PREMISE IS
-#      ASSERTED, NOT ASSUMED: `issue-claim.sh`'s `block` case is read for the
-#      one fact everything rests on — that it strips BOTH labels — since if it
-#      stripped only `ready` the whole account of the bug would be wrong with
-#      every prose assertion still green. Its header records why it carries no
-#      `-ef` precondition (its subjects are other files, so a copy still
-#      measures the tracked ones) and what that costs a mutation harness. The
-#      assertion count is printed, never transcribed. Two tracked files, no gh,
-#      no network.
+#      still advance on its own. So the third conjunct is "nothing this loop is
+#      permitted to advance" and a table decides which side an open PR falls on,
+#      hinged on §2's ONE redispatch. ITS LAST ROW IS A DEFAULT and is pinned as
+#      one, since §2 holds a PR for more reasons than the rows enumerate and a
+#      table that silently answers "alive" for a shape it does not know
+#      re-creates #282 one shape at a time; `CONFLICTING` is the measured case,
+#      stopping CI from firing at all so that `no checks reported` reads exactly
+#      like `CI hasn't started`. Rows 2-5 cannot fire at the moment STALLED is
+#      decided — in-flight zero empties the branch half of the union — and §7
+#      SAYS so, because a reader who works it out will otherwise trust them as
+#      live or delete them as dead.
+#      HOW IT IS BOUND, IN THREE LAYERS, each added after a review defeated the
+#      one before it. Presence-only assertions were measured passing
+#      meaning-inverting rewrites that KEPT the sentence and QUALIFIED it
+#      (including the bug written back as `Ready **non-empty**`, invisible to a
+#      plain flatten). Whole-paragraph equality against canonical literals fixed
+#      that and was itself defeated by INSERTING A SIBLING PARAGRAPH beside a
+#      pinned one — equality bounds the paragraph it holds and says nothing
+#      about the one next to it. So: (1) CANON, decision paragraphs compared for
+#      equality after flattening, bounding rewording; (2) INVENTORY, the ordered
+#      list of paragraph openers, bullet openers and headings, itself canonical,
+#      bounding insertion, deletion and reordering; (3) CONSUMPTION, every canon
+#      key consumed by exactly one assertion, so deleting an assertion block
+#      fails even when its section registration goes with it. The claim is
+#      "identical after flattening", NOT "byte-identical" — a re-wrap passes, a
+#      reword does not — and the inventory keeps each opener's first words only.
+#      Must-not-exist checks run against a flattened AND an emphasis-stripped
+#      copy; every line-scoped check runs against a resolved window, never
+#      file-wide; table-row patterns are anchored `^[[:space:]]*\|`, because a
+#      row indented by ONE SPACE renders identically, passes markdownlint and
+#      was measured slipping past `^\|` while licensing a merge past a
+#      `blocked` issue. Example identifiers are matched by SHAPE, so renumbering
+#      a worked example cannot redden a gate that decides nothing by it.
+#      ITS VACUITY FLOOR IS A SECTION REGISTRY WITH PER-SECTION MINIMUMS —
+#      `name:count`, members enumerated beside their counts, with the floor
+#      DERIVED as their sum — because a bare number was measured not binding
+#      twice over. KNOWN LIMITS are stated in its header rather than patched:
+#      a reword inside an unpinned paragraph, and the three coordinated
+#      deletions (block, registry entry, canon entries) that would be needed to
+#      remove a section quietly. THE PREMISE IS ASSERTED, NOT ASSUMED:
+#      `issue-claim.sh`'s `block` case is read for the one fact everything rests
+#      on — that it strips BOTH labels — since if it stripped only `ready` the
+#      whole account of the bug would be wrong with every prose assertion still
+#      green. Its header records why it carries no `-ef` precondition and what
+#      that costs a mutation harness. The assertion count is printed, never
+#      transcribed. Two tracked files, no gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1314,15 +1326,15 @@ fi
 # --- 32. drain terminal-state tests -------------------------------------------
 # Source-level: §7 IS the instruction the loop follows, so there is nothing to
 # run. It pins the state neither terminal state covered (#282), the §2
-# enumeration the held set depends on — without which the tick sees no PR at all
-# and announces a false DRAIN COMPLETE — the discriminator that decides whether
-# an open PR is a human gate or something this loop may still advance, the
-# non-empty held set that stops STALLED being satisfied vacuously, and the four
-# things the fix must NOT have moved: both carve-outs, COMPLETE and its open-PR
-# veto, the two-tick confirmation, and the single stop path. Decisions are
-# pinned by canonical literals held in the gate, because presence-only was
-# measured passing thirteen meaning-inverting rewrites. Two tracked files, no
-# gh, no network.
+# enumeration the held set depends on — on BOTH the board and boardless paths,
+# and without which the tick sees no PR at all and announces a false DRAIN
+# COMPLETE — the one-set invariant tying COMPLETE's veto to that same set, the
+# discriminator and its held-by-default last row, the non-empty held set that
+# stops STALLED being satisfied vacuously, and the four things the fix must NOT
+# have moved: both carve-outs, COMPLETE and its veto, the two-tick confirmation,
+# and the single stop path. Bound in three layers — canon, inventory,
+# consumption — each added after a review defeated the one before it. Two
+# tracked files, no gh, no network.
 if bash scripts/test-drain-terminal-states.sh; then
     pass "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
 else

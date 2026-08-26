@@ -21,15 +21,25 @@
 #
 # THE ENUMERATION IS PART OF THE FIX, NOT A DETAIL OF IT, and this gate exists
 # in its current shape because the first edition of the fix omitted it and was
-# WORSE THAN THE BUG. §2's only PR discovery is "open PRs from those branches" —
+# WORSE THAN THE BUG. §2's only PR discovery was "open PRs from those branches" —
 # the branches of IN-FLIGHT issues — and `block` strips `in-progress`, so in
-# #282's own state the tick enumerates zero PRs. A held set that is empty
+# #282's own state the tick enumerated zero PRs. A held set that is empty
 # because nothing was looked at is indistinguishable from one that is empty
 # because nothing is held: STALLED is then forbidden by the non-empty rule while
 # COMPLETE is admitted, and the loop announces DRAIN COMPLETE and self-cancels
 # with a human-gated PR still open. The forever-tick at least never claimed to
-# be finished. So §2 must resolve open PRs for `blocked[]` too, and §7 must say
-# that "every open PR this tick sees" means that union — both halves are pinned.
+# be finished.
+#
+# THE SET HAS TO BE ONE SET, and that is the second thing a reader will try to
+# simplify apart. COMPLETE's veto and §7's held set must range over the SAME
+# PRs: any PR that can veto COMPLETE but can never enter the held set gives
+# Ready-empty + in-flight-zero + held-empty, which is #282 one shape over — and
+# an unqualified "any open PR vetoes COMPLETE" produces exactly that the moment
+# a Dependabot PR, a hand-opened PR or another session's PR is sitting there.
+# BOTH HALVES ALSO HAVE TO SPAN BOTH PATHS: the blocked set is `blocked[]` only
+# on the boardless path, and a bullet written for one path is invisible on the
+# other, which is how a board repo would have kept the bug with every assertion
+# here green.
 #
 # WHY THE FIX IS A DISCRIMINATOR AND NOT A DELETED CONJUNCT. Simply dropping
 # "Ready non-empty" is the obvious fix and it is wrong — it is also the shape a
@@ -47,59 +57,89 @@
 # measured case: a conflicted PR stops CI firing at all and `no checks reported`
 # reads exactly like `CI hasn't started`, so without its own row ABOVE the
 # checks rows it matches "checks still running" and is answered with something
-# that can never happen — one long-lived conflicted PR would then keep a
-# genuinely stalled queue from ever confirming STALLED, which is a regression
-# the pre-#282 file did not have.
+# that can never happen. Rows 2 to 5 cannot fire at the moment STALLED is
+# decided — in-flight zero empties the branch half of the union, so row 1
+# matches first — and §7 states that rather than leaving it to be re-derived;
+# the gate pins the statement, because a reader who works it out will otherwise
+# either trust the rows as live or delete them as dead.
 #
-# HOW THIS GATE IS BOUND, AND WHY IT IS BOUND THAT WAY. Its first edition
+# HOW THIS GATE IS BOUND, AND WHY IT IS BOUND IN THREE LAYERS. Its first edition
 # asserted presence only, and a review measured meaning-inverting rewrites
 # passing it at exit 0 — writing the bug back as `Ready **non-empty**`, which a
-# plain flatten cannot see; appending a fifth table row licensing a merge past a
-# `blocked` issue; inverting the safety rails; and deleting a run of assertion
-# blocks under a floor that did not bind. Every one of them KEPT the
-# sentence an assertion greps for and QUALIFIED it, which is exactly the edit a
-# tidying sweep makes and exactly what a must-exist cannot see. So the decision
-# surface is pinned by CANONICAL LITERALS held in this gate — the whole
-# paragraph, compared for equality after flattening, the shape the carve-outs
-# already used — never by a keyword and never by comparing the file to itself,
-# which bounds divergence rather than content.
+# plain flatten cannot see; appending a table row licensing a merge past a
+# `blocked` issue; inverting the safety rails; and deleting assertion blocks
+# under a floor that did not bind. Every one KEPT the sentence an assertion
+# greps for and QUALIFIED it. The second edition pinned whole paragraphs by
+# equality against canonical literals — and a second review defeated THAT by
+# INSERTING A SIBLING PARAGRAPH beside a pinned one, writing #282's bug back
+# four lines under the canon forbidding it. Equality bounds the paragraph it
+# holds and says nothing about the one next to it. So:
+#
+#   LAYER 1, CANON. Each decision paragraph is compared for equality after
+#   flattening against text held in `canon_table`. Bounds REWORDING.
+#   LAYER 2, INVENTORY. The ordered list of paragraph openers, bullet openers
+#   and headings in §7, and of bullet openers in §2, is itself canonical.
+#   Bounds INSERTION, DELETION and REORDERING — a new paragraph anywhere in §7
+#   changes the list, whatever it says.
+#   LAYER 3, CONSUMPTION. Every key in `canon_table` must be consumed by exactly
+#   one assertion. Deleting an assertion block therefore fails even if its
+#   section registration goes with it, because its canon entries go unconsumed.
 #
 #   THE COST IS STATED, in the idiom test-review-gate-decisions.sh uses for its
-#   own canonical literal: this pins WORDING, so a legitimate reword must be
-#   made in two places at once and reddens CI until it is. That is a loud false
-#   red, which this repo prefers to a gate that reports clean on an inverted
-#   source. `canon_table` is the one place to edit.
+#   own canonical literal: this pins WORDING and STRUCTURE, so a legitimate
+#   reword or a new paragraph in §7 must be made in two places at once and
+#   reddens CI until it is. That is a loud false red, which this repo prefers to
+#   a gate that reports clean on an inverted source. `canon_table` is the one
+#   place to edit, and re-deriving its inventory entries is mechanical.
 #
 #   "BYTE-IDENTICAL" WOULD OVERSTATE IT. The comparison runs after `flat()`, so
-#   it is identity up to whitespace: a re-wrap passes, a reword does not. That
-#   is deliberate — this repo hard-wraps, and a raw comparison would redden on
-#   every reflow — but the claim in this header, in preflight's gate list and in
-#   CLAUDE.md says "after flattening" rather than "byte-identical" because the
-#   weaker true claim is worth more than the stronger false one.
+#   it is identity up to whitespace: a re-wrap passes, a reword does not. The
+#   inventory keeps each opener's first words only, so it is identity up to
+#   those. Both claims are stated that way here, in preflight's gate list and in
+#   CLAUDE.md, because the weaker true claim is worth more than the stronger
+#   false one.
+#
+#   KNOWN LIMITS, stated rather than patched. (1) A reword INSIDE a paragraph
+#   that no canon key holds is caught only if it moves the opener or breaks a
+#   presence assertion. (2) Deleting a section, its registry entry AND its canon
+#   entries together is three coordinated edits in three places, and nothing
+#   here catches that — only the deliberateness of it. (3) The inventory keys
+#   are regenerated by hand when §7 legitimately grows, and a regeneration that
+#   is not read is a rubber stamp.
 #
 # MUST-NOT-EXIST CHECKS RUN AGAINST TWO COPIES, flattened and emphasis-stripped.
 # This repo hard-wraps, so a forbidden phrase routinely straddles a line break
 # and a line-scoped grep reads it as absent — a FALSE PASS. Emphasis is the same
 # defect one layer in: `Ready **non-empty**` is the same instruction as `Ready
-# non-empty` and was measured passing the plain-flatten veto, with a plain-text
-# control that correctly failed. CLAUDE.md records this repo paying for exactly
-# that once already, on `**\`sentry:\`**`.
+# non-empty` and was measured passing the plain-flatten veto. CLAUDE.md records
+# this repo paying for exactly that once already, on `**`sentry:`**`.
 #
 # STRUCTURAL ASSERTIONS ARE WINDOW-SCOPED, NEVER FILE-WIDE. An earlier edition
 # grepped the whole tracked file for COMPLETE's condition line, so the condition
 # could be CANCELLED by a clause added inside COMPLETE's own section while the
 # assertion stayed green. Every line-scoped check now runs against an already
-# resolved window, and every window is proved non-empty AND proved to stop where
-# it claims to.
+# resolved window; every window is proved non-empty AND proved to stop where it
+# claims to, including `sec7`, whose stop is a heading somebody may rename.
+# TABLE-ROW PATTERNS ARE ANCHORED `^[[:space:]]*\|`, because a row indented by
+# ONE SPACE renders identically, passes markdownlint, and was measured slipping
+# past a `^\|` filter while licensing a merge past a `blocked` issue.
 #
-# THE VACUITY FLOOR IS A SECTION REGISTRY, not just a number. A bare floor was
-# measured not binding: deleting sections 3-7 whole left 46 of 80 assertions and
-# a floor of 45, so the run printed `all green` having dropped every "must not
-# have moved" constraint. `SECTIONS` declares the inventory, each section
-# registers itself against it, and a declared section that never ran — or that
-# ran too few assertions to be measuring anything — FAILS. The count of declared
-# sections is re-derived from this file's own `section` call sites rather than
-# transcribed. The numeric floor stays underneath as a coarse backstop.
+# EXAMPLE IDENTIFIERS ARE MATCHED BY SHAPE, not by literal. `PR #279 (#273)` is
+# a worked example; renumbering it changes no decision, and a gate that reddens
+# on it teaches the next author that this gate cries wolf. The exact-literal
+# treatment is reserved for `canon_table`.
+#
+# THE VACUITY FLOOR IS A SECTION REGISTRY WITH PER-SECTION MINIMUMS. A bare
+# number was measured not binding twice over: deleting five assertion blocks
+# left 46 of the 80 assertions then running, under a floor of 45, and deleting
+# 14 assertions from the largest section left the total higher still — both
+# runs printed "all green".
+# `SECTIONS` declares each section beside the count it must reach, which is the
+# form CLAUDE.md sanctions for a count (members enumerated beside it), and
+# `ASSERT_FLOOR` is DERIVED as their sum rather than transcribed. An earlier
+# edition also compared the declared count to this file's own `section` call
+# sites; that was a file-to-itself comparison of the kind this header rules out
+# for the canon, one `sed` updated both sides, and it is gone.
 #
 # THE PREMISE IS ASSERTED, NOT ASSUMED. Everything above rests on `block`
 # stripping BOTH labels; if it ever stripped only `ready`, the blocked issue
@@ -117,8 +157,7 @@
 # hazard is real and belongs to the HARNESS: mutate the tracked file in place
 # and restore it. Mutating a tmpdir copy leaves every assertion here measuring
 # the unmutated tracked file and every mutant reading `undetected` while proving
-# nothing (the #262 lesson). `SELF_ABS` is read only to count this file's own
-# `section` call sites, which is consistent under a copy either way.
+# nothing (the #262 lesson).
 #
 # No `| grep -q` pipelines anywhere: grep -q closes the pipe on its first match,
 # the writer takes SIGPIPE, and pipefail promotes the 141 — turning a caught
@@ -126,7 +165,7 @@
 # string match here reads a herestring or a file directly.
 #
 # NO INVENTORY NUMBER IS TRANSCRIBED. The assertion count is PRINTED by the run;
-# the section inventory is enumerated beside its own count, which is the form
+# the section inventory is enumerated beside its own counts, which is the form
 # CLAUDE.md sanctions. The mutation battery lives in the PR that added this gate
 # (issue #282).
 #
@@ -137,15 +176,13 @@
 set -uo pipefail
 export LC_ALL=C
 
-# Resolved BEFORE the `cd`, because the caller's path is relative to the
-# caller's cwd — the idiom scripts/test-sentry-verification.sh uses.
-SELF_ABS="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/$(basename "${BASH_SOURCE[0]:-$0}")"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && { echo "test-drain-terminal-states: not in a git repo" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 
 SKILL="skills/dispatch-ready/SKILL.md"
 CLAIM="skills/github-issues/scripts/issue-claim.sh"
+OPENER_WORDS=6
 
 fails=0
 asserts=0
@@ -153,16 +190,24 @@ ok()  { asserts=$((asserts + 1)); echo "  ok    $1"; }
 bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 
 # --- the section registry ----------------------------------------------------
-# Declared inventory. A section that never runs, or that runs too few assertions
-# to be measuring anything, fails — which is what a bare numeric floor could not
-# do (measured: 34 of 80 assertions deleted, still `all green`).
-SECTIONS=(conjunct enumeration discriminator nonempty carveouts complete record stoppath premise)
-SECTION_FLOOR=3
-ASSERT_FLOOR=80
+# `name:minimum`. Members enumerated beside their counts, which is the form
+# CLAUDE.md sanctions; ASSERT_FLOOR is their SUM, derived below rather than
+# transcribed. A section that never runs, or that runs fewer assertions than it
+# declares, FAILS — which is what a bare numeric floor could not do (measured
+# twice: a whole section deleted, and 14 assertions deleted from the largest).
+SECTIONS=(conjunct:8 enumeration:9 discriminator:24 nonempty:4 carveouts:5
+          complete:8 record:7 stoppath:12 premise:3)
+SECTION_MIN_TOTAL=0
+for _s in "${SECTIONS[@]}"; do
+    SECTION_MIN_TOTAL=$((SECTION_MIN_TOTAL + ${_s##*:}))
+done
+ASSERT_FLOOR=$SECTION_MIN_TOTAL
+
 ran_names=()
 ran_counts=()
 cur_sec=""
 sec_start=0
+consumed=""
 
 _close_section() {
     if [ -n "$cur_sec" ]; then
@@ -173,13 +218,14 @@ _close_section() {
 section() {
     _close_section
     case " ${SECTIONS[*]} " in
-        *" $1 "*) ;;
+        *" $1:"*) ;;
         *) bad "section '$1' is not in the declared SECTIONS inventory" ;;
     esac
     cur_sec="$1"
     sec_start=$asserts
     echo "-- $1: $2"
 }
+note_consumed() { consumed="$consumed $1"; }
 
 # --- assertion helpers -------------------------------------------------------
 # assert_in <haystack> <ERE> <label>   — herestring, never a pipeline
@@ -231,10 +277,6 @@ done
 # Measured — both carve-out windows came back EMPTY, which their non-empty
 # guards caught. A pattern that silently matched something ELSE would not have
 # been caught, which is why the anchors are index() comparisons.
-#
-# `### ` as a stop does not match a `#### ` heading (character 4 differs), which
-# is what lets the STALLED window span its own `####` subsection while stopping
-# at `### Stop path`; `## ` likewise matches only level-2 headings.
 raw_region() {
     awk -v s="$2" -v stop="$3" '
         !f && index($0, s) == 1 { f = 1; print; next }
@@ -243,8 +285,7 @@ raw_region() {
         f { print }' "$1"
 }
 # flat <text> — join wrapped lines, strip blockquote markers, squeeze runs, trim.
-# `[[:space:]]`, never `[ \t]`: BSD sed reads the latter as a literal-t class
-# and eats every t. Ends in `sed`/`tr`, which drain their input.
+# `[[:space:]]`, never `[ \t]`: BSD sed reads the latter as a literal-t class.
 flat() {
     sed -E 's/^[[:space:]]*(> ?)+//' <<<"$1" | tr '\n' ' ' | tr -s ' ' \
         | sed -E 's/^ +//; s/ +$//'
@@ -253,36 +294,82 @@ flat() {
 # be walked past by bolding the forbidden phrase.
 emph_strip() { tr -d '*_`' <<<"$1"; }
 
+# openers <text> — the first OPENER_WORDS words of each blank-line-delimited
+# block opener, joined by ` ~ `. Fenced blocks collapse to their opening fence.
+# WORDS, not characters: awk under LC_ALL=C counts BYTES while the canon was
+# generated counting CHARACTERS, and `§` is two bytes — measured, the two
+# disagreed on every line carrying one. Words also survive a re-wrap, which
+# changes where a line ENDS, not the words it starts with.
+# This is layer 2: an inserted paragraph changes the list whatever it says.
+openers() {
+    awk -v n="$OPENER_WORDS" '
+        function emit(  i, s) { s = ""
+                                for (i = 1; i <= n && i <= NF; i++) s = s (i > 1 ? " " : "") $i
+                                printf "%s%s", (c++ ? " ~ " : ""), s }
+        BEGIN { prev = 1 }
+        /^```/ { if (!fence) emit(); fence = !fence; prev = 0; next }
+        fence { next }
+        $0 == "" { prev = 1; next }
+        { if (prev) emit(); prev = 0 }' <<<"$1"
+}
+# bullet_openers <text> — same idea for top-level bullets, which an opener list
+# cannot see: bullets in one list are adjacent, so an inserted one adds no block.
+bullet_openers() {
+    awk -v n="$OPENER_WORDS" '
+        function emit(  i, s) { s = ""
+                                for (i = 1; i <= n && i <= NF; i++) s = s (i > 1 ? " " : "") $i
+                                printf "%s%s", (c++ ? " ~ " : ""), s }
+        /^```/ { fence = !fence; next }
+        !fence && /^- / { emit() }' <<<"$1"
+}
+# heading_list <text> — every heading line, joined. A third terminal state added
+# as a `###` subsection changes this while "exactly two states" still reads true.
+# `^#+ ` and not `^#`: a wrapped line beginning `#282 changed is only where …` is
+# not a heading, and an earlier canon baked exactly that in as one — caught by
+# markdownlint's MD018, which is the only reason it did not become the shape the
+# inventory defends.
+heading_list() {
+    awk '/^#+ / { printf "%s%s", (c++ ? " ~ " : ""), $0 }' <<<"$1"
+}
+
 # --- the canon ---------------------------------------------------------------
-# The decision surface, held HERE rather than derived from the file under test.
-# A quoted heredoc, so nothing expands and no quote needs escaping; key and text
-# are TAB-separated. This is the ONE place to edit when a decision is legitimately
-# reworded — see the cost note in the header.
+# The decision surface AND the structure, held HERE rather than derived from the
+# file under test. A quoted heredoc, so nothing expands and no quote needs
+# escaping; key and value are TAB-separated. This is the ONE place to edit when
+# §7 legitimately changes — see the cost note in the header.
 canon_table() {
     cat <<'CANON'
 opening	In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance** — every Ready item held by a §4 filter, and every open PR held by the discriminator below. Nothing this loop controls can change GitHub state before the next tick: no PRs it may merge, no agents working, and dependency holds only resolve when a dep closes — with nothing in flight, only external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone must never keep it alive.
 nonempty	**The held set must be non-empty.** Nothing held, nothing in flight and no open PR is COMPLETE, which fires first and needs no confirmation tick. "Nothing to advance" satisfied vacuously — by a queue that simply finished — must never announce STALLED.
-union	**"Every open PR this tick sees" is the union §2 resolves** — open PRs on in-flight branches, and open PRs on `blocked[]` issues. Both halves are load-bearing: a PR nobody enumerated cannot be held, and the second half is precisely the one #282's own state consists of.
+union	**"Every open PR this tick sees" is the union §2 resolves** — open PRs on in-flight branches, and open PRs on blocked issues. Both halves are load-bearing: a PR nobody enumerated cannot be held, and the second half is precisely the one #282's own state consists of. Their state comes from `sassy-dog:pr-shepherd`'s `poll-prs.sh`, which returns `mergeable`, `mergeStateStatus` and the check counts in one pass; the judgement below stays here, the way §4 keeps its intersection judgement while borrowing `gh pr view`.
+veto_identity	**That union is also the set COMPLETE's veto ranges over, and the identity is the invariant.** A PR that can veto COMPLETE but can never enter the held set gives Ready empty, in-flight zero and a held set that is empty — COMPLETE vetoed, STALLED forbidden, ticking forever. That is #282 exactly, one shape over, and it is what an unqualified "any open PR vetoes COMPLETE" reading produces the moment a Dependabot PR, a hand-opened PR or another session's PR is sitting there. So the veto is scoped to the PRs this loop tracks, never to every PR in the repo: a PR this loop did not open and does not track is not its business, which is the reading §3's "in-flight until actually MERGED" already implies. Widen one half without the other and the forever-tick comes back.
+ask	Ask it of every one of them, take the **first matching row**, and carry the answer per PR into the held set:
+rows_unreachable	**Rows 2 to 5 cannot fire at the moment STALLED is decided, and that is by construction rather than by accident.** STALLED's first conjunct is in-flight zero, which empties the branch half of the union — so every PR still enumerable carries `blocked`, and row 1 matches it first. This is the same shape as the self-resolving carve-out below, and it is stated for the same reason: a reader who works it out later will otherwise read rows 2 to 5 as live guarantees, or delete them as dead prose. They are neither. They classify held-versus-advanceable for the two OTHER consumers of this table — §6's `holds:` line, which renders on every tick including ticks with work in flight, and the safety rails' "an open PR this loop may still advance" — and they are what stops a later widening of §2's enumeration from silently answering "alive" for a shape nobody classified. Delete them and that widening becomes a silent #282; treat them as reachable today and the reasoning above them is wrong.
 default_row	**The last row is a default, not a catch-all to delete.** §2 holds a PR for more reasons than the rows above enumerate and will not stay exhaustive, and a table that silently answers "alive" for a shape it does not know re-creates #282 one shape at a time. Held is the right default *here* because it is the answer §2 already gives: a PR this loop may not merge is a PR it cannot advance. The two defaults are not mirror images — this one ends the loop and names the PR, the other one ticks forever and reports nothing.
 conflicting	**`CONFLICTING` needs its own row, above the checks rows, and the ordering is the point.** A conflicted PR stops CI firing at all, and `no checks reported` is indistinguishable from `CI hasn't started` — `sassy-dog:pr-shepherd` records exactly that. Without the row a conflicted PR matches "checks still running" and is answered with something that can never happen, so one long-lived conflicted PR would keep a genuinely stalled queue from ever confirming STALLED.
-unreadable	**A gate that could not be read is not a hold.** A PR whose checks or review outcome would not read this tick falls under this section's opening rule: live state was not verified, so the tick proves nothing — leave the loop alone and write no stall record.
+unreadable	**A gate that could not be read is not a hold**, and this is not in tension with "unknown is not clear" four paragraphs up — the two answer different questions. An unknown *state that was read* (a shape no row names) is held: the loop has no action for it. State that *could not be read at all* is not a fact about the PR, it is a failed tick, and it falls under this section's opening rule: live state was not verified, so the tick proves nothing — leave the loop alone and write no stall record.
 carve1	- **Self-resolving holds can never trip it.** Collision holds, migration-slot holds, and deps on in-flight issues all require in-flight > 0 — the in-flight = 0 conjunct excludes them by construction.
 carve2	- **A foreign claim is not a human gate.** An item skipped by the Claimed filter is another session's in-flight (`mine: false`) and resolves when that session merges, no human needed. A tick whose holds include an active foreign claim is idle, not stalled — keep looping.
 carves_survive	**Both carve-outs survive the new conjunct unchanged**, and PR rows weaken neither: a self-resolving hold still requires in-flight > 0, and another session's open PR is that session's in-flight, resolving when it merges — a foreign claim is not a human gate whether it presents as an issue row or as a PR row.
 confirm	**Confirm across two consecutive ticks before stopping** — a single stalled tick may be racing another session that is about to close a dependency, unblock an issue, or merge a PR. Ticks share no memory, so persist the observation next to the §5 batch manifest, in `.git/dispatch-ready-stall.json`: the held set — held issue numbers AND held PR numbers — with each one's hold root (the open `Depends on #N` it chains to, the `blocked` label, the decision gate, the Blocking finding a held PR carries).
+matches_exactly	**"Matches exactly" compares the identifiers and each one's hold ROOT, never the rendered sentence.** Two honest ticks word the same hold differently, and a comparison over free text never converges; a comparison over identifiers alone confirms a stall across two genuinely different states, since a PR whose gate changed between ticks is still the same number. A record written before this section grew PR rows carries issue numbers only: it cannot match a hold-set containing a PR, so it is discarded and rewritten, which costs one extra tick and never a false confirmation.
 record_src	**The record is written from the held set, never from `ready[]`**, which is what makes it reachable with Ready empty. Before #282 it was written only inside a branch that required Ready non-empty, so in the uncovered state the two-tick clock never started and there was nothing to confirm. A hold-set of nothing but PRs starts that clock exactly like any other.
 stoppath	Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one. A held set of nothing but PRs takes that same path: it is a terminal state like any other, and the cron self-cancel below is not optional on it.
 clockreset	Any tick that dispatches, merges, observes in-flight work, or sees an open PR it may still advance deletes a leftover `.git/dispatch-ready-stall.json`: progress resets the confirmation clock.
 complete_cond	Ready empty AND in-flight zero → announce loudly and take the stop path below immediately — an empty queue needs no confirmation tick:
-complete_note	**COMPLETE is unchanged, veto included**: an open PR still means the drain is not complete — in-flight until actually MERGED per §3, exactly as the safety rails below state it. What #282 changed is only where that veto leads. A PR this loop may not advance used to veto COMPLETE and reach no other state either; it now joins STALLED's held set.
-rails	Safety rails: self-cancel ONLY on a terminal state confirmed above. For COMPLETE, anything still claimed or an open PR (in-flight until actually MERGED, per §3) means the drain is not complete. For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may still make progress — stay alive. An API-failure tick never self-cancels and never counts toward stall confirmation. Ticks that fire between confirmation and cancellation are no-ops, not errors: each re-runs this section and retries.
-blocked_prs	- **Open PRs on `blocked[]` issues** → resolve these too, and hand them to nobody. `issue-claim.sh block` strips `in-progress`, so a blocked issue is not in-flight and the branch query above cannot see its PR at all; `gh issue view <N> --repo "$REPO" --json closedByPullRequestsReferences` names it (an OPEN entry only), the same lookup §4 already sanctions. This loop may not advance them, so they are never handed to `sassy-dog:pr-shepherd` — they are read so **§7 can see them**. A human-gated PR that nobody enumerated is not a smaller version of the §7 gap, it is a worse one: it leaves §7's held set empty, and an empty held set admits DRAIN COMPLETE, so the loop self-cancels with the PR still open (#282).
+complete_note	**COMPLETE is unchanged, veto included**: an open PR this loop tracks still means the drain is not complete — in-flight until actually MERGED per §3, exactly as the safety rails below state it. What #282 changed is only where that veto leads. A PR this loop may not advance used to veto COMPLETE and reach no other state either; it now joins STALLED's held set, and the veto ranges over exactly the set that held set is drawn from.
+rails	Safety rails: self-cancel ONLY on a terminal state confirmed above. For COMPLETE, anything still claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over the same set, or the state they disagree about ticks forever. For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may still make progress — stay alive. An API-failure tick never self-cancels and never counts toward stall confirmation. Ticks that fire between confirmation and cancellation are no-ops, not errors: each re-runs this section and retries.
+blocked_prs	- **Open PRs on blocked issues** → resolve these too, and hand them to nobody. **With `board:`** the blocked set is the board's cards carrying the `blocked` label; **without a board** it is `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in §4 — a bullet written for one path only is invisible on the other, and the half it omits is the half that goes dark. `issue-claim.sh block` strips `in-progress`, so a blocked issue is not in-flight and the branch query above cannot see its PR at all; `gh issue view <N> --repo "$REPO" --json closedByPullRequestsReferences` names it (an OPEN entry only), the same lookup §4 already sanctions. **Known limit — and it bites hardest exactly here:** that field sees only PRs carrying a closing keyword, and this population (a redispatch PR, one opened by hand) is the likeliest to lack one, so fall back to the `*/issue-N-*` branch and never read an empty result as "no PR" — an unenumerated PR is silent and terminal. **Bounded** like §4's sibling lookup: one call per blocked issue per tick, and the snapshot's own `--limit` bounds the set; if that cost ever bites under `/loop`, it degrades into "live state could not be verified", which is this fix's own failure mode wearing the bug's face. This loop may not advance these PRs, so they are never handed to `sassy-dog:pr-shepherd` — they are read so **§7 can see them**. A human-gated PR that nobody enumerated is not a smaller version of the §7 gap, it is a worse one: it leaves §7's held set empty, and an empty held set admits DRAIN COMPLETE, so the loop self-cancels with the PR still open (#282).
 row1	| Its issue carries `blocked` | **No** — §2 already routed it to a human | held: joins the held set |
 row2	| `CONFLICTING` | **No** — §2 never auto-rebases; a human resolves the conflict | held: joins the held set |
 row3	| Held by a §2 review outcome — a Blocking finding, a `NO REPORT`, or a held `SKIPPED` — with its ONE §2 redispatch spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set |
 row4	| Checks still running, and not `CONFLICTING` | **Yes** — a later tick merges it once it goes green | keeps the loop alive |
 row5	| Checks red, its issue not `blocked`, and its ONE §2 redispatch unspent | **Yes** — that redispatch is still available | keeps the loop alive |
 row6	| Anything else this loop is not permitted to merge this tick | **No** — held is the default | held: joins the held set |
+sec7_openers	## 7. Terminal states — drain ~ A drain loop ends itself in ~ ### DRAIN COMPLETE ~ Ready empty AND in-flight zero → ~ ```text ~ **COMPLETE is unchanged, veto included**: an ~ ### DRAIN STALLED ~ In-flight zero AND dispatched zero this ~ **The third conjunct is "nothing to ~ **Deleting that conjunct outright would have ~ **The held set must be non-empty.** ~ #### The discriminator — may this ~ **"Every open PR this tick sees" ~ **That union is also the set ~ Ask it of every one of ~ | Open PR this tick | ~ **Rows 2 to 5 cannot fire ~ **The last row is a default, ~ **`CONFLICTING` needs its own row, above ~ **The redispatch budget is the hinge ~ **Read the review outcome from the ~ **A gate that could not be ~ Two carve-outs keep the state precise: ~ - **Self-resolving holds can never trip ~ **Both carve-outs survive the new conjunct ~ **Confirm across two consecutive ticks before ~ **"Matches exactly" compares the identifiers and ~ **The record is written from the ~ - **No record, or the recorded ~ ```text ~ Then take the **same stop path ~ Any tick that dispatches, merges, observes ~ ### Stop path — both terminal ~ Stop the loop yourself, according to ~ | Mode | Recognize it by ~ **Cron self-cancel.** Find the loop's job ~ - **Exactly one match** → `CronDelete ~ Safety rails: self-cancel ONLY on a
+sec7_bullets	- **Self-resolving holds can never trip ~ - **A foreign claim is not ~ - **No record, or the recorded ~ - **Record matches this tick's hold-set ~ - **Exactly one match** → `CronDelete ~ - **Zero, multiple, or ambiguous matches**
+sec2_bullets	- **Open PRs from those branches** ~ - **Open PRs on blocked issues** ~ - **Failed or red PRs** → ~ - **Open PRs not yet reviewed, ~ - **A review dispatched that never ~ - **PRs carrying a Blocking review ~ - **`CONFLICTING` PRs** → never auto-rebase;
+sec7_headings	## 7. Terminal states — drain complete, drain stalled ~ ### DRAIN COMPLETE ~ ### DRAIN STALLED ~ #### The discriminator — may this loop advance it? ~ ### Stop path — both terminal states
 CANON
 }
 canon() { awk -F'\t' -v k="$1" '$1 == k { print $2 }' <<<"$(canon_table)"; }
@@ -290,17 +377,23 @@ canon() { awk -F'\t' -v k="$1" '$1 == k { print $2 }' <<<"$(canon_table)"; }
 # assert_canon <key> <start prefix> <stop prefix> <label>
 assert_canon() {
     local want got
+    note_consumed "$1"
     want="$(canon "$1")"
     got="$(flat "$(raw_region "$SKILL" "$2" "$3")")"
     if [ -z "$want" ]; then bad "$4 — no canonical text under key '$1'"; return; fi
     if [ -z "$got" ]; then bad "$4 — the paragraph did not resolve; its opening has moved"; return; fi
     if [ "$got" = "$want" ]; then ok "$4"; else bad "$4 — the text has moved"; fi
 }
+# assert_canon_value <key> <got> <label>
+assert_canon_value() {
+    local want
+    note_consumed "$1"
+    want="$(canon "$1")"
+    if [ -z "$want" ]; then bad "$3 — no canonical value under key '$1'"; return; fi
+    if [ "$2" = "$want" ]; then ok "$3"; else bad "$3 — the structure has moved"; fi
+}
 
 # --- windows, each proved non-empty AND bounded ------------------------------
-# A window that silently over-runs is the failure mode CLAUDE.md records twice:
-# an assertion labelled for one rule, answered by the text of another.
-
 sec2="$(raw_region "$SKILL" '## 2. Reconcile in-flight' '## 3. Compute capacity')"
 sec6="$(raw_region "$SKILL" '## 6. Tick report' '## 7. Terminal states')"
 sec7="$(raw_region "$SKILL" '## 7. Terminal states' '## Guardrails')"
@@ -336,7 +429,11 @@ opening_flat="$(flat "$opening_raw")"
 record_flat="$(flat "$record_raw")"
 announce_flat="$(flat "$announce_raw")"
 rails_flat="$(flat "$rails_raw")"
+carvelist_flat="$(flat "$carvelist_raw")"
 
+# Every window stops where it claims to. `sec7`, `announce_raw` and
+# `carvelist_raw` had only a non-empty check until a review measured renaming
+# `## Guardrails` making `sec7` run silently to EOF at exit 0.
 assert_absent "$complete_flat" 'In-flight zero AND dispatched zero' \
     "COMPLETE window stops before the STALLED gate"
 assert_absent "$gate_flat" 'May this loop advance it' \
@@ -355,15 +452,18 @@ assert_absent "$sec2_flat" 'Capacity =' \
     "section 2 window stops before section 3"
 assert_absent "$sec6_flat" 'DRAIN COMPLETE' \
     "section 6 window stops before section 7"
+assert_absent "$sec7_flat" 'Hard cap .max_in_flight' \
+    "section 7 window stops before the Guardrails list, whatever that heading is called"
+assert_absent "$announce_flat" 'same stop path as DRAIN COMPLETE' \
+    "announcement window stops at the closing fence"
+assert_absent "$carvelist_flat" 'Both carve-outs survive' \
+    "carve-out list window stops before the paragraph after it"
 assert_absent "$claim_block" 'ensure_label "\$READY_LABEL"' \
     "issue-claim.sh block window stops before the promote case"
 
 # --- 1. the third conjunct ---------------------------------------------------
 section conjunct "the STALLED gate is 'nothing to advance', not 'Ready non-empty'"
 
-# The whole opening sentence, by equality. A veto on one spelling was measured
-# defeated by `Ready **non-empty**`, and a presence check on the new conjunct is
-# satisfied by an opening carrying BOTH.
 assert_canon opening 'In-flight zero AND dispatched zero' '' \
     "STALLED's gate paragraph is unchanged (the three conjuncts, and only those)"
 assert_absent "$opening_flat" 'Ready non-empty' \
@@ -371,9 +471,6 @@ assert_absent "$opening_flat" 'Ready non-empty' \
 assert_absent "$opening_flat" 'Ready still' \
     "STALLED's gate has not re-acquired a Ready test under another wording"
 
-# The uncovered state, and the rejected fix. Both are rationale a "this reads
-# like history" sweep deletes — and deleting them is what lets the conjunct be
-# re-derived as the obvious one-word simplification.
 assert_in "$gate_flat" 'covered by NEITHER terminal state' \
     "the gate names the state that neither terminal state covered"
 assert_in "$gate_flat" 'COMPLETE is vetoed by the open PR, and STALLED could not fire on an empty queue' \
@@ -386,16 +483,22 @@ assert_in "$gate_flat" 'strips .ready. and .in-progress. together' \
     "the gate records that blocking an issue is what hid the state"
 
 # --- 2. the enumeration the held set depends on ------------------------------
-section enumeration "section 2 resolves open PRs on blocked issues, and section 7 consumes that union"
+section enumeration "section 2 resolves open PRs on blocked issues, on BOTH paths"
 
-assert_canon blocked_prs '- **Open PRs on `blocked[]` issues**' '- **Failed or red PRs**' \
+assert_canon blocked_prs '- **Open PRs on blocked issues**' '- **Failed or red PRs**' \
     "section 2's blocked-PR enumeration bullet is unchanged"
 assert_canon union '**"Every open PR this tick sees" is the union' '' \
     "the discriminator defines its input as that union"
-assert_wline "$sec2" '^- \*\*Open PRs on `blocked\[\]` issues\*\*' \
+assert_canon veto_identity "**That union is also the set COMPLETE's veto" '' \
+    "the veto and the held set are stated to range over the same set"
+assert_wline "$sec2" '^- \*\*Open PRs on blocked issues\*\*' \
     "the enumeration is a top-level bullet of section 2, not a footnote elsewhere"
 assert_has "$sec2_flat" 'closedByPullRequestsReferences' \
     "section 2 names the lookup that resolves a blocked issue's PR"
+assert_in "$sec2_flat" 'With .board:..+ the blocked set is the board.s cards carrying the .blocked. label' \
+    "the enumeration covers the board path, not the boardless one alone"
+assert_in "$sec2_flat" 'without a board..+ it is .blocked\[\]. from the snapshot' \
+    "the enumeration covers the boardless path too"
 assert_in "$sec2_flat" 'never handed to `sassy-dog:pr-shepherd`' \
     "an enumerated blocked PR is read, never handed to the merger"
 assert_in "$sec2_flat" 'admits DRAIN COMPLETE, so the loop self-cancels with the PR still open' \
@@ -404,21 +507,25 @@ assert_in "$sec2_flat" 'admits DRAIN COMPLETE, so the loop self-cancels with the
 # --- 3. the discriminator ----------------------------------------------------
 section discriminator "every row is pinned, classifies, and agrees with its own answer"
 
-assert_wline "$disc_raw" '^\| Open PR this tick \| May this loop advance it\? \| Effect \|$' \
+assert_wline "$disc_raw" '^[[:space:]]*\| Open PR this tick \| May this loop advance it\? \| Effect \|$' \
     "the discriminator table carries its header row"
+assert_canon ask 'Ask it of every one of them, take the **first matching row**' '' \
+    "the first-matching-row rule is unchanged"
 
+# Anchored `^[[:space:]]*\|`: a row indented by ONE SPACE renders identically,
+# passes markdownlint, and was measured slipping past a `^\|` filter.
 rows="$(awk '
     /^#### The discriminator/ { f = 1; next }
     f && /^Two carve-outs/ { exit }
-    f && /^\|/ && $0 !~ /^\| *-+ *\|/ && $0 !~ /^\| Open PR this tick \|/ { print }' "$SKILL")"
+    f && /^[[:space:]]*\|/ && $0 !~ /^[[:space:]]*\| *-+ *\|/ && $0 !~ /\| Open PR this tick \|/ { print }' "$SKILL")"
 
 n_canon_rows="$(grep -c '^row[0-9]' <<<"$(canon_table)")"
 n_rows=0; n_held=0; n_alive=0; n_unclassified=0; n_contradictory=0; n_moved=0
 while IFS= read -r row; do
     [ -n "$row" ] || continue
     n_rows=$((n_rows + 1))
-    want="$(canon "row$n_rows")"
-    [ "$(flat "$row")" = "$want" ] || n_moved=$((n_moved + 1))
+    note_consumed "row$n_rows"
+    [ "$(flat "$row")" = "$(canon "row$n_rows")" ] || n_moved=$((n_moved + 1))
     answer="$(cut -d'|' -f3 <<<"$row")"
     effect="$(cut -d'|' -f4 <<<"$row")"
     held=0; alive=0
@@ -435,9 +542,6 @@ while IFS= read -r row; do
     fi
 done <<<"$rows"
 
-# EQUALITY against the canon, in order. Accounting alone was measured accepting
-# a FIFTH row that licensed merging past a `blocked` issue: it classified
-# cleanly, so nothing counted it as wrong.
 assert_eq "$n_rows" "$n_canon_rows" \
     "the table holds exactly the rows the canon pins ($n_canon_rows)"
 assert_eq "$n_moved" 0 \
@@ -454,24 +558,24 @@ else
     bad "the discriminator has collapsed to one side (held $n_held, alive $n_alive)"
 fi
 
-# The rows the acceptance boxes name, asserted by shape as well as by canon: the
-# canon moves with a legitimate reword, these say what the row must still MEAN.
-assert_wline "$disc_raw" '^\| Its issue carries `blocked` \| \*\*No\*\*.*held: joins the held set \|$' \
+assert_wline "$disc_raw" '^[[:space:]]*\| Its issue carries `blocked` \| \*\*No\*\*.*held: joins the held set \|$' \
     "a blocked issue's open PR is HELD (acceptance 1)"
-assert_wline "$disc_raw" '^\| `CONFLICTING` \| \*\*No\*\*.*held: joins the held set \|$' \
+assert_wline "$disc_raw" '^[[:space:]]*\| `CONFLICTING` \| \*\*No\*\*.*held: joins the held set \|$' \
     "a CONFLICTING PR is HELD, and above the checks rows"
-assert_wline "$disc_raw" '^\| Checks still running.*\| \*\*Yes\*\*.*keeps the loop alive \|$' \
+assert_wline "$disc_raw" '^[[:space:]]*\| Checks still running.*\| \*\*Yes\*\*.*keeps the loop alive \|$' \
     "a PR whose checks are still running keeps the loop alive (acceptance 2)"
-assert_wline "$disc_raw" '^\| Checks red.*not `blocked`.*\| \*\*Yes\*\*.*keeps the loop alive \|$' \
+assert_wline "$disc_raw" '^[[:space:]]*\| Checks red.*not `blocked`.*\| \*\*Yes\*\*.*keeps the loop alive \|$' \
     "a red PR whose issue is not blocked keeps the loop alive (acceptance 3)"
-assert_wline "$disc_raw" '^\| Anything else this loop is not permitted to merge this tick \| \*\*No\*\*.*held: joins the held set \|$' \
+assert_wline "$disc_raw" '^[[:space:]]*\| Anything else this loop is not permitted to merge this tick \| \*\*No\*\*.*held: joins the held set \|$' \
     "the table ends in a default, and the default is held"
 
 assert_canon default_row '**The last row is a default, not a catch-all' '' \
     "the default row's rationale is unchanged"
 assert_canon conflicting '**`CONFLICTING` needs its own row' '' \
     "the CONFLICTING ordering rationale is unchanged"
-assert_canon unreadable '**A gate that could not be read is not a hold.**' '' \
+assert_canon rows_unreachable '**Rows 2 to 5 cannot fire at the moment' '' \
+    "the statement that rows 2 to 5 cannot fire at STALLED time is unchanged"
+assert_canon unreadable '**A gate that could not be read is not a hold**' '' \
     "an unreadable gate is an unverified tick, not a hold"
 
 assert_in "$disc_flat" 'redispatch budget is the hinge on both failure rows' \
@@ -486,6 +590,8 @@ assert_in "$disc_flat" 'No such comment means the budget is unspent' \
     "the discriminator gives the budget's default reading"
 assert_in "$disc_flat" 'Read the review outcome from the PR body' \
     "the discriminator reads the review outcome from the PR body, as section 2 does"
+assert_in "$disc_flat" 'poll-prs.sh' \
+    "the discriminator names where a PR's state comes from"
 
 # --- 4. the held set must be non-empty ---------------------------------------
 section nonempty "'nothing to advance' cannot be satisfied vacuously"
@@ -515,7 +621,7 @@ assert_canon carves_survive '**Both carve-outs survive the new conjunct unchange
 n_carve="$(grep -c '^- ' <<<"$carvelist_raw")"
 assert_eq "$n_carve" 2 \
     "the carve-out list holds exactly two bullets — a third would weaken them unseen"
-assert_in "$(flat "$carvelist_raw")" 'Two carve-outs keep the state precise' \
+assert_in "$carvelist_flat" 'Two carve-outs keep the state precise' \
     "the carve-out list still introduces itself as two"
 
 # --- 6. COMPLETE is unchanged, veto included ---------------------------------
@@ -530,17 +636,24 @@ assert_canon rails 'Safety rails: self-cancel ONLY on a terminal state' '' \
 assert_wline "$complete_raw" '^DRAIN COMPLETE — Ready is empty and nothing is in flight\.$' \
     "COMPLETE's verbatim announcement is unchanged"
 assert_has "$rails_flat" \
-    'anything still claimed or an open PR (in-flight until actually MERGED, per §3) means the drain is not complete.' \
-    "the safety rail still vetoes COMPLETE on an open PR"
+    'anything still claimed or an open PR this loop tracks' \
+    "the safety rail still vetoes COMPLETE on an open PR this loop tracks"
+assert_has "$rails_flat" \
+    'the veto and the held set must range over the same set' \
+    "the rails carry the one-set invariant"
 assert_has "$rails_flat" \
     'an open PR this loop may still advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may still make progress — stay alive.' \
     "the rails' STALLED clause still ENDS in stay-alive, with all three conditions inside it"
+assert_in "$complete_flat" 'an open PR this loop tracks still means the drain is not complete' \
+    "COMPLETE's note keeps the veto, scoped to the tracked set"
 
 # --- 7. the record is written from the held set ------------------------------
 section record "the two-tick clock is reachable, and still two ticks"
 
 assert_canon confirm '**Confirm across two consecutive ticks before stopping**' '' \
     "the two-tick confirmation paragraph is unchanged"
+assert_canon matches_exactly '**"Matches exactly" compares the identifiers' '' \
+    "what the hold-set comparison compares is unchanged"
 assert_canon record_src '**The record is written from the held set' '' \
     "the record's source paragraph is unchanged"
 assert_canon clockreset 'Any tick that dispatches, merges, observes in-flight work' '' \
@@ -552,23 +665,39 @@ assert_wline "$record_raw" '^  `stall: suspected — nothing in flight and nothi
 assert_in "$record_flat" 'PR rows alongside issue rows, each naming the PR and the gate holding it' \
     "the confirmed announcement names each held PR and its gate"
 
-# --- 8. one stop path, two terminal states -----------------------------------
-section stoppath "still two terminal states, still one stop path, and the tick report shows held PRs"
+# --- 8. structure: two terminal states, one stop path, and the inventories ----
+section stoppath "the shape of section 7 is itself canonical"
 
 assert_canon stoppath 'Then take the **same stop path as DRAIN COMPLETE**' '' \
     "the stop-path paragraph is unchanged"
 assert_in "$sec7_flat" 'A drain loop ends itself in exactly two states' \
     "#282 adds coverage, not a third terminal state"
+
+# LAYER 2. An inserted paragraph writes #282's bug back four lines under the
+# canon forbidding it and every equality check still passes — measured. These
+# three lists are what make insertion, deletion and reordering visible.
+assert_canon_value sec7_openers "$(openers "$sec7")" \
+    "section 7's paragraph inventory is unchanged — no paragraph inserted, dropped or moved"
+assert_canon_value sec7_bullets "$(bullet_openers "$sec7")" \
+    "section 7's bullet inventory is unchanged — bullets are adjacent, so an opener list cannot see them"
+assert_canon_value sec2_bullets "$(bullet_openers "$sec2")" \
+    "section 2's bullet inventory is unchanged"
+assert_canon_value sec7_headings "$(heading_list "$sec7")" \
+    "section 7's headings are unchanged — a third terminal state would be a new one"
+
+# Example identifiers by SHAPE: renumbering a worked example changes no decision.
 assert_wline "$announce_raw" '^DRAIN STALLED — nothing dispatchable, nothing in flight, and nothing this loop may advance:$' \
     "the STALLED announcement's headline covers a PR-only held set"
-assert_wline "$announce_raw" '^  PR #279 \(#273\) → open, issue blocked \(3 Blocking review findings, redispatch spent\)$' \
+assert_wline "$announce_raw" '^  PR #[0-9]+ \(#[0-9]+\) → open, issue blocked \(.*redispatch spent\)$' \
     "the announcement carries a PR row naming the PR and its gate (acceptance 1)"
 assert_absent "$announce_flat" 'all Ready items gate on human action' \
     "the announcement no longer asserts Ready holds the held set"
-assert_wline "$sec6" '^holds:.*· PR #1699 \(open, #1698 blocked\)$' \
+assert_wline "$sec6" '^holds:.*· PR #[0-9]+ \(open, #[0-9]+ blocked\)$' \
     "the tick report's holds line carries held PRs, not issues alone"
 assert_in "$sec6_flat" 'carries \*\*held PRs alongside held issues\*\*' \
     "section 6 states that held PRs render on the holds line"
+assert_in "$sec6_flat" 'drawn from §2.s enumeration' \
+    "section 6 sources held PRs from section 2, which runs on every tick"
 
 # --- 9. the premise -----------------------------------------------------------
 section premise "block strips BOTH labels, which is what makes the whole account true"
@@ -580,15 +709,24 @@ assert_has "$claim_block" '--remove-label "$INPROG_LABEL"' \
 assert_has "$claim_block" '--add-label "$BLOCKED_LABEL"' \
     "issue-claim.sh block adds blocked"
 
-# --- the registry and the floor ----------------------------------------------
+# --- the registry, the consumption check, and the floor ----------------------
 _close_section
 cur_sec=""
 
-n_section_calls="$(grep -c '^section ' "$SELF_ABS")"
-assert_eq "$n_section_calls" "${#SECTIONS[@]}" \
-    "every declared section has exactly one call site (${#SECTIONS[@]} declared)"
+# LAYER 3. Every canonical entry must be consumed by exactly one assertion, so
+# deleting an assertion block fails even if its section registration goes with
+# it — its canon entries go unconsumed.
+canon_keys="$(awk -F'\t' 'NF { print $1 }' <<<"$(canon_table)" | sort)"
+used_all="$(tr ' ' '\n' <<<"$consumed" | sed '/^$/d' | sort)"
+used_uniq="$(tr ' ' '\n' <<<"$consumed" | sed '/^$/d' | sort -u)"
+assert_eq "$used_all" "$used_uniq" \
+    "every canonical entry is consumed at most once"
+assert_eq "$used_uniq" "$canon_keys" \
+    "every canonical entry is consumed by an assertion"
 
-for want in "${SECTIONS[@]}"; do
+for entry in "${SECTIONS[@]}"; do
+    want="${entry%%:*}"
+    min="${entry##*:}"
     found=0
     count=0
     i=0
@@ -601,18 +739,16 @@ for want in "${SECTIONS[@]}"; do
     done
     if [ "$found" -eq 0 ]; then
         bad "declared section '$want' never ran — its block has been deleted"
-    elif [ "$count" -lt "$SECTION_FLOOR" ]; then
-        bad "section '$want' ran only $count assertions (floor $SECTION_FLOOR) — it is no longer measuring anything"
+    elif [ "$count" -lt "$min" ]; then
+        bad "section '$want' ran $count assertions, below its declared $min — it has been trimmed"
     else
-        ok "section '$want' ran $count assertions"
+        ok "section '$want' ran $count assertions (declared $min)"
     fi
 done
 
-# A coarse backstop underneath the registry, not the primary guard — a bare
-# floor was measured NOT binding (34 of 80 assertions deleted, still green),
-# which is why the registry above exists.
+# Derived from the per-section minimums above, never transcribed.
 if [ "$asserts" -lt "$ASSERT_FLOOR" ]; then
-    echo "test-drain-terminal-states: only $asserts assertions ran (floor $ASSERT_FLOOR) — a window or a block is silently matching nothing" >&2
+    echo "test-drain-terminal-states: only $asserts assertions ran (derived floor $ASSERT_FLOOR) — a window or a block is silently matching nothing" >&2
     exit 1
 fi
 

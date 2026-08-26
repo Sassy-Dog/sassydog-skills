@@ -108,14 +108,24 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   **Keep the issue → open-PR mapping this step produces** — §4's Collision
   filter reads those PRs' actual changed files, and re-deriving the mapping there costs a second
   round of lookups.
-- **Open PRs on `blocked[]` issues** → resolve these too, and hand them to nobody.
-  `issue-claim.sh block` strips `in-progress`, so a blocked issue is not in-flight and the branch
-  query above cannot see its PR at all; `gh issue view <N> --repo "$REPO" --json
-  closedByPullRequestsReferences` names it (an OPEN entry only), the same lookup §4 already
-  sanctions. This loop may not advance them, so they are never handed to `sassy-dog:pr-shepherd`
-  — they are read so **§7 can see them**. A human-gated PR that nobody enumerated is not a smaller
-  version of the §7 gap, it is a worse one: it leaves §7's held set empty, and an empty held set
-  admits DRAIN COMPLETE, so the loop self-cancels with the PR still open (#282).
+- **Open PRs on blocked issues** → resolve these too, and hand them to nobody. **With `board:`**
+  the blocked set is the board's cards carrying the `blocked` label; **without a board** it is
+  `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in
+  §4 — a bullet written for one path only is invisible on the other, and the half it omits is the
+  half that goes dark. `issue-claim.sh block` strips `in-progress`, so a blocked issue is not
+  in-flight and the branch query above cannot see its PR at all;
+  `gh issue view <N> --repo "$REPO" --json closedByPullRequestsReferences` names it (an OPEN entry
+  only), the same lookup §4 already sanctions. **Known limit — and it bites hardest exactly here:**
+  that field sees only PRs carrying a closing keyword, and this population (a redispatch PR, one
+  opened by hand) is the likeliest to lack one, so fall back to the `*/issue-N-*` branch and never
+  read an empty result as "no PR" — an unenumerated PR is silent and terminal. **Bounded** like
+  §4's sibling lookup: one call per blocked issue per tick, and the snapshot's own `--limit` bounds
+  the set; if that cost ever bites under `/loop`, it degrades into "live state could not be
+  verified", which is this fix's own failure mode wearing the bug's face. This loop may not advance
+  these PRs, so they are never handed to `sassy-dog:pr-shepherd` — they are read so **§7 can see
+  them**. A human-gated PR that nobody enumerated is not a smaller version of the §7 gap, it is a
+  worse one: it leaves §7's held set empty, and an empty held set admits DRAIN COMPLETE, so the
+  loop self-cancels with the PR still open (#282).
 - **Failed or red PRs** → surface in the tick report with the failing check named, and comment
   `dispatch-ready: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the
   failure context appended is allowed on a later tick. A second failure demotes to blocked — via
@@ -370,9 +380,10 @@ Plus one line per failure with its next action. Drop the `unannotated` line on t
 nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the `review:` line on
 ticks with no review outcome to report — but never drop a Blocking finding or a
 `review: SKIPPED` from it, nor a `review: NO REPORT`, which are outcomes, not noise. The
-`holds:` line carries **held PRs alongside held issues**, in the same reason-per-item shape — a PR
-§7's discriminator holds is what stops the tick completing, so it is visible on the tick that
-observed it rather than only in a STALLED announcement two ticks later. The
+`holds:` line carries **held PRs alongside held issues**, in the same reason-per-item shape, drawn
+from §2's enumeration and classified by §7's table — from §2 rather than from §7 because §7 does
+not run on a tick with work in flight, and a held PR is worth seeing on every tick, not only on the
+one that ends the loop. The
 `collision sources:` line renders whenever anything is in flight and names every in-flight issue's
 source, since a `pr` source is
 what proves the filter saw real files; drop it only on a tick with nothing in flight, and never
@@ -396,10 +407,11 @@ empty queue needs no confirmation tick:
 DRAIN COMPLETE — Ready is empty and nothing is in flight.
 ```
 
-**COMPLETE is unchanged, veto included**: an open PR still means the drain is not complete —
-in-flight until actually MERGED per §3, exactly as the safety rails below state it. What #282
-changed is only where that veto leads. A PR this loop may not advance used to veto COMPLETE and
-reach no other state either; it now joins STALLED's held set.
+**COMPLETE is unchanged, veto included**: an open PR this loop tracks still means the drain is not
+complete — in-flight until actually MERGED per §3, exactly as the safety rails below state it.
+What #282 changed is only where that veto leads. A PR this loop may not advance used to veto COMPLETE
+and reach no other state either; it now joins STALLED's held set, and the veto ranges over exactly
+the set that held set is drawn from.
 
 ### DRAIN STALLED
 
@@ -431,8 +443,20 @@ queue that simply finished — must never announce STALLED.
 #### The discriminator — may this loop advance it?
 
 **"Every open PR this tick sees" is the union §2 resolves** — open PRs on in-flight branches, and
-open PRs on `blocked[]` issues. Both halves are load-bearing: a PR nobody enumerated cannot be
-held, and the second half is precisely the one #282's own state consists of.
+open PRs on blocked issues. Both halves are load-bearing: a PR nobody enumerated cannot be held,
+and the second half is precisely the one #282's own state consists of. Their state comes from
+`sassy-dog:pr-shepherd`'s `poll-prs.sh`, which returns `mergeable`, `mergeStateStatus` and the
+check counts in one pass; the judgement below stays here, the way §4 keeps its intersection
+judgement while borrowing `gh pr view`.
+
+**That union is also the set COMPLETE's veto ranges over, and the identity is the invariant.** A PR
+that can veto COMPLETE but can never enter the held set gives Ready empty, in-flight zero and a
+held set that is empty — COMPLETE vetoed, STALLED forbidden, ticking forever. That is #282 exactly,
+one shape over, and it is what an unqualified "any open PR vetoes COMPLETE" reading produces the
+moment a Dependabot PR, a hand-opened PR or another session's PR is sitting there. So the veto is
+scoped to the PRs this loop tracks, never to every PR in the repo: a PR this loop did not open and
+does not track is not its business, which is the reading §3's "in-flight until actually MERGED"
+already implies. Widen one half without the other and the forever-tick comes back.
 
 Ask it of every one of them, take the **first matching row**, and carry the answer per PR into the
 held set:
@@ -445,6 +469,18 @@ held set:
 | Checks still running, and not `CONFLICTING` | **Yes** — a later tick merges it once it goes green | keeps the loop alive |
 | Checks red, its issue not `blocked`, and its ONE §2 redispatch unspent | **Yes** — that redispatch is still available | keeps the loop alive |
 | Anything else this loop is not permitted to merge this tick | **No** — held is the default | held: joins the held set |
+
+**Rows 2 to 5 cannot fire at the moment STALLED is decided, and that is by construction rather
+than by accident.** STALLED's first conjunct is in-flight zero, which empties the branch half of
+the union — so every PR still enumerable carries `blocked`, and row 1 matches it first. This is the
+same shape as the self-resolving carve-out below, and it is stated for the same reason: a reader
+who works it out later will otherwise read rows 2 to 5 as live guarantees, or delete them as dead
+prose. They are neither. They classify held-versus-advanceable for the two OTHER consumers of this
+table — §6's `holds:` line, which renders on every tick including ticks with work in flight, and
+the safety rails' "an open PR this loop may still advance" — and they are what stops a later
+widening of §2's enumeration from silently answering "alive" for a shape nobody classified. Delete
+them and that widening becomes a silent #282; treat them as reachable today and the reasoning above
+them is wrong.
 
 **The last row is a default, not a catch-all to delete.** §2 holds a PR for more reasons than the
 rows above enumerate and will not stay exhaustive, and a table that silently answers "alive" for a
@@ -476,9 +512,12 @@ not from the PR**: §2 spends it by commenting `dispatch-ready: attempt 1 failed
 issue, so that comment is the record of whether it is spent, and a tick that never reads it cannot
 answer either failure row. No such comment means the budget is unspent.
 
-**A gate that could not be read is not a hold.** A PR whose checks or review outcome would not read
-this tick falls under this section's opening rule: live state was not verified, so the tick proves
-nothing — leave the loop alone and write no stall record.
+**A gate that could not be read is not a hold**, and this is not in tension with "unknown is not
+clear" four paragraphs up — the two answer different questions. An unknown *state that was read*
+(a shape no row names) is held: the loop has no action for it. State that *could not be read at
+all* is not a fact about the PR, it is a failed tick, and it falls under this section's opening
+rule: live state was not verified, so the tick proves nothing — leave the loop alone and write no
+stall record.
 
 Two carve-outs keep the state precise:
 
@@ -500,6 +539,13 @@ no memory, so persist the observation next to the §5 batch manifest, in
 `.git/dispatch-ready-stall.json`: the held set — held issue numbers AND held PR numbers — with each
 one's hold root (the open `Depends on #N` it chains to, the `blocked` label, the decision gate, the
 Blocking finding a held PR carries).
+
+**"Matches exactly" compares the identifiers and each one's hold ROOT, never the rendered
+sentence.** Two honest ticks word the same hold differently, and a comparison over free text never
+converges; a comparison over identifiers alone confirms a stall across two genuinely different
+states, since a PR whose gate changed between ticks is still the same number. A record written
+before this section grew PR rows carries issue numbers only: it cannot match a hold-set containing
+a PR, so it is discarded and rewritten, which costs one extra tick and never a false confirmation.
 
 **The record is written from the held set, never from `ready[]`**, which is what makes it reachable
 with Ready empty. Before #282 it was written only inside a branch that required Ready non-empty, so
@@ -549,7 +595,9 @@ prompt is this dispatch-ready invocation.
   worse than a few extra no-op ticks.
 
 Safety rails: self-cancel ONLY on a terminal state confirmed above. For COMPLETE, anything still
-claimed or an open PR (in-flight until actually MERGED, per §3) means the drain is not complete.
+claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until
+actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over
+the same set, or the state they disagree about ticks forever.
 For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still
 advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may
 still make progress — stay alive. An API-failure tick never self-cancels and never counts toward
