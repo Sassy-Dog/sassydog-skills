@@ -322,7 +322,9 @@ Exit `10` is a skip (no `python3`, no checkout to point `--tree` at), not a pass
 Say so in the report rather than recording a clean run.
 
 **With `board:`** — move qualifying cards to **Ready** per `sassy-dog:github-issues`
-(`references/board-graphql.md`), using the board IDs from config.
+(`references/board-graphql.md`), using the board IDs from config. Note this path never calls
+`issue-claim.sh promote`, so it does **not** clear the residual claim assignee described below: a
+board-configured repo accrues the same residue and nothing here removes it (issue #281).
 
 **Without a board** — label qualifying issues `ready` via `sassy-dog:github-issues`, which
 owns the label taxonomy and ensure-creates before use:
@@ -330,6 +332,15 @@ owns the label taxonomy and ensure-creates before use:
 ```bash
 issue-claim.sh promote N1 N2
 ```
+
+`promote` also clears a **residual claim assignee**, and only the one shape that is residue by
+construction: assigned to exactly `@me` with **no** `in-progress` label. A reopened issue keeps the
+assignee its last claim wrote, and `dispatch-ready` §4 then skips it as already claimed — false,
+silent, and it never dispatches (issue #281). Any other assignee is **reported and left alone**: a
+different login is a human who took it, and `@me` *with* `in-progress` is live in-flight work.
+One limit worth knowing rather than rediscovering: `@me` is the *operator's* login rather than a
+loop identity, so an issue the operator assigned to themselves without setting `in-progress`
+matches the residue shape too (issue #287). The board path has its own note above.
 
 Demotion is the reverse and **requires the reason**: `issue-claim.sh demote N --comment "<why>"`.
 Never a silent strip.
