@@ -83,12 +83,10 @@ every invocation is noise. If declined, carry on and don't raise it again.
 Find work this loop already started.
 
 **With `board:`** — the board snapshot is the source of truth: cards in **In progress** / **In
-review** with assignee @me **and not carrying `blocked`** are in-flight. That exclusion is
-load-bearing, and it is the one place the two paths differ in mechanism rather than in wording:
-`issue-claim.sh block` writes labels and never moves a card, so without it a demoted issue stays
-in-flight on a board repo permanently — in-flight never reaches zero, STALLED's first conjunct is
-never satisfied, and #282's forever-tick survives the whole fix on exactly the repos §2 claims to
-cover. `board-snapshot.sh` returns `labels` per item, so the data is already there.
+review** with assignee @me **and not carrying `blocked`**, per §3's definition, are in-flight.
+`board-snapshot.sh` returns `labels` per item, so the exclusion is computable here; where it is
+not — a snapshot with no labels — treat the issue as blocked rather than as in-flight, since
+failing the other way fails open into the bug the exclusion exists to prevent.
 
 **Without a board** — live issue state is the source of truth. Snapshot the queue via
 `sassy-dog:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]`,
@@ -186,7 +184,13 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
 ## 3. Compute capacity
 
 In-flight is the set of issues claimed by this loop — assignee @me plus board status or the
-`in-progress` label. **Capacity = `max_in_flight` − in-flight.**
+`in-progress` label — **and not carrying `blocked`**. That last clause is stated here because this
+is the file's only "in-flight is" sentence, and §2's board path, §4's filters and §7's first
+conjunct all read it: `issue-claim.sh block` writes labels and never moves a card, so without it a
+demoted issue stays in-flight on a board repo permanently and neither terminal state can ever fire.
+Do NOT resolve the resulting asymmetry with §4's Claimed filter by aligning the two — §4 skips on a
+disjunction on purpose, and `issue-claim.sh` documents why. **Capacity = `max_in_flight` −
+in-flight.**
 
 A green PR sitting in the merge queue still counts as in-flight until it is actually MERGED.
 Compute capacity from post-reconcile live state and accept that a queue-pending slot frees up next
@@ -207,7 +211,7 @@ Filter, in order:
 | Claimed | Skip if assignee set, or status ≠ Ready / `in-progress` label present — another session got it |
 | Blocked | Skip the `blocked` label |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges. **Exempt: members of a stack this tick is dispatching** (below). |
-| Collision | Skip if the issue's `touches:` set intersects any **in-flight** issue's **effective file set** — same repo-relative path, or a glob on one side matching a path on the other. The effective set is the in-flight issue's open PR's *actual changed files* where it has a PR, and its declared `touches:` where it does not (next section). Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
+| Collision | Skip if the issue's `touches:` set intersects the **effective file set** of anything §2 resolved a PR for — in-flight issues **and blocked issues with an open PR** — same repo-relative path, or a glob on one side matching a path on the other. The effective set is the in-flight issue's open PR's *actual changed files* where it has a PR, and its declared `touches:` where it does not (next section). Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
 
 ### Collision — an in-flight PR's real files beat the declaration
 
@@ -223,8 +227,14 @@ neither is knowable when the touch-set is written:
 - **CI wiring** (`scripts/preflight.sh` and the tests it gates) — grooming often does not yet know
   a test will be needed.
 
-So for an in-flight issue that **already has an open PR**, intersect against what that PR actually
-changed rather than against what its issue predicted:
+**A blocked issue's open PR counts here even though it is not in-flight.** §3 excludes it from
+in-flight so the terminal states can be reached; that exclusion must not also remove its files from
+this filter, or the loop dispatches a Ready issue straight into a still-open human-gated PR — the
+class §4's own 2026-08-24 incident records. §2 resolved that PR one bullet above; reuse it. The
+same applies to the migration slot below: a blocked migration PR still holds it.
+
+So for an issue that **already has an open PR**, in-flight or blocked, intersect against what that
+PR actually changed rather than against what its issue predicted:
 
 ```bash
 gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path'
@@ -418,14 +428,18 @@ the loop alone, write no stall record, and let the next tick re-check.
 
 Ready empty AND in-flight zero AND nothing still claimed AND **no open PR this loop tracks** →
 announce loudly and take the stop path below immediately — an empty queue needs no confirmation
-tick. "Nothing still claimed" is not implied by in-flight zero: in-flight counts `mine: true` only,
-so a foreign claim clears it while the rails below still veto:
+tick. **"Nothing still claimed" means no in-flight issue per §3 and no active FOREIGN claim** — an
+item §4's Claimed filter skipped because another session holds it. It is not implied by in-flight
+zero, which counts `mine: true` only. It deliberately does NOT mean "no assignee anywhere":
+`issue-claim.sh block` leaves the assignee on purpose and only `promote` clears it, so a blocked
+issue's leftover assignee is residue rather than a claim — reading it as one would make COMPLETE
+unreachable on any repo that has ever blocked an issue, which is this bug wearing the other face:
 
 ```text
 DRAIN COMPLETE — Ready is empty and nothing is in flight.
 ```
 
-**COMPLETE is unchanged, veto included** — the third conjunct above IS the veto, stated where the
+**COMPLETE is unchanged, veto included** — the fourth conjunct above IS the veto, stated where the
 instruction is rather than three paragraphs below it. An open PR this loop tracks still means the
 drain is not complete, in-flight until actually MERGED per §3, exactly as the safety rails restate
 it. A veto a reader reaches only after "announce loudly and take the stop path immediately" is the
@@ -564,9 +578,12 @@ stall record.
 
 Two carve-outs keep the state precise:
 
-- **Self-resolving holds can never trip it.** Collision holds, migration-slot holds, and deps on
-  in-flight issues all require in-flight > 0 — the in-flight = 0 conjunct excludes them by
-  construction.
+- **Self-resolving holds can never trip it — but a hold against a BLOCKED PR is not one.** A
+  collision or migration hold against in-flight work resolves when that work merges, and requires
+  in-flight > 0, so the in-flight = 0 conjunct excludes it by construction. Since §4 now
+  intersects against blocked issues' open PRs too, the same filters can also hold on a PR no one
+  may advance: that hold survives in-flight = 0, and it is a human gate like any other, so it
+  belongs in the held set rather than keeping the loop alive.
 - **A foreign claim is not a human gate.** An item skipped by the Claimed filter is another
   session's in-flight (`mine: false`) and resolves when that session merges, no human needed. A
   tick whose holds include an active foreign claim is idle, not stalled — keep looping.
