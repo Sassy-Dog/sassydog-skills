@@ -664,51 +664,50 @@
 #      table that silently answers "alive" for a shape it does not know
 #      re-creates #282 one shape at a time; `CONFLICTING` is the measured case,
 #      stopping CI from firing at all so that `no checks reported` reads exactly
-#      like `CI hasn't started`. Rows 2-5 cannot fire at the moment STALLED is
+#      like `CI hasn't started`. Rows 2-6 cannot fire at the moment STALLED is
 #      decided — in-flight zero empties the branch half of the union — and §7
 #      SAYS so, because a reader who works it out will otherwise trust them as
 #      live or delete them as dead.
 #      HOW IT IS BOUND, IN THREE LAYERS, each added after a review defeated the
-#      one before it. Presence-only assertions were measured passing
-#      meaning-inverting rewrites that KEPT the sentence and QUALIFIED it
-#      (including the bug written back as `Ready **non-empty**`, invisible to a
-#      plain flatten). Whole-paragraph equality against canonical literals fixed
-#      that and was itself defeated by INSERTING A SIBLING PARAGRAPH beside a
-#      pinned one — equality bounds the paragraph it holds and says nothing
-#      about the one next to it. So: (1) CANON, decision paragraphs compared for
-#      equality after flattening, bounding rewording; (2) INVENTORY, the ordered
-#      list of paragraph openers, bullet openers, TABLE ROWS and headings,
-#      itself canonical, bounding insertion, deletion and reordering; (3)
-#      CONSUMPTION, every canon key consumed by exactly one assertion, so
+#      one before it, and layer 1 now covers §7 WHOLE. Presence-only assertions
+#      were measured passing meaning-inverting rewrites that KEPT the sentence
+#      and QUALIFIED it. Whole-paragraph equality fixed that and was defeated by
+#      INSERTING A SIBLING PARAGRAPH beside a pinned one. Pinning a hand-picked
+#      subset of paragraphs was then defeated FIVE rounds running, each time by
+#      a paragraph no key held that inverted one a key did — including the
+#      API-failure rule that a pinned paragraph merely DELEGATES to. So: (1)
+#      CANON, every blank-line block of §7 (fences excluded) compared for
+#      equality after flattening, so a bullet body and a table cell are as
+#      pinned as a paragraph; (2) INVENTORY, the ordered lists of block openers,
+#      list markers, table rows and headings for §7 AND for §2 and §6, bounding
+#      insertion, deletion and reordering — its own first edition missed a
+#      two-space nested bullet, a row appended to the stop-path table, a
+#      paragraph glued to a closing fence and a line glued under a heading, all
+#      four measured writing #282's bug back at exit 0 and all four covered now;
+#      (3) CONSUMPTION, every canon key consumed by exactly one assertion, so
 #      deleting an assertion block fails even when its section registration goes
-#      with it. Layer 2's reach is stated as MEASURED, not as intended: its first
-#      edition missed a two-space nested bullet, a row appended to §7's
-#      stop-path table, and a paragraph glued to a closing fence — all three
-#      wrote #282's bug back at exit 0, and all three are covered now. The canon
-#      also holds the BRANCH BULLETS an agent executes, not only the rationale
-#      paragraphs, after a review deleted the two-tick clock by rewriting one
-#      while the paragraph mandating it stayed pinned. The claim is
-#      "identical after flattening", NOT "byte-identical" — a re-wrap passes, a
-#      reword does not — and the inventory keeps each opener's first words only.
-#      Must-not-exist checks run against a flattened AND an emphasis-stripped
-#      copy; every line-scoped check runs against a resolved window, never
-#      file-wide; table-row patterns are anchored `^[[:space:]]*\|`, because a
-#      row indented by ONE SPACE renders identically, passes markdownlint and
-#      was measured slipping past `^\|` while licensing a merge past a
-#      `blocked` issue. Example identifiers are matched by SHAPE, so renumbering
-#      a worked example cannot redden a gate that decides nothing by it.
+#      with it. The claim is "identical after flattening", NOT "byte-identical" —
+#      a re-wrap passes, a reword does not — and the inventory keeps each
+#      opener's first words only. Must-not-exist checks run against a flattened
+#      AND an emphasis-stripped copy; every line-scoped check runs against a
+#      resolved window; table-row patterns are anchored `^[[:space:]]*\|`,
+#      because a row indented by ONE SPACE renders identically and passed `^\|`.
+#      Example identifiers are matched by SHAPE.
 #      ITS VACUITY FLOOR IS A SECTION REGISTRY WITH PER-SECTION MINIMUMS —
-#      `name:count`, members enumerated beside their counts, with the floor
-#      DERIVED as their sum — because a bare number was measured not binding
-#      three times over: two whole blocks deleted, and a prologue of window
-#      checks that ran with no section open at all, so no minimum covered them.
-#      The prologue and the registry block are declared members now. FOUR known
-#      limits are stated in its header rather than patched, and that enumeration
-#      and this one must agree: an APPENDED SENTENCE to a paragraph no canon key
-#      holds; the three coordinated deletions (block, registry entry, canon
-#      entries) needed to remove a section quietly; inventory keys regenerated
-#      by hand; and the registry block's own removal, which the derived floor
-#      catches but no layer beneath it can. THE PREMISE IS ASSERTED, NOT ASSUMED:
+#      `name:count`, members enumerated beside their counts, the floor DERIVED
+#      as their sum — because a bare number was measured not binding three times
+#      over. The registry block's OWN minimum is held apart from that array
+#      (`REGISTRY_MIN`), since while it was a summand, deleting the block and
+#      its entry shrank the floor by exactly what the deletion removed and
+#      retired layer 3 at exit 0. FIVE known limits are stated in its header
+#      rather than patched, and that enumeration and this one must agree: §2 and
+#      §6 are inventoried but not content-pinned, so an APPENDED sentence to an
+#      existing bullet there can invert §7 from outside it; removing a section
+#      quietly takes two to three coordinated edits; canon and inventory values
+#      are regenerated by hand; a gate cannot verify its own guard from inside
+#      it; and markdownlint is load-bearing for two shapes this gate does not
+#      see (MD022/MD023 headings, MD055/MD056 tables). THE PREMISE IS ASSERTED,
+#      NOT ASSUMED:
 #      `issue-claim.sh`'s `block` case is read for the one fact everything rests
 #      on — that it strips BOTH labels — since if it stripped only `ready` the
 #      whole account of the bug would be wrong with every prose assertion still

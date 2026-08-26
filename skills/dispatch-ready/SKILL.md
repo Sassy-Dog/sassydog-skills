@@ -109,8 +109,11 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   filter reads those PRs' actual changed files, and re-deriving the mapping there costs a second
   round of lookups.
 - **Open PRs on blocked issues** → resolve these too, and hand them to nobody. **With `board:`**
-  the blocked set is the board's cards carrying the `blocked` label; **without a board** it is
-  `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in
+  the blocked set is the board's items carrying the `blocked` label, **plus any `blocked`-labelled
+  issue the board does not carry at all** — `issue-claim.sh block` writes labels and never cards, so
+  an issue blocked by hand, archived, or past the board query's own limit is on no card. Take the
+  union: an issue the board cannot see is precisely the one whose PR would otherwise veto nothing
+  and never reach the held set. **Without a board** it is `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in
   §4 — a bullet written for one path only is invisible on the other, and the half it omits is the
   half that goes dark. `issue-claim.sh block` strips `in-progress`, so a blocked issue is not
   in-flight and the branch query above cannot see its PR at all;
@@ -120,8 +123,10 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   opened by hand) is the likeliest to lack one, so fall back to the `*/issue-N-*` branch and never
   read an empty result as "no PR" — an unenumerated PR is silent and terminal. **Bounded** like
   §4's sibling lookup, and stated honestly: up to TWO calls per blocked issue per tick where the
-  branch fallback is needed, and the snapshot's `--limit` bounds only the boardless path — the
-  board path is bounded by the board's own blocked column; if that cost ever bites under `/loop`, it degrades into "live state could not be
+  branch fallback is needed; the snapshot's `--limit` bounds the boardless path, and the board path
+  is bounded by the board query's own limit plus the label query above it. The set grows
+  monotonically — `promote` adds `ready` and strips nothing — so a repo that accumulates blocked
+  issues pays for all of them every tick; if that cost ever bites under `/loop`, it degrades into "live state could not be
   verified", which is this fix's own failure mode wearing the bug's face. This loop may not advance
   these PRs, so they are never handed to `sassy-dog:pr-shepherd` — they are read so **§7 can see
   them**. A human-gated PR that nobody enumerated is not a smaller version of the §7 gap, it is a
@@ -401,8 +406,10 @@ the loop alone, write no stall record, and let the next tick re-check.
 
 ### DRAIN COMPLETE
 
-Ready empty AND in-flight zero AND **no open PR this loop tracks** → announce loudly and take the
-stop path below immediately — an empty queue needs no confirmation tick:
+Ready empty AND in-flight zero AND nothing still claimed AND **no open PR this loop tracks** →
+announce loudly and take the stop path below immediately — an empty queue needs no confirmation
+tick. "Nothing still claimed" is not implied by in-flight zero: in-flight counts `mine: true` only,
+so a foreign claim clears it while the rails below still veto:
 
 ```text
 DRAIN COMPLETE — Ready is empty and nothing is in flight.
@@ -420,8 +427,10 @@ the set that held set is drawn from.
 
 ### DRAIN STALLED
 
-In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance** —
-every Ready item held by a §4 filter, and every open PR held by the discriminator below. Nothing
+In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance**,
+over a **non-empty** held set — every Ready item held by a §4 filter, and every open PR held by the
+discriminator below. All four conjuncts are stated here rather than corrected further down, for the
+reason COMPLETE's condition now states all of its own. Nothing
 this loop controls can change GitHub state before the next tick: no PRs it may merge, no agents
 working, and dependency holds only resolve when a dep closes — with nothing in flight, only
 external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone must
@@ -455,7 +464,8 @@ and the check counts in one pass; the judgement below stays here, the way §4 ke
 judgement while borrowing `gh pr view`. **Both halves of that invocation are load-bearing.**
 Without `--once` it is watch mode, which blocks for up to an hour — the "a tick that waits is a
 loop that stopped" rule two sections up. Without the explicit PR numbers `--once` falls back to
-every open PR in the repo, which is exactly the widening the paragraph above forbids.
+the fifty most recently updated open PRs in the repo, which is both the widening the paragraph
+above forbids and a silently truncated read of it.
 
 **That union is also the set COMPLETE's veto ranges over, and the identity is the invariant.** A PR
 that can veto COMPLETE but can never enter the held set gives Ready empty, in-flight zero and a
@@ -596,7 +606,10 @@ set of nothing but PRs takes that same path: it is a terminal state like any oth
 self-cancel below is not optional on it.
 
 Any tick that dispatches, merges, observes in-flight work, or sees an open PR it may still advance
-deletes a leftover `.git/dispatch-ready-stall.json`: progress resets the confirmation clock.
+deletes a leftover `.git/dispatch-ready-stall.json`: progress resets the confirmation clock. **A
+tick that does both** — merges the last in-flight PR and still ends holding something — deletes the
+record first and then writes this tick's hold-set: progress wins, and the new hold-set starts a
+fresh two-tick count rather than inheriting the old one's.
 
 ### Stop path — both terminal states
 
