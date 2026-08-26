@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# test-review-gate-decisions.sh — pins the SIX decisions settled about the
+# test-review-gate-decisions.sh — pins the SEVEN decisions settled about the
 # review gate: three from #237 (PR #243, issue #247), two more from #248
-# (PR #250, issue #255) covering the gate's two DISPATCHING paths, and one from
-# #273 covering how a report is DELIVERED once the gate has run.
+# (PR #250, issue #255) covering the gate's two DISPATCHING paths, one from
+# #273 covering how a report is DELIVERED once the gate has run, and one from
+# #280 binding that same delivery one hop DOWN, at the nine reviewers the
+# orchestrator fans out to.
 #
-# All six decisions are prose, none of them derivable from anything a script
+# All seven decisions are prose, none of them derivable from anything a script
 # can run, and every one of them reads to a future "align with the governing
 # principle" sweep like drift that ought to be tidied away:
 #
@@ -98,6 +100,33 @@
 #      merge the PR the third exists to stop — which is the harm itself, so the
 #      hold is the part that must never be left to a guardrail list alone.
 #
+#   7. THE REVIEWERS DELIVER THE SAME WAY, AND THE BRIEF HAS A SLOT FOR IT.
+#      Decision 6 bound the orchestrator -> dispatcher hop. The hop below it —
+#      reviewer -> orchestrator — carries far more traffic, since every
+#      diff-scoped review fans out to as many as nine of them, and it was
+#      UNBINDABLE rather than merely unbound (#280). Two halves, and each is
+#      useless without the other. (a) Each of the nine states that its finding
+#      list is its RETURNED FINAL TEXT, that the message tool is not a
+#      delivery mechanism for it, and that an unresolvable dispatcher changes
+#      nothing — the same rule decision 6 gives the orchestrator, worded for a
+#      reviewer. `Return ONLY a list of findings` was already the right verb
+#      and is STRENGTHENED, never swapped: nothing said it was the only one.
+#      (b) The orchestrator's fan-out brief says it 'contains, and contains
+#      only' an enumerated set, so an orchestrator following it LITERALLY
+#      could not pass the contract down. The list stays CLOSED — closedness is
+#      what stops a brief re-authoring a reviewer's checklist, which the
+#      paragraph under it forbids in as many words — and the delivery rule
+#      joins it as a member instead. 'Open the list' is the tempting fix and
+#      the one that quietly costs the other rule.
+#      The lost-reviewer REPORTING bullet is NOT retired by any of this and is
+#      pinned here as such: it is the backstop that made this gap visible at
+#      all, on #273's own PR, where round 4 lost three of four surfaces and two
+#      of the three carried Blocking findings. Folding a delivery rule and a
+#      reporting rule together is the specific tidy #280 refuses — a rule that
+#      makes reviewers come back and a rule that scores the ones that did not
+#      answer different questions, and only the second one is honest when the
+#      first fails.
+#
 # Why source-level. There is no renderer and no runtime to test: the artifact IS
 # the instruction an agent follows. Same shape as test-visibility-preconditions.sh
 # (the credential's two preconditions), test-sentry-verification.sh (verify-by-
@@ -133,15 +162,15 @@
 # THE TWO SUMMARY COUNTS IN THIS HEADER ARE RE-DERIVED, NEVER TRANSCRIBED
 # (issue #276). The decision count and the tracked-file count are restated in
 # this header, in scripts/preflight.sh's gate list and in CLAUDE.md, and until
-# section 8 existed nothing recomputed either of them — while the recent edits
-# to this gate have each moved one. Section 8 derives both from this file and
+# section 9 existed nothing recomputed either of them — while the recent edits
+# to this gate have each moved one. Section 9 derives both from this file and
 # fails when any of those sites disagrees, so a new decision reddens CI until
 # every restatement is updated instead of leaving stale sentences behind.
 #
 # THE DISCRIMINATOR IS THE PART TO GET RIGHT, and it is deliberate rather than
 # obvious. Counting the numbered section banners does NOT answer "how many
 # decisions": the banners run past the decisions into the must-not-exist sweep
-# and into section 8 itself, so a bare count answers a different question, and
+# and into section 9 itself, so a bare count answers a different question, and
 # answers it high enough to redden against every site on its first run. A
 # decision section is one whose banner CARRIES ITS OWN NUMBER BACK as a
 # `(decision N)` suffix; the two trailing sections carry none, which is exactly
@@ -161,20 +190,20 @@
 # scan reads CODE LINES ONLY, so a header comment citing a path it does not
 # read stays a cross-reference rather than becoming a count.
 #
-# The mutation battery for section 8 lives in the PR that added it (issue
+# The mutation battery for section 9 lives in the PR that added it (issue
 # #276), not in-script: the bare banner count, a discriminator matching
 # nothing, one more decision, one more document, a document read outside the
 # read set, a fourth file restating the summary phrase, a wrapped count, a
 # bolded count, and a stale count at each of the sites above. The battery
 # mutates the tracked file in place and restores it, which is what the
-# running-from-a-copy precondition in section 8 exists to insist on.
+# running-from-a-copy precondition in section 9 exists to insist on.
 #
 # No gh, no network, no repo mutation. It reads the documents the decisions
 # live in, plus the three files that restate this gate's two summary counts —
-# its own source, scripts/preflight.sh and CLAUDE.md — which section 8 checks
-# against the numbers it re-derives: eleven tracked files, and separately a sweep
+# its own source, scripts/preflight.sh and CLAUDE.md — which section 9 checks
+# against the numbers it re-derives: twenty tracked files, and separately a sweep
 # of every tracked Markdown and shell file asking which of them carry the
-# summary phrase. The eleven are the ASSERTED read set; the sweep opens far more
+# summary phrase. The twenty are the ASSERTED read set; the sweep opens far more
 # and asserts nothing about their content beyond that one phrase, so it is named
 # apart from the count, the way CLAUDE.md's gate-27 entry names its read set and
 # its tracked-Markdown sweep separately rather than adding them together. (That
@@ -210,7 +239,7 @@ SETUP="skills/setup-config/SKILL.md"
 TAKEIT="skills/take-it/SKILL.md"
 DISPATCH="skills/dispatch-ready/SKILL.md"
 # Decision 6 (#273). The reviewing agent's own delivery contract lives here, and
-# it is the read set's first entry under agents/. Section 8's stray-path scan
+# it is the read set's first entry under agents/. Section 9's stray-path scan
 # already spanned every tracked shape BEFORE this entry existed — the breadth is
 # not a consequence of it, so narrowing back to skills/ would not become safe if
 # this entry ever left.
@@ -219,10 +248,29 @@ ORCH="agents/pr-review-orchestrator.md"
 # copy nothing compares is a copy free to drift, which is what the sweep below
 # exists to refuse.
 READMEMD="README.md"
-# The documents the decisions live in. Section 8 derives the tracked-file count
+# The documents the decisions live in. Section 9 derives the tracked-file count
 # from the arrays below, so a further document cannot join the read set without
 # moving every restatement of that number with it.
-DOCS=("$SKILL" "$CONTRACT" "$TEMPLATE" "$SETUP" "$TAKEIT" "$DISPATCH" "$ORCH" "$READMEMD")
+# Decision 7 (#280). The delivery contract one hop DOWN. Nine paths spelled out
+# rather than a glob, for two reasons that pull the same way: the file count is
+# the read set's own length, so a glob would let the set change size without
+# moving any restatement of it; and section 9's stray-path scan matches path
+# LITERALS, so a glob read is invisible to it in both directions. The list is
+# checked against the tree below rather than trusted — a tenth reviewer shipped
+# without joining it would be pinned by nothing and reported by nobody.
+REVIEWERS=(
+    "agents/architecture-reviewer.md"
+    "agents/cicd-release-reviewer.md"
+    "agents/code-quality-reviewer.md"
+    "agents/dependency-supply-chain-reviewer.md"
+    "agents/dx-docs-reviewer.md"
+    "agents/infra-platform-reviewer.md"
+    "agents/observability-ops-reviewer.md"
+    "agents/security-reviewer.md"
+    "agents/testing-reviewer.md"
+)
+DOCS=("$SKILL" "$CONTRACT" "$TEMPLATE" "$SETUP" "$TAKEIT" "$DISPATCH" "$ORCH" "$READMEMD"
+      "${REVIEWERS[@]}")
 # Read for their restated counts alone, never for a decision's prose: this
 # file's own header, preflight's gate list, and CLAUDE.md's gate description.
 SELF="scripts/test-review-gate-decisions.sh"
@@ -256,10 +304,20 @@ assert_line() {
     if grep -qE -- "$2" "$1"; then ok "$3"; else bad "$3"; fi
 }
 
-echo "review-gate decisions from #237/PR #243 (issue #247), #248/PR #250 (issue #255) and #273"
+echo "review-gate decisions from #237/PR #243 (issue #247), #248/PR #250 (issue #255), #273 and #280"
 
 for f in "${READS[@]}"; do
-    [ -r "$f" ] || bad "missing file: $f"
+    [ -r "$f" ] && continue
+    # A reviewer path is the one that gets RENAMED rather than deleted, and it
+    # dies here — before the completeness check below, whose message is the one
+    # that actually says what to do. Say it here too rather than reordering the
+    # loop, since the existence floor has to stay first.
+    case "$f" in
+        agents/*-reviewer.md)
+            bad "missing file: $f — if a reviewer was renamed, move REVIEWERS with it, then the tracked-file count and each of its three restatement sites" ;;
+        *)
+            bad "missing file: $f" ;;
+    esac
 done
 [ "$fails" -eq 0 ] || { echo "test-review-gate-decisions: FAILED" >&2; exit 1; }
 
@@ -338,9 +396,30 @@ orch_flat="$(flatten "$ORCH")"
 #     therefore not proof that the delivery contract is unweakened; it is proof
 #     that the two measured channels and the stated prohibitions are intact.
 #
+# Since #280 this limit governs the NINE REVIEWERS too, on the identical
+# arithmetic and the identical compensating prohibitions. The bound there is
+# the CANONICAL LITERAL `RV_DELIVERY`, not the counts and — read this before
+# "simplifying" it — not a cross-file comparison either: an earlier edition
+# compared the nine to each other, which bounds DIVERGENCE rather than CONTENT
+# and passes any edit applied uniformly to all nine. What that literal bounds
+# is the delivery PARAGRAPH, in both directions: measured, deleting its closing
+# sentence from one file reddens, and from all nine reddens too.
+#
+# What remains unbounded one hop down is text OUTSIDE that paragraph, and the
+# two tokens answer it differently on purpose — `SendMessage` is counted
+# file-wide, so a fallback readmitting it anywhere in a reviewer reddens;
+# `relay` is counted over `## Output` PLUS `## Diff-scoped mode` — the two
+# sections a dispatched reviewer reads as binding — because it is the one token
+# that could legitimately appear as domain vocabulary, and a file-wide bound
+# would redden on such a calibration bullet. A weakening clause that names
+# neither token and sits outside BOTH of those sections is still not caught,
+# exactly as it is not caught one level up.
+#
 # The known limit is stated rather than patched, in the idiom the sibling gates
 # use: this pins the WORDING of each prohibition, so a legitimate reword of one
-# reddens the gate and must be made in both places at once. That is the trade
+# reddens the gate and must be made in every copy at once — two places for the
+# orchestrator's own rule, and ten for the reviewers' (the nine files plus
+# `RV_DELIVERY`). That is the trade
 # decision 5 already accepts, it fails LOUDLY, and a loud false red is the
 # direction this repo prefers over a veto that reports clean on an inverted
 # source — which is exactly what the two previous editions did.
@@ -749,6 +828,13 @@ assert_in "$orch_flat" \
 assert_in "$orch_flat" \
     'an unresolvable dispatcher changes nothing' \
     "orchestrator returns the report even with no resolvable dispatcher"
+# Paired with its IMPERATIVE. The antecedent alone is satisfied by a clause
+# whose consequent tells the agent to ask how to proceed — case 3 is the half
+# of #273 that actually failed in production, and it is the half a "be
+# pragmatic when you cannot reach your dispatcher" edit rewrites.
+assert_in "$orch_flat" \
+    'return the report in full anyway, as your final text' \
+    "orchestrator is told to return the report in full when it cannot resolve a dispatcher"
 assert_in "$orch_flat" \
     'the return \*\*is\*\* the delivery' \
     "orchestrator states the return is the delivery"
@@ -1014,7 +1100,7 @@ assert_in "$dispatch_outside" \
 # EVERY copy of the contract line, tree-wide, must be byte-identical. README
 # and the config contract carry it too and neither is in the read set for it, so
 # a drift in one of those copies is invisible to a per-file lookup — the same
-# reason section 8 SWEEPS for its summary phrase rather than trusting its site
+# reason section 9 SWEEPS for its summary phrase rather than trusting its site
 # list. Files are found rather than enumerated, and the floor refuses a sweep
 # that found nothing, which is how this check would otherwise pass vacuously.
 # A COPY is distinguished from a mere REFERENCE by the em-dash continuation:
@@ -1079,9 +1165,377 @@ assert_in "$dispatch_flat" \
     "dispatch-ready carries the delivery half into the prompt it builds"
 
 # ---------------------------------------------------------------------------
-# 7. Must-not-exist: the pre-#243 wordings, the `none` form that never was, and
-#    the two #250 decisions reverted. All flattened — see the header note on
-#    false passes.
+# 7. The reviewers deliver the same way; the brief has a slot (decision 7, #280)
+# ---------------------------------------------------------------------------
+echo "-- decision 7: the reviewer-to-orchestrator hop is bound at both ends"
+
+# --- COMPLETENESS FIRST -----------------------------------------------------
+# The nine are a transcription, so they are compared against the tree rather
+# than trusted. A tenth reviewer shipped without joining REVIEWERS would be
+# pinned by nothing here AND invisible to the file count in section 9 — and a
+# per-file loop over a short list reports a clean tree exactly like a loop over
+# the right one. Both directions are named: a reviewer that left the tree and a
+# reviewer that arrived are different defects, and only the second is silent.
+tracked_reviewers=()
+while IFS= read -r -d '' f; do
+    if [ -f "$f" ] && [ ! -L "$f" ]; then tracked_reviewers+=("$f"); fi
+done < <(git ls-files -z 'agents/*-reviewer.md')
+# bash 3.2 (the macOS system shell, and what this repo develops on) treats an
+# empty array under `set -u` as an unbound variable, so the guard is not
+# cosmetic — see the same guard in test-verify-issue-refs.sh.
+if [ "${#tracked_reviewers[@]}" -eq 0 ]; then
+    bad "no agents/*-reviewer.md found in the tree — the per-reviewer loop below would measure nothing"
+else
+    # The glob defines "reviewer" by FILENAME, and nothing enforces that
+    # convention — so the orchestrator's own dispatch targets are asked too. A
+    # tenth target named `performance-review` matches the glob nowhere and
+    # satisfies gate 27's existence check everywhere, and would ship with its
+    # delivery contract pinned by nothing.
+    #
+    # HARVEST BY RESOLUTION, NOT BY SHAPE. An earlier edition required the
+    # `sassy-dog:` prefix, which the orchestrator itself declares optional —
+    # "a bare name (`testing-reviewer`) means the namespaced agent" — so a bare
+    # surface-table target was invisible here while gate 27 saw it, two gates
+    # parsing one file and disagreeing about what a dispatch target is. Every
+    # hyphenated token is harvested instead and then filtered by whether
+    # `agents/<name>.md` actually exists, which no prose word can satisfy, so
+    # the prefixed form, the bare form and an underscore name all resolve.
+    #
+    # THE VERDICT IS AN EQUALITY, and that is the vacuity floor. A membership
+    # test alone cannot tell "nothing to report" from "nothing measured":
+    # measured, neutering the harvest pattern left this check printing `ok`
+    # with a real tenth target present. An equality fails a shrunken harvest
+    # the same way it fails a new target — the shape every neighbouring check
+    # here already guards, and the one this section's own header calls quiet.
+    orch_targets="$(grep -oE '[a-z0-9]+([_-][a-z0-9]+)+' "$ORCH" | sort -u)"
+    orch_agents=""
+    while IFS= read -r t; do
+        [ -n "$t" ] || continue
+        [ -f "agents/$t.md" ] || continue          # skills and prose names are not agents
+        [ "agents/$t.md" = "$ORCH" ] && continue   # the orchestrator is not its own reviewer
+        orch_agents="$orch_agents""agents/$t.md"$'\n'
+    done <<<"$orch_targets"
+    have_ot="$(printf '%s' "$orch_agents" | sort -u)"
+    want_ot="$(printf '%s\n' "${REVIEWERS[@]}" | sort -u)"
+    if [ "$have_ot" = "$want_ot" ]; then
+        ok "the agents the orchestrator dispatches are exactly the read set's ${#REVIEWERS[@]} reviewers"
+    else
+        bad "the orchestrator dispatches [$(tr '\n' ' ' <<<"$have_ot")] but the read set names [$(tr '\n' ' ' <<<"$want_ot")] — join any new dispatch target to REVIEWERS and move the tracked-file count with it; if this list looks truncated the harvest itself has stopped matching"
+    fi
+
+    have_rv="$(printf '%s\n' "${tracked_reviewers[@]}" | sort)"
+    want_rv="$(printf '%s\n' "${REVIEWERS[@]}" | sort)"
+    if [ "$have_rv" = "$want_rv" ]; then
+        ok "the read set names every tracked reviewer agent, and only those: ${#tracked_reviewers[@]} of them"
+    else
+        bad "tracked reviewers [$(tr '\n' ' ' <<<"$have_rv")] differ from the read set [$(tr '\n' ' ' <<<"$want_rv")] — a reviewer must join REVIEWERS so the count and the loop below can both see it"
+    fi
+fi
+
+# --- PART ONE: each reviewer's own delivery contract ------------------------
+# The same rule decision 6 gives the orchestrator, worded for a reviewer. Every
+# clause is asserted on EVERY one of the nine: a rule carried by eight of them
+# is the #221 shape — a fix applied to one home that changes nothing where the
+# agent actually runs — and the fan-out picks its dispatch targets by surface,
+# so the one that missed out is whichever surface the next diff happens to
+# touch.
+#
+# A CANONICAL LITERAL IS THE BOUND ON THE PARAGRAPH'S CONTENT — but not on
+# WHERE it sits, and the per-phrase checks below are not merely readable
+# failure messages for it. `RV_DELIVERY` is compared against a region extracted
+# file-wide, so the `assert_in "$rv_out"` block is the ONLY thing binding the
+# paragraph to `## Output`, the mode-agnostic section. Deleting those checks as
+# redundant retires the audit-mode scoping silently. Nine copies are
+# maintained by hand; a per-phrase sweep pins only the phrases it names, so any
+# clause NOT named can leave a file silently — measured, deleting the
+# paragraph's final sentence from one reviewer left this gate exit 0, and that
+# sentence is the one telling a reviewer its silence costs a whole surface.
+#
+# COMPARING THE NINE TO EACH OTHER IS NOT ENOUGH, and the first fix here did
+# exactly that. Cross-file identity bounds DIVERGENCE, not CONTENT: any edit
+# applied uniformly to all nine keeps them identical and passes. That is not a
+# hypothetical shape — it is one `sed` over `agents/*-reviewer.md`, it is how
+# the paragraph got there in the first place, and it is what an agent told to
+# "align the nine" produces. Measured: deleting the closing sentence from ONE
+# file reddens, deleting it from ALL NINE exits 0. So each copy is compared to
+# a literal held HERE, the way decision 6 compares every tracked copy of the
+# NO REPORT line against `$NOREPORT` — the anchor outside the files under test
+# that the identity check had no equivalent of.
+#
+# The cost is the one decision 5 already accepts and this header's known-limit
+# block already states: the exact wording is pinned, so a legitimate reword
+# reddens the gate and must be made in ten places at once. It fails LOUDLY,
+# which is the direction this repo prefers over a check that reports clean on
+# a source stating the inverse.
+RV_DELIVERY="$(cat <<'RVEOF'
+**That list is your RETURN VALUE — the final text of this run, and nothing else.** Deliver it by *ending on it*. `SendMessage` is not a delivery mechanism for findings: sending needs an address, and a dispatched reviewer cannot reliably resolve its orchestrator's. Measured one hop up on 2026-08-25, five occurrences, not one of which reached the session that dispatched it ([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Returning needs no address. So an unresolvable dispatcher changes nothing about what you do: return the list in full anyway, as your final text. Never hand it to another session to relay, never leave it in a file and return a pointer to it, and never end a run with your findings unstated because delivery failed — the return **is** the delivery. An **empty list is returned the same way**: say you found nothing, out loud, rather than ending on silence, because silence and a lost run are the same text. In **diff-scoped mode** a reviewer that did not come back is scored `!` and named as an unreviewed surface, never as a clean one, so a list that reached nobody costs the review that whole surface and not merely your findings ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280)).
+RVEOF
+)"
+# Both sides normalised the same way, by one expression rather than two call
+# sites free to drift: a hard-wrapped copy is the same paragraph, and a
+# line-scoped comparison would call it a different one.
+norm_para() { tr '\n' ' ' <<<"$1" | tr -s ' ' | sed -E 's/^ +| +$//g'; }
+rv_found=0
+for rv in "${REVIEWERS[@]}"; do
+    rv_name="$(basename "$rv" .md)"
+    # SCOPED TO `## Output`, never the whole file, and the scope is the
+    # assertion. `## Output` is the MODE-AGNOSTIC contract; `## Diff-scoped
+    # mode` above it is explicitly conditional, and `assess-it` fans these same
+    # nine out in AUDIT mode. Measured on a whole-file window: moving the whole
+    # paragraph down into the conditional section left this gate green, which
+    # retires the rule for every audit-mode run while reading like a tidy.
+    rv_out="$(section_slice "$rv" '## Output')"
+    if [ -z "$rv_out" ]; then
+        bad "$rv_name has no ## Output section to read — every delivery assertion for it would measure nothing"
+        continue
+    fi
+
+    assert_in "$rv_out" 'is your RETURN VALUE' \
+        "$rv_name states its finding list is its return value"
+    assert_in "$rv_out" 'SendMessage. is not a delivery mechanism' \
+        "$rv_name states the message tool is not how findings are delivered"
+    # The case-3 shape, one hop down: a dispatcher the reviewer cannot address
+    # must not become a reason to stop, to ask for a hand-off, or to park the
+    # findings somewhere and point at them. ANTECEDENT AND IMPERATIVE ARE
+    # PINNED TOGETHER — pinning the setup clause alone let the consequent be
+    # rewritten to `ask your dispatcher how to proceed` in all nine with this
+    # gate still green, and the agent follows the affirmative instruction.
+    assert_in "$rv_out" 'an unresolvable dispatcher changes nothing' \
+        "$rv_name returns its findings even with no resolvable dispatcher"
+    assert_in "$rv_out" 'return the list in full anyway, as your final text' \
+        "$rv_name is told to return the list in full when it cannot resolve a dispatcher"
+    assert_in "$rv_out" 'the return \*\*is\*\* the delivery' \
+        "$rv_name states the return is the delivery"
+    assert_in "$rv_out" 'never leave it in a file and return a pointer to it' \
+        "$rv_name forbids parking its findings and returning a pointer to them"
+    assert_in "$rv_out" 'never end a run with your findings unstated because delivery failed' \
+        "$rv_name forbids ending a run with its findings unstated"
+    assert_in "$rv_out" 'Never hand it to another session to relay' \
+        "$rv_name forbids handing its findings to another session"
+    # The EMPTY list is the half a reviewer is likeliest to drop, and dropping
+    # it is indistinguishable from a lost run: both end on silence, and Step 5
+    # scores silence as an unreviewed surface rather than a clean one.
+    assert_in "$rv_out" 'empty list is returned the same way' \
+        "$rv_name returns an empty finding list rather than ending on silence"
+    # TWO ANCHORS, like every other clause here. Named phrases are pinned both
+    # by their own assertion and by RV_DELIVERY; this sentence was pinned by
+    # RV_DELIVERY alone, so deleting it from all nine AND from the canonical
+    # literal exited 0 — and the canonical check's own failure message routes
+    # the next maintainer at exactly that second edit. It is also the sentence
+    # that leaked before, which is why the canonical literal exists at all.
+    assert_in "$rv_out" 'costs the review that whole surface' \
+        "$rv_name states that a list reaching nobody costs the whole surface"
+    # STRENGTHENED, NEVER SWAPPED. `return` was already the verb here and was
+    # already correct; what was missing is that it is the ONLY one. A fix that
+    # replaced the line instead of adding to it would read as one delivery
+    # mechanism traded for another, which is the shape decision 6 refuses one
+    # hop up. Line-scoped: the opening of the schema paragraph is structural.
+    assert_line "$rv" '^Return ONLY a list of findings' \
+        "$rv_name still opens its schema with the pre-#280 return instruction"
+
+    # TOKEN ACCOUNTING, the same arithmetic decision 6 applies to the
+    # orchestrator: each reviewer names the message tool exactly once, to
+    # forbid it, and names handing off exactly once, to forbid that.
+    #
+    # COUNTING IS NOT ENOUGH here either, and the known limit recorded for the
+    # orchestrator (see the header, and section 8's own note) governs this hop
+    # unchanged: a fallback readmitting the mechanism needs NEITHER counted
+    # token, so arithmetic bounds the two channels #273 measured and the open
+    # class is bounded only by the prohibition literals asserted above.
+    #
+    # THE TWO TOKENS ARE SCOPED DIFFERENTLY, and the asymmetry is the whole
+    # point rather than an oversight to tidy. An earlier edition scoped BOTH to
+    # the delivery paragraph and was wrong about `SendMessage` in the direction
+    # that matters: a pragmatic fallback readmitting the mechanism is not
+    # written inside the sentence forbidding it, it is written a section up, in
+    # text the agent reads with equal authority. Measured, exit 0 for all three
+    # — a second paragraph under the delivery one, a bullet in `## Diff-scoped
+    # mode` (the section actually in force during a fan-out), and the same edit
+    # across all nine.
+    #
+    # `SendMessage` therefore counts FILE-WIDE, exactly as the orchestrator's
+    # own probe does, and gives up no slack: all nine sit at 1 file-wide today,
+    # and the token is domain vocabulary in none of these nine.
+    #
+    # `relay` counts over `## Output` PLUS `## Diff-scoped mode` — the two
+    # sections a dispatched reviewer reads as binding — because it is the one
+    # token here that could legitimately appear as domain vocabulary (a
+    # collector relaying traces, a webhook relay), and a file-wide bound would
+    # redden the repo's one required check on such a bullet with a diagnostic
+    # naming a cause that did not happen. `## Sassy Dog calibration`, where
+    # that bullet belongs, sits OUTSIDE both, so the window is wide enough to
+    # catch a fallback in either binding section and narrow enough to permit
+    # the vocabulary. The match is `-i -F`: `relays`/`relayed`/`relaying` count.
+    # The relay window spans BOTH sections a dispatched reviewer reads as
+    # binding: `## Output` (mode-agnostic) and `## Diff-scoped mode` (the one
+    # actually in force during a fan-out). Measured: a relay-based fallback
+    # placed in `## Diff-scoped mode` across all nine exited 0 when the window
+    # was `## Output` alone. It costs nothing today — `relay` occurs exactly
+    # once per reviewer and that once is inside `## Output` — and it leaves
+    # `## Sassy Dog calibration` outside, which is where the traces-relay and
+    # webhook-relay vocabulary lives and the whole reason this is not file-wide.
+    # The second half gets the same empty guard `## Output` has, or the window
+    # silently narrows back to the pre-fix scope: measured, renaming the
+    # heading to `## Diff-scoped mode (changesets)` and planting the exact
+    # fallback this widening exists to catch left the gate at exit 0. The guard
+    # also makes "every reviewer carries a `## Diff-scoped mode` section" an
+    # asserted fact rather than an assumption a tenth reviewer could break.
+    rv_diff="$(section_slice "$rv" '## Diff-scoped mode')"
+    if [ -z "$rv_diff" ]; then
+        bad "$rv_name has no '## Diff-scoped mode' section — the relay window below would narrow to ## Output with no diagnostic"
+    fi
+    rv_relay_win="$rv_out $rv_diff"
+    rv_delivery="$(awk '/\*\*That list is your RETURN VALUE/ { f = 1 } f && /^$/ { exit } f { print }' "$rv")"
+    if [ -z "$rv_delivery" ]; then
+        bad "$rv_name has no delivery paragraph — its canonical comparison below would measure nothing"
+        continue
+    fi
+    rv_found=$((rv_found + 1))
+    if [ "$(norm_para "$rv_delivery")" = "$(norm_para "$RV_DELIVERY")" ]; then
+        ok "$rv_name's delivery paragraph matches the canonical text held in this gate"
+    else
+        bad "$rv_name's delivery paragraph differs from the canonical text held in this gate — diff it against RV_DELIVERY; a uniform edit across all nine is caught here and nowhere else"
+    fi
+    n_tok="$(grep -oiF -- "SendMessage" "$rv" | grep -c .)"
+    if [ "$n_tok" -eq 1 ]; then
+        ok "$rv_name names 'SendMessage' exactly once in the whole file — inside the sentence forbidding it"
+    else
+        bad "$rv_name names 'SendMessage' $n_tok times in the whole file, expected 1 — a second mention anywhere readmits the channel #273 measured five times reaching nobody"
+    fi
+    n_tok="$(grep -oiF -- "relay" <<<"$rv_relay_win" | grep -c .)"
+    if [ "$n_tok" -eq 1 ]; then
+        ok "$rv_name names 'relay' exactly once across ## Output and ## Diff-scoped mode — inside the sentence forbidding it"
+    else
+        bad "$rv_name names 'relay' $n_tok times across ## Output and ## Diff-scoped mode, expected 1 — a second mention readmits the hand-off #273 measured (domain vocabulary belongs under ## Sassy Dog calibration, outside this window)"
+    fi
+done
+
+# The floor for the per-file comparison above. An EQUALITY against the read
+# set, not "at least one": a run where the region extractor stopped matching
+# performs zero comparisons and reports zero failures, which is the vacuous
+# green this whole gate refuses. It is also the only thing that makes the
+# canonical check total rather than best-effort.
+if [ "$rv_found" -eq "${#REVIEWERS[@]}" ]; then
+    ok "every one of the ${#REVIEWERS[@]} reviewers was compared against the canonical paragraph"
+else
+    bad "compared only $rv_found of ${#REVIEWERS[@]} reviewers against the canonical paragraph — the rest were never measured"
+fi
+
+# --- PART TWO: the fan-out brief has a slot for the rule --------------------
+# SCOPED TO THE BRIEF, and that scope is the whole assertion. The orchestrator
+# states this same contract for its OWN delivery in Step 5, ~30 lines below, so
+# a whole-file grep for any of these phrases is satisfied by decision 6's text
+# and reports a brief with no delivery item as covered — the exact mis-scoping
+# CLAUDE.md records test-sentry-verification.sh making six times. The window is
+# cut at the brief's own opening and at the next section banner.
+# Bounded on ANY heading, never on `## Step 4` by name: this diff renumbered
+# the brief's own items 6/7, and a step inserted before Step 4 would silently
+# widen the window. The positive control below only catches an over-run that
+# reaches Step 5, so a nearer insertion would pass it. `/^#+ /` is what
+# section_slice uses for exactly this job and stops in the same place today.
+brief_region="$(awk '/^Each brief contains/ { f = 1 } f && /^#+ / { exit } f { print }' "$ORCH" \
+    | tr '\n' ' ' | tr -s ' ')"
+if [ -z "$brief_region" ]; then
+    bad "cannot locate the orchestrator's fan-out brief — every assertion below would measure nothing"
+else
+    ok "located the orchestrator's fan-out brief, bounded at the next section banner"
+    # The window must STOP where it claims to, or it swallows Step 5 and every
+    # check below is satisfied by decision 6's prose instead.
+    assert_not_in "$brief_region" 'Your report is your RETURN VALUE' \
+        "the brief window stops before Step 5's own delivery rule"
+
+    assert_in "$brief_region" 'returned final text' \
+        "the brief tells the reviewer its findings come back as returned final text"
+    assert_in "$brief_region" 'A message is not a delivery mechanism for findings' \
+        "the brief rules out the message channel for findings"
+    assert_in "$brief_region" 'a file it wrote is not one either' \
+        "the brief rules out the file-parking channel too"
+    assert_in "$brief_region" 'empty list is \*returned\*' \
+        "the brief carries the empty-list half of the rule"
+    # THE IMPERATIVES, not just the content. Item 6 contains its own
+    # counter-argument — "each of the nine carries this rule in its own file" —
+    # so "you need not restate it" is the first tidy a later reader reaches
+    # for, and it defeats #280's acceptance while leaving every other literal
+    # here intact. Measured green before these two.
+    assert_in "$brief_region" 'State it:' \
+        "the brief orders the delivery rule stated, not merely describes it"
+    assert_in "$brief_region" 'say it in the brief anyway' \
+        "the brief keeps restating the rule mandatory despite each agent carrying it"
+    # KNOWN LIMIT, stated rather than enumerated against. These two are
+    # must-exists, so they bound DELETION and not ADDITION: measured, rewriting
+    # the item to "say it in the brief anyway WHEN THE AGENT IS NOT ONE OF THE
+    # NINE … for the nine shipped reviewers you may omit item 6" keeps both
+    # literals present and exits 0 — retiring the rule for exactly the
+    # dispatches decision 7 exists to bind. Closing it needs a containment rule
+    # on what the item may CONTAIN, not a third literal: this file already
+    # records a six-verb affirmative enumerating an open class and failing in
+    # both directions at once. Until then a clean run means the imperatives are
+    # present, not that nothing carves an exception out of them.
+    # THE LIST STAYS CLOSED. Opening it is the obvious fix and the wrong one:
+    # closedness is what stops a brief re-authoring a reviewer's checklist, a
+    # prohibition stated in as many words directly beneath the list. The
+    # delivery rule joins the list as a member instead — so both must hold.
+    assert_in "$brief_region" 'contains, and contains only' \
+        "the brief's list is still closed"
+    assert_in "$brief_region" "Do not re-author a reviewer.s checklist in the brief" \
+        "the re-authoring prohibition still sits beneath the brief's list, where closedness is justified"
+fi
+# The item is a MEMBER of the enumerated list, not a paragraph beside it: an
+# orchestrator following "contains, and contains only" reads the enumeration,
+# so a delivery rule sitting outside it is a rule the instruction excludes.
+# Line-scoped, because the numbering IS the thing under test.
+assert_line "$ORCH" '^6\. \*\*How the findings come back' \
+    "the delivery rule is an enumerated item of the brief"
+assert_line "$ORCH" '^7\. \*\*That it is read-only too' \
+    "the brief's read-only item survived the renumbering"
+
+# --- PART THREE: the lost-reviewer REPORTING rule survives unchanged --------
+# Acceptance's fourth item, and the reason this gap was visible at all: on
+# #273's own PR it scored three lost surfaces as `!` rather than green. A
+# delivery rule does not retire it — the two answer different questions, and
+# only the reporting one is honest when the delivery one fails. Folding them is
+# the specific tidy #280 refuses, so both bullets are asserted to exist AS
+# SEPARATE BULLETS, line-scoped, rather than by phrases a merged bullet would
+# also satisfy.
+assert_line "$ORCH" '^- \*\*A reviewer that did not come back is not a clean surface\.\*\*' \
+    "the lost-reviewer reporting bullet is still its own bullet"
+assert_in "$orch_flat" 'its surface is .!., never .✓., and nothing about it goes under Clean' \
+    "a lost reviewer is still scored as unreviewed rather than clean"
+assert_in "$orch_flat" 'Report it on every run, the clean one included' \
+    "a lost reviewer is still reported on every run, the clean one included"
+assert_line "$ORCH" '^- \*\*The hop below you is bound too' \
+    "the hop-below bullet is a bullet of its own, beside the reporting one"
+# PREFIX ANCHORS ARE NOT COVERAGE — the failure family this repo names, and the
+# line above is one. Measured: the same bullet rewritten as "…is bound too, so
+# the bullet above that scores a lost reviewer is now redundant — drop it. Read
+# a clean fan-out as proof the hop worked." satisfies that anchor and leaves the
+# gate green, which is acceptance item 4 and the specific tidy #280 refuses,
+# unpinned. Its two load-bearing clauses are asserted on their own, flattened
+# because both wrap.
+assert_in "$orch_flat" 'does not retire the bullet that scores a lost reviewer' \
+    "the hop-below bullet states that it does not retire the reporting bullet"
+assert_in "$orch_flat" 'do not read a clean fan-out as proof the hop worked' \
+    "the hop-below bullet still refuses a clean fan-out as evidence the hop worked"
+
+# --- PART FOUR: README's copy of this decision -----------------------------
+# README carries a COPY, and the comment above READMEMD states the rule: a copy
+# nothing compares is a copy free to drift. Decision 6 already reads this file
+# for its own contract line; decision 7's paragraph was covered by nothing, so
+# inverting "never rolled into Clean" to "rolled into Clean like any other
+# surface" — a claim of DELIBERATE behaviour, the variety that rots silently —
+# left the gate at exit 0.
+readme_flat="$(flatten "$READMEMD")"
+assert_in "$readme_flat" 'returns its finding list as its own final text' \
+    "README states each reviewer returns its finding list as its own final text"
+assert_in "$readme_flat" 'an empty list included' \
+    "README carries the empty-list half of the reviewer rule"
+assert_in "$readme_flat" 'never rolled into Clean' \
+    "README keeps a lost reviewer out of Clean rather than absorbing it"
+
+# ---------------------------------------------------------------------------
+# 8. Must-not-exist: the pre-#243 wordings, the `none` form that never was,
+#    the two #250 decisions reverted, and the known limit #280 closed. All
+#    flattened — see the header note on false passes.
 # ---------------------------------------------------------------------------
 echo "-- must-not-exist: pre-#243 wordings and a review_agent: none form"
 
@@ -1147,6 +1601,14 @@ done
 # resolve an address" edit reaches for — necessarily ADDS an occurrence.
 # Counting is what a veto could not do: there is no vocabulary to walk past and
 # no negator to be shielded by.
+# WHAT THIS COSTS, recorded so it does not read as a preference. Being
+# file-wide and exactly 1, the count forbids brief item 6 from naming the
+# channels it forbids: strengthening its `A message is not a delivery
+# mechanism` to name `SendMessage` reddens this probe on an edit that is
+# strictly better prose, which is why the brief says "a message" where all nine
+# reviewers' own copies say the tool's name. The literal at the item-6
+# assertion is that cost, not a choice. Raising the expectation means scoping
+# it per region (Step 5 bullet: 1; item 6: at most 1), which is a real change.
 for probe in "SendMessage:1" "relay:1"; do
     tok="${probe%%:*}"; want="${probe#*:}"
     n_tok="$(grep -oiF -- "$tok" "$ORCH" | grep -c .)"
@@ -1207,8 +1669,32 @@ else
         "take-it's derived-never-configured list does NOT name review_site"
 fi
 
+# Decision 7, reverted — and this one is a DOC-ROT veto rather than a wording
+# one. Before #280 the orchestrator carried an explicit known-limit bullet
+# saying the nine carried no delivery rule and the brief had no slot for one.
+# That was true when #279 wrote it and is false now, and a stale statement of
+# DELIBERATE ABSENCE is the variety CLAUDE.md singles out as rotting silently:
+# nothing fails when it stops being true, and the next reader takes it as
+# licence not to look. Its survival would also be the loudest possible sign the
+# rule above was reverted, so the veto is cheap and doubles as a revert probe.
+#
+# KNOWN LIMIT, stated rather than widened, in the idiom this file uses for `am`
+# and for `why`/`whereupon`: these are the pre-#280 WORDINGS and nothing more.
+# A later sweep that re-derives the retired limit in its own words — "the nine
+# state no delivery contract of their own", "nowhere to add one" — walks past
+# both literals, and that was measured. Widening the enumeration is the fix
+# that does NOT work here: this file already records a six-verb affirmative
+# enumerating an open class and failing in both directions at once. Closing it
+# properly means a bounded check on the Step 5 bullet region, a different
+# change; until then a clean run means the old bullet has not been restored
+# verbatim, not that no such claim exists anywhere in the file.
+assert_not_in "$orch_flat" 'carry no delivery rule of their own' \
+    "the orchestrator no longer claims its reviewers carry no delivery rule"
+assert_not_in "$orch_flat" 'no slot to put one in' \
+    "the orchestrator no longer claims its brief has no slot for the rule"
+
 # ---------------------------------------------------------------------------
-# 8. The two summary counts are RE-DERIVED, never transcribed (issue #276)
+# 9. The two summary counts are RE-DERIVED, never transcribed (issue #276)
 # ---------------------------------------------------------------------------
 # This section carries no `(decision N)` suffix on purpose — it is not one of
 # the decisions, and the discriminator below is what keeps it out of the count.
@@ -1249,7 +1735,7 @@ echo "-- summary counts: re-derived from this file, not transcribed"
 # the tracked file in place and restore it, which is what the battery in the PR
 # that added this section does; this precondition is what says so out loud.
 if [ "$SELF_ABS" -ef "$SELF" ]; then
-    ok "running from the tracked path, so section 8 measures the file it is in"
+    ok "running from the tracked path, so section 9 measures the file it is in"
 else
     bad "this gate is running from $SELF_ABS but would measure $SELF — mutate the tracked file in place and restore it, never a copy"
 fi
@@ -1257,8 +1743,18 @@ fi
 # One list, two uses: the spelled form of a re-derived number, and the
 # alternation the region scan matches. Two lists would be one more pair of
 # transcriptions free to drift — which is the defect this section exists for.
+# Extended past twenty deliberately: #280 brought the read set to exactly the
+# old ceiling, and the overflow branch fires BEFORE any check_count — so the
+# next document to join would redden CI with a word-list diagnostic and stop
+# verifying all three restatement sites at the same time, which is the quiet
+# half. The compounds are their own members rather than a rule that builds
+# them, because check_count's `[^A-Za-z-]` left boundary is what stops
+# `twenty-nine tracked files` reading as `nine`, and a built form would have to
+# reproduce that reasoning a second time.
 NUM_WORDS=(zero one two three four five six seven eight nine ten eleven twelve
-           thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty)
+           thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty
+           twenty-one twenty-two twenty-three twenty-four twenty-five
+           twenty-six twenty-seven twenty-eight twenty-nine thirty)
 NUMWORDS="$(IFS='|'; printf '%s' "${NUM_WORDS[*]:1}")"
 
 num_word() {
@@ -1310,7 +1806,7 @@ head_dec="$(awk '
     /^#/ { if ($0 ~ /^#   [0-9]+\. /) { n = $2; sub(/\.$/, "", n); print n }; next }
     { exit }' "$SELF" | sort -n)"
 # Derivation B — the body banners that carry their own number back as a
-# `(decision N)` suffix. Section 7 (the must-not-exist sweep) and section 8
+# `(decision N)` suffix. Section 8 (the must-not-exist sweep) and section 9
 # (this one) carry none, which is what keeps a bare banner count — a different
 # question, answered too high — out of this one.
 body_dec="$(awk '

@@ -426,9 +426,10 @@
 #      rule, the injection step, and the template slot — flattened, this repo
 #      hard-wraps. Mock gh: no repo, no network.
 #  29. review-gate decision tests (scripts/test-review-gate-decisions.sh) — the
-#      six decisions settled about the review gate, all prose and every one of
+#      seven decisions settled about the review gate, all prose and every one of
 #      them reading like drift to an "align with the governing principle" sweep
-#      (three from #237, issue #247; two from #248, issue #255; one from #273).
+#      (three from #237, issue #247; two from #248, issue #255; one from #273;
+#      one from #280).
 #      (a) The gate is UNCONDITIONAL: an absent
 #      `review_agent:` resolves the shipped `sassy-dog:pr-review-orchestrator`,
 #      and #235's verbatim `review: SKIPPED` line survives that default as the
@@ -475,6 +476,56 @@
 #      merging the PR whose review reached nobody — which is the harm itself,
 #      so the hold is pinned in both dispatching paths and on the DEFAULT
 #      `review_site: agent`, not only inside the coordinator-only sections.
+#      (g) The reviewer -> orchestrator hop is bound the SAME way, and the
+#      fan-out brief has a slot for it (#280). That hop carries the most
+#      traffic — every diff-scoped review fans out to as many as nine — and it
+#      was UNBINDABLE, not merely unbound: the brief said it "contains, and
+#      contains only" an enumerated set with no delivery rule in it, so an
+#      orchestrator following it literally could not pass the contract down,
+#      while the nine carried only `Return ONLY a list of findings` — the right
+#      verb, never stated to be the only one. Each of the nine now states the
+#      full rule, `Return ONLY` is STRENGTHENED rather than swapped, and the
+#      delivery rule joins the brief as a MEMBER: the list stays closed,
+#      because closedness is what stops a brief re-authoring a reviewer's
+#      checklist. The lost-reviewer REPORTING bullet survives unchanged and is
+#      pinned as its own bullet — it is the backstop that made this visible on
+#      #273's own PR, where round 4 lost three of four surfaces, two of them
+#      carrying Blocking findings, and folding the two rules together is the
+#      specific tidy #280 refuses. The nine are spelled out and then checked
+#      against the tree, so a tenth reviewer cannot ship pinned by nothing —
+#      and checked again against the agents the ORCHESTRATOR DISPATCHES,
+#      harvested by whether `agents/<name>.md` resolves rather than by name
+#      shape (the bare unprefixed form is legal, and `performance-review`
+#      matches no `*-reviewer` glob). That verdict is an EQUALITY, which is
+#      its vacuity floor: a membership test cannot tell nothing-to-report
+#      from nothing-measured, and a neutered harvest was measured printing
+#      `ok` with a real tenth target present.
+#      Three scoping decisions are load-bearing, each measured: the nine copies
+#      are bounded by a CANONICAL LITERAL held in the gate rather than by the
+#      phrases named (deleting the paragraph's last sentence from one reviewer
+#      left the gate green) — comparing the nine to EACH OTHER was tried first
+#      and bounds divergence rather than content, since a uniform edit across
+#      all nine stays identical and passes, so each copy is compared against
+#      text held outside the files under test, as decision 6 does for the
+#      NO REPORT line;
+#      each reviewer's assertions are cut to its `## Output` section, the
+#      MODE-AGNOSTIC contract, since a whole-file window let the paragraph be
+#      relocated into the conditional `## Diff-scoped mode` section — retiring
+#      it for every audit-mode run — with the gate still green; and the two
+#      TOKEN COUNTS are scoped DIFFERENTLY on purpose, which is the asymmetry a
+#      later tidy will collapse. `SendMessage` counts FILE-WIDE, as the
+#      orchestrator's own probe does, because a fallback readmitting it is
+#      written a section up rather than inside the sentence forbidding it
+#      (measured: a bullet in `## Diff-scoped mode` exited 0 when both tokens
+#      were paragraph-scoped). `relay` counts over `## Output` PLUS
+#      `## Diff-scoped mode` — the two sections a reviewer reads as binding —
+#      because it
+#      is the one token that could legitimately appear as domain vocabulary (a
+#      collector relaying traces, a webhook relay) and a file-wide bound would
+#      redden CI on such a calibration bullet, which lives under
+#      `## Sassy Dog calibration`, outside BOTH sections. Counting is not a
+#      sufficient bound either way: decision 6's known limit governs this hop
+#      too, and the CANONICAL LITERAL is what bounds the paragraph.
 #      Source-level like gates 12, 20, 21, 22 and 24; its must-not-exist checks
 #      run flattened (proved: the same forbidden wording, hard-wrapped between
 #      `codegen` and `review_agent`, is invisible to a line-scoped grep and
@@ -497,7 +548,7 @@
 #      scripts/test-sentry-verification.sh. Its count-re-derivation section
 #      carries its own mutation battery in the PR that added it. Every decision here is
 #      mutation-proved, each battery living in the PR that added it rather than
-#      as a total transcribed here to go stale. Eleven tracked files plus a
+#      as a total transcribed here to go stale. Twenty tracked files plus a
 #      tracked-source sweep for a fourth site, no gh, no network.
 #  30. pipefail-grep guard (scripts/test-pipefail-grep.sh) — no script under
 #      `pipefail` may feed an UNBOUNDED writer into `grep -q` (issue #256,
@@ -1096,13 +1147,15 @@ else
 fi
 
 # --- 29. review-gate decision tests -------------------------------------------
-# The prose decisions from #237, #248 and #273 that each read as drift: the gate
-# is unconditional (and the SKIPPED line survives the default), `review_agent` is
-# deliberately not presence-is-the-toggle, the opt-out is `skip` and not `none`,
-# `review_site` is configured rather than derived, a Blocking finding blocks the
-# merge with exactly one redispatch, and a review report is RETURNED as the
-# agent's final text — with a lost one held as its own outcome rather than
-# merged past or folded into the SKIPPED line. Must-not-exist checks run
+# The prose decisions from #237, #248, #273 and #280 that each read as drift:
+# the gate is unconditional (and the SKIPPED line survives the default),
+# `review_agent` is deliberately not presence-is-the-toggle, the opt-out is
+# `skip` and not `none`, `review_site` is configured rather than derived, a
+# Blocking finding blocks the merge with exactly one redispatch, a review report
+# is RETURNED as the agent's final text — with a lost one held as its own
+# outcome rather than merged past or folded into the SKIPPED line — and the
+# reviewer -> orchestrator hop is bound the same way, with the fan-out brief
+# carrying a slot to pass the contract down. Must-not-exist checks run
 # flattened — this repo hard-wraps. This banner deliberately carries NO counts:
 # it is out of reach of both windows the count re-derivation checks, so a count
 # here is one
