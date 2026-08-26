@@ -3,9 +3,9 @@
 # review gate: three from #237 (PR #243, issue #247), and two more from #248
 # (PR #250, issue #255) covering the gate's two DISPATCHING paths.
 #
-# All five are prose, none of them is derivable from anything a script can run,
-# and every one of them reads to a future "align with the governing principle"
-# sweep like drift that ought to be tidied away:
+# All five decisions are prose, none of them derivable from anything a script
+# can run, and every one of them reads to a future "align with the governing
+# principle" sweep like drift that ought to be tidied away:
 #
 #   1. THE REVIEW GATE IS UNCONDITIONAL. `review_agent:` resolves to the shipped
 #      `sassy-dog:pr-review-orchestrator` when the key is absent, so the gate has
@@ -102,13 +102,68 @@
 # and the Phase 4 section slice — end in `tr`, which drains its input and never
 # closes early.
 #
-# No gh, no network, no repo mutation — it reads six tracked files.
+# THE TWO SUMMARY COUNTS IN THIS HEADER ARE RE-DERIVED, NEVER TRANSCRIBED
+# (issue #276). The decision count and the tracked-file count are restated in
+# this header, in scripts/preflight.sh's gate list and in CLAUDE.md, and until
+# section 7 existed nothing recomputed either of them — while the recent edits
+# to this gate have each moved one. Section 7 derives both from this file and
+# fails when any of those sites disagrees, so a new decision reddens CI until
+# every restatement is updated instead of leaving stale sentences behind.
+#
+# THE DISCRIMINATOR IS THE PART TO GET RIGHT, and it is deliberate rather than
+# obvious. Counting the numbered section banners does NOT answer "how many
+# decisions": the banners run past the decisions into the must-not-exist sweep
+# and into section 7 itself, so a bare count answers a different question, and
+# answers it high enough to redden against every site on its first run. A
+# decision section is one whose banner CARRIES ITS OWN NUMBER BACK as a
+# `(decision N)` suffix; the two trailing sections carry none, which is exactly
+# what excludes them. The opposite failure is the quiet one: a discriminator
+# that silently stops matching re-derives 0 and passes every count vacuously.
+# So the count is taken TWICE, from two independent places — the header's
+# enumerated list above and the body's banners — and the two must agree and be
+# numbered 1..N with no gap. A discriminator gone blind disagrees and reddens.
+#
+# The file count is the length of the READS array, which is also what the
+# existence loop iterates, so a document cannot join the read set without
+# moving the number. A tracked path read WITHOUT joining that array is caught
+# separately, by a scan of this source that spans every tracked shape the gate
+# could read rather than skills/ alone — #276 names agents/ as the next entry
+# it expects, and a scan narrowed to today's read set would not see it. That
+# scan reads CODE LINES ONLY, so a header comment citing a path it does not
+# read stays a cross-reference rather than becoming a count.
+#
+# The mutation battery for section 7 lives in the PR that added it (issue
+# #276), not in-script: the bare banner count, a discriminator matching
+# nothing, one more decision, one more document, a document read outside the
+# read set, a fourth file restating the summary phrase, a wrapped count, a
+# bolded count, and a stale count at each of the sites above. The battery
+# mutates the tracked file in place and restores it, which is what the
+# running-from-a-copy precondition in section 7 exists to insist on.
+#
+# No gh, no network, no repo mutation. It reads the documents the decisions
+# live in, plus the three files that restate this gate's two summary counts —
+# its own source, scripts/preflight.sh and CLAUDE.md — which section 7 checks
+# against the numbers it re-derives: nine tracked files, and separately a sweep
+# of every tracked Markdown and shell file asking which of them carry the
+# summary phrase. The nine are the ASSERTED read set; the sweep opens far more
+# and asserts nothing about their content beyond that one phrase, so it is named
+# apart from the count, the way CLAUDE.md's gate-27 entry names its read set and
+# its tracked-Markdown sweep separately rather than adding them together. (That
+# entry's own wording is deliberately not quoted here: it carries a spelled
+# count, and quoting it would put a competing one inside this very window —
+# measured, it reddened this gate on the first run.)
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-review-gate-decisions.sh
 set -uo pipefail
 export LC_ALL=C
 
+# Resolved BEFORE the `cd` below, because the caller's path is relative to the
+# caller's cwd: comparing it afterwards false-fails from every directory but the
+# repo root, including `cd scripts && bash test-review-gate-decisions.sh` — the
+# most natural invocation there is, given every gate script lives there. Same
+# idiom, and the same reason, as scripts/test-sentry-verification.sh.
+SELF_ABS="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/$(basename "${BASH_SOURCE[0]:-$0}")"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && { echo "test-review-gate-decisions: not in a git repo" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
@@ -125,6 +180,17 @@ TEMPLATE="skills/setup-config/references/templates/send-it.config.md"
 SETUP="skills/setup-config/SKILL.md"
 TAKEIT="skills/take-it/SKILL.md"
 DISPATCH="skills/dispatch-ready/SKILL.md"
+# The documents the decisions live in. Section 7 derives the tracked-file count
+# from the arrays below, so a further document cannot join the read set without
+# moving every restatement of that number with it.
+DOCS=("$SKILL" "$CONTRACT" "$TEMPLATE" "$SETUP" "$TAKEIT" "$DISPATCH")
+# Read for their restated counts alone, never for a decision's prose: this
+# file's own header, preflight's gate list, and CLAUDE.md's gate description.
+SELF="scripts/test-review-gate-decisions.sh"
+PREFLIGHT="scripts/preflight.sh"
+CLAUDEMD="CLAUDE.md"
+COUNT_SITES=("$SELF" "$PREFLIGHT" "$CLAUDEMD")
+READS=("${DOCS[@]}" "${COUNT_SITES[@]}")
 
 fails=0
 ok()  { echo "  ok    $1"; }
@@ -145,7 +211,7 @@ assert_line() {
 
 echo "review-gate decisions from #237/PR #243 (issue #247) and #248/PR #250 (issue #255)"
 
-for f in "$SKILL" "$CONTRACT" "$TEMPLATE" "$SETUP" "$TAKEIT" "$DISPATCH"; do
+for f in "${READS[@]}"; do
     [ -r "$f" ] || bad "missing file: $f"
 done
 [ "$fails" -eq 0 ] || { echo "test-review-gate-decisions: FAILED" >&2; exit 1; }
@@ -576,6 +642,309 @@ else
     ok "located take-it's derived-never-configured list"
     assert_not_in "$derived_list" 'review_site' \
         "take-it's derived-never-configured list does NOT name review_site"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. The two summary counts are RE-DERIVED, never transcribed (issue #276)
+# ---------------------------------------------------------------------------
+# This section carries no `(decision N)` suffix on purpose — it is not one of
+# the decisions, and the discriminator below is what keeps it out of the count.
+#
+# KNOWN LIMITS, stated rather than patched, in the idiom the sibling gates use:
+#
+#   * DIGIT forms are invisible. `it reads 6 tracked files`, sitting beside a
+#     correct spelled count, passes. The scan is spelled-out words only, the
+#     same limit test-sentry-verification.sh states for its own count probe.
+#     So "a stale restatement fails the gate" is true of the spelled forms the
+#     three sites actually use, and not of every form one could write.
+#   * A correct BREAKDOWN reddens. Every spelled `<number> decisions` in a
+#     region must equal the summary, so "three decisions from #237 and two
+#     decisions from #248" fails on a sentence that is true. All three governed
+#     regions write "three from #237" today, with the noun unattached. The fix,
+#     if that ever stops being the natural wording, is to classify each hit
+#     against a bounded left context — the machinery the negation classifier in
+#     test-sentry-verification.sh already pays for — not to drop the veto,
+#     which is the half that catches a region stating both numbers.
+#   * The site sweep below keys on ONE phrase, the decisions summary, so a
+#     fourth file restating only the tracked-file count is not found by it.
+#     That count has no phrasing distinctive enough to sweep for: `N tracked
+#     files` is how nearly every entry in preflight's gate list ends.
+#   * The tracked-path scan spans five directory prefixes and the .md and .sh
+#     extensions, so a read of `.github/workflows/ci.yml` or
+#     `.claude-plugin/plugin.json` would join the read set unseen. It also
+#     matches path LITERALS only: a glob read (`for g in skills/*/SKILL.md`) is
+#     invisible to it, while the same path spelled out reddens.
+#   * check_count matches its noun EXACTLY, so a restatement that varies the
+#     noun — "six documents", "six settled decisions" — sits beside a correct
+#     count unseen by both halves of the check.
+echo "-- summary counts: re-derived from this file, not transcribed"
+
+# Running from a COPY would measure the tracked file rather than the copy: SELF
+# is resolved against the repo root, so a mutation applied to a tmpdir copy of
+# this script reports `undetected` while proving nothing — the #262 lesson
+# aimed at the one gate whose subject is itself. A mutation harness must edit
+# the tracked file in place and restore it, which is what the battery in the PR
+# that added this section does; this precondition is what says so out loud.
+if [ "$SELF_ABS" -ef "$SELF" ]; then
+    ok "running from the tracked path, so section 7 measures the file it is in"
+else
+    bad "this gate is running from $SELF_ABS but would measure $SELF — mutate the tracked file in place and restore it, never a copy"
+fi
+
+# One list, two uses: the spelled form of a re-derived number, and the
+# alternation the region scan matches. Two lists would be one more pair of
+# transcriptions free to drift — which is the defect this section exists for.
+NUM_WORDS=(zero one two three four five six seven eight nine ten eleven twelve
+           thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty)
+NUMWORDS="$(IFS='|'; printf '%s' "${NUM_WORDS[*]:1}")"
+
+num_word() {
+    if [ "$1" -ge 1 ] && [ "$1" -lt "${#NUM_WORDS[@]}" ]; then
+        printf '%s' "${NUM_WORDS[$1]}"
+    fi
+}
+
+# Every region is normalised the SAME way, by one helper rather than three call
+# sites free to drift apart. Leading comment and blockquote markers are
+# stripped, because a phrase wrapped across two lines otherwise joins as
+# `... six # tracked files` and reads ABSENT — a false pass, since preflight's
+# gate list is hard-wrapped and already wraps mid-phrase. Markdown emphasis is
+# stripped for the same reason one line down: `**six** tracked files` is the
+# same miss wearing a different hat, and CLAUDE.md bolds numerals constantly.
+# test-sentry-verification.sh runs an emphasis-stripped copy for exactly this.
+normalize_region() {
+    sed -E -e 's/^[[:space:]]*(>[[:space:]]?)+//' -e 's/^[[:space:]]*#[[:space:]]?//' \
+           -e 's/\*//g' -e 's/(^|[[:space:]])_+/\1/g' -e 's/_+([[:space:]]|\$)/\1/g' <<<"$1" \
+        | tr '\n' ' ' | tr -s ' '
+}
+
+# check_count <label> <region> <noun> <expected word> — every spelled count of
+# <noun> inside the region must be the re-derived one, and at least one must be
+# stated. Every hit is ACCOUNTED FOR rather than looked up: a grep for the right
+# number passes just as happily on a region carrying the right number AND the
+# wrong one, which is the shape a bare must-exist check cannot see. The left
+# boundary keeps `twenty-nine tracked files` from reading as `nine`.
+check_count() {
+    local label="$1" text="$2" noun="$3" want="$4"
+    local hits wrong
+    hits="$(grep -oiE "(^|[^A-Za-z-])($NUMWORDS) $noun" <<<"$text" \
+        | tr 'A-Z' 'a-z' | sed -E 's/^[^a-z]+//' | sort -u)"
+    if [ -z "$hits" ]; then
+        bad "$label states no $noun count at all — re-derived: $want $noun"
+        return
+    fi
+    wrong="$(grep -vxF "$want $noun" <<<"$hits" | tr '\n' ' ')"
+    if [ -n "$wrong" ]; then
+        bad "$label states ${wrong}— re-derived from this file: $want $noun"
+    else
+        ok "$label states $want $noun"
+    fi
+}
+
+# Derivation A — the header's enumerated list, read from the leading comment
+# block alone, which ends at the first line that is not a comment.
+head_dec="$(awk '
+    /^#/ { if ($0 ~ /^#   [0-9]+\. /) { n = $2; sub(/\.$/, "", n); print n }; next }
+    { exit }' "$SELF" | sort -n)"
+# Derivation B — the body banners that carry their own number back as a
+# `(decision N)` suffix. Section 6 (the must-not-exist sweep) and section 7
+# (this one) carry none, which is what keeps a bare banner count — a different
+# question, answered too high — out of this one.
+body_dec="$(awk '
+    /^# [0-9]+\./ {
+        n = $2; sub(/\.$/, "", n)
+        if ($0 ~ ("\\(decision " n "[,)]")) print n
+    }' "$SELF" | sort -n)"
+
+n_head="$(grep -c . <<<"$head_dec")"
+n_body="$(grep -c . <<<"$body_dec")"
+head_flat="$(tr '\n' ' ' <<<"$head_dec")"
+body_flat="$(tr '\n' ' ' <<<"$body_dec")"
+
+# Vacuity first, in both directions: a derivation that matches nothing scores 0,
+# agrees with nothing, and would otherwise let every count below pass silently.
+if [ "$n_head" -gt 0 ]; then
+    ok "the header enumerates $n_head decisions"
+else
+    bad "the header enumeration matched nothing — the counts below would re-derive 0 and pass vacuously"
+fi
+if [ "$n_body" -gt 0 ]; then
+    ok "the decision-N discriminator matched $n_body section banners"
+else
+    bad "the decision-N discriminator matched no section banner — it re-derives 0 and passes every count vacuously"
+fi
+if [ "$head_dec" = "$body_dec" ]; then
+    ok "both derivations name the same decisions"
+else
+    bad "header list [$head_flat] and section banners [$body_flat] disagree on which sections are decisions"
+fi
+# Guarded on a non-empty derivation: `numbered 1..0 with no gap` is an `ok`
+# printed while measuring nothing, which this repo treats as worse than none.
+if [ "$n_head" -gt 0 ]; then
+    expected_dec="$(i=1; while [ "$i" -le "$n_head" ]; do printf '%s\n' "$i"; i=$((i + 1)); done)"
+    if [ "$head_dec" = "$expected_dec" ]; then
+        ok "the decisions are numbered 1..$n_head with no gap and no duplicate"
+    else
+        bad "the decision numbers are not 1..$n_head contiguous: [$head_flat]"
+    fi
+fi
+n_dec="$n_head"
+
+# The tracked-file count is the read set's own length, never a transcription.
+n_files="${#READS[@]}"
+
+# A document read WITHOUT joining READS is a document the count cannot see, and
+# the read set is no longer `skills/` alone — #276 names `agents/` as the next
+# entry it expects. So the scan spans every tracked shape this gate could read
+# and compares against READS, not DOCS. It reads CODE LINES ONLY: a header
+# comment citing a path it does not read is a cross-reference, not a read, and
+# failing on one would push the next editor to "fix" it by inflating the count.
+code_lines="$(grep -vE '^[[:space:]]*#' "$SELF")"
+lits="$(grep -oE '(skills|agents|docs|scripts|references)/[A-Za-z0-9_./-]+\.(md|sh)|(CLAUDE|README)\.md' <<<"$code_lines" | sort -u)"
+n_lits="$(grep -c . <<<"$lits")"
+if [ "$n_lits" -ge "$n_files" ]; then
+    ok "the path scan is live: $n_lits distinct tracked paths in this source, for $n_files reads"
+else
+    bad "the path scan found only $n_lits literals for $n_files reads — the scan is broken, not the source clean"
+fi
+stray=""
+while IFS= read -r lit; do
+    [ -n "$lit" ] || continue
+    known=0
+    for d in "${READS[@]}"; do
+        [ "$lit" = "$d" ] && known=1
+    done
+    [ "$known" -eq 1 ] || stray="$stray $lit"
+done <<<"$lits"
+if [ -n "$stray" ]; then
+    bad "tracked path read outside the read set:$stray — join it to DOCS or COUNT_SITES so the count can see it"
+else
+    ok "every tracked path read by this source is a member of the read set"
+fi
+
+# The site list is a transcription too, so it is swept for rather than trusted:
+# any tracked document carrying this gate's own summary phrase must be one of
+# the sites checked below. One awk pass, flattening per file as it goes, so a
+# wrapped or bolded restatement in a fourth file cannot hide from it.
+sweep_phrase="decisions settled about the review gate"
+# Regular, non-symlink files handed to awk directly, never raw git pathspec
+# output: CLAUDE.md records the #263 measurement that a tracked symlink to
+# /dev/zero satisfies a readability test and awk reading it never returns, which
+# in a required gate is a hang with no diagnostic — the worst shape CI has.
+sweep_files=()
+while IFS= read -r -d '' f; do
+    if [ -f "$f" ] && [ ! -L "$f" ]; then sweep_files+=("$f"); fi
+done < <(git ls-files -z '*.md' '*.sh')
+sweep_hits=""
+if [ "${#sweep_files[@]}" -gt 0 ]; then
+    sweep_hits="$(awk -v phrase="$sweep_phrase" '
+        /sweep_phrase=/ { next }
+        { s = $0
+          sub(/^[[:space:]]*(> ?)+/, "", s); sub(/^[[:space:]]*#[ ]?/, "", s)
+          gsub(/\*/, "", s)
+          buf[FILENAME] = buf[FILENAME] " " s }
+        END { for (f in buf) { t = tolower(buf[f]); gsub(/  +/, " ", t)
+                               if (index(t, phrase)) print f } }' "${sweep_files[@]}" | sort)"
+fi
+# The line DEFINING the phrase is skipped, and that skip is what keeps this
+# file's own membership honest: without it the sweep matched its own assignment,
+# so this file was found whatever the marker-stripping did — a mutation
+# neutering that stripping was measured UNDETECTED. With the skip, this file
+# matches only through its header prose, where the phrase wraps across two
+# comment lines and only the stripping can join it.
+#
+# The floor is set EQUALITY against COUNT_SITES, not "no extras". Every one of
+# the checked sites carries the phrase today, so a sweep that finds NOTHING — a
+# reworded phrase, a pathspec matching nothing, an awk that never ran — is the
+# vacuous green this whole section exists to refuse, and a no-extras test
+# reports it as success. Both directions are named, since a site that stopped
+# carrying the phrase and a file that started are different defects.
+sweep_expected="$(printf '%s\n' "${COUNT_SITES[@]}" | sort)"
+if [ "$sweep_hits" = "$sweep_expected" ]; then
+    ok "the site sweep finds exactly the $(grep -c . <<<"$sweep_expected") checked sites, across ${#sweep_files[@]} tracked files"
+else
+    bad "the site sweep found [$(tr '\n' ' ' <<<"$sweep_hits")] but the checked sites are [$(tr '\n' ' ' <<<"$sweep_expected")] — a file restating the phrase must join COUNT_SITES, and a sweep finding nothing is measuring nothing"
+fi
+
+dec_word="$(num_word "$n_dec")"
+file_word="$(num_word "$n_files")"
+
+# The three windows are located unconditionally: a ceiling failure below must
+# cost one assertion, not nine, and the locators are what say WHERE a later
+# rewording moved a site to.
+self_head="$(normalize_region "$(awk '/^#/{print; next} {exit}' "$SELF")")"
+assert_in "$self_head" "$sweep_phrase" \
+    "this file's header carries the phrase the site sweep keys on"
+
+# preflight's gate entry, anchored on the SCRIPT NAME and never on the gate
+# number, which is unverifiable where it is written — measured, the bullet in
+# test-sentry-verification.sh cited a number this gate has never had. Bounded
+# by the next gate's banner or by the end of the comment block, whichever comes
+# first, so being the last gate in the list does not run the window into code.
+n_pf_entry="$(grep -cE '^#[ ]+[0-9]+\. .*test-review-gate-decisions\.sh' "$PREFLIGHT")"
+if [ "$n_pf_entry" -eq 1 ]; then
+    ok "preflight's gate list introduces this gate exactly once"
+else
+    bad "preflight's gate list introduces this gate $n_pf_entry times — the window cannot be anchored"
+fi
+pf_region="$(normalize_region "$(awk '
+    /^#[ ]+[0-9]+\. / { if (f) exit; if (index($0, "test-review-gate-decisions.sh")) f = 1 }
+    !/^#/ { if (f) exit }
+    f { print }' "$PREFLIGHT")")"
+# Every entry in that list introduces its gate as an open paren before the
+# script path, so a window holding more than one has overrun — the same guard
+# the CLAUDE.md window carries, and an asymmetry that would otherwise read as
+# deliberate. It fires if preflight's next banner ever stops matching.
+n_pf_intro="$(grep -oF -- '(scripts/test-' <<<"$pf_region" | grep -c .)"
+if [ "$n_pf_intro" -eq 1 ]; then
+    ok "preflight window stops before the next gate is introduced"
+else
+    bad "preflight window holds $n_pf_intro gate introductions — it has overrun its entry"
+fi
+
+# CLAUDE.md's gate description. One enormous line, so the window is cut in awk
+# rather than by prefix-stripping a 96KB string, which costs seconds. It is
+# anchored on the INTRODUCTION form — an open paren before the backticked path
+# — so a later cross-reference to this gate elsewhere in the file cannot
+# relocate the window, and the anchor must be unique. The window ends at this
+# gate's own no-network terminator; losing that runs it into the next gate,
+# which the overrun guard below catches.
+claude_anchor='(`scripts/test-review-gate-decisions.sh'
+n_claude_anchor="$(grep -oF -- "$claude_anchor" "$CLAUDEMD" | grep -c .)"
+if [ "$n_claude_anchor" -eq 1 ]; then
+    ok "CLAUDE.md introduces this gate exactly once"
+else
+    bad "CLAUDE.md introduces this gate $n_claude_anchor times — the window cannot be anchored"
+fi
+claude_region="$(normalize_region "$(awk -v a="$claude_anchor" -v t="no network)" '
+    { i = index($0, a)
+      if (i > 0) {
+          rest = substr($0, i + length(a))
+          j = index(rest, t)
+          if (j > 0) print substr(rest, 1, j - 1)
+          exit
+      } }' "$CLAUDEMD")")"
+if [ -n "$claude_region" ]; then
+    ok "located CLAUDE.md's gate description, bounded at its own terminator"
+    # A terminator that merely MOVED is the mis-scoping boundedness cannot see:
+    # the window then runs to the next gate's terminator and measures that
+    # gate's counts. Every gate in that sentence is introduced as an open paren
+    # before its script path, so a window holding one has overrun.
+    assert_not_in "$claude_region" '\(`scripts/' \
+        "CLAUDE.md window stops before the next gate is introduced"
+else
+    bad "CLAUDE.md's gate description did not resolve: either its no-network terminator is gone, or the description now spans more than one line and the cut is line-scoped"
+fi
+
+if [ -z "$dec_word" ] || [ -z "$file_word" ]; then
+    bad "no spelled form for $n_dec decisions / $n_files tracked files — extend NUM_WORDS; a digit restatement is invisible to the scan and cannot stand in"
+else
+    check_count "this file's header" "$self_head" "decisions" "$dec_word"
+    check_count "this file's header" "$self_head" "tracked files" "$file_word"
+    check_count "preflight's gate entry" "$pf_region" "decisions" "$dec_word"
+    check_count "preflight's gate entry" "$pf_region" "tracked files" "$file_word"
+    check_count "CLAUDE.md's gate description" "$claude_region" "decisions" "$dec_word"
+    check_count "CLAUDE.md's gate description" "$claude_region" "tracked files" "$file_word"
 fi
 
 if [ "$fails" -ne 0 ]; then

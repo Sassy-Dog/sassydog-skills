@@ -461,8 +461,23 @@
 #      caught by the flattened one), the flatten also stripping blockquote
 #      markers because take-it's step-6 rule lives inside a `>` prompt template,
 #      and it uses no `| grep -q` pipeline, whose SIGPIPE-plus-pipefail 141
-#      reports a caught mutation as a miss (#172). Twenty-one mutations across
-#      the five decisions, six tracked files, no gh, no network.
+#      reports a caught mutation as a miss (#172). Its own two summary counts —
+#      the decision count and the tracked-file count — are RE-DERIVED by the
+#      gate rather than transcribed (issue #276), because they were restated in
+#      several places and recomputed by nothing. The decisions are counted
+#      twice, from the header's enumerated list and from the body banners that
+#      carry a `(decision N)` suffix, and the two must agree: a bare count of
+#      numbered banners answers a different question (it runs past the
+#      decisions into the trailing sweeps) and a discriminator that silently
+#      matches nothing re-derives 0 and would pass every count vacuously. The
+#      file count is the length of the array the existence loop iterates. A
+#      stale restatement in the gate's header, in this list or in CLAUDE.md
+#      fails the gate — in the SPELLED forms those sites use; a digit form is a
+#      stated blind spot, as it is for the free-floating-count probe in
+#      scripts/test-sentry-verification.sh. Section 7 carries its
+#      own mutation battery in the PR that added it. Twenty-one mutations
+#      across the five decisions, nine tracked files plus a tracked-source
+#      sweep for a fourth site, no gh, no network.
 #  30. pipefail-grep guard (scripts/test-pipefail-grep.sh) — no script under
 #      `pipefail` may feed an UNBOUNDED writer into `grep -q` (issue #256,
 #      generalising #172). grep -q closes the pipe on its first match, the
@@ -1060,11 +1075,14 @@ else
 fi
 
 # --- 29. review-gate decision tests -------------------------------------------
-# Three prose decisions from #237 that each read as drift: the gate is
+# The prose decisions from #237 and #248 that each read as drift: the gate is
 # unconditional (and the SKIPPED line survives the default), `review_agent` is
-# deliberately not presence-is-the-toggle, and the opt-out is `skip`, not `none`.
-# Must-not-exist checks run flattened — this repo hard-wraps. Three tracked
-# files, no gh, no network.
+# deliberately not presence-is-the-toggle, the opt-out is `skip` and not `none`,
+# `review_site` is configured rather than derived, and a Blocking finding blocks
+# the merge with exactly one redispatch. Must-not-exist checks run flattened —
+# this repo hard-wraps. This banner deliberately carries NO counts: it is out of
+# reach of both windows section 7 checks, so a count here is one nothing holds.
+# The counts live in the gate list above, where the gate re-derives them.
 if bash scripts/test-review-gate-decisions.sh; then
     pass "review-gate decision tests (scripts/test-review-gate-decisions.sh)"
 else
