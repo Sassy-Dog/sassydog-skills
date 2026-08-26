@@ -243,7 +243,7 @@ bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 # transcribed. A section that never runs, or that runs fewer assertions than it
 # declares, FAILS — which is what a bare numeric floor could not do (measured
 # twice: a whole section deleted, and 14 assertions deleted from the largest).
-SECTIONS=(windows:31 canon7:19 conjunct:7 enumeration:8 discriminator:17
+SECTIONS=(windows:31 canon7:19 conjunct:7 enumeration:10 discriminator:17
           nonempty:3 carveouts:2 complete:5 record:3 stoppath:7 premise:3)
 # The registry block's own minimum is deliberately NOT a member of SECTIONS.
 # Measured: while it was one, deleting the block AND its entry shrank the floor
@@ -492,6 +492,7 @@ heading_list() {
 canon_table() {
     cat <<'CANON'
 blocked_prs	- **Open PRs on blocked issues** → resolve these too, and hand them to nobody. **With `board:`** the blocked set is the board's items carrying the `blocked` label, **plus any `blocked`-labelled issue the board does not carry at all** — `issue-claim.sh block` writes labels and never cards, so an issue blocked by hand, archived, or past the board query's own limit is on no card. Read that second half with `gh issue list --repo "$REPO" --state open --label blocked --limit 200 --json number`; without a named command this half is an instruction nobody can execute, and it is the half #282's own state consists of. Take the union: an issue the board cannot see is precisely the one whose PR would otherwise veto nothing and never reach the held set. **Without a board** it is `blocked[]` from the snapshot above. Both paths, like every other rule in this section and in §4 — a bullet written for one path only is invisible on the other, and the half it omits is the half that goes dark. `issue-claim.sh block` strips `in-progress`, so a blocked issue is not in-flight and the branch query above cannot see its PR at all; `gh issue view <N> --repo "$REPO" --json closedByPullRequestsReferences` names it (an OPEN entry only), the same lookup §4 already sanctions. **Known limit — and it bites hardest exactly here:** that field sees only PRs carrying a closing keyword, and this population (a redispatch PR, one opened by hand) is the likeliest to lack one, so fall back to the `*/issue-N-*` branch and never read an empty result as "no PR" — an unenumerated PR is silent and terminal. **Bounded** like §4's sibling lookup, and stated honestly: up to TWO calls per blocked issue per tick where the branch fallback is needed; the snapshot's `--limit` bounds the boardless path, and the board path is bounded by the board query's own limit plus the `--limit` on the label query named above. The set grows monotonically — nothing removes `blocked` but a human, and `promote` never does — so a repo that accumulates blocked issues pays for all of them every tick; if that cost ever bites under `/loop`, it degrades into "live state could not be verified", which is this fix's own failure mode wearing the bug's face. This loop may not advance these PRs, so they are never handed to `sassy-dog:pr-shepherd` — they are read so **§7 can see them**. A human-gated PR that nobody enumerated is not a smaller version of the §7 gap, it is a worse one: it leaves §7's held set empty, and an empty held set admits DRAIN COMPLETE, so the loop self-cancels with the PR still open (#282).
+board_inflight	**With `board:`** — the board snapshot is the source of truth: cards in **In progress** / **In review** with assignee @me **and not carrying `blocked`** are in-flight. That exclusion is load-bearing, and it is the one place the two paths differ in mechanism rather than in wording: `issue-claim.sh block` writes labels and never moves a card, so without it a demoted issue stays in-flight on a board repo permanently — in-flight never reaches zero, STALLED's first conjunct is never satisfied, and #282's forever-tick survives the whole fix on exactly the repos §2 claims to cover. `board-snapshot.sh` returns `labels` per item, so the data is already there.
 b001	## 7. Terminal states — drain complete, drain stalled
 b002	A drain loop ends itself in exactly two states. Both must be **confirmed from live GitHub state read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave the loop alone, write no stall record, and let the next tick re-check.
 b003	### DRAIN COMPLETE
@@ -772,6 +773,14 @@ section enumeration "section 2 resolves open PRs on blocked issues, on BOTH path
 
 assert_canon blocked_prs '- **Open PRs on blocked issues**' '- **Failed or red PRs**' \
     "section 2's blocked-PR enumeration bullet is unchanged"
+# Without the `blocked` exclusion here, a demoted issue stays in-flight on a
+# board repo forever and STALLED's first conjunct is never satisfied — the whole
+# fix is inert on exactly the repos §2 claims to cover. Measured undetected
+# while §2 was inventory-only, which is why this paragraph is content-pinned.
+assert_canon board_inflight '**With `board:`** — the board snapshot is the source of truth' '' \
+    "section 2's board-path in-flight definition is unchanged"
+assert_in "$sec2_flat" 'never one whose issue carries .blocked.' \
+    "the merge hand-off withholds a PR whose issue a human blocked"
 assert_wline "$sec2" '^- \*\*Open PRs on blocked issues\*\*' \
     "the enumeration is a top-level bullet of section 2, not a footnote elsewhere"
 assert_has "$sec2_flat" 'closedByPullRequestsReferences' \
