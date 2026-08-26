@@ -623,6 +623,46 @@
 #      to the caller. No taxonomy colour is transcribed —
 #      the mock's label store is seeded from the `taxonomy` emitter, gate 8's
 #      no-third-copy rule. Mock gh only: no repo, no network.
+#  32. drain terminal-state tests (scripts/test-drain-terminal-states.sh) —
+#      `dispatch-ready` §7's two terminal states must COVER the state where
+#      Ready is empty, in-flight is zero, and an open unmerged PR sits there
+#      that this loop is not permitted to advance (issue #282). They did not:
+#      COMPLETE is vetoed by the open PR and STALLED required Ready non-empty,
+#      so neither branch was reachable and the loop ticked forever — accurately
+#      reporting the state and doing nothing, unable to self-cancel. The stall
+#      record could not help, being written only INSIDE the STALLED branch, so
+#      the two-tick clock never started. THE ACTION THAT CREATES THE STATE IS
+#      THE ACTION THAT HIDES IT: `issue-claim.sh block` strips `ready` and
+#      `in-progress` together, so recording "a human must decide this" removes
+#      the issue from the one set the old conjunct consulted (observed
+#      2026-08-26 on #273 / PR #279; cancelled by hand). THE FIX IS A
+#      DISCRIMINATOR, NOT A DELETED CONJUNCT, and the deletion is what a later
+#      "this conjunct does nothing" sweep re-derives: an open PR is not
+#      automatically a human gate — one whose checks are running or red can
+#      still advance on its own, and firing STALLED there cancels a loop that
+#      was about to make progress. So the third conjunct is "nothing this loop
+#      is permitted to advance" and a four-row table decides which side an open
+#      PR falls on, hinged on §2's ONE redispatch: spent means held, unspent
+#      means the loop still has an action of its own. Rows are ACCOUNTED FOR,
+#      not tallied — every row must classify by its effect cell and its answer
+#      cell must agree, so a fifth row matching neither is visible and a table
+#      that swapped which condition carries which effect is caught by the four
+#      per-row assertions beside it. The HELD SET MUST BE NON-EMPTY, or
+#      "nothing to advance" is satisfied vacuously by a queue that simply
+#      finished and STALLED races COMPLETE on the state COMPLETE owns. Both
+#      pre-existing carve-outs are compared BYTE-IDENTICAL against canonical
+#      literals held in the gate — not to each other, which bounds divergence
+#      rather than content — and the list must hold exactly two bullets, so a
+#      third weakening them is caught by arithmetic; the accepted cost is that
+#      a legitimate reword must be made in two places at once and fails loudly
+#      until it is. COMPLETE is pinned unchanged, veto included, its rail
+#      asserted as a FIXED string so a softening rewrite deletes the literal.
+#      Prose checks are flattened — this repo hard-wraps, and for a
+#      must-not-exist a line wrap is a false PASS. Its own header records why
+#      it carries no `-ef` precondition (its subject is another file, so a copy
+#      still measures the tracked one) and what that costs a mutation harness.
+#      The assertion count is printed, never transcribed, over a coarse vacuity
+#      floor. One tracked file, no gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1241,6 +1281,21 @@ if bash scripts/test-claim-lifecycle.sh; then
     pass "claim-lifecycle tests (scripts/test-claim-lifecycle.sh)"
 else
     failed "claim-lifecycle tests (scripts/test-claim-lifecycle.sh)"
+fi
+
+# --- 32. drain terminal-state tests -------------------------------------------
+# Source-level: §7 IS the instruction the loop follows, so there is nothing to
+# run. It pins the state neither terminal state covered (#282), the
+# discriminator that decides whether an open PR is a human gate or something
+# this loop may still advance, the non-empty held set that stops STALLED being
+# satisfied vacuously, and the four things the fix must NOT have moved — both
+# carve-outs byte-identical, COMPLETE and its open-PR veto, the two-tick
+# confirmation, and the single stop path. Flattened must-not-exists; one
+# tracked file, no gh, no network.
+if bash scripts/test-drain-terminal-states.sh; then
+    pass "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
+else
+    failed "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
 fi
 
 # ------------------------------------------------------------------------------

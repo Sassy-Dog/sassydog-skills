@@ -385,13 +385,64 @@ empty queue needs no confirmation tick:
 DRAIN COMPLETE — Ready is empty and nothing is in flight.
 ```
 
+**COMPLETE is unchanged, veto included**: an open PR still means the drain is not complete —
+in-flight until actually MERGED per §3, exactly as the safety rails below state it. What #282
+changed is only where that veto leads. A PR this loop may not advance used to veto COMPLETE and
+reach no other state either; it now joins STALLED's held set.
+
 ### DRAIN STALLED
 
-In-flight zero AND dispatched zero this tick AND Ready non-empty — every Ready item held by a §4
-filter. Nothing this loop controls can change GitHub state before the next tick: no PRs to merge,
-no agents working, and dependency holds only resolve when a dep closes — with nothing in flight,
-only external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone
-must never keep it alive.
+In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance** —
+every Ready item held by a §4 filter, and every open PR held by the discriminator below. Nothing
+this loop controls can change GitHub state before the next tick: no PRs it may merge, no agents
+working, and dependency holds only resolve when a dep closes — with nothing in flight, only
+external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone must
+never keep it alive.
+
+**The third conjunct is "nothing to advance", and it replaced "Ready non-empty"** — that
+difference is the whole of #282. Ready empty, in-flight zero and an open unmerged PR was covered by
+NEITHER terminal state: COMPLETE is vetoed by the open PR, and STALLED could not fire on an empty
+queue. The loop ticked forever, reporting the state accurately and doing nothing (observed
+2026-08-26 on #273 / PR #279; cancelled by hand). The action that creates the state is the action
+that hides it — `issue-claim.sh block` strips `ready` and `in-progress` together, so recording
+"a human must decide this" is precisely what removes the issue from the one set the old conjunct
+consulted.
+
+**Deleting that conjunct outright would have been the wrong fix**, and re-deriving it that way is
+the tempting simplification here: an open PR is not automatically a human gate. One whose checks
+are still running or red can advance on its own, and firing STALLED there cancels a loop that was
+about to make progress.
+
+**The held set must be non-empty.** Nothing held, nothing in flight and no open PR is COMPLETE,
+which fires first and needs no confirmation tick. "Nothing to advance" satisfied vacuously — by a
+queue that simply finished — must never announce STALLED.
+
+#### The discriminator — may this loop advance it?
+
+Ask it of every open PR this tick sees, and carry the answer per PR into the held set:
+
+| Open PR this tick | May this loop advance it? | Effect |
+| --- | --- | --- |
+| Its issue carries `blocked` | **No** — §2 already routed it to a human | held: joins the held set |
+| It carries an unresolved **Blocking** review finding whose ONE §2 redispatch is spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set |
+| Checks still running | **Yes** — a later tick merges it once it goes green | keeps the loop alive |
+| Checks red and its issue is not `blocked` | **Yes** — §2's one redispatch is still available | keeps the loop alive |
+
+**The redispatch budget is the hinge on both failure rows**, so read this before "simplifying" the
+four rows into two. §2 grants exactly ONE redispatch per issue, taken on a later tick; while it is
+unspent this loop still has an action of its own, and a state it can still act on is not a stall.
+Once it is spent §2 demotes to `blocked`, which is why the label is the usual way a held PR
+presents — and why the finding row is not redundant beside it: the label is a write this loop
+performs, the finding is a fact it reads, and a demotion not yet written must never read as
+advanceable. Unknown is not clear.
+
+**Read the review outcome from the PR body**, exactly as §2 reads it — take-it's step 6 requires
+the sub-agent to have written the verbatim line. This loop reads no RESULT lines, and a later tick
+is a different session from the one that dispatched.
+
+**A gate that could not be read is not a hold.** A PR whose checks or review outcome would not read
+this tick falls under this section's opening rule: live state was not verified, so the tick proves
+nothing — leave the loop alone and write no stall record.
 
 Two carve-outs keep the state precise:
 
@@ -402,30 +453,44 @@ Two carve-outs keep the state precise:
   session's in-flight (`mine: false`) and resolves when that session merges, no human needed. A
   tick whose holds include an active foreign claim is idle, not stalled — keep looping.
 
+**Both carve-outs survive the new conjunct unchanged**, and PR rows weaken neither: a
+self-resolving hold still requires in-flight > 0, and another session's open PR is that session's
+in-flight, resolving when it merges — a foreign claim is not a human gate whether it presents as an
+issue row or as a PR row.
+
 **Confirm across two consecutive ticks before stopping** — a single stalled tick may be racing
-another session that is about to close a dependency or unblock an issue. Ticks share no memory,
-so persist the observation next to the §5 batch manifest, in `.git/dispatch-ready-stall.json`: the held
-issue numbers with each one's hold root (the open `Depends on #N` it chains to, the `blocked`
-label, the decision gate).
+another session that is about to close a dependency, unblock an issue, or merge a PR. Ticks share
+no memory, so persist the observation next to the §5 batch manifest, in
+`.git/dispatch-ready-stall.json`: the held set — held issue numbers AND held PR numbers — with each
+one's hold root (the open `Depends on #N` it chains to, the `blocked` label, the decision gate, the
+Blocking finding a held PR carries).
+
+**The record is written from the held set, never from `ready[]`**, which is what makes it reachable
+with Ready empty. Before #282 it was written only inside a branch that required Ready non-empty, so
+in the uncovered state the two-tick clock never started and there was nothing to confirm. A
+hold-set of nothing but PRs starts that clock exactly like any other.
 
 - **No record, or the recorded hold-set differs from this tick's** → write this tick's hold-set
   and finish normally, appending to the tick report:
-  `stall: suspected — nothing in flight, all Ready held; an identical hold-set next tick ends the loop`.
+  `stall: suspected — nothing in flight and nothing this loop may advance; an identical hold-set next tick ends the loop`.
 - **Record matches this tick's hold-set exactly** → STALLED is confirmed. Delete the record and
   announce loudly, naming the reason **per held item** so the human knows exactly what unlocks
-  the queue:
+  the queue — PR rows alongside issue rows, each naming the PR and the gate holding it:
 
 ```text
-DRAIN STALLED — nothing dispatchable and nothing in flight; all Ready items gate on human action:
+DRAIN STALLED — nothing dispatchable, nothing in flight, and nothing this loop may advance:
   #103 #104 #105 #106 #108 → chain to #102 (parked in Backlog: awaiting planning session)
   #22 → blocked label (dispatch-ready: 2 failed attempts — CI check needs a human call)
+  PR #279 (#273) → open, issue blocked (3 Blocking review findings, redispatch spent)
 Loop <id> cancelled — resolve the gate(s), then restart the drain.
 ```
 
-Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one.
+Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one. A held
+set of nothing but PRs takes that same path: it is a terminal state like any other, and the cron
+self-cancel below is not optional on it.
 
-Any tick that dispatches, merges, or observes in-flight work deletes a leftover
-`.git/dispatch-ready-stall.json`: progress resets the confirmation clock.
+Any tick that dispatches, merges, observes in-flight work, or sees an open PR it may still advance
+deletes a leftover `.git/dispatch-ready-stall.json`: progress resets the confirmation clock.
 
 ### Stop path — both terminal states
 
@@ -449,10 +514,11 @@ prompt is this dispatch-ready invocation.
 
 Safety rails: self-cancel ONLY on a terminal state confirmed above. For COMPLETE, anything still
 claimed or an open PR (in-flight until actually MERGED, per §3) means the drain is not complete.
-For STALLED, any dispatch, any in-flight work (mine or foreign), or a hold-set that changed since
-the recorded tick means the loop may still make progress — stay alive. An API-failure tick never
-self-cancels and never counts toward stall confirmation. Ticks that fire between confirmation and
-cancellation are no-ops, not errors: each re-runs this section and retries.
+For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still
+advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may
+still make progress — stay alive. An API-failure tick never self-cancels and never counts toward
+stall confirmation. Ticks that fire between confirmation and cancellation are no-ops, not errors:
+each re-runs this section and retries.
 
 ## Guardrails
 
