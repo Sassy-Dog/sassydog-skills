@@ -408,11 +408,12 @@ orch_flat="$(flatten "$ORCH")"
 # What remains unbounded one hop down is text OUTSIDE that paragraph, and the
 # two tokens answer it differently on purpose — `SendMessage` is counted
 # file-wide, so a fallback readmitting it anywhere in a reviewer reddens;
-# `relay` is counted over `## Output` only, because it is genuine domain
-# vocabulary here and a file-wide bound would redden on a legitimate
-# calibration bullet. A weakening clause that names neither token and sits
-# outside `## Output` is still not caught, exactly as it is not caught one
-# level up.
+# `relay` is counted over `## Output` PLUS `## Diff-scoped mode` — the two
+# sections a dispatched reviewer reads as binding — because it is the one token
+# that could legitimately appear as domain vocabulary, and a file-wide bound
+# would redden on such a calibration bullet. A weakening clause that names
+# neither token and sits outside BOTH of those sections is still not caught,
+# exactly as it is not caught one level up.
 #
 # The known limit is stated rather than patched, in the idiom the sibling gates
 # use: this pins the WORDING of each prohibition, so a legitimate reword of one
@@ -1186,27 +1187,40 @@ if [ "${#tracked_reviewers[@]}" -eq 0 ]; then
     bad "no agents/*-reviewer.md found in the tree — the per-reviewer loop below would measure nothing"
 else
     # The glob defines "reviewer" by FILENAME, and nothing enforces that
-    # convention — so the orchestrator's own dispatch targets are asked too.
-    # Any `sassy-dog:<name>` it names that resolves to a tracked agent file
-    # must be in the read set, whatever it is called: a tenth dispatch target
-    # named `performance-review` satisfies the glob nowhere and gate 27's
-    # existence check everywhere, and would ship pinned by nothing.
-    orch_targets="$(grep -oE 'sassy-dog:[a-z0-9-]+' "$ORCH" | sed 's/^sassy-dog://' | sort -u)"
-    unpinned=""
+    # convention — so the orchestrator's own dispatch targets are asked too. A
+    # tenth target named `performance-review` matches the glob nowhere and
+    # satisfies gate 27's existence check everywhere, and would ship with its
+    # delivery contract pinned by nothing.
+    #
+    # HARVEST BY RESOLUTION, NOT BY SHAPE. An earlier edition required the
+    # `sassy-dog:` prefix, which the orchestrator itself declares optional —
+    # "a bare name (`testing-reviewer`) means the namespaced agent" — so a bare
+    # surface-table target was invisible here while gate 27 saw it, two gates
+    # parsing one file and disagreeing about what a dispatch target is. Every
+    # hyphenated token is harvested instead and then filtered by whether
+    # `agents/<name>.md` actually exists, which no prose word can satisfy, so
+    # the prefixed form, the bare form and an underscore name all resolve.
+    #
+    # THE VERDICT IS AN EQUALITY, and that is the vacuity floor. A membership
+    # test alone cannot tell "nothing to report" from "nothing measured":
+    # measured, neutering the harvest pattern left this check printing `ok`
+    # with a real tenth target present. An equality fails a shrunken harvest
+    # the same way it fails a new target — the shape every neighbouring check
+    # here already guards, and the one this section's own header calls quiet.
+    orch_targets="$(grep -oE '[a-z0-9]+([_-][a-z0-9]+)+' "$ORCH" | sort -u)"
+    orch_agents=""
     while IFS= read -r t; do
         [ -n "$t" ] || continue
         [ -f "agents/$t.md" ] || continue          # skills and prose names are not agents
         [ "agents/$t.md" = "$ORCH" ] && continue   # the orchestrator is not its own reviewer
-        known=0
-        for d in "${REVIEWERS[@]}"; do
-            [ "agents/$t.md" = "$d" ] && known=1
-        done
-        [ "$known" -eq 1 ] || unpinned="$unpinned $t"
+        orch_agents="$orch_agents""agents/$t.md"$'\n'
     done <<<"$orch_targets"
-    if [ -n "$unpinned" ]; then
-        bad "the orchestrator dispatches agents the read set does not name:$unpinned — join them to REVIEWERS, then move the tracked-file count and its three restatement sites"
+    have_ot="$(printf '%s' "$orch_agents" | sort -u)"
+    want_ot="$(printf '%s\n' "${REVIEWERS[@]}" | sort -u)"
+    if [ "$have_ot" = "$want_ot" ]; then
+        ok "the agents the orchestrator dispatches are exactly the read set's ${#REVIEWERS[@]} reviewers"
     else
-        ok "every agent the orchestrator dispatches is a member of the read set"
+        bad "the orchestrator dispatches [$(tr '\n' ' ' <<<"$have_ot")] but the read set names [$(tr '\n' ' ' <<<"$want_ot")] — join any new dispatch target to REVIEWERS and move the tracked-file count with it; if this list looks truncated the harvest itself has stopped matching"
     fi
 
     have_rv="$(printf '%s\n' "${tracked_reviewers[@]}" | sort)"
@@ -1226,8 +1240,12 @@ fi
 # so the one that missed out is whichever surface the next diff happens to
 # touch.
 #
-# A CANONICAL LITERAL IS THE BOUND, and the per-phrase checks below are the
-# readable failure messages rather than the coverage. Nine copies are
+# A CANONICAL LITERAL IS THE BOUND ON THE PARAGRAPH'S CONTENT — but not on
+# WHERE it sits, and the per-phrase checks below are not merely readable
+# failure messages for it. `RV_DELIVERY` is compared against a region extracted
+# file-wide, so the `assert_in "$rv_out"` block is the ONLY thing binding the
+# paragraph to `## Output`, the mode-agnostic section. Deleting those checks as
+# redundant retires the audit-mode scoping silently. Nine copies are
 # maintained by hand; a per-phrase sweep pins only the phrases it names, so any
 # clause NOT named can leave a file silently — measured, deleting the
 # paragraph's final sentence from one reviewer left this gate exit 0, and that
@@ -1250,7 +1268,7 @@ fi
 # which is the direction this repo prefers over a check that reports clean on
 # a source stating the inverse.
 RV_DELIVERY="$(cat <<'RVEOF'
-**That list is your RETURN VALUE — the final text of this run, and nothing else.** Deliver it by *ending on it*. `SendMessage` is not a delivery mechanism for findings: sending needs an address, and a dispatched reviewer cannot reliably resolve its orchestrator's — measured on 2026-08-25 across five occurrences, not one of which reached the session that dispatched it ([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Returning needs no address. So an unresolvable dispatcher changes nothing about what you do: return the list in full anyway, as your final text. Never hand it to another session to relay, never leave it in a file and return a pointer to it, and never end a run with your findings unstated because delivery failed — the return **is** the delivery. An **empty list is returned the same way**: say you found nothing, out loud, rather than ending on silence, because silence and a lost run are the same text. In **diff-scoped mode** a reviewer that did not come back is scored `!` and named as an unreviewed surface, never as a clean one, so a list that reached nobody costs the review that whole surface and not merely your findings ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280)).
+**That list is your RETURN VALUE — the final text of this run, and nothing else.** Deliver it by *ending on it*. `SendMessage` is not a delivery mechanism for findings: sending needs an address, and a dispatched reviewer cannot reliably resolve its orchestrator's. Measured one hop up on 2026-08-25, five occurrences, not one of which reached the session that dispatched it ([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Returning needs no address. So an unresolvable dispatcher changes nothing about what you do: return the list in full anyway, as your final text. Never hand it to another session to relay, never leave it in a file and return a pointer to it, and never end a run with your findings unstated because delivery failed — the return **is** the delivery. An **empty list is returned the same way**: say you found nothing, out loud, rather than ending on silence, because silence and a lost run are the same text. In **diff-scoped mode** a reviewer that did not come back is scored `!` and named as an unreviewed surface, never as a clean one, so a list that reached nobody costs the review that whole surface and not merely your findings ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280)).
 RVEOF
 )"
 # Both sides normalised the same way, by one expression rather than two call
@@ -1339,14 +1357,15 @@ for rv in "${REVIEWERS[@]}"; do
     # own probe does, and gives up no slack: all nine sit at 1 file-wide today,
     # and the token is domain vocabulary in none of these nine.
     #
-    # `relay` counts over the `## Output` SLICE, because it genuinely IS
-    # ordinary vocabulary here — a collector that relays traces, a webhook
-    # relay, a deploy-notification relay — and a file-wide bound would redden
-    # the repo's one required check on a legitimate calibration bullet, with a
-    # diagnostic naming a cause that did not happen. `## Sassy Dog calibration`
-    # is where such a bullet lives and sits OUTSIDE this window, so the window
-    # is wide enough to catch a fallback and narrow enough to permit the
-    # vocabulary. The match is `-i -F`, so `relays`/`relayed`/`relaying` count.
+    # `relay` counts over `## Output` PLUS `## Diff-scoped mode` — the two
+    # sections a dispatched reviewer reads as binding — because it is the one
+    # token here that could legitimately appear as domain vocabulary (a
+    # collector relaying traces, a webhook relay), and a file-wide bound would
+    # redden the repo's one required check on such a bullet with a diagnostic
+    # naming a cause that did not happen. `## Sassy Dog calibration`, where
+    # that bullet belongs, sits OUTSIDE both, so the window is wide enough to
+    # catch a fallback in either binding section and narrow enough to permit
+    # the vocabulary. The match is `-i -F`: `relays`/`relayed`/`relaying` count.
     # The relay window spans BOTH sections a dispatched reviewer reads as
     # binding: `## Output` (mode-agnostic) and `## Diff-scoped mode` (the one
     # actually in force during a fan-out). Measured: a relay-based fallback
@@ -1355,7 +1374,17 @@ for rv in "${REVIEWERS[@]}"; do
     # once per reviewer and that once is inside `## Output` — and it leaves
     # `## Sassy Dog calibration` outside, which is where the traces-relay and
     # webhook-relay vocabulary lives and the whole reason this is not file-wide.
-    rv_relay_win="$rv_out $(section_slice "$rv" '## Diff-scoped mode')"
+    # The second half gets the same empty guard `## Output` has, or the window
+    # silently narrows back to the pre-fix scope: measured, renaming the
+    # heading to `## Diff-scoped mode (changesets)` and planting the exact
+    # fallback this widening exists to catch left the gate at exit 0. The guard
+    # also makes "every reviewer carries a `## Diff-scoped mode` section" an
+    # asserted fact rather than an assumption a tenth reviewer could break.
+    rv_diff="$(section_slice "$rv" '## Diff-scoped mode')"
+    if [ -z "$rv_diff" ]; then
+        bad "$rv_name has no '## Diff-scoped mode' section — the relay window below would narrow to ## Output with no diagnostic"
+    fi
+    rv_relay_win="$rv_out $rv_diff"
     rv_delivery="$(awk '/\*\*That list is your RETURN VALUE/ { f = 1 } f && /^$/ { exit } f { print }' "$rv")"
     if [ -z "$rv_delivery" ]; then
         bad "$rv_name has no delivery paragraph — its canonical comparison below would measure nothing"
@@ -1432,6 +1461,16 @@ else
         "the brief orders the delivery rule stated, not merely describes it"
     assert_in "$brief_region" 'say it in the brief anyway' \
         "the brief keeps restating the rule mandatory despite each agent carrying it"
+    # KNOWN LIMIT, stated rather than enumerated against. These two are
+    # must-exists, so they bound DELETION and not ADDITION: measured, rewriting
+    # the item to "say it in the brief anyway WHEN THE AGENT IS NOT ONE OF THE
+    # NINE … for the nine shipped reviewers you may omit item 6" keeps both
+    # literals present and exits 0 — retiring the rule for exactly the
+    # dispatches decision 7 exists to bind. Closing it needs a containment rule
+    # on what the item may CONTAIN, not a third literal: this file already
+    # records a six-verb affirmative enumerating an open class and failing in
+    # both directions at once. Until then a clean run means the imperatives are
+    # present, not that nothing carves an exception out of them.
     # THE LIST STAYS CLOSED. Opening it is the obvious fix and the wrong one:
     # closedness is what stops a brief re-authoring a reviewer's checklist, a
     # prohibition stated in as many words directly beneath the list. The
@@ -1466,6 +1505,17 @@ assert_in "$orch_flat" 'Report it on every run, the clean one included' \
     "a lost reviewer is still reported on every run, the clean one included"
 assert_line "$ORCH" '^- \*\*The hop below you is bound too' \
     "the hop-below bullet is a bullet of its own, beside the reporting one"
+# PREFIX ANCHORS ARE NOT COVERAGE — the failure family this repo names, and the
+# line above is one. Measured: the same bullet rewritten as "…is bound too, so
+# the bullet above that scores a lost reviewer is now redundant — drop it. Read
+# a clean fan-out as proof the hop worked." satisfies that anchor and leaves the
+# gate green, which is acceptance item 4 and the specific tidy #280 refuses,
+# unpinned. Its two load-bearing clauses are asserted on their own, flattened
+# because both wrap.
+assert_in "$orch_flat" 'does not retire the bullet that scores a lost reviewer' \
+    "the hop-below bullet states that it does not retire the reporting bullet"
+assert_in "$orch_flat" 'do not read a clean fan-out as proof the hop worked' \
+    "the hop-below bullet still refuses a clean fan-out as evidence the hop worked"
 
 # --- PART FOUR: README's copy of this decision -----------------------------
 # README carries a COPY, and the comment above READMEMD states the rule: a copy
@@ -1551,6 +1601,14 @@ done
 # resolve an address" edit reaches for — necessarily ADDS an occurrence.
 # Counting is what a veto could not do: there is no vocabulary to walk past and
 # no negator to be shielded by.
+# WHAT THIS COSTS, recorded so it does not read as a preference. Being
+# file-wide and exactly 1, the count forbids brief item 6 from naming the
+# channels it forbids: strengthening its `A message is not a delivery
+# mechanism` to name `SendMessage` reddens this probe on an edit that is
+# strictly better prose, which is why the brief says "a message" where all nine
+# reviewers' own copies say the tool's name. The literal at the item-6
+# assertion is that cost, not a choice. Raising the expectation means scoping
+# it per region (Step 5 bullet: 1; item 6: at most 1), which is a real change.
 for probe in "SendMessage:1" "relay:1"; do
     tok="${probe%%:*}"; want="${probe#*:}"
     n_tok="$(grep -oiF -- "$tok" "$ORCH" | grep -c .)"

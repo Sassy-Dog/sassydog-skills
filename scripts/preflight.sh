@@ -492,7 +492,14 @@
 #      #273's own PR, where round 4 lost three of four surfaces, two of them
 #      carrying Blocking findings, and folding the two rules together is the
 #      specific tidy #280 refuses. The nine are spelled out and then checked
-#      against the tree, so a tenth reviewer cannot ship pinned by nothing.
+#      against the tree, so a tenth reviewer cannot ship pinned by nothing —
+#      and checked again against the agents the ORCHESTRATOR DISPATCHES,
+#      harvested by whether `agents/<name>.md` resolves rather than by name
+#      shape (the bare unprefixed form is legal, and `performance-review`
+#      matches no `*-reviewer` glob). That verdict is an EQUALITY, which is
+#      its vacuity floor: a membership test cannot tell nothing-to-report
+#      from nothing-measured, and a neutered harvest was measured printing
+#      `ok` with a real tenth target present.
 #      Three scoping decisions are load-bearing, each measured: the nine copies
 #      are bounded by a CANONICAL LITERAL held in the gate rather than by the
 #      phrases named (deleting the paragraph's last sentence from one reviewer
@@ -510,10 +517,13 @@
 #      orchestrator's own probe does, because a fallback readmitting it is
 #      written a section up rather than inside the sentence forbidding it
 #      (measured: a bullet in `## Diff-scoped mode` exited 0 when both tokens
-#      were paragraph-scoped). `relay` counts over `## Output` alone, because it
-#      IS ordinary vocabulary in three of these domains and a file-wide bound
-#      would redden CI on a legitimate calibration bullet, which lives under
-#      `## Sassy Dog calibration`, outside that window. Counting is not a
+#      were paragraph-scoped). `relay` counts over `## Output` PLUS
+#      `## Diff-scoped mode` — the two sections a reviewer reads as binding —
+#      because it
+#      is the one token that could legitimately appear as domain vocabulary (a
+#      collector relaying traces, a webhook relay) and a file-wide bound would
+#      redden CI on such a calibration bullet, which lives under
+#      `## Sassy Dog calibration`, outside BOTH sections. Counting is not a
 #      sufficient bound either way: decision 6's known limit governs this hop
 #      too, and the CANONICAL LITERAL is what bounds the paragraph.
 #      Source-level like gates 12, 20, 21, 22 and 24; its must-not-exist checks
@@ -1137,13 +1147,15 @@ else
 fi
 
 # --- 29. review-gate decision tests -------------------------------------------
-# The prose decisions from #237, #248 and #273 that each read as drift: the gate
-# is unconditional (and the SKIPPED line survives the default), `review_agent` is
-# deliberately not presence-is-the-toggle, the opt-out is `skip` and not `none`,
-# `review_site` is configured rather than derived, a Blocking finding blocks the
-# merge with exactly one redispatch, and a review report is RETURNED as the
-# agent's final text — with a lost one held as its own outcome rather than
-# merged past or folded into the SKIPPED line. Must-not-exist checks run
+# The prose decisions from #237, #248, #273 and #280 that each read as drift:
+# the gate is unconditional (and the SKIPPED line survives the default),
+# `review_agent` is deliberately not presence-is-the-toggle, the opt-out is
+# `skip` and not `none`, `review_site` is configured rather than derived, a
+# Blocking finding blocks the merge with exactly one redispatch, a review report
+# is RETURNED as the agent's final text — with a lost one held as its own
+# outcome rather than merged past or folded into the SKIPPED line — and the
+# reviewer -> orchestrator hop is bound the same way, with the fan-out brief
+# carrying a slot to pass the contract down. Must-not-exist checks run
 # flattened — this repo hard-wraps. This banner deliberately carries NO counts:
 # it is out of reach of both windows the count re-derivation checks, so a count
 # here is one
