@@ -266,6 +266,9 @@ detail_of() { printf '%s' "$OUT" | jq -r -s '.[0].detail // ""'; }
 result_of() { printf '%s' "$OUT" | jq -r -s '.[0].result // ""'; }
 n_edits()   { printf '%s' "$EDITS" | grep -c '^issue edit' 2>/dev/null || true; }
 edit_for()  { printf '%s' "$EDITS" | grep "^issue edit $1 " 2>/dev/null || true; }
+# Per-issue, for the batch case: `.[0]` reads the FIRST issue's verdict, which is
+# exactly the one a leak into the SECOND issue hides behind.
+detail_for() { printf '%s' "$OUT" | jq -r -s --argjson n "$1" '[.[] | select(.issue == $n) | .detail] | first // ""'; }
 
 # Did this run write a `--remove-assignee` at all? The one question every case
 # below turns on.
@@ -467,8 +470,11 @@ fi
 MOCK_LOGIN="" run_claim promote 10
 if cleared; then
     bad "promote cleared an assignee it could not compare against @me (login unresolved)"
-elif [ -z "$(detail_of)" ]; then
-    bad "an unresolved login left the assignee in place SILENTLY"
+elif ! has "$(detail_of)" "own login unresolved"; then
+    # Discriminating, like (b)/(c)/(f): a bare non-empty detail is satisfied by
+    # ANY other arm's reason, so neutering this arm would leave the case green
+    # while the run reported the wrong cause.
+    bad "an unresolved login was left alone for the wrong stated reason: '$(detail_of)'"
 else
     ok "an unresolved own-login clears nothing and reports why"
 fi
@@ -515,10 +521,25 @@ else
 fi
 
 MOCK_FAIL_EDIT=1 run_claim promote 10
-if has "$ERR" "cleared claim residue"; then
+if [ "$(result_of)" != "failed" ]; then
+    # The control: without it, a run that never reached the edit at all passes
+    # this case exactly like one that reached it and stayed quiet.
+    bad "the hard-failed-edit case did not reach a failed promote (result=$(result_of)) — it proves nothing"
+elif has "$ERR" "cleared claim residue"; then
     bad "stderr asserted the clear on a promote whose edit failed outright"
 else
-    ok "a hard-failed promote edit never announces a clear on stderr either"
+    ok "a hard-failed promote edit reports failed and never announces a clear on stderr"
+fi
+
+# The tolerance was SCOPED, not deleted. `--remove-label` of a label the repo
+# does not carry is gh's one non-idempotent edge, and release/block/demote still
+# depend on it — a fix that quietly removed it for them would turn every such
+# no-op into a hard failure, and nothing else here would notice.
+MOCK_FAIL_EDIT=notfound run_claim release 10
+if [ "$(result_of)" != "ok" ]; then
+    bad "release lost the 'not found' tolerance it still needs: result=$(result_of) — the scoping deleted the edge instead of narrowing it"
+else
+    ok "release/block/demote keep the 'not found' tolerance the edge was written for"
 fi
 
 # --- 8. --dry-run previews the decision instead of hiding it -----------------
@@ -538,15 +559,27 @@ fi
 # --- 9. the batch form, and --force ------------------------------------------
 # `groom-backlog` ships `issue-claim.sh promote N1 N2`, so a verdict leaking
 # from one issue into the next one's EDIT is a live shape, not a hypothetical.
-run_claim promote 10 11
-if has "$(edit_for 11)" "--remove-assignee"; then
-    bad "BATCH LEAK: #10's residue verdict reached #11's edit — a human's assignee stripped: $(edit_for 11)"
+# The pair is 10 then 13 — residue, then UNASSIGNED — and the second number is
+# load-bearing. A verdict is two things, RESIDUE_ARGS and RESIDUE_NOTE, and both
+# are reset in one place. Pairing 10 with an ASSIGNED issue (#11) can only see
+# the first: #11's gate runs to one of the left-alone arms and re-sets the note
+# on every path, so a lost `RESIDUE_NOTE=""` is masked. #13 returns at the
+# unassigned early-out, which is the one path that sets no note at all — so it
+# carries #10's note forward and the JSON reports a clear on an issue whose only
+# edit was `--add-label ready`. That record is what a coordinator reads.
+run_claim promote 10 13
+if has "$(edit_for 13)" "--remove-assignee"; then
+    bad "BATCH LEAK (args): #10's residue verdict reached #13's edit: $(edit_for 13)"
+elif has "$(detail_for 13)" "cleared claim residue"; then
+    bad "BATCH LEAK (note): #13 reported '$(detail_for 13)' but its only edit was $(edit_for 13) — a confident record of a write that never happened"
 elif ! has "$(edit_for 10)" "--remove-assignee"; then
     bad "batch promote lost #10's clear: $(edit_for 10)"
+elif ! has "$(detail_for 10)" "cleared claim residue"; then
+    bad "batch promote lost #10's report: '$(detail_for 10)'"
 elif [ "$(n_edits)" != "2" ]; then
     bad "batch promote wrote $(n_edits) edits for 2 issues"
 else
-    ok "batch promote 10 11: the clear lands on #10 only, and #11's edit is untouched"
+    ok "batch promote 10 13: both halves of the verdict stay with #10 — #13's edit and its REPORT are untouched"
 fi
 
 # --force is claim's double-pick override. Widening it to promote would hand the
@@ -560,6 +593,17 @@ elif ! has "$EDITS" "--add-label ready"; then
     bad "--force promote wrote no ready label — it failed before reaching the gate, so this case proves nothing: rc=$RC"
 else
     ok "--force does not widen the residue gate: the promote lands and a human's assignee survives it"
+fi
+
+# The same, against the state arm: --force must not reach the who-shipped-it
+# record either. One arm proved is not the flag proved.
+run_claim promote 16 --force
+if cleared; then
+    bad "--force stripped the who-shipped-it record off CLOSED #16: $EDITS"
+elif ! has "$EDITS" "--add-label ready"; then
+    bad "--force promote on #16 wrote no ready label — it failed before reaching the gate, so this case proves nothing: rc=$RC"
+else
+    ok "--force does not reach the state arm either: a CLOSED issue keeps its assignee"
 fi
 
 # --- 10. the docs say what the script does -----------------------------------
@@ -654,17 +698,37 @@ MUTANTS=(
 "M2 equality relaxed to claim's substring idiom	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if [[ \",\$assignees,\" != *\",\$ME,\"* ]]; then	-	promote 14	cleared	the substring idiom clears on an issue a human ALSO holds"
 "M3 in-progress arm	    if [[ \",\$labels,\" == *\",\$INPROG_LABEL,\"* ]]; then	    if false; then	-	promote 12	cleared	without the in-progress arm, promote strips a LIVE in-flight claim"
 "M4 closed-state arm	    if [[ \"\$state\" != \"OPEN\" ]]; then	    if false; then	-	promote 16	cleared	without the state arm, promote strips the who-shipped-it record off a CLOSED issue"
-"M5 unreadable probe clears anyway	        RESIDUE_NOTE=\"assignee unchecked: could not read #\$n\"	        RESIDUE_ARGS=(--remove-assignee \"@me\")	MOCK_FAIL_VIEW=1	promote 10	cleared	treating an unreadable probe as residue strips an assignee never read"
+"M5 unreadable probe clears anyway	        RESIDUE_NOTE=\"assignee unchecked: could not read #\$n\"	        RESIDUE_ARGS=(--remove-assignee \"@me\")	MOCK_FAIL_VIEW=1	promote 11	cleared	treating an unreadable probe as residue strips a HUMAN's assignee, never read"
 "M6 --force widens the gate	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if [[ \"\$assignees\" != \"\$ME\" && \"\$FORCE\" == \"0\" ]]; then	-	promote 11 --force	cleared	--force widened to promote strips a HUMAN's assignee"
-"M7 the gate stops resetting its verdict	    RESIDUE_ARGS=()	    :	-	promote 10 11	cleared-11	one issue's verdict leaks into the next one's edit in a batch"
-"M9 short-read guard	    if [[ \"\$read_ok\" != \"1\" ]]; then	    if false; then	MOCK_SHORT_VIEW=1	promote 10	no-malformed	a truncated probe result stops being reported as malformed"
+"M7 the gate stops resetting its verdict	    RESIDUE_ARGS=()	    :	-	promote 10 13	cleared-13	one issue's ARGS leak into the next one's edit in a batch"
+"M9 short-read guard	    if [[ \"\$read_ok\" != \"1\" ]]; then	    if false; then	MOCK_SHORT_VIEW=1	promote 10	state-arm	a truncated probe result is reported as the state arm's verdict instead of malformed"
+"M10 the gate stops resetting its reported verdict	    RESIDUE_NOTE=\"\"	    :	-	promote 10 13	false-detail-13	one issue's REPORT leaks into the next one's JSON, claiming a write that never happened"
 "M8 not-found tolerance re-widened to promote	        claim|release|block|demote)	        claim|release|block|demote|promote)	MOCK_FAIL_EDIT=notfound	promote 10	false-clear	a promote that wrote nothing reports ok and claims the residue was cleared"
 )
 
 mut_ran=0
+env_knobs_checked=0
 for row in "${MUTANTS[@]}"; do
     IFS=$'\t' read -r m_label m_from m_to m_env m_args m_expect m_why <<<"$row"
     apply_mutation "$m_label" "$m_from" "$m_to" || continue
+    # VACUITY GUARD. A mutant whose fixture knob never fires is indistinguishable
+    # from a guard being caught — the mutation is applied, the run completes, and
+    # the expectation is met by the ordinary path. Measured: renaming two env
+    # cells to dead names left both rows reporting CAUGHT and the whole run
+    # green. So the knob's NAME must actually be consulted by the mock, and the
+    # cell must be `-` or a NAME=VALUE, never blank.
+    if [ "$m_env" != "-" ]; then
+        m_envname="${m_env%%=*}"
+        if [ -z "$m_envname" ] || [ "$m_envname" = "$m_env" ]; then
+            bad "$m_label — env cell '$m_env' is not '-' and not a NAME=VALUE assignment"
+            continue
+        fi
+        if ! grep -q "$m_envname" "$WORK/bin/gh"; then
+            bad "$m_label — the mock never reads '$m_envname', so this mutant's fixture knob is DEAD and its verdict would be the ordinary path's"
+            continue
+        fi
+        env_knobs_checked=$((env_knobs_checked + 1))
+    fi
     # The env cell is a literal NAME=VALUE assignment applied with `export`, so
     # the table stays data — no eval, and no second copy of the mock's knobs.
     [ "$m_env" = "-" ] || export "${m_env?}"
@@ -680,15 +744,28 @@ for row in "${MUTANTS[@]}"; do
             else
                 bad "$m_label UNDETECTED: the decision was neutered and nothing cleared — its case proves nothing"
             fi ;;
-        cleared-11)
-            if has "$(edit_for 11)" "--remove-assignee"; then
+        cleared-13)
+            if has "$(edit_for 13)" "--remove-assignee"; then
                 ok "$m_label CAUGHT: $m_why"
             else
                 bad "$m_label UNDETECTED: the reset was removed and no leak followed — the batch case proves nothing"
             fi ;;
-        no-malformed)
+        false-detail-13)
+            if has "$(detail_for 13)" "cleared claim residue"; then
+                ok "$m_label CAUGHT: $m_why"
+            else
+                bad "$m_label UNDETECTED: the note reset was removed and #13 still reported '$(detail_for 13)'"
+            fi ;;
+        state-arm)
+            # POSITIVE, not an absence: "does not say malformed" is satisfied by
+            # any run at all, including one whose knob never fired. Requiring the
+            # state arm's own words proves the short read HAPPENED and then fell
+            # through to a different arm — a dead knob reports 'cleared claim
+            # residue' here and is caught as inconclusive.
             if has "$(detail_of)" "malformed"; then
                 bad "$m_label UNDETECTED: the guard was removed and the run still reported malformed — its case proves nothing"
+            elif ! has "$(detail_of)" "left alone"; then
+                bad "$m_label INCONCLUSIVE: without the guard the run reported '$(detail_of)' — neither malformed nor a left-alone arm, so the short-read knob may never have fired"
             else
                 ok "$m_label CAUGHT: $m_why"
             fi ;;
@@ -708,6 +785,14 @@ else
     bad "only $mut_ran of ${#MUTANTS[@]} declared mutants ran — the rest proved nothing"
 fi
 
+# The knob guard itself can go vacuous: if every env cell became `-`, it would
+# check nothing and still pass. Today three mutants carry a knob.
+if [ "$env_knobs_checked" -ge 3 ]; then
+    ok "every mutant fixture knob ($env_knobs_checked) is one the mock actually reads"
+else
+    bad "only $env_knobs_checked mutant env knobs were checked — fewer than the 3 carried today; did a knob-driven mutant lose its cell?"
+fi
+
 # --- vacuity floor ------------------------------------------------------------
 # A broken harness reports a clean tree exactly like a correct one, so the run
 # states how much it actually measured. This is an EQUALITY, not a floor: every
@@ -718,9 +803,14 @@ fi
 # sections 3 through 9 could be deleted and the run still passed. An equality
 # cannot rot silently in either direction: deleting a case fails it, and adding
 # one forces a deliberate bump here rather than a quiet drift.
-EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + 22 ))
+# ONE transcription, used in both the arithmetic and the message. It was written
+# twice, and a live edition during review carried 24 against 22 actual cases —
+# adding one case while removing another nets zero and passes silently either
+# way, so the number that cannot be re-derived is at least only written once.
+EXPECTED_CASES=25
+EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
-    bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + 22 cases) — a case was added or skipped; if deliberate, bump the constant"
+    bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
 fi
 
 # ------------------------------------------------------------------------------
