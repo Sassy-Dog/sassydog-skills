@@ -108,6 +108,14 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   **Keep the issue → open-PR mapping this step produces** — §4's Collision
   filter reads those PRs' actual changed files, and re-deriving the mapping there costs a second
   round of lookups.
+- **Open PRs on `blocked[]` issues** → resolve these too, and hand them to nobody.
+  `issue-claim.sh block` strips `in-progress`, so a blocked issue is not in-flight and the branch
+  query above cannot see its PR at all; `gh issue view <N> --repo "$REPO" --json
+  closedByPullRequestsReferences` names it (an OPEN entry only), the same lookup §4 already
+  sanctions. This loop may not advance them, so they are never handed to `sassy-dog:pr-shepherd`
+  — they are read so **§7 can see them**. A human-gated PR that nobody enumerated is not a smaller
+  version of the §7 gap, it is a worse one: it leaves §7's held set empty, and an empty held set
+  admits DRAIN COMPLETE, so the loop self-cancels with the PR still open (#282).
 - **Failed or red PRs** → surface in the tick report with the failing check named, and comment
   `dispatch-ready: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the
   failure context appended is allowed on a later tick. A second failure demotes to blocked — via
@@ -351,7 +359,7 @@ Terse — this prints every few minutes under `/loop`:
 
 ```text
 DRAIN TICK — in-flight 3/5 | merged this tick: #1712 | dispatched: #1707 #1711 | Ready remaining: 4
-holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (overlaps in-flight #1707)
+holds: #1713 (Depends on #1717, still open) · #1708 (migration slot busy) · #1709 (overlaps in-flight #1707) · PR #1699 (open, #1698 blocked)
 collision sources: #1707 pr · #1710 declared (no PR yet) · #1706 declared (PR read failed — narrower check)
 stacks: #1720 → #1721 → #1722 dispatched as 1 layer-stack (1 slot, 3 PRs)
 unannotated (dispatched without a touches set — coupling unchecked): #1711
@@ -362,6 +370,9 @@ Plus one line per failure with its next action. Drop the `unannotated` line on t
 nothing unannotated, the `stacks:` line on ticks that dispatch no chain, and the `review:` line on
 ticks with no review outcome to report — but never drop a Blocking finding or a
 `review: SKIPPED` from it, nor a `review: NO REPORT`, which are outcomes, not noise. The
+`holds:` line carries **held PRs alongside held issues**, in the same reason-per-item shape — a PR
+§7's discriminator holds is what stops the tick completing, so it is visible on the tick that
+observed it rather than only in a STALLED announcement two ticks later. The
 `collision sources:` line renders whenever anything is in flight and names every in-flight issue's
 source, since a `pr` source is
 what proves the filter saw real files; drop it only on a tick with nothing in flight, and never
@@ -419,26 +430,51 @@ queue that simply finished — must never announce STALLED.
 
 #### The discriminator — may this loop advance it?
 
-Ask it of every open PR this tick sees, and carry the answer per PR into the held set:
+**"Every open PR this tick sees" is the union §2 resolves** — open PRs on in-flight branches, and
+open PRs on `blocked[]` issues. Both halves are load-bearing: a PR nobody enumerated cannot be
+held, and the second half is precisely the one #282's own state consists of.
+
+Ask it of every one of them, take the **first matching row**, and carry the answer per PR into the
+held set:
 
 | Open PR this tick | May this loop advance it? | Effect |
 | --- | --- | --- |
 | Its issue carries `blocked` | **No** — §2 already routed it to a human | held: joins the held set |
-| It carries an unresolved **Blocking** review finding whose ONE §2 redispatch is spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set |
-| Checks still running | **Yes** — a later tick merges it once it goes green | keeps the loop alive |
-| Checks red and its issue is not `blocked` | **Yes** — §2's one redispatch is still available | keeps the loop alive |
+| `CONFLICTING` | **No** — §2 never auto-rebases; a human resolves the conflict | held: joins the held set |
+| Held by a §2 review outcome — a Blocking finding, a `NO REPORT`, or a held `SKIPPED` — with its ONE §2 redispatch spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set |
+| Checks still running, and not `CONFLICTING` | **Yes** — a later tick merges it once it goes green | keeps the loop alive |
+| Checks red, its issue not `blocked`, and its ONE §2 redispatch unspent | **Yes** — that redispatch is still available | keeps the loop alive |
+| Anything else this loop is not permitted to merge this tick | **No** — held is the default | held: joins the held set |
+
+**The last row is a default, not a catch-all to delete.** §2 holds a PR for more reasons than the
+rows above enumerate and will not stay exhaustive, and a table that silently answers "alive" for a
+shape it does not know re-creates #282 one shape at a time. Held is the right default *here*
+because it is the answer §2 already gives: a PR this loop may not merge is a PR it cannot advance.
+The two defaults are not mirror images — this one ends the loop and names the PR, the other one
+ticks forever and reports nothing.
+
+**`CONFLICTING` needs its own row, above the checks rows, and the ordering is the point.** A
+conflicted PR stops CI firing at all, and `no checks reported` is indistinguishable from
+`CI hasn't started` — `sassy-dog:pr-shepherd` records exactly that. Without the row a conflicted
+PR matches "checks still running" and is answered with something that can never happen, so one
+long-lived conflicted PR would keep a genuinely stalled queue from ever confirming STALLED.
 
 **The redispatch budget is the hinge on both failure rows**, so read this before "simplifying" the
-four rows into two. §2 grants exactly ONE redispatch per issue, taken on a later tick; while it is
+rows into fewer. §2 grants exactly ONE redispatch per issue, taken on a later tick; while it is
 unspent this loop still has an action of its own, and a state it can still act on is not a stall.
 Once it is spent §2 demotes to `blocked`, which is why the label is the usual way a held PR
-presents — and why the finding row is not redundant beside it: the label is a write this loop
-performs, the finding is a fact it reads, and a demotion not yet written must never read as
-advanceable. Unknown is not clear.
+presents — and why the review-outcome row is not redundant beside it: the label is a write
+this loop performs, the finding is a fact it reads, and a demotion not yet written must never read
+as advanceable. It is also why the red-checks row asks for the budget and not for the label
+alone: an unspent budget is what makes a red PR advanceable, while a spent one whose demotion has
+not been written yet matches no row above and falls to the default. Unknown is not clear.
 
 **Read the review outcome from the PR body**, exactly as §2 reads it — take-it's step 6 requires
 the sub-agent to have written the verbatim line. This loop reads no RESULT lines, and a later tick
-is a different session from the one that dispatched.
+is a different session from the one that dispatched. **Read the redispatch budget from the issue,
+not from the PR**: §2 spends it by commenting `dispatch-ready: attempt 1 failed — <cause>` on the
+issue, so that comment is the record of whether it is spent, and a tick that never reads it cannot
+answer either failure row. No such comment means the budget is unspent.
 
 **A gate that could not be read is not a hold.** A PR whose checks or review outcome would not read
 this tick falls under this section's opening rule: live state was not verified, so the tick proves
