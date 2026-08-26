@@ -138,6 +138,25 @@ visibility change cannot silently rewrite a repo's review architecture. It choos
 `review_agent:` still chooses the agent — and a Blocking finding is never merged past: one
 redispatch carrying the finding, then the `blocked` label.
 
+**However the gate is sited, the report is *returned*** — it is the reviewing agent's final text,
+never a message sent to a session it would first have to address, because an address is the thing a
+reviewer cannot reliably resolve. The dispatching side of that rule is carried by all three shipping
+paths — `send-it`, `take-it` and `dispatch-ready` — since one living only in `send-it` never runs
+for the two that carry most of the PR volume: read the returned report yourself, never block while a
+review you dispatched is outstanding, and treat a dispatch that came back with nothing as its own
+outcome —
+
+```text
+review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)
+```
+
+— never as the SKIPPED line above, which says no agent ran at all. In the two **dispatching** paths
+(`take-it`, `dispatch-ready`) a PR whose review reached nobody is additionally **held** rather than
+merged, on either `review_site:`. The discriminator is **unattended merging**, not whether a PR
+exists yet: those two go on to merge with nobody reading along, so a lost report there becomes an
+unreviewed merge. `send-it` hands its run back to the person who started it, who is reading the
+output, so it records the outcome and carries on.
+
 ## Installation
 
 ### Claude Code

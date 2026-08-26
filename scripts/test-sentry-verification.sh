@@ -1909,7 +1909,7 @@ dest_case "a determiner before a real noun still opens one" \
 #     the review-gate decision gate -- "the five decisions, six tracked files",
 #     restated in that gate header, in `scripts/preflight.sh` and in
 #     `CLAUDE.md`, re-derived by nothing. Issue #276 moved it onto the OTHER
-#     safe form named above: section 7 of
+#     safe form named above: the counts section of
 #     `scripts/test-review-gate-decisions.sh` re-derives both numbers from its
 #     own source and reddens every site that disagrees. Two things outlive it.
 #     First, this bullet cited it as gate 26 while the gate was numbered 29 in

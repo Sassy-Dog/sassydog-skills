@@ -180,6 +180,51 @@ that are not this skill, and a check written in two places drifts into a check i
 | a repo's own agent | **not** forwarded; say so on the run — the map has no contract outside the shipped orchestrator |
 | none (`review_agent: skip`, or a dispatch failure) | nothing is dispatched, so nothing is forwarded |
 
+**The gate has THREE outcomes, not two.** A dispatch that *succeeded* and whose report never
+reached you is neither "reviewed" nor "could not dispatch", and reported as either it states
+something untrue:
+
+| Outcome | What happened | What renders |
+| --- | --- | --- |
+| reviewed | the agent returned a report | its findings — Blocking fixed and re-run, Nits rolled in or noted |
+| dispatched, no report returned | the agent ran; nothing readable came back | the NO REPORT line below, naming the agent |
+| could not dispatch | no agent resolved, or the dispatch itself errored | the SKIPPED line below, naming the cause |
+
+**Read the report yourself; never wait to be told.** A review report is the *return value* of the
+agent you dispatched — the final text it hands back as it finishes, which is what
+`agents/pr-review-orchestrator.md`'s aggregate-and-report step obliges the shipped
+orchestrator to deliver. Read that text. Do **not** rely on a message or a notification to bring it to you, and do **not** stop, poll or idle
+on one arriving: on 2026-08-25 five review reports were sent as messages rather than returned and
+not one reached the session that dispatched it — three landed in a coordinator's session instead,
+one round lost 2 of 5 dispatches that never came back at all, and one was addressed to an agent
+*type* rather than an address. An implementing agent then deadlocked on a report that had already
+been delivered elsewhere, and lost the whole review cycle
+([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Treat the dispatch as
+fire-and-report: either it comes back with a report you can read, or it does not come back — and
+both are outcomes you write down, never states you sit out.
+
+**When a dispatch came back with nothing readable, say THAT.** Print this line verbatim, then carry
+on to the PR body:
+
+```text
+review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)
+```
+
+**Then name the agent that was dispatched** on the next line. The quoted line is the contract and
+never changes; `<agent>` is the one slot you fill, and you fill it in place. (The SKIPPED line
+below carries no placeholder at all — its variable part is the *reason*, named on the next line —
+so the two lines are not the same shape, and neither should be edited to match the other.)
+
+**`send-it` records this outcome and carries on; it does not hold anything.** That is deliberate
+and it is the one place the three paths differ: this gate runs before the commit, and the run ends
+back with the person who started it, who is reading this output. `take-it` and `dispatch-ready`
+hold the PR instead, because they go on to merge it with nobody reading along — the discriminator
+is unattended merging, not whether a PR exists yet.
+
+**It is not the SKIPPED line and must never be folded into it.** That line says *no agent ran*;
+here one did, which is a different fact about a different failure with a different fix. Collapsing
+the two re-creates, one word over, the very ambiguity the SKIPPED line exists to remove.
+
 **If no agent resolves, say so.** The gate is never omitted from the run's output. When the
 resolved agent cannot be dispatched — it does not exist, the plugin did not load, the installed
 plugin is older than the agent, the dispatch errors — or the repo set the explicit
