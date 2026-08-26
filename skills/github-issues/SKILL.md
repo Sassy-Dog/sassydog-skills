@@ -12,7 +12,7 @@ description: >
 
 # GitHub Issues
 
-Issue and ProjectV2 board operations for any GitHub repo: board snapshots, backlog reads, stale-issue detection, idempotent dedupe-then-file issue creation, and the fill/drain label-state transitions. Reads are free; **this skill bundles exactly two write paths — `scripts/file-or-link-issue.sh` (issue creation, preview-then-confirm) and `scripts/issue-claim.sh` (label-state transitions, dry-runnable)** — plus one it points at, `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh`, which owns the engineering-dimension and severity half of the label taxonomy.
+Issue and ProjectV2 board operations for any GitHub repo: board snapshots, backlog reads, stale-issue detection, idempotent dedupe-then-file issue creation, and the fill/drain label-state transitions. Reads are free; **this skill bundles exactly two write paths — `scripts/file-or-link-issue.sh` (issue creation, preview-then-confirm) and `scripts/issue-claim.sh` (label-state transitions plus `promote`'s shape-gated assignee clear, dry-runnable)** — plus one it points at, `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh`, which owns the engineering-dimension and severity half of the label taxonomy.
 
 ## Reads
 
@@ -166,7 +166,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/file-or-link-issue.sh \
 
 Output actions: `filed` / `already-linked` / `filed-no-board` / `would-file`. Board placement is optional and degrades gracefully.
 
-## Writes: label-state transitions (fill/drain claims)
+## Writes: label-state transitions (fill/drain claims), and one assignee clear
 
 The org label taxonomy has **two canonical homes, disjoint by design.** Neither script defines the other's labels — two homes for one label is precisely the drift both exist to prevent:
 
@@ -200,7 +200,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/issue-claim.sh taxonomy
 ```
 
 - `claim` — assignee @me + `in-progress`, strips `ready`; **skips issues already assigned to someone else** (double-pick guard; `--force` overrides).
-- `release` — strips `in-progress` (post-merge: `Closes #N` closes the issue but never strips labels).
+- `release` — strips `in-progress` (post-merge: `Closes #N` closes the issue but never strips labels). Deliberately **not** symmetric with `claim`: it leaves the assignee alone, because on a closed issue that assignee records who shipped it.
+- `promote` — adds `ready`, and clears a **residual claim assignee** — but only the one shape that is residue *by construction*: assigned to exactly `@me`, **no** `in-progress` label, and the issue **OPEN**. `claim` always writes those two halves in a single edit and the loop only ever assigns `@me`, so no *other* account can produce that shape. Every other shape is **reported and left alone**: a different assignee is a human who took it, `@me` *with* `in-progress` is live in-flight work, an issue holding `@me` alongside a human is not residue either, a **CLOSED** issue keeps its assignee — that is the who-shipped-it record `release` is deliberately asymmetric to protect, and `promote` has no business destroying it — and a probe that could not run (own login unresolved, issue unreadable, result truncated) is unknown, which is not verified. `--force` does not widen it. **One stated limit** [#287](https://github.com/Sassy-Dog/sassydog-skills/issues/287): `@me` is the *operator's* login rather than a loop identity, so an issue the operator assigned to themselves without setting `in-progress` matches the residue shape too. Without this, a reopened and re-promoted issue arrives still assigned and `dispatch-ready`'s §4 filter skips it as "another session got it", which is false and silent (issue #281). `--dry-run` previews the decision as `would clear`.
 - `block` / `demote` — **require `--comment`**; a demotion without a reason is a silent failure for the next human.
 - Every label is reconciled before use: created when absent, **corrected when its color or description has drifted**, untouched when it already matches. A colour change therefore reaches repos that already carry the label — it used to be `gh label create || true`, which fails on an existing label and silently left every onboarded repo on the old colour forever.
 - `sync-labels` does that reconcile for all four labels in one pass without touching an issue — the entry point for propagating a taxonomy change to a repo that isn't currently transitioning anything. `--dry-run` previews.
@@ -237,14 +238,14 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo <owner/name> --migrate
 | `scripts/verify-gotcha-claims.sh` | Resolves a `groom-backlog` config's `gotcha_summary` against issue state and emits only the claims that survive, between SAFE GOTCHAS markers. Fail-closed: wrong state, ambiguous assertion, unresolvable, and malformed (an unpaired backtick run, which drops the whole field) all drop, so there is no skip exit. Inline code is parsed, spans paired by backtick run, before the sentence split, and the fragments of a sentence are committed as one group, so shell punctuation inside a span never ends a claim and a mis-parse degrades to a drop rather than a certified fragment. A splitter failure is its own exit 3, never a clean empty field. `--lint` reports time-varying shapes offline. Read-only. Exit 0 clean / 3 dropped or found / 64 usage. |
 | `scripts/stale-issues.sh` | shipped-but-still-open + stub-body + tracking-parent-complete detection. Read-only. Handles compound PR-title refs like `(#419 + #421)`. Detector 3 reads the epic-split `Part of #<parent>` convention with a prefix guard (`#28` never claims `#283`'s children) and reports `truncated: true` — never a clean-looking empty result — when its all-state pull hits `ALL_LIMIT` (default 500). |
 | `scripts/file-or-link-issue.sh` | Write path #1: issue creation. Marker-keyed create-or-find + optional board add. `--dry-run` for previews. |
-| `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote), plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
+| `scripts/issue-claim.sh` | Write path #2: fill/drain label-state transitions (claim/release/block/promote/demote) — plus its one assignee-CLEARING write, `promote`'s shape-gated claim-residue clear (#281), the counterpart to the `--add-assignee` half `claim` writes — plus `sync-labels` (reconcile the taxonomy, touch no issue) and `taxonomy` (print it). Owns the dev-workflow half of the label taxonomy; labels are created *and corrected* in place; `--dry-run`; retries via pr-shepherd's `gh-retry.sh`. |
 
 Not bundled here but paired with it: `${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh` owns the dimension + severity half. It lives at the plugin root because it aligns a whole repo rather than serving one issue-flow call.
 
 ## Guardrails
 
 - Never `gh issue create` directly when filing from an automated signal — route through `file-or-link-issue.sh` so idempotency and markers can't drift.
-- Never hand-roll `gh label create` or claim-label `gh issue edit` calls in a fill/drain flow — route through `issue-claim.sh` so the taxonomy (names, colors, descriptions, the double-pick guard) can't drift.
+- Never hand-roll `gh label create`, claim-label `gh issue edit`, or assignee edits in a fill/drain flow — route through `issue-claim.sh` so the taxonomy (names, colors, descriptions), the double-pick guard, and `promote`'s residue gate can't drift. A hand-rolled `--remove-assignee` in particular bypasses the shape gate that is the only thing keeping a human's assignment off the strip list.
 - Never hand-roll the dimension/severity labels either — route through `align-labels.sh`, and never define a label in both scripts: one label, one home.
 - Mutating board calls go through pr-shepherd's `gh-retry.sh` (Projects GraphQL flakes); board claims are best-effort, never a hard failure.
 - Signal escalated on an existing issue → comment on it, don't re-file.

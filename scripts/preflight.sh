@@ -575,6 +575,54 @@
 #      scripts/fixtures/pipefail-grep/ and deliberately not `*.sh`, because the
 #      guard is in its own scan scope and a printf-built fixture makes it flag
 #      itself (measured — the first draft did). No gh, no network.
+#  31. claim-lifecycle tests (scripts/test-claim-lifecycle.sh) — issue-claim.sh
+#      writes a claim as TWO things (assignee @me + in-progress, one edit) and
+#      clears it as ONE (in-progress), and `promote` may only clear the half
+#      that is residue BY CONSTRUCTION (issue #281). On a CLOSED issue the
+#      leftover assignee is correct — it records who shipped it — so the defect
+#      is reachable only on REOPEN, where dispatch-ready §4 skips on "assignee
+#      set OR label state" (a disjunction) while §3 defines in-flight as
+#      assignee AND label (a conjunction): a reopened, re-promoted issue lands
+#      in ready[] still assigned and is skipped as "another session got it",
+#      which is false, silent, and never dispatches. BOTH obvious fixes were
+#      rejected on #281 and are pinned here as NEGATIVES, because each is what a
+#      later "make this symmetric" sweep reaches for: making `release` clear the
+#      assignee destroys the who-shipped-it record on every closed issue, and
+#      aligning §4's disjunction to §3's conjunction discards the guard for a
+#      human who self-assigned without setting in-progress — so this gate never
+#      reads dispatch-ready/SKILL.md and nothing in it licenses that edit.
+#      THE PREMISE IS ASSERTED, NOT ASSUMED: "@me AND no in-progress -> residue"
+#      holds only because `claim` writes both halves together, so a `claim` that
+#      split them would turn the discriminator into a guess with every promote
+#      case still green — the pairing is therefore pinned on its own. Every
+#      assertion about the guard's BEHAVIOUR is behavioural, against a mock gh
+#      that records writes, since a source-level grep for the guard's wording is
+#      satisfied by a guard that no longer runs, and the harm being prevented is
+#      a WRITE; exactly ONE check is source-level and it reads SKILL.md rather
+#      than the guard, cut at the `promote` bullet. THE PROBE'S TRANSPORT is its
+#      own failure mode: TAB is IFS whitespace, so `@tsv` through `read`
+#      collapses the leading empty field and an unassigned issue reads its own
+#      LABELS as its assignees. With `state` as a third field the broken idiom
+#      shifts EVERY unassigned shape, but it was invisible in the two-field
+#      draft this replaced, where an unassigned issue with NO labels was the one
+#      shape it read correctly — which is exactly how that draft's fixture
+#      missed it. The gate now carries an unassigned-WITH-labels fixture and
+#      proves adequacy by RUNNING the pre-fix idiom against the fixture store
+#      itself (the #263 posture; gate 11 does the same for its own fixture). The mutant
+#      inventory is an ARRAY whose length the run prints and whose every member
+#      it asserts ran, so no count here can go stale (#276); each is applied by
+#      exact whole-line awk match that fails unless it hit exactly once (the
+#      #262 lesson: `cmp -s` exits 2 on a missing file, which an `if` reads as
+#      "differs"), and each is caught by the edit it causes rather than by a
+#      literal an assertion greps for. STATED LIMIT: `@me` is the operator's
+#      login, not a loop identity, so the operator's own self-assignment is
+#      byte-identical to the residue; narrowing that needs a fourth conjunct
+#      #281 does not sanction, filed as issue #287 (where reopen evidence alone
+#      is recorded as insufficient — `block` leaves an assignee with no close in
+#      the history). A CLOSED issue is refused in the gate's own body, not left
+#      to the caller. No taxonomy colour is transcribed —
+#      the mock's label store is seeded from the `taxonomy` emitter, gate 8's
+#      no-third-copy rule. Mock gh only: no repo, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -642,12 +690,14 @@ if command -v shellcheck >/dev/null 2>&1; then
     # the cheap option, not the lazy one.
     #
     # COST, measured: the SC2006 pass is ~5s against a ~48s preflight, about
-    # 11%. It re-parses all 60 files, which is the price of shellcheck having
-    # no way to ask one question of an existing parse.
+    # 11%. It re-parses every tracked *.sh, which is the price of shellcheck
+    # having no way to ask one question of an existing parse.
     #
     # Bare `xargs` here and in the pass above ASSUMES no tracked `*.sh` path
-    # contains whitespace — verified, 0 of 60 today. If that ever changes both
-    # call sites need `-0` with `git ls-files -z`.
+    # contains whitespace — verified, none today. (A count was written here and
+    # went stale the next time a script was added; the assumption is what
+    # matters, and it is re-checked by the run itself failing loudly.) If that
+    # ever changes both call sites need `-0` with `git ls-files -z`.
     if [ -n "$sh_files" ]; then
         if echo "$sh_files" | xargs shellcheck --include=SC2006; then
             pass "shellcheck SC2006 (unescaped backticks in strings)"
@@ -1178,6 +1228,19 @@ if bash scripts/test-pipefail-grep.sh; then
     pass "pipefail-grep guard (scripts/test-pipefail-grep.sh)"
 else
     failed "pipefail-grep guard (scripts/test-pipefail-grep.sh)"
+fi
+
+# --- 31. claim-lifecycle tests -----------------------------------------------
+# The failure it guards is a write on somebody else's issue, so the gate
+# measures writes: a mock gh records every mutating call and each case is judged
+# on whether a --remove-assignee appeared. Its two negatives are the fixes #281
+# rejected — a symmetric `release`, and aligning dispatch-ready's §3/§4 — and
+# both read as tidying, which is why they are asserted rather than described.
+# Mock gh only: no repo, no network.
+if bash scripts/test-claim-lifecycle.sh; then
+    pass "claim-lifecycle tests (scripts/test-claim-lifecycle.sh)"
+else
+    failed "claim-lifecycle tests (scripts/test-claim-lifecycle.sh)"
 fi
 
 # ------------------------------------------------------------------------------
