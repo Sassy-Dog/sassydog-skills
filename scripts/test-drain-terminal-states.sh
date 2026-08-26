@@ -133,6 +133,12 @@
 # defect one layer in: `Ready **non-empty**` is the same instruction as `Ready
 # non-empty` and was measured passing the plain-flatten veto. CLAUDE.md records
 # this repo paying for exactly that once already, on `**`sentry:`**`.
+#   The stripping is applied to the HAYSTACK only, so the second arm is inert
+#   whenever the PATTERN itself contains `*`, `_` or a backtick — which is
+#   correct rather than a gap (a pattern that spells emphasis is asking about
+#   emphasis), but it means "two copies" is true of the pattern's plain form
+#   alone. No live veto here depends on that arm; every one of them binds
+#   through the plain copy today.
 #
 # STRUCTURAL ASSERTIONS ARE WINDOW-SCOPED, NEVER FILE-WIDE. An earlier edition
 # grepped the whole tracked file for COMPLETE's condition line, so the condition
