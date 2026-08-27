@@ -38,7 +38,9 @@ Follow the five phases. Full dispatch details, the finding schema, and exact `gh
 
 Dispatch the relevant `sassy-dog:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns findings in the shared schema with mandatory `file:line` evidence.
 
-See **`orchestration.md`** for the agent→domain map and the finding schema.
+**Record an outcome for every domain as the fan-out returns** — `returned`, `no report`, or `could not dispatch` — plus `not dispatched`, with its reason, for a domain step 2 above skipped. That ledger is Phase 4's input: a domain whose outcome is not `returned` is **dark**, and a dark domain is never scored as clean and never reported as "no findings". A reviewer that came back with nothing looks exactly like one that found nothing, and writing down which happened is the only thing that separates them. Carry the ledger through Phases 2 and 3 unchanged — nothing there adds a domain or clears one.
+
+See **`orchestration.md`** for the agent→domain map, the four outcomes and what each one means, and the finding schema.
 
 ### Phase 2 — Adversarial review (you)
 
@@ -50,19 +52,34 @@ Cluster surviving findings so each cluster is one coherent PR (e.g. "harden GitH
 
 ### Phase 4 — Preview, then file
 
-1. **Print the full preview**: the Epic (exec summary + scores) and every child issue (title, body, labels, and its dedupe decision). Ask the user to approve, edit, or cancel. **File nothing yet.**
-2. On approval, **align the target repo's labels first** — the engineering-dimension + severity taxonomy is owned by one script in this plugin, and this skill invokes it rather than carrying a copy (issue #167). The path below is resolved when this skill loads; pass it on as `ALIGN=<that path>` to anything that needs it, because `references/*.md` are read raw and never get the substitution:
+1. **Print the full preview**: the Epic (exec summary + scores) and every child issue (title, body, labels, and its dedupe decision).
+2. **Print the Phase-1 ledger in that preview, before you ask for approval.** Every domain, with its outcome, rendered so a reader sees the coverage without opening anything:
+
+   ```text
+   Domain coverage — 9 dispatched, 7 returned, 2 dark
+     returned:           architecture, code-quality, testing, dx-docs, observability-ops, cicd-release, deps
+     no report:          infra-platform — came back with prose, not a finding list
+     could not dispatch: security — Agent call errored (agent not resolved)
+     not dispatched:     (none)
+
+   2 domains are DARK. This audit does not cover them, and nothing above is
+   evidence that they are clean.
+   ```
+
+   Print this block on **every** run, the all-clear included. A coverage line that shows up only when something went wrong teaches the reader that its absence means nothing, which is the habit that made a dark domain invisible in the first place (issue [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284)).
+3. Now ask the user to approve, edit, or cancel. **File nothing yet.** A dark domain is surfaced, not a veto: it does not stop the run and does not block filing, and on approval everything that did come back is filed as normal.
+4. On approval, **align the target repo's labels first** — the engineering-dimension + severity taxonomy is owned by one script in this plugin, and this skill invokes it rather than carrying a copy (issue #167). The path below is resolved when this skill loads; pass it on as `ALIGN=<that path>` to anything that needs it, because `references/*.md` are read raw and never get the substitution:
 
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo "$REPO" --dry-run   # preview drift, writes nothing
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo "$REPO"             # create missing + correct drifted
    ```
 
-3. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
+5. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
 
 ### Phase 5 — Report
 
-Print the Epic URL, the child issue list, and the executive summary.
+Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed — the filed backlog is the durable artefact, so the record of what this audit did not cover travels with it.
 
 ## Reference Files
 
@@ -76,4 +93,6 @@ Print the Epic URL, the child issue list, and the executive summary.
 - About to create issues without showing the preview first → STOP, preview and get approval.
 - A finding that's "best practice" with no concrete harm in *this* repo → that's cargo-cult; drop it.
 - Skipped the dedupe index fetch → you will create duplicates. Fetch it in Phase 0.
+- About to call a domain clean, or write "no findings" for it, when its reviewer did not come back → STOP. That is the one claim this audit cannot make. Report it dark, with its outcome, and file the rest.
+- About to show the preview with a domain missing from the coverage block → STOP. A domain absent from the ledger is a domain the reader cannot tell apart from a clean one, and this preview is the last moment before the backlog becomes the record.
 - About to type a `gh label create` with a colour in it → STOP. Run `align-labels.sh` (Phase 4). A hardcoded hex here is a second copy of the taxonomy, and the last one silently painted stale colours into every repo this skill audited.

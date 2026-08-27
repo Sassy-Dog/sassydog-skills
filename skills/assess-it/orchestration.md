@@ -20,7 +20,25 @@ Dispatch only the agents with signal for the detected stack. All ship with this 
 
 **Dispatch rule:** issue all selected agents in **one message, multiple Agent calls** (concurrent). Give each: the absolute repo path, the detected stack summary, the dedupe index is *not* needed by agents (you dedupe centrally), and an instruction to return **only** the JSON-ish finding list in the schema below. Tell each agent it is in **audit mode**: find what's wrong, cite evidence, do not propose to write code.
 
-**Known gap — audit mode has no lost-agent scoring.** The *diff-scoped* fan-out (`agents/pr-review-orchestrator.md`, Step 5) scores a reviewer that did not come back as an unreviewed surface and names it on every run. This path has no equivalent. Each of the nine states in its own `## Output` section that its finding list is its returned final text, so the reviewer half of the delivery contract applies here too. The **dispatcher** half does not: nothing above scores an agent that errored, timed out, or came back unparseable, and the rule one line down — that an agent finding nothing returns an empty list — makes a lost agent read exactly like a clean domain. That matters more here than in a diff-scoped run, because this path **writes**: a lost `security-reviewer` yields an Epic that silently omits a whole domain, and the preview a human approves looks complete. Closing it means deciding what an audit reports when a domain goes dark, which reaches the Epic preview a human approves — a write-side change to the issue-filing path, deliberately kept out of the prose-gate work that bound the diff-scoped hop. Recorded here so the absence is not mistaken for a settled question; it is unfixed, not overlooked.
+## Dispatch outcomes (Phase 1)
+
+Every domain in the table above gets an **outcome**, recorded as the fan-out returns. Together they are the run's **ledger**: built in Phase 1, carried through Phases 2 and 3 unchanged, and printed in Phase 4's preview before the approval prompt.
+
+Three outcomes belong to the fan-out itself:
+
+| Outcome | What it means | Reviewed |
+|---|---|---|
+| `returned` | The agent came back with a finding list in the schema below — empty or not | yes |
+| `no report` | The dispatch succeeded and came back with nothing usable: no final text, prose where a finding list belongs, or output you cannot parse | **no** |
+| `could not dispatch` | The Agent call errored, timed out, or the agent could not be resolved | **no** |
+
+A fourth records a decision taken *before* the fan-out: `not dispatched`, for a domain the Phase-0 stack detection found no signal for. Record it with the reason that skipped it.
+
+**A domain whose outcome is not `returned` is DARK, and a dark domain is never scored as clean and never reported as "no findings".** Those are the two claims this audit is not entitled to make about a domain nobody reviewed. Name it, name its outcome, and say that this run does not cover it. Keep `not dispatched` visibly apart from the two dark outcomes: a domain skipped for cause and a domain that went dark are indistinguishable once both are merely missing from the Epic, and only one of them is a decision somebody made.
+
+**This is the sibling of the diff-scoped rule, not a copy of it and not derived from it.** `agents/pr-review-orchestrator.md`, Step 5, scores a lost reviewer's surface `!` in a report a human reads while the context is still live; a hole there costs a re-run. This path **writes**. Its artefact is a filed Epic and its child issues, which becomes the durable record of what is wrong with the repo — so a lost `security-reviewer` here yields a backlog that omits an entire domain and **reads complete** to everyone who finds it later. Same question, different consequence: neither rule is evidence about the other, and changing one does not license changing the other ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280), [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284)).
+
+**A dark domain is surfaced, not a veto.** It never stops the run and never blocks filing: findings that did come back are still verified, grouped, previewed and — on approval — filed. The human was always the gate here; what was missing is that they were not told a domain went dark. Re-dispatching a dark domain is allowed, and the ledger records the outcome of the last attempt — a domain that comes back on a retry is `returned`.
 
 ## Finding output schema
 
@@ -40,7 +58,7 @@ Each agent returns a list of findings. Each finding:
   confidence:       0.0–1.0  (agent's own confidence the finding is real)
 ```
 
-Agents that find nothing in their domain return an empty list — that is a valid, useful result.
+Agents that find nothing in their domain return an empty list — that is a valid, useful result, **and it is a result only once you have received it**. An empty list that arrived is a clean domain; an empty list that never arrived is a dark one. The ledger above is the only thing that tells them apart, which is why it is recorded rather than inferred from what the Epic ended up containing.
 
 ## Adversarial review (Phase 2)
 

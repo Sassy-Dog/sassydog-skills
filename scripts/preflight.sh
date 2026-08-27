@@ -721,6 +721,46 @@
 #      green. Its header records why it carries no `-ef` precondition and what
 #      that costs a mutation harness. The assertion count is printed, never
 #      transcribed. Two tracked files, no gh, no network.
+#  33. audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh) — the
+#      nine `*-reviewer` agents serve TWO orchestrators and only one of them
+#      scored a reviewer that came back with nothing. `pr-review-orchestrator`
+#      Step 5 marks such a surface `!` and names it on every run; `assess-it`
+#      had no equivalent, so a reviewer that returned nothing was
+#      indistinguishable from one that found nothing (issue #284). AUDIT MODE IS
+#      THE WORSE PLACE FOR IT because it WRITES: the artefact is a filed Epic
+#      and its child issues, so a lost `security-reviewer` yields a backlog that
+#      omits a whole domain and READS COMPLETE to everyone who finds it later.
+#      THE HARM LANDS AT THE PREVIEW, NOT AT THE REPORT — `assess-it` already
+#      previews before it files, so the requirement is POSITIONAL: the dark
+#      domains are named IN the preview and BEFORE the approval prompt, and a
+#      rule landing after the ask, or in Phase 5, documents a backlog already
+#      filed. AND IT IS NOT A VETO: filing still proceeds on approval, so both
+#      halves are pinned because either alone is wrong. Bound the way gate 32
+#      is, and for its reasons: (1) CANON, every blank-line block AND every
+#      FENCE of every pinned window compared for equality after flattening —
+#      Phase 4's ```text fence IS the coverage block the run prints, so
+#      excluding it would leave the one artefact #284 is about writable;
+#      (2) INVENTORY, openers, bullets, ORDERED-LIST items, table rows and
+#      headings for BOTH FILES WHOLE, the ordered list being the one carrying
+#      #284's own decision since Phase 4's ITEM ORDER is the fix; (3)
+#      CONSUMPTION, every canon key consumed and every window's block and fence
+#      counts equal to its canon entry counts. THERE IS DELIBERATELY NO PROSE
+#      VETO, the asymmetry with gates 24-29 that a later sweep will try to
+#      close: both veto editions built for gate 29 reported clean on inverted
+#      sources, canon plus inventory already answers what a veto would ask, and
+#      the only must-not-exist checks are for the #283 residue note's own
+#      literals — a literal deletion verified, not a polarity judgement — run
+#      flattened AND emphasis-stripped. THE PREMISE IS ASSERTED: the ledger says
+#      "every domain in the table above", so the map's rows are compared to
+#      `agents/*-reviewer.md` as an EQUALITY over a count floor, since a stale
+#      map would leave a whole domain with no row to be dark in while every
+#      prose assertion stayed green. `agents/pr-review-orchestrator.md` is read
+#      for exactly ONE fact — that its own `!` bullet survives — and nothing
+#      else about it is pinned here; gate 29 owns that file. Its floor is a
+#      section registry with per-section minimums whose sum is DERIVED, every
+#      token validated before arithmetic touches it, and `REGISTRY_MIN` held
+#      apart from the array. Three tracked files plus a listing of `agents/`,
+#      no gh, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1357,6 +1397,25 @@ if bash scripts/test-drain-terminal-states.sh; then
     pass "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
 else
     failed "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
+fi
+
+# --- 33. audit lost-reviewer tests --------------------------------------------
+# Source-level: the two assess-it documents ARE the instruction an audit run
+# follows, so there is nothing to execute. It pins the per-domain outcome ledger
+# (#284), the rule that a domain which did not return is never scored clean, the
+# ledger's POSITION before the approval prompt — the harm lands at the preview,
+# not at the report — and the half that stops the fix overshooting: a dark
+# domain is surfaced, never a veto on filing. Bound like gate 32 in three layers
+# (canon, inventory, consumption) over both files whole, with the fences
+# included because Phase 4's ```text fence is the coverage block the run prints.
+# No prose veto, deliberately; the only must-not-exist checks are the #283
+# residue note's own literals. `agents/pr-review-orchestrator.md` is read for
+# one fact only — gate 29 owns that file. Three tracked files, no gh, no
+# network.
+if bash scripts/test-audit-lost-reviewer.sh; then
+    pass "audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh)"
+else
+    failed "audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh)"
 fi
 
 # ------------------------------------------------------------------------------
