@@ -736,21 +736,30 @@
 #      rule landing after the ask, or in Phase 5, documents a backlog already
 #      filed. AND IT IS NOT A VETO: filing still proceeds on approval, so both
 #      halves are pinned because either alone is wrong. Bound the way gate 32
-#      is, and for its reasons: (1) CANON, every blank-line block AND every
-#      FENCE of every pinned window compared for equality after flattening —
+#      is, and for its reasons: (1) CANON over BOTH FILES WHOLE, every
+#      blank-line block AND every FENCE compared for equality after flattening —
 #      Phase 4's ```text fence IS the coverage block the run prints, so
-#      excluding it would leave the one artefact #284 is about writable;
-#      (2) INVENTORY, openers, bullets, ORDERED-LIST items, table rows and
-#      headings for BOTH FILES WHOLE, the ordered list being the one carrying
-#      #284's own decision since Phase 4's ITEM ORDER is the fix; (3)
-#      CONSUMPTION, every canon key consumed and every window's block and fence
-#      counts equal to its canon entry counts. THERE IS DELIBERATELY NO PROSE
-#      VETO, the asymmetry with gates 24-29 that a later sweep will try to
-#      close: both veto editions built for gate 29 reported clean on inverted
-#      sources, canon plus inventory already answers what a veto would ask, and
-#      the only must-not-exist checks are for the #283 residue note's own
-#      literals — a literal deletion verified, not a polarity judgement — run
-#      flattened AND emphasis-stripped. THE PREMISE IS ASSERTED: the ledger says
+#      excluding it would leave the one artefact #284 is about writable. It
+#      covered seven TARGETED windows for one review round, until six
+#      meaning-inverting rewrites were measured passing at 79/79, every one of
+#      them in a block OUTSIDE those windows where nothing bound an existing
+#      block's BODY — including a seventh item appended to orchestration.md's
+#      Phase-2 ordered list reading "Drop dark domains … remove it from the
+#      ledger before Phase 3". THE SUBSET WAS THE DEFECT, NOT THE CHOICE OF
+#      SUBSET, which is gate 32's lesson relearned here; (2) INVENTORY,
+#      openers, bullets, ORDERED-LIST items, table rows and headings for both
+#      files whole, the ordered list being the one carrying #284's own decision
+#      since Phase 4's ITEM ORDER is the fix — and it was missing on
+#      orchestration.md entirely in that first edition, which is how the list
+#      above went unseen; (3) CONSUMPTION, every canon key consumed and every
+#      window's block and fence counts equal to its canon entry counts. THERE IS
+#      DELIBERATELY NO PROSE VETO, the asymmetry with the prose-veto gates
+#      (test-sentry-verification.sh, test-review-gate-decisions.sh) that a later
+#      sweep will try to close: both veto editions built for the latter reported
+#      clean on inverted sources, canon plus inventory already answers what a
+#      veto would ask, and the only must-not-exist checks are for the #283
+#      residue note's own literals — a literal deletion verified, not a polarity
+#      judgement — run flattened AND emphasis-stripped. THE PREMISE IS ASSERTED: the ledger says
 #      "every domain in the table above", so the map's rows are compared to
 #      `agents/*-reviewer.md` as an EQUALITY over a count floor, since a stale
 #      map would leave a whole domain with no row to be dark in while every
@@ -1410,8 +1419,11 @@ fi
 # included because Phase 4's ```text fence is the coverage block the run prints.
 # No prose veto, deliberately; the only must-not-exist checks are the #283
 # residue note's own literals. `agents/pr-review-orchestrator.md` is read for
-# one fact only — gate 29 owns that file. Three tracked files, no gh, no
-# network.
+# one fact only — gate 29 owns that file, and that double-pin is deliberate,
+# "the sibling survives untouched" being an acceptance item of #284 itself.
+# It pins the PREVIEW half only: the coverage record does not yet reach the
+# filed Epic, which is issue #294 and is stated rather than claimed. Three
+# tracked files, no gh, no network.
 if bash scripts/test-audit-lost-reviewer.sh; then
     pass "audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh)"
 else
