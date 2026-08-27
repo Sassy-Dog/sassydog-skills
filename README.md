@@ -163,7 +163,7 @@ address the orchestrator that dispatched it than the orchestrator can address th
 dispatched *it*, and the fan-out brief carries that rule down as one of its enumerated items rather
 than assuming each agent's own file gets read. It does not make the hop reliable and is not meant
 to: a reviewer that errors, times out, or comes back unparseable is still scored `!` and named on
-every run, never rolled into Clean.
+every run, never rolled into Clean. **Audit mode scores a lost reviewer too, in its own idiom** — the sibling of that rule rather than a copy of it: `assess-it` keeps a per-domain outcome ledger and prints it in the Phase 4 preview *before* the approval prompt, so a domain whose reviewer never came back is named dark rather than filed as clean. The consequence differs because audit mode **writes**: a diff-scoped hole costs a re-run, while a filed Epic missing a domain becomes the durable record and reads complete. It is surfaced, not a veto — filing still proceeds on approval.
 
 ## Installation
 

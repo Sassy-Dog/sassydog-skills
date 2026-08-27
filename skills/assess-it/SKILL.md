@@ -84,7 +84,7 @@ Print the Epic URL, the child issue list, the executive summary, and the same co
 ## Reference Files
 
 - **`assessment-rubric.md`** — the 15 assessment areas, scoring (1–10 health/security/DX/maintainability), severity & likelihood definitions, and the executive-summary format. Review agents consult their section; you use it for the Epic summary.
-- **`orchestration.md`** — agent→domain map, per-agent scope, the finding output schema, and the adversarial-review / dedupe / grouping logic.
+- **`orchestration.md`** — agent→domain map, per-agent scope, the four dispatch outcomes and the dark-domain rule, the finding output schema, and the adversarial-review / dedupe / grouping logic.
 - **`references/github-issue-ops.md`** — label *routing* (which dimension label a finding gets; the taxonomy itself is owned by `scripts/align-labels.sh`, never copied), child-issue & Epic body templates, and exact `gh`/`gh api` commands for dedupe, issue creation, and native sub-issue linking.
 
 ## Red Flags — STOP
