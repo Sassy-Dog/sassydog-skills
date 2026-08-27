@@ -125,12 +125,18 @@
 # its minimum, so it fails twice. The per-section minimums are hand-written
 # constants, not derived from the files under test, so this is not the
 # file-to-itself comparison the precedent rules out.
-#   It is also the ONLY thing that catches the two-edit deletion. Removing a
-# pinned paragraph from a section AND its canon row together leaves the
-# block-count equality passing — both sides moved — so layer 3's count check
-# says nothing; what fails is the section running one assertion fewer than its
-# declared minimum. That is measured, not reasoned: see the mutation battery in
-# the PR for #284.
+#   WHAT IT CATCHES UNIQUELY IS A RETIRED WINDOW, and that claim is narrower
+# than the one this paragraph first made. Deleting a pinned PARAGRAPH together
+# with its canon row does NOT need the floor: every block has an opener, so the
+# inventory sees the deletion regardless — measured, three assertions fire, one
+# of them `inventory orch_openers`. The floor is the sole layer for an edit that
+# touches only THIS FILE: drop a window from `WINDOW_DEFS` and its canon rows
+# with it, and the documents are untouched, so every surviving canon equality
+# and every inventory passes and consumption is satisfied. Measured, that mutant
+# produces ZERO failing assertions — the run is silent — and is caught only by
+# the total falling to 73 and by `windows` and `canon` missing their minimums.
+# A gate that stopped measuring a whole section is exactly the vacuity here, and
+# nothing above the floor can see it.
 #   The stated cost is that a section which legitimately LOSES a block reddens
 # until its minimum is updated too. Additions are free, since they only raise
 # the count. Nudging a minimum downward to quiet a red is the one edit that
