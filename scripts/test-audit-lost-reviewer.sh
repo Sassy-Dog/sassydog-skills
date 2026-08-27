@@ -304,26 +304,41 @@ assert_absent() {
         ok "$3"
     fi
 }
-# assert_eq <got> <want> <label> — on mismatch, prints a window around the FIRST
-# DIVERGING CHARACTER rather than the head of each string. Head truncation was
-# measured useless: a canon block is a whole paragraph, and for most of them the
-# first 140 characters of got and want are byte-identical, so the failure printed
-# the same line twice and said nothing. The scan runs only on failure.
+# assert_eq <got> <want> <label> — on mismatch, quotes a WINDOW OF WHOLE WORDS
+# around the first divergence rather than the head of each string. Two defects
+# were measured here, in order.
+#   Head truncation said nothing: a canon block is a whole paragraph, and for
+# most of them the first 140 bytes of got and want are byte-identical, so the
+# failure printed the same line twice.
+#   Slicing at the divergence OFFSET then emitted invalid UTF-8. `LC_ALL=C` is
+# set at the top of this file — deliberately, so awk counts bytes consistently —
+# which also makes bash substring expansion byte-based, so `${s:$i:1}` can cut an
+# em dash or an arrow in half. Measured: the mutation harness reading this
+# output died with `UnicodeDecodeError: invalid continuation byte`, and CI logs
+# would have shown mojibake. Words are whole characters by construction, so the
+# window is cut on word boundaries and the byte offset is reported rather than
+# used as a slice point.
+_word_window() { # <text> <first word> <count>
+    awk -v a="$2" -v n="$3" '{ for (i = a; i < a + n && i <= NF; i++)
+                                   printf "%s%s", (i > a ? " " : ""), $i }' <<<"$1"
+}
 assert_eq() {
     if [ "$1" = "$2" ]; then
         ok "$3"
         return
     fi
-    local i=0 n=${#1} m=${#2} lim start
+    local i=0 n=${#1} m=${#2} lim w from
     lim=$n
     [ "$m" -lt "$lim" ] && lim=$m
     while [ "$i" -lt "$lim" ] && [ "${1:$i:1}" = "${2:$i:1}" ]; do i=$((i + 1)); done
-    start=$((i - 30))
-    [ "$start" -lt 0 ] && start=0
+    w="$(awk '{print NF}' <<<"${1:0:$i}")"
+    case "$w" in ''|*[!0-9]*) w=0 ;; esac
+    from=$((w - 5))
+    [ "$from" -lt 1 ] && from=1
     bad "$3
-        diverges at char $i (got ${n} chars, want ${m} chars)
-        got : ...${1:$start:120}
-        want: ...${2:$start:120}"
+        diverges near word $((w + 1)) (got $n bytes, want $m bytes)
+        got : $(_word_window "$1" "$from" 16)
+        want: $(_word_window "$2" "$from" 16)"
 }
 assert_nonempty() {
     if [ -n "$1" ]; then ok "$2"; else bad "$2 — empty"; fi
