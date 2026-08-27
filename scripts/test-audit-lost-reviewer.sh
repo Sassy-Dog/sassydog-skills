@@ -117,6 +117,25 @@
 # block's own minimum is held APART from the SECTIONS array, so deleting the
 # block cannot also shrink the floor by exactly what the deletion removed.
 #
+# THE FLOOR EQUALS THE RUN, AND THAT IS THE STRICT SETTING RATHER THAN A
+# COINCIDENCE TO LOOSEN. Headroom is the WEAK configuration: a floor beneath the
+# count cannot tell "measuring everything" from "one assertion silently stopped
+# running", which is the whole failure a floor exists to catch. At equality, one
+# lost assertion drops the total below the floor AND drops its own section below
+# its minimum, so it fails twice. The per-section minimums are hand-written
+# constants, not derived from the files under test, so this is not the
+# file-to-itself comparison the precedent rules out.
+#   It is also the ONLY thing that catches the two-edit deletion. Removing a
+# pinned paragraph from a section AND its canon row together leaves the
+# block-count equality passing — both sides moved — so layer 3's count check
+# says nothing; what fails is the section running one assertion fewer than its
+# declared minimum. That is measured, not reasoned: see the mutation battery in
+# the PR for #284.
+#   The stated cost is that a section which legitimately LOSES a block reddens
+# until its minimum is updated too. Additions are free, since they only raise
+# the count. Nudging a minimum downward to quiet a red is the one edit that
+# retires this layer, and it should be read as such.
+#
 # NO `| grep -q` PIPELINE ANYWHERE: grep -q closes the pipe on its first match,
 # the writer takes SIGPIPE, and pipefail promotes the 141 — turning a caught
 # regression into a reported miss (the #172 shape, generalised by #256). Every
