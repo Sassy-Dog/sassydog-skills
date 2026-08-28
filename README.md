@@ -215,7 +215,7 @@ claude plugin update sassy-dog@sassydog-skills
 
 `claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale.
 
-**Do not diagnose this by comparing version strings.** The manifest is stamped only in release PRs while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files plus all ten reviewer agents differed ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
+**Do not diagnose this by comparing version strings.** The manifest is stamped only in release PRs while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
 
 **1. Find which cached copy is live.** The cache keeps every version ever installed (ten directories on the machine measured above) and installs are per scope, so `ls` cannot answer this:
 
@@ -224,7 +224,7 @@ jq -r '.plugins["sassy-dog@sassydog-skills"][] | "\(.scope)\t\(.projectPath // "
   ~/.claude/plugins/installed_plugins.json
 ```
 
-Take the `installPath` for the scope you are running under — a project-scope install and the user-scope one are routinely at different versions. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
+Take the `installPath` for the scope you are running under — a project-scope install and the user-scope one are routinely at different versions — and use it as `INSTALL_PATH` below. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
 
 **2. Refresh the marketplace clone**, so that what you compare against is current:
 
