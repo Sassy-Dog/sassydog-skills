@@ -415,6 +415,49 @@ promote_residue_gate() {  # $1=issue number
     return 0
 }
 
+# --- what each subcommand REMOVES (issue #288) ---------------------------------
+# The `not found` tolerance below keys on these tokens, so the labels each
+# subcommand strips are named here as DATA — deliberately not a regex over "any
+# label this subcommand mentions": `claim`'s `--add-label in-progress` and
+# `block`'s `--add-label blocked` are exactly the tokens that must NOT be
+# tolerated, so a match against the union re-admits the very bug the scoping
+# fixes.
+#
+# `promote` removes nothing — it adds `ready` and clears a residue assignee —
+# and its empty list is written out rather than left implicit, because that
+# emptiness IS #281's fix and a reader following this table should not have to
+# infer it from an absent arm. The arm is inert, the initialiser above already
+# covering it, which is precisely what makes it safe to keep as documentation.
+#
+# The `--remove-label` flags stay SPELLED OUT in each edit below rather than
+# being built from this list, which looks like the obvious de-duplication.
+# `scripts/test-drain-terminal-states.sh` reads the `block)` arm's own text for
+# one of the three cross-file facts its whole account of #282 rests on — that
+# `block` strips BOTH labels — and it asserts that by LITERAL, so deriving the
+# flags REDDENS that gate rather than quietly weakening it. Loud is the right
+# direction, so the reason the duplication stays is not that the derivation is
+# unsafe: it is that removing the duplication means repointing at this table the
+# window of a gate that pins another issue's decisions, which is not this
+# change's to make. That option is real and belongs to whoever owns gate 32; no
+# figure for its size is quoted here, because none was measured here.
+#
+# What the duplication costs is a second home for the list, and the drift it
+# admits is LOUD in the only direction that matters: a removal present in the
+# edit and missing here stops being tolerated, so gh's `not found` becomes a
+# hard failure rather than a silent success. The reverse cannot fire at all — an
+# error naming a label the edit no longer mentions is not an error this edit can
+# produce. The gate closes the loop from the other side: every tolerated-edge
+# case asserts the failure it relies on was actually injected, so an edit arm
+# that stops passing a removal this table names reddens it.
+REMOVALS=()
+case "$SUB" in
+    claim)   REMOVALS=("$READY_LABEL") ;;
+    release) REMOVALS=("$INPROG_LABEL") ;;
+    block)   REMOVALS=("$READY_LABEL" "$INPROG_LABEL") ;;
+    demote)  REMOVALS=("$READY_LABEL") ;;
+    promote) REMOVALS=() ;;
+esac
+
 hard_failed=0
 
 for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
@@ -488,19 +531,96 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
     # the issue merely doesn't carry is already a silent no-op). Nothing to
     # remove = the desired end state — treat "not found" errors as ok.
     #
-    # SCOPED to the subcommands that actually carry a --remove-label. `promote`
-    # does not, and swallowing its failures let it report `ok` — with a cleared
-    # assignee in the detail — on an edit that wrote nothing at all, neither the
-    # removal nor the `ready` label the whole subcommand exists to add.
+    # SCOPED TWICE, and the two scopes fix two halves of the same defect.
+    #
+    # (1) To the subcommands that actually carry a `--remove-label` — i.e. to a
+    #     NON-EMPTY $REMOVALS. `promote` has none, and swallowing its failures
+    #     let it report `ok` — with a cleared assignee in the detail — on an edit
+    #     that wrote nothing at all, neither the removal nor the `ready` label
+    #     the whole subcommand exists to add (issue #281).
+    #
+    # (2) To the REMOVAL's OWN label token. gh's error names one label and says
+    #     nothing about which flag it came from, so `claim` and `block` — which
+    #     carry an `--add-label` too — went on swallowing a wholly-failed edit
+    #     whose failing operation was the ADD. `ensure_label` runs `|| true`, so
+    #     on a repo where label creation fails (Terraform-managed labels, a
+    #     restricted token) the whole edit fails: nothing is assigned,
+    #     `in-progress` is never added, `ready` is never stripped — and `claim`
+    #     reported `result: "ok"`, so the loop believed the claim landed and
+    #     dispatch-ready handed the same issue to a second cold agent on its next
+    #     tick. Two agents, two PRs, one issue: the double-pick the claim guard
+    #     exists to prevent, reached through the silent-success path (#288).
+    #
+    # The token is matched QUOTED, the way gh writes it. gh's message embeds the
+    # issue URL — `failed to update https://github.com/<owner>/<repo>/issues/N:
+    # 'in-progress' not found` — so a bare-substring match on `ready` is
+    # satisfied by an owner or repo named `already`, and the swallowed claim
+    # comes back on that repo alone. If gh ever stops quoting, the tolerance
+    # stops firing and the removal edge becomes a LOUD failure rather than a
+    # silent success, which is the direction to fail in.
+    #
+    # The `could not be found` alternative is pre-existing and this change makes
+    # it strictly NARROWER: it used to suffice on its own for every subcommand
+    # carrying a removal, and now also needs a quoted removal token. What was
+    # measured here is the form gh 2.98.0 emitted on the probe below — `'<label>'
+    # not found`. Whether any gh wording reaches the other arm was NOT measured,
+    # so it stays as a hedge, and no fixture exercises it: a narrowing recorded
+    # rather than a path proved.
+    #
+    # KNOWN LIMIT, measured rather than assumed (gh 2.98.0, 2026-08-28, probed
+    # with two labels that exist in no repo, which gh refuses before it mutates
+    # anything): gh resolves the whole label set BEFORE it writes, and when both
+    # an add and a removal are unresolvable it names the REMOVAL. So an edit that
+    # failed on the removal token wrote nothing either. For `release` and
+    # `demote` the removal is the only operation, so tolerating it is exactly
+    # right; for `claim` and `block` it means the ADDS did not land and the run
+    # still reports `ok`.
+    #
+    # ITS PRECONDITION IS PER SUBCOMMAND, and stating it once for both gets one
+    # of them wrong. The loop below carries no `break`, so ANY of a subcommand's
+    # removal tokens tolerates: `claim` has one, `ready`, so `ready` absent is
+    # enough; `block` has two, and EITHER absent is enough — for `block` the
+    # "a repo carrying neither" form is the wrong one in the other direction.
+    # The argument does NOT rest on `in-progress` being ensured above: that
+    # ensure is `|| true`, and its failing is the very premise of the scenario.
+    # It rests on the measured fact that gh names the REMOVAL.
+    #
+    # `block` is the worse of the two and nothing observes it: a tolerated
+    # `block` reports `ok`, still posts its `--comment`, and never adds
+    # `blocked` — so a human reads a reason on the issue while
+    # `gh issue list --label blocked` finds nothing and dispatch-ready's §7 held
+    # set stays empty.
+    #
+    # It is left OPEN rather than closed because #288's acceptance requires the
+    # removal edge to stay tolerated for every subcommand that carries one. The
+    # SOUND closure is to re-issue the edit with the NAMED removal dropped — a
+    # label absent from the REPO is on no issue, so dropping it is a no-op by
+    # construction — which needs the `--remove-label` flags built from
+    # $REMOVALS, the derivation the note above declines. `ensure_label`-ing the
+    # removals too is NOT a closure, and is recorded here so it is not mistaken
+    # for one: that ensure is `|| true` on precisely the repos this limit is
+    # about, so it would reintroduce #288 wearing a fix.
+    #
+    # What the tolerance is no longer is SILENT. It names the token it swallowed
+    # on stderr and in the JSON detail, so an `ok` reached this way is at least
+    # distinguishable from one that wrote something — which is the half of the
+    # limit that could be closed without touching the verdict #288 freezes.
     tolerated=0
-    case "$SUB" in
-        claim|release|block|demote)
-            if [[ "$rc" -ne 0 ]]; then
-                case "$err" in
-                    *"not found"*|*"could not be found"*) tolerated=1 ;;
-                esac
-            fi ;;
-    esac
+    TOLERATED_NOTE=""
+    if [[ "$rc" -ne 0 ]]; then
+        case "$err" in
+            *"not found"*|*"could not be found"*)
+                for rl in ${REMOVALS[@]+"${REMOVALS[@]}"}; do
+                    if [[ "$err" == *"'$rl'"* ]]; then
+                        tolerated=1
+                        TOLERATED_NOTE="tolerated: '$rl' does not exist in $REPO, so removing it was already the end state"
+                    fi
+                done ;;
+        esac
+    fi
+    if [[ "$tolerated" == "1" ]]; then
+        echo "issue-claim: #$n — $TOLERATED_NOTE" >&2
+    fi
     if [[ "$rc" -ne 0 && "$tolerated" == "0" ]]; then
         detail="$(echo "$err" | grep -v '^\[gh-retry\]' | head -1)"
         # UNVERIFIED, not "not cleared": gh sends labels via updateIssue and
@@ -526,7 +646,13 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
         fi
     fi
 
-    emit "$n" "ok" "$RESIDUE_NOTE"
+    # A tolerated failure and a clean write both end here, so the detail has to
+    # tell them apart — see the limit above.
+    ok_detail="$RESIDUE_NOTE"
+    if [[ -n "$TOLERATED_NOTE" ]]; then
+        ok_detail="${ok_detail:+$ok_detail; }$TOLERATED_NOTE"
+    fi
+    emit "$n" "ok" "$ok_detail"
 done
 
 [[ "$hard_failed" == "1" ]] && exit 2

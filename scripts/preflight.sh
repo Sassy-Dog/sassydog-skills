@@ -620,7 +620,42 @@
 #      #281 does not sanction, filed as issue #287 (where reopen evidence alone
 #      is recorded as insufficient — `block` leaves an assignee with no close in
 #      the history). A CLOSED issue is refused in the gate's own body, not left
-#      to the caller. No taxonomy colour is transcribed —
+#      to the caller.
+#      IT PINS A SECOND DECISION (issue #288): the `not found` tolerance may
+#      only swallow a failure that IS a removal. #281 scoped it to the
+#      subcommands carrying a `--remove-label`, which fixed `promote` and left
+#      the other half standing — gh's error names one label and says nothing
+#      about which FLAG it came from, so `claim` and `block`, which carry an
+#      `--add-label` too, went on reporting `ok` for an edit that wrote NOTHING:
+#      no assignee, no `in-progress`, `ready` never stripped, and dispatch-ready
+#      handing the same issue to a second cold agent on its next tick — the
+#      double-pick the claim guard exists to prevent, reached through the
+#      silent-success path. The match is keyed on each subcommand's OWN removal
+#      tokens now, and BOTH halves are pinned because either alone is wrong: the
+#      strict cases are satisfied by deleting the tolerance outright, the
+#      tolerated-edge cases by never scoping it, and `block` appears twice in
+#      the gate's tolerated-edge table (not in the removals table, where it is
+#      one row with two tokens), being the only subcommand with two removals.
+#      Every tolerated-edge case asserts the failure it relies on was actually
+#      injected, since the mock errors only for a label the invocation NAMES —
+#      without which a row certifies its own premise and an edit arm that
+#      stopped passing that removal keeps the gate green. The `--remove-label`
+#      flags stay SPELLED OUT in each edit arm rather than derived from that
+#      table: gate 32 reads the `block)` arm's own text for one of its three
+#      cross-file premises and asserts it by literal, so deriving them REDDENS
+#      gate 32 rather than blinding it — the duplication stays because removing
+#      it means repointing another gate's window at this table, which belongs to
+#      whoever owns that gate and is not measured here. gh's wording is
+#      measured too (2.98.0): `'<label>' not found`, identical for an add and
+#      for a removal, naming the REMOVAL when both are unresolvable — so the
+#      token is matched QUOTED (the message embeds the issue URL, where a bare
+#      `ready` is satisfied by an owner named `already`, which is what the mock
+#      repo is called), and one residue is STATED rather than closed: an edit
+#      that failed on the removal token wrote nothing either, so `claim`/`block`
+#      report `ok` when the repo lacks THAT SUBCOMMAND's removal label — for
+#      `claim`, `ready` alone — which #288's acceptance requires to stay
+#      tolerated for all four.
+#      No taxonomy colour is transcribed —
 #      the mock's label store is seeded from the `taxonomy` emitter, gate 8's
 #      no-third-copy rule. Mock gh only: no repo, no network.
 #  32. drain terminal-state tests (scripts/test-drain-terminal-states.sh) —

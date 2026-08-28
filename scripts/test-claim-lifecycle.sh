@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # test-claim-lifecycle.sh — a claim is WRITTEN as two things and CLEARED as one,
-# and `promote` may only clear the half that is residue (issue #281).
+# and `promote` may only clear the half that is residue (issue #281); and the
+# `not found` tolerance may only swallow a failure that IS a removal (#288).
 #
 # What the defect is. `issue-claim.sh claim` writes `--add-assignee @me` AND
 # `--add-label in-progress` in ONE `gh issue edit`; `release` writes
@@ -11,6 +12,44 @@
 # its §3 defines in-flight as assignee AND label (a conjunction). So a reopened,
 # re-promoted issue arrives in ready[] still assigned and is skipped as "another
 # session got it" — false, silent, and it never dispatches.
+#
+# THE SECOND DEFECT THIS FILE PINS (issue #288, section 7b). The `not found`
+# tolerance exists for gh's one non-idempotent edge — `--remove-label` of a
+# label the REPO does not carry errors instead of no-opping — and it matched
+# gh's bare error string. #281 scoped it to the subcommands that carry a
+# removal, which fixed `promote` and left the other half standing: gh's error
+# names one label and says nothing about which FLAG it came from, so `claim` and
+# `block`, which carry an `--add-label` too, went on swallowing a WHOLLY-failed
+# edit whose failing operation was the ADD. `ensure_label` runs `|| true`, so on
+# a repo where label creation fails the whole edit fails — nothing assigned, no
+# `in-progress`, `ready` never stripped — and the run reported `ok`, which is
+# all a coordinator ever sees: dispatch-ready re-dispatches the same issue on
+# its next tick, two cold agents, two PRs, one issue. The tolerance is now keyed
+# on each subcommand's OWN removal tokens, and BOTH halves are pinned, because
+# either alone is wrong — the strict cases are satisfied by deleting the
+# tolerance outright, and the tolerated-edge cases by never scoping it. `block`
+# appears TWICE in that table because it is the only subcommand with two
+# removals, and a list that dropped its second token would still pass a
+# single-token case.
+#
+# MEASURED, NOT ASSUMED (gh 2.98.0, 2026-08-28, probed with two labels that
+# exist in no repo, which gh refuses before it mutates anything): the message is
+# `failed to update <issue-url>: '<label>' not found`, identical for an add and
+# for a removal, and when BOTH are unresolvable it names the REMOVAL. The mock
+# reproduces that message WHOLE, and errors only for a label the invocation
+# actually names — both halves are load-bearing here. The URL is why $MOCK_REPO
+# is owned by `already`: the shipped tolerance matches the QUOTED token, and
+# without a URL in the fixture a bare-substring match would pass every case.
+# Scanning the argv is why a tolerated-edge row cannot certify its own premise:
+# the removal list has two homes, and a knob that errored unconditionally
+# reported `ok` about a removal the subcommand had stopped performing.
+#
+# One residue is STATED rather than closed: an edit that failed on the removal
+# token wrote nothing either, so `claim`/`block` still report `ok` when the repo
+# lacks THAT SUBCOMMAND'S REMOVAL LABEL — for `claim`, `ready` alone, since
+# `claim` ensures `in-progress` itself and nothing in its path ever creates
+# `ready`. #288's acceptance requires the removal edge to stay tolerated for all
+# four, so the shipped script states the limit and its two available closures.
 #
 # Why the two obvious fixes are NOT what is tested here. Both were considered
 # and rejected on #281, and both are the shape a later "make this symmetric"
@@ -185,13 +224,48 @@ case "$cmd" in
                       state:     $s}' \
                     | jq -r "${jq_expr:-.}" ;;
             edit|comment)
+                # An arbitrary terminal error, so a failure that is NOT the
+                # not-found edge can be exercised — including one that QUOTES a
+                # removal token, which is what pins the phrase conjunct rather
+                # than leaving the token match to carry the whole decision.
+                if [ -n "${MOCK_EDIT_ERROR:-}" ]; then
+                    echo "$MOCK_EDIT_ERROR" >&2
+                    exit 1
+                fi
+                # $MOCK_MISSING_LABEL is the label this fixture treats as
+                # absent from the REPO — the edge the tolerance was written for.
+                # The label STORE still holds it, deliberately: `ensure_label`
+                # has to find the taxonomy aligned, and what is modelled here is
+                # gh's EDIT-TIME resolution failing, not a reconcile. gh errors
+                # only for a label the invocation actually NAMES, so the mock
+                # scans the argv it was handed rather than trusting the fixture
+                # to say what the script passed. That is what stops a
+                # tolerated-edge row certifying its own premise: an edit arm
+                # that stopped passing the removal the row names injects no
+                # failure at all, records a write, and is caught — where a knob
+                # that errored unconditionally printed `ok` about a removal the
+                # subcommand no longer performs.
+                #
+                # The wording is gh 2.98.0's, reproduced whole because BOTH
+                # halves are load-bearing: it names one QUOTED label and says
+                # nothing about which flag it came from (#288's whole question),
+                # and it embeds the issue URL — which is why $MOCK_REPO's owner
+                # contains `ready` inside `already`, so a match on the bare
+                # token rather than the quoted one is caught here.
+                if [ -n "${MOCK_MISSING_LABEL:-}" ]; then
+                    prev_flag=""
+                    for a in "$@"; do
+                        case "$prev_flag" in
+                            --add-label|--remove-label)
+                                if [ "$a" = "$MOCK_MISSING_LABEL" ]; then
+                                    echo "failed to update https://github.com/$MOCK_REPO/issues/$num: '$MOCK_MISSING_LABEL' not found" >&2
+                                    exit 1
+                                fi ;;
+                        esac
+                        prev_flag="$a"
+                    done
+                fi
                 case "${MOCK_FAIL_EDIT:-0}" in
-                    notfound)
-                        # gh's own wording for the edge the tolerance was
-                        # written for. Nothing is recorded: the edit did not
-                        # apply, which is the whole point.
-                        echo "gh: 'ready' not found" >&2
-                        exit 1 ;;
                     1)
                         echo "gh: HTTP 500 Internal Server Error" >&2
                         exit 1 ;;
@@ -208,7 +282,10 @@ esac
 MOCK
 chmod +x "$WORK/bin/gh"
 
-export MOCK_REPO="mock-org/mock-repo"
+# The owner is not decorative: gh's error embeds the issue URL, so an owner
+# containing `ready` inside `already` is what makes the difference between the
+# QUOTED token match the script ships and a bare-substring one observable here.
+export MOCK_REPO="already/mock-repo"
 export MOCK_ISSUES="$WORK/issues.tsv"
 export MOCK_LABELS="$WORK/labels.tsv"
 export MOCK_WRITES="$WORK/writes.log"
@@ -237,6 +314,8 @@ fi
 #                                                   split mis-reads (section 4)
 #   16  @me, no in-progress, but CLOSED          -> the who-shipped-it record
 INPROG="in-progress"
+READY="ready"
+BLOCKED="blocked"
 {
     printf '10\ttester\t\tOPEN\n'
     printf '11\tsomeone-else\t\tOPEN\n'
@@ -509,7 +588,7 @@ fi
 # that failed. The `not found` tolerance made that worse than cosmetic: written
 # for --remove-label, which promote does not carry, it turned a completely
 # failed edit into `result:"ok"` plus "cleared claim residue" with zero writes.
-MOCK_FAIL_EDIT=notfound run_claim promote 10
+MOCK_MISSING_LABEL=$READY run_claim promote 10
 if [ "$(result_of)" = "ok" ]; then
     bad "a promote whose edit wrote NOTHING reported ok — the not-found tolerance is not scoped to --remove-label"
 elif has "$(detail_of)" "cleared claim residue"; then
@@ -531,15 +610,118 @@ else
     ok "a hard-failed promote edit reports failed and never announces a clear on stderr"
 fi
 
-# The tolerance was SCOPED, not deleted. `--remove-label` of a label the repo
-# does not carry is gh's one non-idempotent edge, and release/block/demote still
-# depend on it — a fix that quietly removed it for them would turn every such
-# no-op into a hard failure, and nothing else here would notice.
-MOCK_FAIL_EDIT=notfound run_claim release 10
-if [ "$(result_of)" != "ok" ]; then
-    bad "release lost the 'not found' tolerance it still needs: result=$(result_of) — the scoping deleted the edge instead of narrowing it"
+# --- 7b. the tolerance is scoped to the REMOVAL's own token (issue #288) -----
+# #281 scoped the tolerance to the subcommands that carry a `--remove-label`,
+# which fixed `promote` and left the other half standing: gh's error names one
+# label and says nothing about which FLAG it came from, so `claim` and `block` —
+# which carry an `--add-label` too — went on swallowing a wholly-failed edit
+# whose failing operation was the ADD. `ensure_label` runs `|| true`, so on a
+# repo where label creation fails the whole edit fails, nothing is assigned,
+# `in-progress` is never added, `ready` is never stripped — and the run reported
+# `ok`, so the loop believed the claim landed and dispatch-ready handed the same
+# issue to a second cold agent on its next tick.
+MOCK_MISSING_LABEL=$INPROG run_claim claim 13
+if [ "$(result_of)" = "ok" ]; then
+    bad "a claim whose --add-label $INPROG failed reported ok — nothing was assigned and nothing was labelled, so the loop dispatches this issue twice (#288)"
+elif [ "$(result_of)" != "failed" ]; then
+    bad "a claim whose add half failed did not report failed: result=$(result_of)"
+elif [ "$RC" -ne 2 ]; then
+    bad "a wholly-failed claim exited $RC, not 2 — a hard failure must reach the caller's exit code too"
 else
-    ok "release/block/demote keep the 'not found' tolerance the edge was written for"
+    ok "a claim whose --add-label $INPROG failed reports failed and exits 2 (#288)"
+fi
+
+# `block`'s add half is a different label from `claim`'s, and its removals are
+# the only pair in the table — proving one subcommand's add is not proving the
+# other's, since the discriminator is per-subcommand DATA.
+MOCK_MISSING_LABEL=$BLOCKED run_claim block 13 --comment "why"
+if [ "$(result_of)" != "failed" ]; then
+    bad "a block whose --add-label $BLOCKED failed reported $(result_of) — the label the subcommand exists to add never landed, and nothing said so"
+elif [ "$RC" -ne 2 ]; then
+    bad "a wholly-failed block exited $RC, not 2 — a hard failure must reach the caller's exit code too"
+else
+    ok "a block whose --add-label $BLOCKED failed reports failed and exits 2 (#288)"
+fi
+
+# The tolerance was SCOPED, not deleted. `--remove-label` of a label the repo
+# does not carry is gh's one non-idempotent edge, and every subcommand that
+# carries a removal still depends on it — a fix that quietly removed it would
+# turn each such no-op into a hard failure, and nothing else here would notice.
+# One row per subcommand, and `block` twice because it is the only one with TWO
+# removals: a list that dropped its second token would still pass a single-token
+# case. Each row names the label gh's error would carry.
+#   label <TAB> args <TAB> the removal gh names
+TOLERATED_EDGES=(
+"claim	claim 13	$READY"
+"release	release 10	$INPROG"
+"block ($READY)	block 13 --comment why	$READY"
+"block ($INPROG)	block 13 --comment why	$INPROG"
+"demote	demote 10 --comment why	$READY"
+)
+for row in "${TOLERATED_EDGES[@]}"; do
+    IFS=$'\t' read -r t_label t_args t_token <<<"$row"
+    # shellcheck disable=SC2086
+    MOCK_MISSING_LABEL="$t_token" run_claim $t_args
+    # THE KNOB MUST HAVE FIRED. A failed edit records nothing, so a recorded
+    # `issue edit` means the mock saw no missing label in the argv — the row's
+    # subcommand no longer passes the removal this row names, and `ok` below
+    # would be the ordinary path's verdict rather than the tolerance's. It is
+    # the same control the short-read mutant uses, and it is what stops the
+    # duplicated removal list being policed in one direction only.
+    if [ -n "$EDITS" ]; then
+        bad "$t_label recorded an edit ($EDITS) — the invocation never named '$t_token', so no tolerance was exercised and this row proves nothing"
+    elif [ "$(result_of)" != "ok" ]; then
+        bad "$t_label lost the 'not found' tolerance for its OWN removal '$t_token': result=$(result_of) — the scoping deleted the edge instead of narrowing it"
+    elif [ "$RC" -ne 0 ]; then
+        bad "$t_label tolerated '$t_token' not found but still exited $RC"
+    elif ! has "$(detail_of)" "$t_token"; then
+        bad "$t_label tolerated '$t_token' but its detail was '$(detail_of)' — an ok that names nothing is indistinguishable from one that wrote something"
+    elif ! has "$ERR" "tolerated"; then
+        bad "$t_label swallowed '$t_token' with nothing on stderr saying so"
+    else
+        ok "$t_label still tolerates '$t_token' not found — its own removal, the edge the tolerance was written for"
+    fi
+done
+
+# FIXTURE ADEQUACY for the QUOTED match — measured, not argued, the posture
+# #263 established and this file already uses for the TSV transport at section
+# 4. The shipped tolerance matches `'<token>'` rather than the bare token only
+# because gh's message embeds the issue URL, and the fixture can only expose a
+# relaxation while the pre-fix predicate ANSWERS DIFFERENTLY from the shipped
+# one on that message. $MOCK_REPO's `already` owner is the entire reason it
+# does; a neutral owner makes every case here pass with the quoting removed,
+# and reads like a spelling choice one tidy away.
+adequacy_err="failed to update https://github.com/$MOCK_REPO/issues/13: '$INPROG' not found"
+if [ "${adequacy_err#*"'$READY'"}" != "$adequacy_err" ]; then
+    bad "the QUOTED predicate matched '$READY' in an error naming only $INPROG — the shipped match is not the one this file claims"
+elif [ "${adequacy_err#*"$READY"}" = "$adequacy_err" ]; then
+    bad "the bare-substring predicate does not match '$READY' in the mock's error at all, so relaxing the quoting would be invisible here: MOCK_REPO ('$MOCK_REPO') no longer carries it"
+else
+    ok "FIXTURE ADEQUACY: the mock's message separates the two predicates — '$READY' appears in it, and never quoted"
+fi
+
+# The tolerance is an EDGE, not a blanket: a failure that is not the not-found
+# edge at all must still be a hard failure for a subcommand whose only operation
+# is the removal. `release` and `demote` appear nowhere else except the tolerated
+# path, so without this the gate asserts their tolerance and never its absence —
+# and a swallowed `release` leaves `in-progress` set, so the issue reads in-flight
+# forever.
+MOCK_FAIL_EDIT=1 run_claim release 10
+if [ "$(result_of)" != "failed" ]; then
+    bad "release tolerated a failure that was not the not-found edge: result=$(result_of)"
+else
+    ok "release reports failed on an error that is not the not-found edge"
+fi
+
+# And the not-found PHRASE is a conjunct in its own right: an error that quotes
+# the subcommand's removal token but is not that edge must NOT be tolerated.
+# Without this the token match carries the whole decision and the phrase test
+# could be widened to anything with nothing noticing.
+MOCK_EDIT_ERROR="failed to update https://github.com/$MOCK_REPO/issues/10: HTTP 500 while removing '$INPROG'" run_claim release 10
+if [ "$(result_of)" != "failed" ]; then
+    bad "release tolerated an error QUOTING its own removal that was not a not-found: result=$(result_of) — the phrase conjunct is doing nothing"
+else
+    ok "an error quoting the removal token WITHOUT the not-found phrase is not tolerated"
 fi
 
 # --- 8. --dry-run previews the decision instead of hiding it -----------------
@@ -703,7 +885,8 @@ MUTANTS=(
 "M7 the gate stops resetting its verdict	    RESIDUE_ARGS=()	    :	-	promote 10 13	cleared-13	one issue's ARGS leak into the next one's edit in a batch"
 "M9 short-read guard	    if [[ \"\$read_ok\" != \"1\" ]]; then	    if false; then	MOCK_SHORT_VIEW=1	promote 10	state-arm	a truncated probe result is reported as the state arm's verdict instead of malformed"
 "M10 the gate stops resetting its reported verdict	    RESIDUE_NOTE=\"\"	    :	-	promote 10 13	false-detail-13	one issue's REPORT leaks into the next one's JSON, claiming a write that never happened"
-"M8 not-found tolerance re-widened to promote	        claim|release|block|demote)	        claim|release|block|demote|promote)	MOCK_FAIL_EDIT=notfound	promote 10	false-clear	a promote that wrote nothing reports ok and claims the residue was cleared"
+"M8 not-found tolerance re-widened to promote	    promote) REMOVALS=() ;;	    promote) REMOVALS=(\"\$READY_LABEL\") ;;	MOCK_MISSING_LABEL=$READY	promote 10	false-clear	a promote that wrote nothing reports ok and claims the residue was cleared"
+"M11 removal-token match re-widened to the bare error string	                    if [[ \"\$err\" == *\"'\$rl'\"* ]]; then	                    if true; then	MOCK_MISSING_LABEL=$INPROG	claim 13	false-ok	a claim whose ADD half failed reports ok, so the loop believes an unclaimed issue was claimed and dispatches it again"
 )
 
 mut_ran=0
@@ -775,6 +958,19 @@ for row in "${MUTANTS[@]}"; do
             else
                 bad "$m_label UNDETECTED: the tolerance was re-widened and no false clear followed — section 7 proves nothing"
             fi ;;
+        false-ok)
+            # The harm here is a SILENT SUCCESS, not a false detail: a claim that
+            # wrote nothing reports ok, and #288's whole point is that the
+            # verdict is all a coordinator ever sees. The recorded-edit control
+            # is the one the tolerated-edge rows carry — without it a knob that
+            # never fired reports CAUGHT on the ordinary path's verdict.
+            if [ -n "$EDITS" ]; then
+                bad "$m_label INCONCLUSIVE: an edit was recorded, so no failure was injected and 'ok' is the ordinary path's verdict"
+            elif [ "$(result_of)" = "ok" ]; then
+                ok "$m_label CAUGHT: $m_why"
+            else
+                bad "$m_label UNDETECTED: the token match was re-widened to the bare error string and the wholly-failed claim still reported '$(result_of)' — section 7b proves nothing"
+            fi ;;
         *) bad "$m_label — unknown expectation '$m_expect'" ;;
     esac
 done
@@ -786,11 +982,11 @@ else
 fi
 
 # The knob guard itself can go vacuous: if every env cell became `-`, it would
-# check nothing and still pass. Today three mutants carry a knob.
-if [ "$env_knobs_checked" -ge 3 ]; then
+# check nothing and still pass. Today four mutants carry a knob.
+if [ "$env_knobs_checked" -ge 4 ]; then
     ok "every mutant fixture knob ($env_knobs_checked) is one the mock actually reads"
 else
-    bad "only $env_knobs_checked mutant env knobs were checked — fewer than the 3 carried today; did a knob-driven mutant lose its cell?"
+    bad "only $env_knobs_checked mutant env knobs were checked — fewer than the 4 carried today; did a knob-driven mutant lose its cell?"
 fi
 
 # --- vacuity floor ------------------------------------------------------------
@@ -807,7 +1003,7 @@ fi
 # twice, and a live edition during review carried 24 against 22 actual cases —
 # adding one case while removing another nets zero and passes silently either
 # way, so the number that cannot be re-derived is at least only written once.
-EXPECTED_CASES=25
+EXPECTED_CASES=34
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
