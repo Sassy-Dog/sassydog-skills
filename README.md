@@ -201,7 +201,7 @@ claude plugin marketplace add Sassy-Dog/sassydog-skills
 claude plugin install sassy-dog
 ```
 
-Plugin updates are **manual** — the cache does not follow releases. After every release (a new CalVer stamped into `.claude-plugin/plugin.json` via `scripts/stamp-version.sh` — see `docs/VERSIONING.md`), each consumer machine must run:
+Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only in release PRs (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
 
 ```bash
 claude plugin update sassy-dog@sassydog-skills
@@ -213,14 +213,37 @@ claude plugin update sassy-dog@sassydog-skills
 
 ### `claude plugin marketplace update` is not a plugin update
 
-`claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale. Diagnose with:
+`claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale.
+
+**Do not diagnose this by comparing version strings.** The manifest is stamped only in release PRs while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files plus all ten reviewer agents differed ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
+
+**1. Find which cached copy is live.** The cache keeps every version ever installed (ten directories on the machine measured above) and installs are per scope, so `ls` cannot answer this:
 
 ```bash
-ls ~/.claude/plugins/cache/sassydog-skills/sassy-dog/
-# 2026.6.4    <- installed version (stale)
+jq -r '.plugins["sassy-dog@sassydog-skills"][] | "\(.scope)\t\(.projectPath // "-")\t\(.installPath)"' \
+  ~/.claude/plugins/installed_plugins.json
 ```
 
-Compare against `version` in `.claude-plugin/plugin.json` on `main` (e.g. `2026.7.16`). If they differ, run the qualified update command above. This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
+Take the `installPath` for the scope you are running under — a project-scope install and the user-scope one are routinely at different versions. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
+
+**2. Refresh the marketplace clone**, so that what you compare against is current:
+
+```bash
+claude plugin marketplace update sassydog-skills
+```
+
+**3. Compare content** — the clone against that install path:
+
+```bash
+diff -rq ~/.claude/plugins/marketplaces/sassydog-skills/skills "$INSTALL_PATH/skills"
+diff -rq ~/.claude/plugins/marketplaces/sassydog-skills/agents "$INSTALL_PATH/agents"
+```
+
+Any `Files … differ` line means the cache is stale — run the qualified update command above. Silence means it is current.
+
+Step 2 is load-bearing rather than tidiness: an unrefreshed clone is stale in the same way the cache is, and matches it exactly. On the measurement above that identical pair of directories reported **zero** differences before the refresh and **28** after it, with nothing about the repo having changed in between.
+
+This failure mode is silent: no error anywhere — skills just keep old bugs and trigger phrases stop matching.
 
 ### Updates freeze at the cached version
 
