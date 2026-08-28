@@ -8,6 +8,7 @@ preflight_commands: |
 pr_template_sections: [Summary, Changes, Verification]
 merge_queue: true
 claim_label: in-progress
+review_site: coordinator
 ---
 
 ## subagent-rules
