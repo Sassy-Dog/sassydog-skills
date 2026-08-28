@@ -179,7 +179,55 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   session from the one that dispatched. The comment template on this path names the outcome rather
   than a finding — `dispatch-ready: attempt 1 failed — review: no report returned` — since a lost
   report has no finding to name.
-- **`CONFLICTING` PRs** → never auto-rebase; surface and hold.
+- **`CONFLICTING` PRs** → never auto-rebase; **demote on sight.** Surface it in the tick report
+  naming the PR *and the conflict*: §6's `holds:` line classifies by §7's table, which answers row
+  1 (`blocked`) once this bullet has written, so the word `CONFLICTING` reaches the operator only
+  if this bullet puts it there. Demote the issue in the same tick — via the board plus a `blocked`
+  label, or `issue-claim.sh block N --comment "dispatch-ready: PR #<pr> is CONFLICTING — needs a
+  rebase this loop may not perform, then clear the blocked label to resume the drain"`, that
+  subcommand requiring a comment — so a human resolves the conflict. Name the label in it:
+  `promote` never strips `blocked`, so a rebase alone no longer returns the issue to the queue.
+  **Demote ONCE**: skip an issue that already carries `blocked` and write nothing, leaving it to
+  the blocked-PR bullet above. That is an idempotency predicate, not an attempt
+  counter — it asks whether the demotion has been *written*, never how many times the PR has
+  failed — and without it this bullet re-fires every tick against a PR that stays `CONFLICTING`
+  until a human rebases, posting a fresh comment each time, since `issue-claim.sh` makes the label
+  edits idempotent and the comment not. The Guardrails' **idempotent ticks** rule forbids exactly
+  that. **If the demotion write fails**, say so in the tick report and treat the issue as still
+  in-flight this tick: a tick that believes it demoted and did not is #282 again wearing this fix.
+  **Read that from live state, never from the exit code alone** — `issue-claim.sh` reports `ok` and
+  exits 0 when the label edit lands and only the *comment* fails, saying so on stderr, so a
+  demotion can be real while the reason nobody posted is not. `Demote ONCE` then never retries it,
+  which is the trade: re-comment nothing, and report the missing reason instead.
+  **No redispatch, and no attempt counter** — this is deliberately NOT the shape the failed-check
+  bullet above has, and aligning the two is the tidy to refuse: a sub-agent sent to rebase the
+  branch IS this loop advancing that PR, which §7's discriminator table forbids for `CONFLICTING`
+  in as many words, so that option costs a §7 row as well and re-opens a decision already settled
+  there. `take-it` keeps the bare surface-and-hold form for the mirror-image reason and must not be
+  aligned to this one: it is a bounded batch with no §7 and no forever-tick, so a hold there ends
+  when the batch does. **A bare surface-and-hold is what this replaces, and it was the defect**:
+  nothing cleared the claim, so the issue stayed `in-progress`, in-flight never reached zero, and
+  with COMPLETE vetoed by the open PR and STALLED forbidden by in-flight, the loop ticked forever —
+  #282's class one bullet over, and not covered by it (#290). No other route reaches a demotion
+  either: a conflicted PR stops CI firing at all, `sassy-dog:pr-shepherd` recording that `no checks
+  reported` reads identically to `CI hasn't started`, so the failed-check bullet's counter never
+  starts. **A stacked upper layer demotes like any other**, and that cost is accepted rather than
+  carved out: a layer goes `CONFLICTING` the moment the layer below squash-merges, which
+  `sassy-dog:pr-shepherd`'s stacked-PR reference calls the expected shape rather than a fault — but
+  this loop may not rebase it either, so it is a human gate like the rest. Say which it is in the
+  comment. **The demotion changes which §7 row matches, never whether the PR is enumerated** — the
+  first bullet above already resolved it from the in-flight branch this tick, and both rows answer
+  held, `CONFLICTING` (row 2) before and `blocked` (row 1) after — so COMPLETE stays vetoed and the
+  held set stays non-empty across the write. **Carry that PR into §4's collision sources and the
+  migration slot for this tick**, from the issue → open-PR mapping the first bullet already keeps:
+  §4 draws its blocked half from the blocked-PR bullet's enumeration, taken *before* this write, so
+  a PR demoted here sits in neither half until the next tick — while §3 frees its slot in this one,
+  which is exactly the state where §4 would dispatch a Ready issue into a still-open human-gated
+  PR. From the next tick on the blocked-PR bullet enumerates it and the hand-off bullet's own
+  `blocked` predicate withholds it from `sassy-dog:pr-shepherd`; on the demotion tick that
+  predicate reads state not yet written, and what withholds it instead is `merge-shepherd.sh`
+  refusing a `CONFLICTING` PR ahead of every other check. **Never park it back in Ready**: Ready
+  must stay synonymous with dispatchable.
 
 ## 3. Compute capacity
 

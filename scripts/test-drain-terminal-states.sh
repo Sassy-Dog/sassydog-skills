@@ -2,7 +2,8 @@
 # test-drain-terminal-states.sh — pins dispatch-ready §7's terminal-state
 # coverage: the uncovered state #282 found, the enumeration the fix depends on,
 # the discriminator that makes it safe, and the four things the fix must NOT
-# have moved.
+# have moved — plus the §2 bullet that has to demote a `CONFLICTING` PR for
+# that coverage to be reachable at all (#290).
 #
 # THE BUG. §7 defined exactly two terminal states and between them they did not
 # cover "Ready empty, in-flight zero, and an open unmerged PR this loop is not
@@ -63,6 +64,35 @@
 # the gate pins the statement, because a reader who works it out will otherwise
 # either trust the rows as live or delete them as dead.
 #
+# THE SAME FOREVER-TICK IS REACHABLE ONE BULLET EARLIER, AND #282 DOES NOT
+# CLOSE IT (issue #290). Every §2 failure path had a demotion route except one:
+# a `CONFLICTING` PR was surfaced and HELD, with no comment, no counter and no
+# exit. The hold left the issue `in-progress`, so in-flight never reached zero —
+# COMPLETE vetoed by the open PR, STALLED forbidden by in-flight — and the loop
+# ticked forever. The discriminator above classifies such a PR correctly the
+# moment it is enumerable, and on the in-flight path it never became so, which
+# is why #282's fix is untouched here and does not reach this.
+#
+# IT CANNOT ARRIVE AT A DEMOTION BY ANY OTHER ROUTE, which is why the fix has to
+# be written into that bullet rather than left to the failed-check one. A
+# conflicted PR stops CI firing at all — `pr-shepherd` records that
+# `no checks reported` is indistinguishable from `CI hasn't started` — so the
+# attempt counter that eventually demotes a red PR never starts.
+#
+# THE DECISION IS DEMOTE ON SIGHT, and the rejected alternative is RECORDED in
+# the bullet — recorded, not pinned as a negative; see the limit below for what
+# that is worth. It is the one a later "make these bullets symmetric" sweep
+# reaches for. Mirroring the failed-check bullet's ONE redispatch means
+# dispatching a sub-agent to rebase, which IS this loop advancing that PR —
+# exactly what §7's `CONFLICTING` row forbids in as many words — so that option
+# costs a §7 row as well, re-opening a decision the canon here holds. §7's table
+# is UNTOUCHED by #290: once the issue carries `blocked`, §7's FIRST row matches
+# it before the `CONFLICTING` row is reached, and in-flight drops so #282's own
+# discriminator can finally fire. The demotion also does not change the union —
+# §2's first bullet already resolved that PR from the in-flight branch this
+# tick, and both rows answer held — so COMPLETE stays vetoed and the held set
+# stays non-empty across the write, which is the one-set identity below.
+#
 # HOW THIS GATE IS BOUND, AND WHY IT IS BOUND IN THREE LAYERS. Its first edition
 # asserted presence only, and a review measured meaning-inverting rewrites
 # passing it at exit 0 — writing the bug back as `Ready **non-empty**`, which a
@@ -119,16 +149,22 @@
 #   false one.
 #
 #   KNOWN LIMITS, stated rather than patched, and each one measured.
-#   (1) §4, §6 AND GUARDRAILS ARE INVENTORIED, NOT CONTENT-PINNED. Rewriting the
+#   (1) §2's AND §4's REMAINING BULLETS, §6 AND GUARDRAILS ARE INVENTORIED,
+#       NOT CONTENT-PINNED — both of the first two carry text-pinned
+#       exceptions, enumerated below, so naming either one alone is what let
+#       this limit's three copies disagree — the header named §4 while
+#       preflight.sh and CLAUDE.md both named §2 (#290).
+#       Rewriting the
 #       BODY of an existing bullet or paragraph there — not merely appending a
 #       sentence to it — changes no opener and no marker list, and was measured
 #       inverting §7 from outside it ("the blocked-PR bullet is a reporting
 #       convenience, not an input to §7" is enough). What IS pinned by text:
 #       §7 and §3 wholesale (§3 being the file's only "in-flight is" sentence,
-#       which §2, §4 and §7 all read), §2's four operative regions (the
+#       which §2, §4 and §7 all read), §2's five operative regions (the
 #       blocked-PR enumeration, the board-path in-flight definition, the merge
-#       hand-off and the ONE-redispatch budget), and §4's Collision row plus the
-#       paragraph keeping a blocked PR inside it. The rest is inventoried
+#       hand-off, the ONE-redispatch budget and the CONFLICTING demotion), and
+#       §4's Collision row plus the paragraph keeping a blocked PR inside it.
+#       The rest is inventoried
 #       because pinning sections this change did not write would redden on every
 #       unrelated edit: that is the trade, stated, not an oversight.
 #   (2) Deleting a section, its registry entry AND its canon entries together is
@@ -143,10 +179,10 @@
 #   (4) A gate cannot verify its own guard from inside that guard. The derived
 #       floor is the backstop under the registry block; there is no layer
 #       beneath the floor.
-#   (6) §3 and §4 are read now, but §5 is not, and no window reaches the config
+#   (5) §3 and §4 are read now, but §5 is not, and no window reaches the config
 #       block in §1. A rule hoisted into either could contradict §7 unseen —
 #       the same shape Guardrails had until it was inventoried.
-#   (5) Markdownlint remains load-bearing for a malformed table (MD055/MD056),
+#   (6) Markdownlint remains load-bearing for a malformed table (MD055/MD056),
 #       which this gate reads as content rather than as structure. Eight rules
 #       are already disabled in `.markdownlint-cli2.jsonc`; disabling those
 #       would remove a backstop nothing here replaces. The heading and fence
@@ -196,12 +232,20 @@
 # sites; that was a file-to-itself comparison of the kind this header rules out
 # for the canon, one `sed` updated both sides, and it is gone.
 #
-# THE PREMISE IS ASSERTED, NOT ASSUMED. Everything above rests on `block`
-# stripping BOTH labels; if it ever stripped only `ready`, the blocked issue
-# would stay in-flight, §2's branch query would find its PR, and this gate's
-# whole account of the bug would be wrong while every prose assertion stayed
-# green. So the `block` case in `skills/github-issues/scripts/issue-claim.sh` is
-# read too — the gate's second tracked file, read for that one fact.
+# THE PREMISE IS ASSERTED, NOT ASSUMED, AND IT IS NOW TWO FACTS IN TWO WINDOWS.
+# (a) `block` strips BOTH labels; if it ever stripped only `ready`, the blocked
+# issue would stay in-flight, §2's branch query would find its PR, and this
+# gate's whole account of the bug would be wrong while every prose assertion
+# stayed green. (b) `block` REFUSES TO RUN WITHOUT `--comment`, and exits rather
+# than warning, which is what the CONFLICTING bullet's promise that a human
+# learns why actually rests on (#290). The two live in different places — (a) in
+# the `block)` case, (b) in argument parsing ABOVE it — so they need two windows,
+# and a reader who trims "redundant" windows on the strength of an account that
+# names only the `block)` case deletes the assertion (b) is. A third fact is
+# read from `skills/pr-shepherd/scripts/merge-shepherd.sh`: it refuses a
+# `CONFLICTING` PR ahead of every other gate, which is the ONLY thing withholding
+# that PR from the merger on the demotion tick, the hand-off bullet's own
+# `blocked` predicate reading state not yet written.
 #
 # NO `-ef` PRECONDITION, deliberately, and what follows is the reasoning
 # test-review-gate-decisions.sh's section 9 paid for rather than its conclusion.
@@ -221,10 +265,10 @@
 #
 # NO INVENTORY NUMBER IS TRANSCRIBED. The assertion count is PRINTED by the run;
 # the section inventory is enumerated beside its own counts, which is the form
-# CLAUDE.md sanctions. The mutation battery lives in the PR that added this gate
-# (issue #282).
+# CLAUDE.md sanctions. Each mutation battery lives in the PR that added the
+# section it proves (issues #282 and #290).
 #
-# Two tracked files. No gh, no network, no repo mutation.
+# Three tracked files. No gh, no network, no repo mutation.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-drain-terminal-states.sh
@@ -237,6 +281,10 @@ cd "$REPO_ROOT" || exit 1
 
 SKILL="skills/dispatch-ready/SKILL.md"
 CLAIM="skills/github-issues/scripts/issue-claim.sh"
+# The third premise file (#290): the CONFLICTING bullet's account of the
+# demotion tick rests on this script refusing a conflicted PR before any other
+# gate. Read for that one fact, like CLAIM.
+SHEPHERD="skills/pr-shepherd/scripts/merge-shepherd.sh"
 OPENER_WORDS=6
 
 fails=0
@@ -250,8 +298,9 @@ bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 # transcribed. A section that never runs, or that runs fewer assertions than it
 # declares, FAILS — which is what a bare numeric floor could not do (measured
 # twice: a whole section deleted, and 14 assertions deleted from the largest).
-SECTIONS=(windows:33 canon7:27 conjunct:7 enumeration:13 discriminator:17
-          nonempty:3 carveouts:2 complete:5 record:3 stoppath:7 premise:3)
+SECTIONS=(windows:43 canon7:27 conjunct:7 enumeration:13 conflicting:17
+          discriminator:17 nonempty:3 carveouts:2 complete:5 record:3
+          stoppath:7 premise:7)
 # The registry block's own minimum is deliberately NOT a member of SECTIONS.
 # Measured: while it was one, deleting the block AND its entry shrank the floor
 # by exactly what the deletion removed, so two edits retired layer 3 and every
@@ -265,7 +314,7 @@ SECTIONS=(windows:33 canon7:27 conjunct:7 enumeration:13 discriminator:17
 # script at exit 0 having run ZERO assertions, which a preflight-shaped wrapper
 # reports as PASS. Both tokens are validated explicitly below for that reason,
 # and the sentence is now what was measured rather than what was assumed.
-REGISTRY_MIN=13
+REGISTRY_MIN=14
 # EVERY token is validated before any arithmetic touches it. Measured on
 # /bin/bash 3.2 — the shell CLAUDE.md tells developers to run preflight on —
 # deleting one digit (`discriminator:17` -> `discriminator:`) aborted the `for`
@@ -375,7 +424,7 @@ echo "dispatch-ready section 7 terminal states (issue #282)"
 # very block added after a review made `sec7` run silently to EOF.
 section windows "every window resolves, and stops where it claims to"
 
-for f in "$SKILL" "$CLAIM"; do
+for f in "$SKILL" "$CLAIM" "$SHEPHERD"; do
     if [ -r "$f" ]; then ok "read $f"; else bad "missing file: $f"; fi
 done
 [ "$fails" -eq 0 ] || { echo "test-drain-terminal-states: FAILED ($fails)" >&2; exit 1; }
@@ -532,6 +581,7 @@ blocked_prs	- **Open PRs on blocked issues** → resolve these too, and hand the
 board_inflight	**With `board:`** — the board snapshot is the source of truth: cards in **In progress** / **In review** with assignee @me **and not carrying `blocked`**, per §3's definition, are in-flight. `board-snapshot.sh` returns `labels` per item, so the exclusion is computable here; where it is not — a snapshot with no labels — treat the issue as blocked rather than as in-flight, since failing the other way fails open into the bug the exclusion exists to prevent.
 handoff_bullet	- **Open PRs from those branches** → delegate to `sassy-dog:pr-shepherd`: mergeable check, merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the local default branch. **Hand it only the PRs the review bullets below have cleared, and never one whose issue carries `blocked`** — a human's demotion is not a merge instruction, and §4's `blocked` filter governs Ready SELECTION rather than this hand-off, so it does not cover this. A PR whose review reported `NO REPORT` or `SKIPPED`, or carries a Blocking finding, is withheld from this hand-off, on either `review_site` — with one carve-out, `review_agent: skip`, whose every run legitimately reports `SKIPPED`, so holding on it would turn the documented opt-out into a blanket merge freeze. `take-it` draws the same line for the same reason. This exception is stated here rather than three bullets down because this is the bullet that merges: a corrective a reader reaches only after the merge has been ordered is a corrective that never runs. **How a tick learns the outcome: read the PR body**, where take-it's step 6 requires the sub-agent to have written the verbatim line — this loop reads no RESULT lines, and a later tick is a different session from the one that dispatched. **Keep the issue → open-PR mapping this step produces** — §4's Collision filter reads those PRs' actual changed files, and re-deriving the mapping there costs a second round of lookups.
 redispatch_bullet	- **Failed or red PRs** → surface in the tick report with the failing check named, and comment `dispatch-ready: attempt 1 failed — <check>: <one-line cause>` on the issue. ONE redispatch with the failure context appended is allowed on a later tick. A second failure demotes to blocked — via the board plus a `blocked` label, or `issue-claim.sh block N --comment "dispatch-ready: 2 failed attempts — <cause>"` — and a human decides next. **Never park failures in Ready**: Ready must stay synonymous with dispatchable.
+conflicting_bullet	- **`CONFLICTING` PRs** → never auto-rebase; **demote on sight.** Surface it in the tick report naming the PR *and the conflict*: §6's `holds:` line classifies by §7's table, which answers row 1 (`blocked`) once this bullet has written, so the word `CONFLICTING` reaches the operator only if this bullet puts it there. Demote the issue in the same tick — via the board plus a `blocked` label, or `issue-claim.sh block N --comment "dispatch-ready: PR #<pr> is CONFLICTING — needs a rebase this loop may not perform, then clear the blocked label to resume the drain"`, that subcommand requiring a comment — so a human resolves the conflict. Name the label in it: `promote` never strips `blocked`, so a rebase alone no longer returns the issue to the queue. **Demote ONCE**: skip an issue that already carries `blocked` and write nothing, leaving it to the blocked-PR bullet above. That is an idempotency predicate, not an attempt counter — it asks whether the demotion has been *written*, never how many times the PR has failed — and without it this bullet re-fires every tick against a PR that stays `CONFLICTING` until a human rebases, posting a fresh comment each time, since `issue-claim.sh` makes the label edits idempotent and the comment not. The Guardrails' **idempotent ticks** rule forbids exactly that. **If the demotion write fails**, say so in the tick report and treat the issue as still in-flight this tick: a tick that believes it demoted and did not is #282 again wearing this fix. **Read that from live state, never from the exit code alone** — `issue-claim.sh` reports `ok` and exits 0 when the label edit lands and only the *comment* fails, saying so on stderr, so a demotion can be real while the reason nobody posted is not. `Demote ONCE` then never retries it, which is the trade: re-comment nothing, and report the missing reason instead. **No redispatch, and no attempt counter** — this is deliberately NOT the shape the failed-check bullet above has, and aligning the two is the tidy to refuse: a sub-agent sent to rebase the branch IS this loop advancing that PR, which §7's discriminator table forbids for `CONFLICTING` in as many words, so that option costs a §7 row as well and re-opens a decision already settled there. `take-it` keeps the bare surface-and-hold form for the mirror-image reason and must not be aligned to this one: it is a bounded batch with no §7 and no forever-tick, so a hold there ends when the batch does. **A bare surface-and-hold is what this replaces, and it was the defect**: nothing cleared the claim, so the issue stayed `in-progress`, in-flight never reached zero, and with COMPLETE vetoed by the open PR and STALLED forbidden by in-flight, the loop ticked forever — #282's class one bullet over, and not covered by it (#290). No other route reaches a demotion either: a conflicted PR stops CI firing at all, `sassy-dog:pr-shepherd` recording that `no checks reported` reads identically to `CI hasn't started`, so the failed-check bullet's counter never starts. **A stacked upper layer demotes like any other**, and that cost is accepted rather than carved out: a layer goes `CONFLICTING` the moment the layer below squash-merges, which `sassy-dog:pr-shepherd`'s stacked-PR reference calls the expected shape rather than a fault — but this loop may not rebase it either, so it is a human gate like the rest. Say which it is in the comment. **The demotion changes which §7 row matches, never whether the PR is enumerated** — the first bullet above already resolved it from the in-flight branch this tick, and both rows answer held, `CONFLICTING` (row 2) before and `blocked` (row 1) after — so COMPLETE stays vetoed and the held set stays non-empty across the write. **Carry that PR into §4's collision sources and the migration slot for this tick**, from the issue → open-PR mapping the first bullet already keeps: §4 draws its blocked half from the blocked-PR bullet's enumeration, taken *before* this write, so a PR demoted here sits in neither half until the next tick — while §3 frees its slot in this one, which is exactly the state where §4 would dispatch a Ready issue into a still-open human-gated PR. From the next tick on the blocked-PR bullet enumerates it and the hand-off bullet's own `blocked` predicate withholds it from `sassy-dog:pr-shepherd`; on the demotion tick that predicate reads state not yet written, and what withholds it instead is `merge-shepherd.sh` refusing a `CONFLICTING` PR ahead of every other check. **Never park it back in Ready**: Ready must stay synonymous with dispatchable.
 collision_row	| Collision | Skip if the issue's `touches:` set intersects the **effective file set** of anything §2 resolved a PR for — in-flight issues **and blocked issues with an open PR** — same repo-relative path, or a glob on one side matching a path on the other. The effective set is the in-flight issue's open PR's *actual changed files* where it has a PR, and its declared `touches:` where it does not (next section). Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
 collision_blocked	**A blocked issue's open PR counts here even though it is not in-flight.** §3 excludes it from in-flight so the terminal states can be reached; that exclusion must not also remove its files from this filter, or the loop dispatches a Ready issue straight into a still-open human-gated PR — the class §4's own 2026-08-24 incident records. §2 resolved that PR one bullet above; reuse it. The same applies to the migration slot below: a blocked migration PR still holds it.
 b001	## 7. Terminal states — drain complete, drain stalled
@@ -642,9 +692,27 @@ sec3="$(raw_region "$SKILL" '## 3. Compute capacity' '## 4. Select from Ready')"
 sec4="$(raw_region "$SKILL" '## 4. Select from Ready' '## 5. Dispatch')"
 guard="$(raw_region "$SKILL" '## Guardrails' '## THIS-MARKER-MUST-NOT-EXIST')"
 claim_block="$(raw_region "$CLAIM" '        block)' '        promote)')"
+# The bullet also states that `block` REQUIRES a comment, which is the reason it
+# can promise a human ever learns why. That check lives in argument parsing,
+# above the `block)` case, so it needs its own window (#290).
+claim_require="$(raw_region "$CLAIM" 'if [[ ("$SUB" == "block"' '')"
+# The `mergeable` arm and everything below it, so "ahead of every other gate" is
+# a question this window can answer rather than one it has to be told.
+shepherd_open="$(raw_region "$SHEPHERD" '  # OPEN:' '}')"
+# §2's LAST bullet, so its stop is §3's heading and NOT the empty stop marker,
+# which `raw_region` implements as "the first blank line". Measured: with the
+# empty stop, appending a blank line plus an indented continuation paragraph
+# that re-admits a redispatch, parks the issue back in Ready and restores
+# `surface and hold` left ALL of this section's assertions green — the window
+# shrank and the canon shrank with it, so equality compared the surviving half
+# against itself. Only `sec2_openers` moved, whose message says `edit
+# canon_table`, which is precisely the rubber stamp limit (3) describes. An
+# explicit stop makes an appended paragraph part of the compared text.
+conflicting_raw="$(raw_region "$SKILL" '- **`CONFLICTING` PRs**' '## 3. Compute capacity')"
 
 for w in sec2 sec3 sec4 sec6 sec7 guard complete_raw stalled_raw gate_raw disc_raw opening_raw \
-         record_raw announce_raw rails_raw carvelist_raw claim_block; do
+         record_raw announce_raw rails_raw carvelist_raw claim_block claim_require \
+         shepherd_open conflicting_raw; do
     if [ -n "${!w}" ]; then
         ok "window $w resolved"
     else
@@ -665,6 +733,7 @@ record_flat="$(flat "$record_raw")"
 announce_flat="$(flat "$announce_raw")"
 rails_flat="$(flat "$rails_raw")"
 carvelist_flat="$(flat "$carvelist_raw")"
+conflicting_flat="$(flat "$conflicting_raw")"
 
 # Every window stops where it claims to. `sec7`, `announce_raw` and
 # `carvelist_raw` had only a non-empty check until a review measured renaming
@@ -695,6 +764,33 @@ assert_absent "$carvelist_flat" 'Both carve-outs survive' \
     "carve-out list window stops before the paragraph after it"
 assert_absent "$claim_block" 'ensure_label "\$READY_LABEL"' \
     "issue-claim.sh block window stops before the promote case"
+# `claim_require` is bounded by a BLANK LINE, so deleting the one at
+# issue-claim.sh's guard grows it silently into whatever follows. This section
+# claims every window stops where it says it does; that has to include the two
+# this change added.
+assert_absent "$claim_require" 'REPO=' \
+    "the require-comment window stops at the guard, not at the rest of the preamble"
+assert_absent "$shepherd_open" 'MERGED . tearing down' \
+    "the merge-shepherd window starts at the OPEN arm, below the MERGED/CLOSED arms"
+assert_absent "$shepherd_open" 'deadline=' \
+    "the merge-shepherd window stops at the end of the function, not at the watch loop"
+assert_absent "$conflicting_flat" 'Compute capacity' \
+    "the CONFLICTING-bullet window stops at the end of section 2"
+# The stop marker is a HEADING somebody may rename, and a renamed one runs this
+# window to EOF while the check above still passes, the heading text having gone
+# with it. §3's body is what survives a rename, so it is what proves the bound —
+# the same reasoning `sec7`'s stop check carries.
+assert_absent "$conflicting_flat" 'Capacity =' \
+    "the CONFLICTING-bullet window stops before section 3's body, whatever its heading is called"
+# The START bound, and deliberately NOT an `assert_wline` for the opening
+# bullet: `raw_region` already anchors that with `index($0, s) == 1`, while
+# `assert_wline`'s single-line-blob guard fires on a legitimately ONE-LINE
+# bullet — measured, reverting this bullet to its pre-fix one-liner reported
+# "assert_wline was handed a single-line blob" beside the real failures. This
+# asks the same question in the direction that can actually drift: that the
+# window has not started at a bullet ABOVE this one.
+assert_absent "$conflicting_flat" 'PRs carrying a Blocking review' \
+    "the CONFLICTING-bullet window starts at that bullet, not the one above it"
 assert_wline "$guard" '^- \*\*Ready only\.\*\*' \
     "the Guardrails window starts at the Guardrails list"
 assert_absent "$(flat "$guard")" 'DRAIN COMPLETE' \
@@ -904,6 +1000,113 @@ assert_in "$sec2_flat" 'never handed to `sassy-dog:pr-shepherd`' \
 assert_in "$sec2_flat" 'admits DRAIN COMPLETE, so the loop self-cancels with the PR still open' \
     "section 2 records the false-COMPLETE harm an unenumerated PR causes"
 
+# --- 2b. the CONFLICTING demotion --------------------------------------------
+# THE STATE ONE STEP EARLIER THAN #282's. Every §2 failure path had a demotion
+# route except this one: a `CONFLICTING` PR was surfaced and HELD, and the hold
+# left the issue `in-progress`, so in-flight never reached zero — COMPLETE
+# vetoed by the open PR, STALLED forbidden by in-flight, and the loop ticked
+# forever. #282's discriminator classifies such a PR correctly the moment it is
+# enumerable, and on this path it never became so; that fix is untouched here
+# and does not close this (issue #290).
+#
+# IT CANNOT REACH A DEMOTION BY ANY OTHER ROUTE, which is why the fix has to be
+# written into this bullet rather than left to the failed-check one. A
+# conflicted PR stops CI firing at all — `pr-shepherd` records that
+# `no checks reported` is indistinguishable from `CI hasn't started` — so the
+# attempt counter that eventually demotes a red PR never starts.
+#
+# DEMOTE ON SIGHT, and the REJECTED alternative is RECORDED in the bullet —
+# recorded, not pinned as a negative; see the limit below for what that is
+# worth. It is the one a later "make these bullets symmetric" sweep reaches for.
+# Mirroring the failed-check bullet's ONE redispatch means dispatching a
+# sub-agent to rebase, which IS this loop advancing that PR — precisely what
+# §7's `CONFLICTING` row forbids in as many words. That option therefore costs
+# a §7 row as well, re-opening a decision PR #291 settled and the canon here
+# holds. Demote-on-sight needs no new policy: once the issue carries `blocked`,
+# §7's FIRST row matches it before the `CONFLICTING` row is reached.
+#
+# HOW IT IS BOUND, AND WHAT THAT IS AND IS NOT WORTH. Canon equality is the
+# only layer that bounds a REWORDED decision, exactly as it is for every other
+# canon key here, and known limit (3) governs it: a hand regeneration is a
+# rubber stamp, and a regeneration that is not read retires this section.
+# WHAT THAT COSTS, MEASURED RATHER THAN GUESSED IN EITHER DIRECTION — an earlier
+# draft of this comment claimed three meaning-inverting rewrites "each exit 0",
+# and only ONE of them does; understating coverage invites the next sweep to
+# delete these must-exists as dead weight, which is the same defect as
+# overstating it. With `conflicting_bullet` regenerated the way the failure
+# message instructs: an APPENDED sentence that contradicts a rule exits 0,
+# because nothing here reads a rule's neighbourhood. INVERTING a pinned sentence
+# is caught by that sentence's own must-exist — rewriting the headline to
+# `**hold until a human rebases.**` fails `demote on sight`, and rewriting the
+# tail to `**Park it back in Ready**` fails `Never park it back in Ready`. So
+# these catch a literal DELETION and an inversion that DELETES the pinned form
+# with it; each pins one surface form, so a contradiction added BESIDE the
+# pinned form walks past (`ONE redispatch` is also case-sensitive).
+# WIDENING THE GREPS IS THE FIX TO REFUSE — CLAUDE.md records this repo losing
+# that argument every review round, and a veto that works needs the forward
+# segmentation pass a different issue owns. The two must-not-exists are
+# LITERAL-DELETION checks against the pre-fix wording, not polarity judgements,
+# which is the posture test-audit-lost-reviewer.sh states. The `surface and
+# hold` veto does not collide with this bullet's own "A bare surface-and-hold
+# is what this replaces": that phrase is hyphenated, measured, and the hyphens
+# survive `emph_strip`. Rewording it to the spaced form is a loud false red,
+# which is the direction this repo prefers.
+section conflicting "a CONFLICTING PR is demoted on sight, so it cannot hold in-flight open forever"
+
+# The stop literal is DUPLICATED from `conflicting_raw`'s declaration above, and
+# the rationale for it being non-empty lives there. Changing this one back to ''
+# surrenders the append protection and fails only into `sec2_openers`, whose
+# message says `edit canon_table` — the rubber stamp. Change both or neither.
+assert_canon conflicting_bullet '- **`CONFLICTING` PRs**' '## 3. Compute capacity' \
+    "section 2's CONFLICTING bullet is unchanged, demotion included"
+assert_wline "$sec2" '^- \*\*`CONFLICTING` PRs\*\*' \
+    "the demotion is a top-level bullet of section 2, not a footnote elsewhere"
+assert_in "$conflicting_flat" 'demote on sight' \
+    "the bullet states the decision — demote on sight"
+assert_has "$conflicting_flat" 'issue-claim.sh block N --comment' \
+    "the bullet names the command that writes the demotion, comment included"
+assert_has "$conflicting_flat" '**No redispatch, and no attempt counter**' \
+    "the bullet refuses the redispatch shape the failed-check bullet has"
+assert_in "$conflicting_flat" 'discriminator table forbids for `CONFLICTING`' \
+    "the bullet gives its rationale — a redispatch contradicts section 7's own row"
+assert_in "$conflicting_flat" 'in-flight never reached zero' \
+    "the bullet records the harm a bare hold caused"
+# The four rules this bullet added beyond the demotion itself. Each is pinned by
+# its own literal for the DELETION case only — the limit above governs a reword
+# — and each was measured undetected before these existed: dropping the
+# idempotency predicate, the failed-write outcome, the §4 carry-forward or the
+# stacked-layer case each left the gate at exit 0 once the canon was regenerated.
+assert_in "$conflicting_flat" 'Demote ONCE' \
+    "the bullet demotes once, so a tick cannot re-comment on a PR that stays CONFLICTING"
+# THE TOKEN IS NOT THE RULE. The line above was measured passing on a bullet
+# whose predicate had been replaced by "demote it every tick it is seen",
+# because the failed-write sentence MENTIONS `Demote ONCE` a second time and
+# satisfied it. Pin the operative clause, not the name of it.
+assert_has "$conflicting_flat" 'skip an issue that already carries `blocked`' \
+    "the demote-once rule keeps its predicate, not just its name"
+# The failed-write rule has a second half nothing pinned: `issue-claim.sh`
+# reports ok and exits 0 when only the COMMENT fails, so a tick reading the exit
+# code alone concludes a human was told why when nobody was.
+assert_in "$conflicting_flat" 'never from the exit code alone' \
+    "the demotion is verified from live state, not from the exit code"
+assert_in "$conflicting_flat" 'If the demotion write fails' \
+    "the bullet gives the failed-write outcome, without which a tick believes it demoted"
+# `assert_has`, not `assert_in`: under LC_ALL=C the section sign is TWO bytes,
+# so a `.` wildcard standing in for it matches half of it and the check fails on
+# a clean tree — measured, it reddened every mutation AND the restored run.
+assert_has "$conflicting_flat" "Carry that PR into §4's collision sources" \
+    "the demoted PR stays in section 4's collision sources for the tick that demotes it"
+assert_in "$conflicting_flat" 'A stacked upper layer demotes like any other' \
+    "the bullet answers the stacked-layer case the pr-shepherd reference calls expected"
+assert_in "$conflicting_flat" 'COMPLETE stays vetoed and the held set stays non-empty' \
+    "the bullet keeps section 7's one-set identity across the demotion write"
+assert_in "$conflicting_flat" 'Never park it back in Ready' \
+    "a demoted CONFLICTING issue is never parked back in Ready"
+assert_absent "$conflicting_flat" 'surface and hold' \
+    "the bullet no longer ends at surface-and-hold, the shape with no exit"
+assert_absent "$conflicting_flat" 'ONE redispatch' \
+    "the bullet has not acquired the sibling bullets' redispatch budget"
+
 # --- 3. the discriminator ----------------------------------------------------
 section discriminator "every row is pinned, classifies, and agrees with its own answer"
 
@@ -1054,7 +1257,7 @@ assert_in "$sec6_flat" 'drawn from §2.s enumeration' \
     "section 6 sources held PRs from section 2, which runs on every tick"
 
 # --- 9. the premise -----------------------------------------------------------
-section premise "block strips BOTH labels, which is what makes the whole account true"
+section premise "the three cross-file facts the whole account rests on"
 
 assert_has "$claim_block" '--remove-label "$READY_LABEL"' \
     "issue-claim.sh block strips ready"
@@ -1062,6 +1265,35 @@ assert_has "$claim_block" '--remove-label "$INPROG_LABEL"' \
     "issue-claim.sh block strips in-progress — the half that empties in-flight"
 assert_has "$claim_block" '--add-label "$BLOCKED_LABEL"' \
     "issue-claim.sh block adds blocked"
+# The bullet promises a human learns WHY, which rests on `block` refusing to run
+# without a comment — a second cross-file fact, and one that lives in argument
+# parsing rather than in the `block)` case the window above reads (#290).
+assert_in "$claim_require" 'requires --comment' \
+    "issue-claim.sh block refuses to strip a claim silently, which the CONFLICTING bullet relies on"
+# THE ECHO IS NOT THE GUARD. The line above pins the message; this one pins the
+# `exit 64` that makes it binding, and the split is the whole assertion.
+# Measured: deleting the exit alone — so `block` PRINTS the warning and then
+# strips `ready`+`in-progress` and adds `blocked` with no comment — left the run
+# at all green. An assertion written by grepping the literal a mutation deletes
+# is the tautology CLAUDE.md says this repo loses to every round, and it was
+# reintroduced here in the assertion added to close exactly that (#290).
+assert_has "$claim_require" 'exit 64' \
+    "the require-comment guard EXITS, rather than printing and continuing"
+# The third fact, and the only thing withholding a just-demoted PR from the
+# merger on the tick that demotes it: the hand-off bullet's `blocked` predicate
+# reads state this bullet has not written yet, so `merge-shepherd.sh` refusing a
+# conflicted PR AHEAD of the queue, stack, no-checks and red gates is what
+# actually holds it. Position is the assertion — the arm alone would still pass
+# if it moved below the merge.
+assert_has "$shepherd_open" 'CONFLICTING' \
+    "merge-shepherd refuses a CONFLICTING PR, which is what withholds it on the demotion tick"
+sh_conf="$(grep -n 'CONFLICTING' <<<"$shepherd_open" | head -1 | cut -d: -f1)"
+sh_queue="$(grep -n 'IN_QUEUE' <<<"$shepherd_open" | head -1 | cut -d: -f1)"
+if [ -n "$sh_conf" ] && [ -n "$sh_queue" ] && [ "$sh_conf" -lt "$sh_queue" ]; then
+    ok "merge-shepherd's CONFLICTING arm sits ahead of the other OPEN gates"
+else
+    bad "merge-shepherd's CONFLICTING arm no longer precedes the other OPEN gates"
+fi
 
 # --- the registry, the consumption check, and the floor ----------------------
 # `registry` is itself a declared member, so this block's own assertions sit
