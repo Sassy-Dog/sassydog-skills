@@ -31,12 +31,15 @@ agent (`agents/*.md`):
   `bash scripts/stamp-version.sh` (monthly CalVer; **never hand-edit** — one-way ratchet, see
   `docs/VERSIONING.md`).
 
-**Post-release plugin update reminder** — if the merged diff bumped `version` in
-`.claude-plugin/plugin.json`, consumer machines do NOT pick up releases automatically. After the
-merge, remind the operator to run `claude plugin update sassy-dog@sassydog-skills` (the
-marketplace-qualified name — the bare name returns "not found") on each consumer machine, then
-re-check that `ls ~/.claude/plugins/cache/sassydog-skills/sassy-dog/` shows the new version.
-See README "Updating / Troubleshooting".
+**Post-merge plugin update reminder** — consumer machines do NOT pick up changes automatically,
+and a `version` bump is NOT the trigger: content lands on `main` on every merge while the manifest
+is stamped only in release PRs, so a cached copy and `main` routinely share one `version` over
+different files (issue #296). After ANY merge that changes `skills/` or `agents/`, remind the
+operator to run `claude plugin update sassy-dog@sassydog-skills` (the marketplace-qualified name —
+the bare name returns "not found") on each consumer machine. Do not verify with `ls`: the version
+string cannot answer the question, and the cache holds every version ever installed. Verify by the
+content comparison in README "Updating / Troubleshooting", which is the single copy of that
+procedure — do not restate its steps here.
 
 ## extra-guardrails
 

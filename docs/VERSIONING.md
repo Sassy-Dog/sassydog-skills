@@ -112,10 +112,15 @@ auto-stamp workflow), that job needs full history (`fetch-depth: 0`).
 **Re-checked 2026-08-28 against the tree** (issue #296): still true.
 `scripts/preflight.sh` section 5 reads `.version`, matches it against the
 CalVer regex and compares `marketplace.json` against it — and computes
-nothing — which is exactly why a manifest 23 below its own formula passes
-the gate green. This is a *deliberate absence*, not an unfinished item, and the
-section below records why; an absence nobody can explain gets re-derived as
-an oversight and "fixed" by whoever finds it next.
+nothing — which is exactly why the manifest measured above, 23 below its own
+formula on that date, passed the gate green. (The gap is not a constant: it
+widens with every unstamped merge, so quote it only with a date and a SHA.) Gate 6 does *execute* both versioning scripts on every CI run
+(`scripts/test-versioning.sh`), but against a `mktemp` fixture repo rather
+than this repo's history — which is why the shallow checkout is still safe,
+and what a future assertion against live history would change. This is a
+*deliberate absence*, not an unfinished item, and the section below records
+why; an absence nobody can explain gets re-derived as an oversight and
+"fixed" by whoever finds it next.
 
 ### Why there is no per-merge auto-stamp
 
@@ -128,32 +133,72 @@ and nothing available inside this repo can.
 through the queue), `required_status_checks: ["ci"]`, `bypass_actors: []`
 and `current_user_can_bypass: "never"` — alongside classic protection with
 `enforce_admins: true`. So there is no direct push to `main` for any actor,
-admins included, and no allowlist to add one to. The only route in is a pull
-request carrying a green `ci`.
+admins included, and the bypass list is empty *by policy* — one Terraform PR
+from non-empty, which is route 1 below, and not a door that can be opened
+from here. The only route in today is a pull request carrying a green `ci`.
 
-The only credential a workflow here can reach is its own `GITHUB_TOKEN`:
-`GET /repos/Sassy-Dog/sassydog-skills/actions/secrets` returns
-`total_count: 0`, because every org secret is `private`-visibility and public
-repos are excluded (issue #178) — and this repo is public by exception. A
-pull request opened with `GITHUB_TOKEN` does not trigger workflow runs, so a
-stamp PR would never receive the `ci` it needs in order to merge.
+The only credential a workflow here can reach is its own `GITHUB_TOKEN`.
+Measured 2026-08-28, all four stores are empty for this repo:
+`actions/organization-secrets` — the org-available endpoint, and the one that
+actually answers the question — returns `total_count: 0`, as do
+`actions/secrets`, `dependabot/secrets` and `environments`. The cause is that
+every org secret is `private`-visibility and public repos are excluded
+(issue #178), and this repo is public by exception. (Cite the org-available
+endpoint, not the repository store: an org secret re-scoped to `all` leaves
+the repository store at 0 as well, so that endpoint alone cannot see the
+change.)
+
+A pull request opened with `GITHUB_TOKEN` does not trigger workflow runs, so
+a stamp PR gets no `ci` from its own `pull_request` event. The chain closes
+under the merge queue too, which is where `ci` actually reports here
+(`.github/workflows/ci.yml` declares `merge_group`): a `merge_group` run
+suppressed for the same reason means no check ever reports against the queue
+entry, and it ages out at the ruleset's `check_response_timeout_minutes: 60`
+— delaying every real PR queued behind it. A mechanism whose failure mode is
+jamming the merge queue is worse than the drift it fixes.
+
 `skills/setup-deps/SKILL.md` has already ruled on this exact shape
-(issue #190): `GITHUB_TOKEN` is out precisely because its writes do not
-re-trigger CI, re-scoping the org secrets to `all` visibility is out, and a
-standing PAT in a public repo is out.
+(issue #190), and states it as "ruled out twice over": `GITHUB_TOKEN` is out
+because
+its writes do not re-trigger CI *and* on a second, Dependabot-specific ground
+that does not carry here; re-scoping the org secrets to `all` visibility is
+out; and a standing PAT in a public repo is out.
 
 Two routes remain, and neither is takeable from inside this repo:
 
-1. A **bypass actor** on the ruleset for a stamping identity. Repo settings
-   are Terraform-owned and verified in `Sassy-Dog/platform`, so this is a PR
-   there — never a setting changed by hand, which would drift and be
-   reverted.
+1. A **bypass actor**, on the ruleset *and* on classic protection, for a
+   stamping identity. Both controls are in force — `enforce_admins: true`
+   lives on the classic side — so moving one alone changes nothing. Repo
+   settings are Terraform-owned and verified in `Sassy-Dog/platform`, so this
+   is a PR there, never a setting changed by hand, and the bypass entry needs
+   its own scoping conditions rather than a blanket exemption.
 2. A **dedicated GitHub App** installed on this repo alone with
-   `contents: write`, its credentials held as repo-level secrets — the one
-   route `setup-deps` sanctions, and only "when a real repo is paying the
-   cost".
+   `contents: write`, its credentials held as repo-level secrets — the route
+   `setup-deps` sanctions, and only "when a real repo is paying the cost".
+   **Import its conditions with it, not just its conclusion.** That ruling was
+   written for a credential pushing to a PR head ref in a *consumer* repo;
+   here the credential writes to `main` of the plugin marketplace, whose
+   content installs and executes on every Sassy Dog machine and cloud session,
+   so "blast radius limited to one repo" is false in this repo's terms — the
+   radius is every consumer. Any workflow minting it must therefore be
+   unreachable from fork-PR-influenced triggers and carry an actor and branch
+   guard (this repo is public, `pull_request` fires for fork PRs, and
+   `.github/workflows/ci.yml` records that its `ci` job has no actor guard),
+   and must carry issue #232's checkout rules forward: never hand the minted
+   token to `actions/checkout`, keep `persist-credentials: false`, and bound
+   the token's on-disk lifetime to the push step.
 
-Until one of those lands the version-of-record cannot track content, so the
+A third option needs no write to `main` at all and is listed here because it
+is the one a reader re-derives first: **stamp in the PR**. Issue #296 weighed
+and rejected it for an unrelated reason — every PR would then touch
+`.claude-plugin/plugin.json`, putting that path in every issue's `touches:`
+line and permanently serializing `dispatch-ready`'s collision filter at a
+throughput of 1. It is rejected on that ground, not on the credential ground
+above.
+
+Until one of these lands the version-of-record cannot track content, so the
 consequence is handled where it bites instead of being papered over: README's
 stale-cache diagnostic is keyed on file content rather than on the version
-string.
+string. None of the decisions in this section is pinned by a gate — they are
+prose, and the paragraph above about `test-versioning.sh` being the executable
+copy of this document's rules does not reach them.
