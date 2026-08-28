@@ -204,8 +204,10 @@ claude plugin install sassy-dog
 Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only when some PR happens to carry a fresh stamp (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
 
 ```bash
-claude plugin update sassy-dog@sassydog-skills
+claude plugin update sassy-dog@sassydog-skills --scope user   # or: project, local, managed
 ```
+
+`--scope` defaults to `user`. If this machine has a *project*-scope install of the plugin, that is the copy your sessions in that project run, and the bare command will not touch it — see step 1 below for how to tell.
 
 ### The bare plugin name fails
 
@@ -222,12 +224,12 @@ claude plugin update sassy-dog@sassydog-skills
 ```bash
 jq -r --arg p "$PWD" '
   .plugins["sassy-dog@sassydog-skills"][]
-  | select(.scope == "user" or .projectPath == $p)
+  | select(.scope != "project" or .projectPath == $p)
   | "\(.scope)\t\(.installPath)"
 ' ~/.claude/plugins/installed_plugins.json
 ```
 
-A `project` row wins for sessions in that project; the `user` row is the answer when there is no project row (a fresh git worktree has none). `claude plugin update --help` lists two further scopes, `local` and `managed`. **Keep both the `installPath` and the `scope`** — the path is what you compare in step 3, and the scope is what you must pass when you fix it. The two are routinely at *different* versions — `2026.8.100` user against `2026.8.94` project on the machine measured — so picking the wrong one silently checks a copy you are not running. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
+A `project` row wins for sessions in that project; the `user` row is the answer when there is no project row. Do not assume a worktree has no project row — most do, written when a session first runs there, which is where `take-it` and `dispatch-ready` do nearly all of this repo's work. Read the filter's output rather than predicting it. **Keep both the `installPath` and the `scope`** — the path is what you compare in step 3, and the scope is what you must pass when you fix it. The two are routinely at *different* versions — `2026.8.100` user against `2026.8.94` project on the machine measured — so picking the wrong one silently checks a copy you are not running. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
 
 **2. Refresh the marketplace clone**, so that what you compare against is current:
 
@@ -238,14 +240,19 @@ claude plugin marketplace update sassydog-skills
 **3. Compare content** — the clone against that install path, over all three directories that load or execute:
 
 ```bash
-INSTALL_PATH=<installPath from step 1>
-CLONE=~/.claude/plugins/marketplaces/sassydog-skills
-for d in skills agents scripts; do diff -rq "$CLONE/$d" "$INSTALL_PATH/$d"; done
+INSTALL_PATH='<paste the installPath from step 1>'
+CLONE="$HOME/.claude/plugins/marketplaces/sassydog-skills"
+for d in skills agents scripts; do
+  [ -d "$INSTALL_PATH/$d" ] || { echo "NOT COMPARED: $d — check INSTALL_PATH"; continue; }
+  diff -rq "$CLONE/$d" "$INSTALL_PATH/$d" 2>&1
+done
 ```
 
-`scripts/` belongs in that list: skills invoke it at runtime through `${CLAUDE_PLUGIN_ROOT}` (`align-labels.sh`, `gh-retry.sh`, the verifiers), so a merge touching only `scripts/` leaves `skills/` and `agents/` identical while changing what actually runs. It is drifting today — against the measured cache, five files differed and three were absent.
+The quoting and the `[ -d ]` guard are not decoration. Pasted with the placeholder left in, `INSTALL_PATH=<...>` is a *redirection* and the block dies with a syntax error; pointed at a path that does not exist, `diff` writes to **stderr** and stdout stays empty — so an unguarded version of this block reports silence, and silence is the answer that means "current". The `2>&1` and the guard exist so that the rule below is true of what you actually see.
 
-**Any output at all means the cache is stale** — run the update in step 4. Silence across all three means it is current. The three shapes say different things, and a reader scanning only for the word "differ" skips the one that matters most:
+`scripts/` belongs in that list because of one file: `align-labels.sh` is the only root-`scripts/` path any skill invokes at runtime through `${CLAUDE_PLUGIN_ROOT}` (every other bundled script lives under `skills/<skill>/scripts/` and is already covered by the first directory). One file is enough — a merge touching only it leaves `skills/` and `agents/` identical while changing what a label-writing run actually executes, which is the #167 failure. Most of root `scripts/` is CI gates that never run at plugin runtime, so drift counts there are not evidence about runtime behaviour and are not offered as any.
+
+**Any output at all means the cache is stale, or the comparison did not run** — either way it is not current, so run the update in step 4. Silence across all three directories means it is current. The shapes say different things, and a reader scanning only for the word "differ" skips the one that matters most:
 
 | Output | Meaning |
 | --- | --- |
@@ -254,7 +261,7 @@ for d in skills agents scripts; do diff -rq "$CLONE/$d" "$INSTALL_PATH/$d"; done
 | `Only in …/cache/…` | that file was removed upstream |
 | no output | that directory is current |
 
-Measured on the project-scope copy above, `verify-gotcha-claims.sh` — one of the bundled scripts issue #296 cites — was **absent** rather than merely changed, which is why the row exists.
+Measured against the `2026.8.94` project copy, `verify-gotcha-claims.sh` — one of the bundled scripts issue #296 cites — was **absent** rather than merely changed, which is why the row exists. (Every count on this page names the copy it came from: the two copies on the measured machine disagree, which is the section's whole point.)
 
 An error naming a path that does not exist is **not** a clean result: the comparison did not run. Fix `INSTALL_PATH` and repeat.
 
@@ -272,7 +279,7 @@ This failure mode is silent: no error anywhere — skills just keep old bugs and
 
 ### Updates freeze at the cached version
 
-Re-run the qualified update command above. There is no marketplace auto-refresh unless you opt in, so a cache goes stale simply because nobody refreshed it.
+Re-run the update from step 4 above, with the `--scope` that matches the copy you are running. There is no marketplace auto-refresh unless you opt in, so a cache goes stale simply because nobody refreshed it.
 
 This repo is **public**, so install and update clone it over anonymous HTTPS — no SSH key, no SSO authorization, no SAML step. If you are reading an older note about `Configure SSO` on <https://github.com/settings/keys>, it applied while the repo was `INTERNAL` and no longer does.
 

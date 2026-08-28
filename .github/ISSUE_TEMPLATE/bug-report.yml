@@ -46,7 +46,7 @@ body:
     id: version
     attributes:
       label: Which plugin copy were you running?
-      description: "The `scope` and `installPath` of the live copy — see README \"Updating / Troubleshooting\" step 1. The version string alone cannot identify it: the cache holds every version ever installed, the highest is often not the one in use, and one version string covers many different trees (#296)."
-      placeholder: "project — ~/.claude/plugins/cache/sassydog-skills/sassy-dog/2026.8.94"
+      description: "Run this in the affected project and paste the scope plus the version directory (not the full path): `jq -r --arg p \"$PWD\" '.plugins[\"sassy-dog@sassydog-skills\"][] | select(.scope != \"project\" or .projectPath == $p) | \"\\(.scope) \\(.installPath | split(\"/\") | last)\"' ~/.claude/plugins/installed_plugins.json`. A bare version number cannot identify the code you ran: the cache holds every version ever installed, the highest is often not the one in use, and one version string covers many different trees (#296)."
+      placeholder: "project 2026.8.94"
     validations:
       required: false

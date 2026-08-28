@@ -10,8 +10,10 @@ spec rather than a local fork.
 > `Sassy-Dog/platform#397`. Nothing here depends on reading them: this document
 > is self-contained, and `scripts/test-versioning.sh` is the executable copy of
 > every rule it states about *resolving and stamping a version*. Where you
-> want the authority for such a rule, read the test. The "CI (spec §8)"
-> section's account of why CI does not stamp is prose, pinned by no gate.
+> want the authority for such a rule, read the test. The cadence note under
+> "Releasing" and the "CI (spec §8)" account of why CI does not stamp are both
+> prose, pinned by no gate — the test runs against a `mktemp` fixture and
+> asserts the ladder, not the cadence.
 
 Adopted 2026-07-11 via issue #31. Per spec §9, this doc is validated against the
 scripts at adoption and whenever either changes — the validation is automated as
@@ -91,8 +93,11 @@ committed value lags, by design and by a wide margin.** Content lands on
 script and commits the result. In practice that is not confined to release
 PRs: the most recent stamp rode a *feature* PR (`98d5d42`, `2026.8.96` →
 `2026.8.100`), so a reader hunting for the last `chore(release):` commit finds
-the wrong one and computes the wrong gap. `git log -1 -- .claude-plugin/plugin.json`
-is the reproducible way to find the last stamp.
+the wrong one and computes the wrong gap. To find the last stamp reproducibly, search the
+version *line* rather than the file — `git log -1 -G'"version":' --
+.claude-plugin/plugin.json`. Plain `git log -1 -- <path>` returns the last
+commit that merely touched the manifest, which is not the same thing:
+`951e131` added the `license` key and left `version` at `2026.8.41`.
 
 Measured 2026-08-27 at `31e9579`, the committed `2026.8.100` was 23 below what
 its own formula resolved, across 22 unstamped merges (issue #296). The
@@ -170,7 +175,7 @@ unattended — GitHub withholds the run such a PR would otherwise trigger, the
 recursion guard working as designed. `ci` is a required status check, so a
 stamp PR that cannot produce one cannot merge. **That is the whole of the
 argument; do not reach past it for a mechanism.** `.github/workflows/ci.yml`
-fires on `pull_request`, `push` and `merge_group` alike, and precisely where
+fires on `pull_request`, `merge_group`, and `push` filtered to `main`, and precisely where
 such a PR stalls — before it can be queued, or inside the queue — has not
 been measured here. The conclusion does not depend on knowing: no successful
 `ci`, no merge.
@@ -183,53 +188,27 @@ that does not carry here; re-scoping the org secrets to `all` visibility is
 out; and a standing PAT in a public repo is out.
 
 Two directions could unblock it, and neither is takeable from inside this
-repo. **Neither is specified here either**: each needs its own design pass,
-because the traps recorded below are the ones a quick implementation walks
-straight into.
+repo:
 
-1. **A ruleset bypass** for a stamping identity. *Radius:* a bypass on
-   `main protection` lifts all five rules at once — the PR requirement, `ci`,
-   the merge queue, `non_fast_forward` and `deletion` — so it grants
-   force-push and delete on the default branch of a public plugin marketplace
-   whose content executes on every Sassy Dog machine. It is also coarser than
-   it sounds: `bypass_actors` exposes only `bypass_mode` (`always` /
-   `pull_request`), and on the classic side the only lever is
-   `enforce_admins: false`, so "scope the bypass narrowly" is **not
-   implementable as a condition on the entry**. The scoping has to come from
-   *who* the actor is — one App installed on this repo alone, named as such
-   in the Terraform resource. Repo settings are Terraform-owned and verified
-   in `Sassy-Dog/platform`, so this is a PR there.
+1. **A ruleset bypass** for a stamping identity, added in `Sassy-Dog/platform`
+   where repo settings are Terraform-owned and verified.
+2. **A dedicated GitHub App** that opens the stamp PR — note that this is not
+   an alternative to route 1 in the naive form: `contents: write` is a token
+   scope, not a ruleset bypass, so an App cannot push to `main` either. The
+   variant that needs no bypass is the one where the App *opens a PR* and the
+   queue merges it, its `ci` running normally because the recursion guard does
+   not apply to an App token.
 
-2. **A dedicated GitHub App opening the stamp PR.** Note what this is not:
-   `contents: write` is a token scope, not a ruleset bypass, so an App still
-   cannot push to `main` and route 2 is *not* an alternative to route 1 in its
-   naive form. The variant that works needs no bypass — the App opens the
-   stamp PR, its `ci` runs normally because the recursion guard does not apply
-   to an App token, and the queue merges it — and it needs
-   `pull-requests: write` as well as `contents: write`. *Radius:* `setup-deps`
-   sanctions a repo-scoped App on the grounds that the blast radius stays
-   inside one repo, and **that justification does not transfer here**: this
-   repo's `main` installs and executes on every consumer, so the radius is
-   every consumer.
-
-   The conditions `setup-deps` attaches must travel with its conclusion.
-   The credential is a repo-level **Actions** secret — repo secrets have no
-   visibility axis, which is what escapes issue #178, whereas the Dependabot
-   store that skill names serves Dependabot-triggered runs and a `push` job
-   cannot read it at all. The minting action is SHA-pinned and fails closed on
-   an empty credential; `permissions:` is minimal; event payload reaches
-   `run:` through step `env:` and is never inlined. The trigger is
-   `push: branches: [main]`, post-merge — `pull_request_target`,
-   `workflow_run` and `issue_comment` are each forbidden, because each one
-   hands a fork-influenced ref the token this job holds. The invariant behind
-   that list, which is what to preserve if the list is ever reworded: **the
-   privileged job executes no code from a ref an untrusted identity
-   controls** — hence `dependabot-auto-merge`'s "no checkout … Do not add a
-   checkout step", and issue #232's `persist-credentials: false` with no
-   `token:` on `actions/checkout`. It also needs a self-trigger guard: a
-   credential chosen *because* its pushes re-trigger workflows will re-fire
-   the workflow that made the push, and the CalVer patch increments on each
-   pass, so without one it never converges.
+**Neither is designed here, deliberately.** Both put a write-capable
+credential, or a hole in branch protection, on a public repo whose `main`
+installs and executes on every Sassy Dog machine and cloud session — so the
+blast radius is every consumer, not this repo, and `setup-deps`' repo-scoped-App
+reasoning does not transfer on its own terms. Working out the trigger, the
+credential store, the guards and the self-trigger stop is a design task with
+its own security review, and it belongs in its own issue rather than in
+sketch form here: three attempts to sketch it in this document produced three
+sets of confidently wrong specifics. What this section is for is recording
+*why* the absence exists, so it is not re-derived as an oversight.
 
 A third option needs no write to `main` at all and is listed here because it
 is the one a reader re-derives first: **stamp in the PR**. Issue #296 weighed
