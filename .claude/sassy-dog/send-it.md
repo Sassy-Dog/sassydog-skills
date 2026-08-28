@@ -33,12 +33,14 @@ agent (`agents/*.md`):
 
 **Post-merge plugin update reminder** — consumer machines do NOT pick up changes automatically,
 and a `version` bump is NOT the trigger: content lands on `main` on every merge while the manifest
-is stamped only in release PRs, so a cached copy and `main` routinely share one `version` over
-different files (issue #296). After ANY merge that changes `skills/` or `agents/`, remind the
+is stamped only when some PR happens to carry a fresh stamp, so a cached copy and `main` routinely share one `version` over
+different files (issue #296). After ANY merge that changes `skills/`, `agents/` or `scripts/` (skills invoke `scripts/`
+at runtime through `${CLAUDE_PLUGIN_ROOT}`), remind the
 operator to run `claude plugin update sassy-dog@sassydog-skills` (the marketplace-qualified name —
 the bare name returns "not found") on each consumer machine. Do not verify with `ls`: the version
 string cannot answer the question, and the cache holds every version ever installed. Verify by the
-content comparison in README "Updating / Troubleshooting", which is the single copy of that
+content comparison in README "Updating / Troubleshooting" → "`claude plugin marketplace
+update` is not a plugin update", which is the single copy of that
 procedure — do not restate its steps here.
 
 ## extra-guardrails

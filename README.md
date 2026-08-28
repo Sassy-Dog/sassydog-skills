@@ -201,7 +201,7 @@ claude plugin marketplace add Sassy-Dog/sassydog-skills
 claude plugin install sassy-dog
 ```
 
-Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only in release PRs (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
+Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only when some PR happens to carry a fresh stamp (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
 
 ```bash
 claude plugin update sassy-dog@sassydog-skills
@@ -215,9 +215,9 @@ claude plugin update sassy-dog@sassydog-skills
 
 `claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale.
 
-**Do not diagnose this by comparing version strings.** The manifest is stamped only in release PRs while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
+**Do not diagnose this by comparing version strings.** The manifest is stamped only when some PR happens to carry a fresh stamp, while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
 
-**1. Find which cached copy is live.** The cache keeps every version ever installed (ten directories on the machine measured above) and installs are per scope, so `ls` cannot answer this. Run from the project you care about:
+**1. Find which cached copy is live.** The cache keeps every version ever installed (ten directories on the machine measured above) and installs are per scope, so `ls` cannot answer this. Run this from the project *root* (the match is an exact path comparison — a subdirectory returns only the `user` row):
 
 ```bash
 jq -r --arg p "$PWD" '
@@ -227,7 +227,7 @@ jq -r --arg p "$PWD" '
 ' ~/.claude/plugins/installed_plugins.json
 ```
 
-A `project` row wins for sessions in that project; the `user` row is the answer when there is no project row (a fresh git worktree has none). The two are routinely at *different* versions — `2026.8.100` user against `2026.8.94` project on the machine measured — so picking the wrong one silently checks a copy you are not running. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
+A `project` row wins for sessions in that project; the `user` row is the answer when there is no project row (a fresh git worktree has none). `claude plugin update --help` lists two further scopes, `local` and `managed`. **Keep both the `installPath` and the `scope`** — the path is what you compare in step 3, and the scope is what you must pass when you fix it. The two are routinely at *different* versions — `2026.8.100` user against `2026.8.94` project on the machine measured — so picking the wrong one silently checks a copy you are not running. Ignore `gitCommitSha` in that file: it records the commit the *marketplace* was added at, is not refreshed by a plugin update, and was 101 commits behind on the machine measured.
 
 **2. Refresh the marketplace clone**, so that what you compare against is current:
 
@@ -235,26 +235,36 @@ A `project` row wins for sessions in that project; the `user` row is the answer 
 claude plugin marketplace update sassydog-skills
 ```
 
-**3. Compare content** — the clone against that install path:
+**3. Compare content** — the clone against that install path, over all three directories that load or execute:
 
 ```bash
-INSTALL_PATH=~/.claude/plugins/cache/sassydog-skills/sassy-dog/<version-from-step-1>
-diff -rq ~/.claude/plugins/marketplaces/sassydog-skills/skills "$INSTALL_PATH/skills"
-diff -rq ~/.claude/plugins/marketplaces/sassydog-skills/agents "$INSTALL_PATH/agents"
+INSTALL_PATH=<installPath from step 1>
+CLONE=~/.claude/plugins/marketplaces/sassydog-skills
+for d in skills agents scripts; do diff -rq "$CLONE/$d" "$INSTALL_PATH/$d"; done
 ```
 
-**Read all of `diff`'s output, not one line shape.** A cache that is missing files entirely reports no `Files … differ` line at all:
+`scripts/` belongs in that list: skills invoke it at runtime through `${CLAUDE_PLUGIN_ROOT}` (`align-labels.sh`, `gh-retry.sh`, the verifiers), so a merge touching only `scripts/` leaves `skills/` and `agents/` identical while changing what actually runs. It is drifting today — against the measured cache, five files differed and three were absent.
+
+**Any output at all means the cache is stale** — run the update in step 4. Silence across all three means it is current. The three shapes say different things, and a reader scanning only for the word "differ" skips the one that matters most:
 
 | Output | Meaning |
 | --- | --- |
 | `Files … differ` | that file changed upstream |
-| `Only in …/marketplaces/…` | your cache is missing that file outright |
+| `Only in …/marketplaces/…` | your cache is missing that file outright — a whole skill or bundled script may be absent |
 | `Only in …/cache/…` | that file was removed upstream |
-| no output | the cache is current |
+| no output | that directory is current |
 
-Any of the first three means the cache is stale — run the qualified update command above. If you would rather not read the lines, `diff` already says it in its exit status: `0` identical, `1` differences of any shape, `2` it could not run (an unset `INSTALL_PATH` lands here, and prints nothing on stdout).
+Measured on the project-scope copy above, `verify-gotcha-claims.sh` — one of the bundled scripts issue #296 cites — was **absent** rather than merely changed, which is why the row exists.
 
-Missing-file staleness is not the rare case. Against the two cached copies on the measured machine the *same* refreshed clone reported 2 and 11 `Only in` lines — among them `verify-gotcha-claims.sh`, one of the bundled scripts issue #296 cites — while a rule keyed on `Files … differ` alone would have called one of those copies current.
+An error naming a path that does not exist is **not** a clean result: the comparison did not run. Fix `INSTALL_PATH` and repeat.
+
+**4. Update the scope you actually found**, because the default is not always yours:
+
+```bash
+claude plugin update sassy-dog@sassydog-skills --scope project   # or: user, local, managed
+```
+
+`--scope` defaults to `user`. A reader who correctly identifies a `project` copy in step 1 and then runs the bare command updates the *user* copy, sees no error, and finds step 3 unchanged — the same wrong-copy trap as step 1, on the write side. The update also says "restart required to apply": until you restart, the session keeps running the old skills and agents. Then re-run step 1 and step 3 — an update that crosses a release installs into a *new* version directory, so the `INSTALL_PATH` you just used now points at an abandoned copy that will differ forever.
 
 Step 2 is load-bearing rather than tidiness: an unrefreshed clone is stale in the same way the cache is, and matches it exactly. On the measurement above that identical pair of directories reported **zero** differences before the refresh and **28** after it, with nothing about the repo having changed in between.
 

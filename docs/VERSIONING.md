@@ -9,7 +9,9 @@ spec rather than a local fork.
 > (`Sassy Dog/Architecture/Development/Versioning.md`) and its mirror on
 > `Sassy-Dog/platform#397`. Nothing here depends on reading them: this document
 > is self-contained, and `scripts/test-versioning.sh` is the executable copy of
-> every rule it states. Where you want the authority for a rule, read the test.
+> every rule it states about *resolving and stamping a version*. Where you
+> want the authority for such a rule, read the test. The "CI (spec §8)"
+> section's account of why CI does not stamp is prose, pinned by no gate.
 
 Adopted 2026-07-11 via issue #31. Per spec §9, this doc is validated against the
 scripts at adoption and whenever either changes — the validation is automated as
@@ -80,14 +82,24 @@ bash scripts/stamp-version.sh --dry-run  # preview without writing
 Commit the stamped manifest in the release PR — the committed value **is**
 the release. Never hand-edit `version`. After the merge, consumer machines
 still update manually (`claude plugin update sassy-dog@sassydog-skills`
-— see README "Updating / Troubleshooting").
+— see README "Updating / Troubleshooting", under "`claude plugin marketplace
+update` is not a plugin update", which is where the content check lives).
 
-**Cadence: release PRs only — so the committed value lags, by design and by
-a wide margin.** Content lands on `main` on every merge; the manifest moves
-only when a release PR carries a fresh stamp. Measured 2026-08-27 at
-`31e9579`, the committed `2026.8.100` was 23 below what its own formula
-resolved, across 22 unstamped merges (issue #296). Two consequences follow,
-and both are load-bearing:
+**Cadence: only when some PR happens to carry a fresh stamp — so the
+committed value lags, by design and by a wide margin.** Content lands on
+`main` on every merge; the manifest moves only when someone runs the stamp
+script and commits the result. In practice that is not confined to release
+PRs: the most recent stamp rode a *feature* PR (`98d5d42`, `2026.8.96` →
+`2026.8.100`), so a reader hunting for the last `chore(release):` commit finds
+the wrong one and computes the wrong gap. `git log -1 -- .claude-plugin/plugin.json`
+is the reproducible way to find the last stamp.
+
+Measured 2026-08-27 at `31e9579`, the committed `2026.8.100` was 23 below what
+its own formula resolved, across 22 unstamped merges (issue #296). The
+apparent off-by-one between those two numbers is correct rather than an error:
+the stamp is computed *before* its own merge lands, which is the §2
+self-reference waived above. Two consequences follow, and both are
+load-bearing:
 
 - The version string does **not** distinguish trees. Two checkouts with
   different content routinely carry the same `version`, so nothing may key a
@@ -113,8 +125,11 @@ auto-stamp workflow), that job needs full history (`fetch-depth: 0`).
 `scripts/preflight.sh` section 5 reads `.version`, matches it against the
 CalVer regex and compares `marketplace.json` against it — and computes
 nothing — which is exactly why the manifest measured above, 23 below its own
-formula on that date, passed the gate green. (The gap is not a constant: it
-widens with every unstamped merge, so quote it only with a date and a SHA.) Gate 6 does *execute* both versioning scripts on every CI run
+formula on that date, passed the gate green. (The gap is not a constant: within a month it
+widens with every unstamped merge, and at a month roll it inverts — on
+2026-09-01 the formula resolves `2026.9.1` against a committed `2026.8.100`,
+which is still monotonic-safe but shows no gap at all. Quote it only with a
+date and a SHA.) Gate 6 does *execute* both versioning scripts on every CI run
 (`scripts/test-versioning.sh`), but against a `mktemp` fixture repo rather
 than this repo's history — which is why the shallow checkout is still safe,
 and what a future assertion against live history would change. This is a
@@ -141,21 +156,24 @@ The only credential a workflow here can reach is its own `GITHUB_TOKEN`.
 Measured 2026-08-28, all four stores are empty for this repo:
 `actions/organization-secrets` — the org-available endpoint, and the one that
 actually answers the question — returns `total_count: 0`, as do
-`actions/secrets`, `dependabot/secrets` and `environments`. The cause is that
+`actions/secrets`, `dependabot/secrets` and `environments`. (For Dependabot
+there is no per-repo org-available endpoint; the org store answers it —
+`orgs/Sassy-Dog/dependabot/secrets`, every entry `private`-visibility.) The cause is that
 every org secret is `private`-visibility and public repos are excluded
 (issue #178), and this repo is public by exception. (Cite the org-available
 endpoint, not the repository store: an org secret re-scoped to `all` leaves
 the repository store at 0 as well, so that endpoint alone cannot see the
 change.)
 
-A pull request opened with `GITHUB_TOKEN` does not trigger workflow runs, so
-a stamp PR gets no `ci` from its own `pull_request` event. The chain closes
-under the merge queue too, which is where `ci` actually reports here
-(`.github/workflows/ci.yml` declares `merge_group`): a `merge_group` run
-suppressed for the same reason means no check ever reports against the queue
-entry, and it ages out at the ruleset's `check_response_timeout_minutes: 60`
-— delaying every real PR queued behind it. A mechanism whose failure mode is
-jamming the merge queue is worse than the drift it fixes.
+A pull request opened with `GITHUB_TOKEN` never reaches a successful `ci`
+unattended — GitHub withholds the run such a PR would otherwise trigger, the
+recursion guard working as designed. `ci` is a required status check, so a
+stamp PR that cannot produce one cannot merge. **That is the whole of the
+argument; do not reach past it for a mechanism.** `.github/workflows/ci.yml`
+fires on `pull_request`, `push` and `merge_group` alike, and precisely where
+such a PR stalls — before it can be queued, or inside the queue — has not
+been measured here. The conclusion does not depend on knowing: no successful
+`ci`, no merge.
 
 `skills/setup-deps/SKILL.md` has already ruled on this exact shape
 (issue #190), and states it as "ruled out twice over": `GITHUB_TOKEN` is out
@@ -164,29 +182,54 @@ its writes do not re-trigger CI *and* on a second, Dependabot-specific ground
 that does not carry here; re-scoping the org secrets to `all` visibility is
 out; and a standing PAT in a public repo is out.
 
-Two routes remain, and neither is takeable from inside this repo:
+Two directions could unblock it, and neither is takeable from inside this
+repo. **Neither is specified here either**: each needs its own design pass,
+because the traps recorded below are the ones a quick implementation walks
+straight into.
 
-1. A **bypass actor**, on the ruleset *and* on classic protection, for a
-   stamping identity. Both controls are in force — `enforce_admins: true`
-   lives on the classic side — so moving one alone changes nothing. Repo
-   settings are Terraform-owned and verified in `Sassy-Dog/platform`, so this
-   is a PR there, never a setting changed by hand, and the bypass entry needs
-   its own scoping conditions rather than a blanket exemption.
-2. A **dedicated GitHub App** installed on this repo alone with
-   `contents: write`, its credentials held as repo-level secrets — the route
-   `setup-deps` sanctions, and only "when a real repo is paying the cost".
-   **Import its conditions with it, not just its conclusion.** That ruling was
-   written for a credential pushing to a PR head ref in a *consumer* repo;
-   here the credential writes to `main` of the plugin marketplace, whose
-   content installs and executes on every Sassy Dog machine and cloud session,
-   so "blast radius limited to one repo" is false in this repo's terms — the
-   radius is every consumer. Any workflow minting it must therefore be
-   unreachable from fork-PR-influenced triggers and carry an actor and branch
-   guard (this repo is public, `pull_request` fires for fork PRs, and
-   `.github/workflows/ci.yml` records that its `ci` job has no actor guard),
-   and must carry issue #232's checkout rules forward: never hand the minted
-   token to `actions/checkout`, keep `persist-credentials: false`, and bound
-   the token's on-disk lifetime to the push step.
+1. **A ruleset bypass** for a stamping identity. *Radius:* a bypass on
+   `main protection` lifts all five rules at once — the PR requirement, `ci`,
+   the merge queue, `non_fast_forward` and `deletion` — so it grants
+   force-push and delete on the default branch of a public plugin marketplace
+   whose content executes on every Sassy Dog machine. It is also coarser than
+   it sounds: `bypass_actors` exposes only `bypass_mode` (`always` /
+   `pull_request`), and on the classic side the only lever is
+   `enforce_admins: false`, so "scope the bypass narrowly" is **not
+   implementable as a condition on the entry**. The scoping has to come from
+   *who* the actor is — one App installed on this repo alone, named as such
+   in the Terraform resource. Repo settings are Terraform-owned and verified
+   in `Sassy-Dog/platform`, so this is a PR there.
+
+2. **A dedicated GitHub App opening the stamp PR.** Note what this is not:
+   `contents: write` is a token scope, not a ruleset bypass, so an App still
+   cannot push to `main` and route 2 is *not* an alternative to route 1 in its
+   naive form. The variant that works needs no bypass — the App opens the
+   stamp PR, its `ci` runs normally because the recursion guard does not apply
+   to an App token, and the queue merges it — and it needs
+   `pull-requests: write` as well as `contents: write`. *Radius:* `setup-deps`
+   sanctions a repo-scoped App on the grounds that the blast radius stays
+   inside one repo, and **that justification does not transfer here**: this
+   repo's `main` installs and executes on every consumer, so the radius is
+   every consumer.
+
+   The conditions `setup-deps` attaches must travel with its conclusion.
+   The credential is a repo-level **Actions** secret — repo secrets have no
+   visibility axis, which is what escapes issue #178, whereas the Dependabot
+   store that skill names serves Dependabot-triggered runs and a `push` job
+   cannot read it at all. The minting action is SHA-pinned and fails closed on
+   an empty credential; `permissions:` is minimal; event payload reaches
+   `run:` through step `env:` and is never inlined. The trigger is
+   `push: branches: [main]`, post-merge — `pull_request_target`,
+   `workflow_run` and `issue_comment` are each forbidden, because each one
+   hands a fork-influenced ref the token this job holds. The invariant behind
+   that list, which is what to preserve if the list is ever reworded: **the
+   privileged job executes no code from a ref an untrusted identity
+   controls** — hence `dependabot-auto-merge`'s "no checkout … Do not add a
+   checkout step", and issue #232's `persist-credentials: false` with no
+   `token:` on `actions/checkout`. It also needs a self-trigger guard: a
+   credential chosen *because* its pushes re-trigger workflows will re-fire
+   the workflow that made the push, and the CalVer patch increments on each
+   pass, so without one it never converges.
 
 A third option needs no write to `main` at all and is listed here because it
 is the one a reader re-derives first: **stamp in the PR**. Issue #296 weighed
