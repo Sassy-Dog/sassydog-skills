@@ -828,6 +828,70 @@
 #      token validated before arithmetic touches it, and `REGISTRY_MIN` held
 #      apart from the array. Three tracked files plus a listing of `agents/`,
 #      no gh, no network.
+#  34. platform-health-probe tests (scripts/test-platform-health-probe.sh) —
+#      pr-shepherd's degradation probe returns FOUR distinct verdicts and gates
+#      NOTHING (issue #285). The unhandled case was never a `gh` error, which
+#      every caller already discounts, but a `gh` call that exits 0 carrying
+#      INCOMPLETE data and is then read as live state: measured 2026-08-26 on
+#      PR #283, where the rollup came back without `ci`, no `CI` run existed for
+#      the head across ~40 minutes while two prior heads each had one within
+#      minutes, and `ci` later appeared with an EMPTY state and still no run.
+#      Nothing errored; three hypotheses were produced and all three were wrong.
+#      Both ways of getting this wrong are silent and they are opposite.
+#      Collapsing any verdict toward `healthy` makes the probe WORSE than not
+#      having one — a status page lags real degradation by minutes to tens of
+#      minutes, so green can never be evidence of health and an unreachable page
+#      certainly cannot — and both collapse directions are mutation-proved.
+#      Letting the verdict reach a decision turns an outage into changed
+#      behaviour rather than a changed explanation, so never-a-gate is asserted
+#      STRUCTURALLY twice: every verdict exits 0 (the deliberate asymmetry with
+#      stack-probe.sh, whose exit codes ARE a gate), and no sibling pr-shepherd
+#      script names the probe — over a sibling list held as an EQUALITY against
+#      the directory, so a new script cannot ship unscanned. The SKILL.md half
+#      is SECTION-scoped, because a whole-file grep is satisfied by the probe's
+#      own §2b and by the bundled-script table and would read a probe wired into
+#      the merge section as clean; §1, §1b and §3 are asserted not to name it,
+#      mutation-proved by inserting a mention into §3. Two contract decisions
+#      are pinned together and must be read together: an unreachable endpoint
+#      never manufactures a `healthy` and never manufactures a `degraded` on its
+#      own, while an anomaly BESIDE an unreadable page stays
+#      `degraded (unattributed)`, the degradation having been measured
+#      first-party. THERE ARE TWO DOORS INTO `healthy` and the first-party one is
+#      the easier to leave open: a single-commit branch has no prior head, so an
+#      earlier edition compared nothing, found nothing, and certified a branch
+#      whose CI had never started — #285 one step EARLIER. `clean` now means a
+#      check RAN and found nothing, and ONLY the run comparison earns it: the
+#      empty-state read detects a MALFORMED entry and can never detect an ABSENT
+#      one, so a rollup simply lacking `ci` looks healthy through it. Pagination
+#      cuts BOTH ways — a dropped head over-detects, a boundary INSIDE the oldest
+#      head's set under-detects and reaches `healthy` — so the page reports
+#      whether it was truncated. Three decisions follow, each cased and
+#      mutated: a gh TRANSPORT failure is `not_measured` and never an anomaly (an
+#      expired token is not platform degradation); attribution is SCOPED to
+#      check-relevant components, since a Copilot blip beside a genuinely red
+#      `ci` invents an EXCUSE — the same wrong answer pointed the other way; and
+#      the baseline is an INTERSECTION over every prior head with head-triggered
+#      events only, so a path filter or a one-off workflow_dispatch is not
+#      degradation. Its age floor is contract, not an optimisation — a workflow
+#      that has not started is not a missing one — and so is its SCOPE: the
+#      empty-state read is direct, so it is neither age-suppressed nor
+#      conditional on the runs call, which an outage breaks at the same time. The
+#      healthy fixture's rollup names deliberately match no workflow name, since
+#      a fixture where they lined up would make the cross-namespace case vacuous.
+#      THE RUNS PAYLOAD TRAVELS ON STDIN, never on argv — #263's lesson from the
+#      other side: one page of 100 runs is ~1.6 MB against a 131,072-byte cap on
+#      a single argv element, so `--argjson runs` exited 126 at roughly the
+#      eighth run and the comparison was dead on every real repo. A failed
+#      derivation is validated rather than trusted (`[ "" -eq 0 ]` is falsy and
+#      falls through to the branch asserting the check RAN), and `probe_errors`
+#      is CONSULTED, not merely recorded. §2b is pinned by CANON rather than by
+#      presence, since a needle is satisfied by a document that still contains
+#      its sentence AND its inverse; never-a-gate is scanned for the verdict
+#      VOCABULARY as well as the filename, since the follow-up work will be
+#      written as "on a degraded verdict, hold the PR", naming no script.
+#      Mock `gh` AND mock `curl`, both recording every call so the read-only
+#      claim is measured by METHOD — per token, by prefix — not by path prefix:
+#      no repo, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1489,6 +1553,25 @@ if bash scripts/test-audit-lost-reviewer.sh; then
     pass "audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh)"
 else
     failed "audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh)"
+fi
+
+# --- 34. platform-health-probe tests -------------------------------------------
+# Behavioural where the harm is behavioural and source-level where the rule is
+# prose. The probe answers "is the platform degraded, or is this a real defect?"
+# with one of four verdicts (#285), and every way of being wrong is silent:
+# collapsing one toward `healthy` converts an unknown into a confident wrong
+# answer, and letting one reach a merge/hold/block/redispatch decision turns an
+# outage into changed behaviour instead of a changed explanation. So the four
+# verdicts are exercised against a mock gh AND a mock curl, both collapse
+# directions are mutation-proved, and never-a-gate is asserted structurally —
+# every verdict exits 0, no sibling script names the probe (sibling list held as
+# an equality against the directory), and the SKILL.md decision sections are
+# checked SECTION-scoped, because a whole-file grep is satisfied by the probe's
+# own section. No repo, no network.
+if bash scripts/test-platform-health-probe.sh; then
+    pass "platform-health-probe tests (scripts/test-platform-health-probe.sh)"
+else
+    failed "platform-health-probe tests (scripts/test-platform-health-probe.sh)"
 fi
 
 # ------------------------------------------------------------------------------
