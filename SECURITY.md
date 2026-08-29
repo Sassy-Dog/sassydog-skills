@@ -32,5 +32,9 @@ The plugin is versioned as monthly-rolling CalVer (`YYYY.M.<commits-this-month>`
 Consumers do not auto-update. If a fix ships, updating is:
 
 ```bash
-claude plugin update sassy-dog@sassydog-skills
+claude plugin update sassy-dog@sassydog-skills --scope user   # or: project, local, managed
 ```
+
+`--scope` defaults to `user`; a project-scope install is a separate copy and is not updated by the
+bare command. README "Updating / Troubleshooting" → "`claude plugin marketplace update` is not a
+plugin update" shows how to tell which copy you run, and how to confirm the update landed.

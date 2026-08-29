@@ -9,7 +9,11 @@ spec rather than a local fork.
 > (`Sassy Dog/Architecture/Development/Versioning.md`) and its mirror on
 > `Sassy-Dog/platform#397`. Nothing here depends on reading them: this document
 > is self-contained, and `scripts/test-versioning.sh` is the executable copy of
-> every rule it states. Where you want the authority for a rule, read the test.
+> every rule it states about *resolving and stamping a version*. Where you
+> want the authority for such a rule, read the test. The cadence note under
+> "Releasing" and the "CI (spec §8)" account of why CI does not stamp are both
+> prose, pinned by no gate — the test runs against a `mktemp` fixture and
+> asserts the ladder, not the cadence.
 
 Adopted 2026-07-11 via issue #31. Per spec §9, this doc is validated against the
 scripts at adoption and whenever either changes — the validation is automated as
@@ -79,8 +83,36 @@ bash scripts/stamp-version.sh --dry-run  # preview without writing
 
 Commit the stamped manifest in the release PR — the committed value **is**
 the release. Never hand-edit `version`. After the merge, consumer machines
-still update manually (`claude plugin update sassy-dog@sassydog-skills`
-— see README "Updating / Troubleshooting").
+still update manually (`claude plugin update --scope <scope> sassy-dog@sassydog-skills`
+— see README "Updating / Troubleshooting", under "`claude plugin marketplace
+update` is not a plugin update", which is where the content check lives).
+
+**Cadence: only when some PR happens to carry a fresh stamp — so the
+committed value lags, by design and by a wide margin.** Content lands on
+`main` on every merge; the manifest moves only when someone runs the stamp
+script and commits the result. In practice that is not confined to release
+PRs: the most recent stamp rode a *feature* PR (`98d5d42`, `2026.8.96` →
+`2026.8.100`), so a reader hunting for the last `chore(release):` commit finds
+the wrong one and computes the wrong gap. To find the last stamp reproducibly, search the
+version *line* rather than the file — `git log -1 -G'"version":' --
+.claude-plugin/plugin.json`. Plain `git log -1 -- <path>` returns the last
+commit that merely touched the manifest, which is not the same thing:
+`951e131` added the `license` key and left `version` at `2026.8.41`.
+
+Measured 2026-08-27 at `31e9579`, the committed `2026.8.100` was 23 below what
+its own formula resolved, across 22 unstamped merges (issue #296). The
+apparent off-by-one between those two numbers is correct rather than an error:
+the stamp is computed *before* its own merge lands, which is the §2
+self-reference waived above. Two consequences follow, and both are
+load-bearing:
+
+- The version string does **not** distinguish trees. Two checkouts with
+  different content routinely carry the same `version`, so nothing may key a
+  content or cache-freshness decision on it. That is why README's
+  stale-cache diagnostic compares files rather than version strings.
+- "The committed value **is** the release" stays true as the *definition* of
+  what a release is. It is not a claim that the manifest tracks `main`, and
+  between releases it does not.
 
 Migration note (spec §6): the semver → CalVer switch needed no cutover gate —
 `2026.M.P` strictly exceeds the pre-adoption `0.x` train, and this repo has no
@@ -93,3 +125,102 @@ committed manifest (`^[0-9]{4}\.[0-9]{1,2}\.[0-9]+$`) and cross-checks any
 `marketplace.json` `plugins[].version` against it, so no `fetch-depth: 0` is
 needed today. If a CI job ever *computes* the version (e.g. a future
 auto-stamp workflow), that job needs full history (`fetch-depth: 0`).
+
+**Re-checked 2026-08-28 against the tree** (issue #296): still true.
+`scripts/preflight.sh` section 5 reads `.version`, matches it against the
+CalVer regex and compares `marketplace.json` against it — and computes
+nothing — which is exactly why the manifest measured above, 23 below its own
+formula on that date, passed the gate green. (The gap is not a constant: within a month it
+widens with every unstamped merge, and at a month roll it inverts — on
+2026-09-01 the formula resolves `2026.9.1` against a committed `2026.8.100`,
+which is still monotonic-safe but shows no gap at all. Quote it only with a
+date and a SHA.) Gate 6 does *execute* both versioning scripts on every CI run
+(`scripts/test-versioning.sh`), but against a `mktemp` fixture repo rather
+than this repo's history — which is why the shallow checkout is still safe,
+and what a future assertion against live history would change. This is a
+*deliberate absence*, not an unfinished item, and the section below records
+why; an absence nobody can explain gets re-derived as an oversight and
+"fixed" by whoever finds it next.
+
+### Why there is no per-merge auto-stamp
+
+Stamping `main` after every merge — what issue #296 asked for, so that the
+version-of-record tracks content 1:1 — needs a job that **writes to `main`**,
+and nothing available inside this repo can.
+
+`main` is governed by the repository ruleset `main protection`, read
+2026-08-28: `pull_request` (a PR is required), `merge_queue` (that PR merges
+through the queue), `required_status_checks: ["ci"]`, `bypass_actors: []`
+and `current_user_can_bypass: "never"` — alongside classic protection with
+`enforce_admins: true`. So there is no direct push to `main` for any actor,
+admins included, and the bypass list is empty *by policy* — one Terraform PR
+from non-empty, which is route 1 below, and not a door that can be opened
+from here. The only route in today is a pull request carrying a green `ci`.
+
+The only credential a workflow here can reach is its own `GITHUB_TOKEN`.
+Measured 2026-08-28, all four stores are empty for this repo:
+`actions/organization-secrets` — the org-available endpoint, and the one that
+actually answers the question — returns `total_count: 0`, as do
+`actions/secrets`, `dependabot/secrets` and `environments`. (For Dependabot
+there is no per-repo org-available endpoint; the org store answers it —
+`orgs/Sassy-Dog/dependabot/secrets`, every entry `private`-visibility.) The cause is that
+every org secret is `private`-visibility and public repos are excluded
+(issue #178), and this repo is public by exception. (Cite the org-available
+endpoint, not the repository store: an org secret re-scoped to `all` leaves
+the repository store at 0 as well, so that endpoint alone cannot see the
+change.)
+
+A pull request opened with `GITHUB_TOKEN` never reaches a successful `ci`
+unattended — GitHub withholds the run such a PR would otherwise trigger, the
+recursion guard working as designed. `ci` is a required status check, so a
+stamp PR that cannot produce one cannot merge. **That is the whole of the
+argument; do not reach past it for a mechanism.** `.github/workflows/ci.yml`
+fires on `pull_request`, `merge_group`, and `push` filtered to `main`, and precisely where
+such a PR stalls — before it can be queued, or inside the queue — has not
+been measured here. The conclusion does not depend on knowing: no successful
+`ci`, no merge.
+
+`skills/setup-deps/SKILL.md` has already ruled on this exact shape
+(issue #190), and states it as "ruled out twice over": `GITHUB_TOKEN` is out
+because
+its writes do not re-trigger CI *and* on a second, Dependabot-specific ground
+that does not carry here; re-scoping the org secrets to `all` visibility is
+out; and a standing PAT in a public repo is out.
+
+Two directions could unblock it, and neither is takeable from inside this
+repo:
+
+1. **A ruleset bypass** for a stamping identity, added in `Sassy-Dog/platform`
+   where repo settings are Terraform-owned and verified.
+2. **A dedicated GitHub App** that opens the stamp PR — note that this is not
+   an alternative to route 1 in the naive form: `contents: write` is a token
+   scope, not a ruleset bypass, so an App cannot push to `main` either. The
+   variant that needs no bypass is the one where the App *opens a PR* and the
+   queue merges it, its `ci` running normally because the recursion guard does
+   not apply to an App token.
+
+**Neither is designed here, deliberately.** Both put a write-capable
+credential, or a hole in branch protection, on a public repo whose `main`
+installs and executes on every Sassy Dog machine and cloud session — so the
+blast radius is every consumer, not this repo, and `setup-deps`' repo-scoped-App
+reasoning does not transfer on its own terms. Working out the trigger, the
+credential store, the guards and the self-trigger stop is a design task with
+its own security review, and it belongs in its own issue rather than in
+sketch form here: three attempts to sketch it in this document produced three
+sets of confidently wrong specifics. What this section is for is recording
+*why* the absence exists, so it is not re-derived as an oversight.
+
+A third option needs no write to `main` at all and is listed here because it
+is the one a reader re-derives first: **stamp in the PR**. Issue #296 weighed
+and rejected it for an unrelated reason — every PR would then touch
+`.claude-plugin/plugin.json`, putting that path in every issue's `touches:`
+line and permanently serializing `dispatch-ready`'s collision filter at a
+throughput of 1. It is rejected on that ground, not on the credential ground
+above.
+
+Until one of these lands the version-of-record cannot track content, so the
+consequence is handled where it bites instead of being papered over: README's
+stale-cache diagnostic is keyed on file content rather than on the version
+string. None of the decisions in this section is pinned by a gate — they are
+prose, and the paragraph above about `test-versioning.sh` being the executable
+copy of this document's rules does not reach them.
