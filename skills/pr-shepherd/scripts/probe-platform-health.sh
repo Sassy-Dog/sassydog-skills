@@ -294,6 +294,16 @@ if [ -n "$PR" ]; then
     # reaches any reported string, because a fork-PR author controls it and a
     # bidi override or a newline in a reported field is the same injection the
     # check-name sanitiser exists to stop.
+    #
+    # THAT SENTENCE IS ONLY TRUE BECAUSE THE CLASSES WERE UNIFIED. It used to
+    # assert a parity that did not exist: this site stripped control characters
+    # AND bidi, while the check-name, missing-run and status-detail sanitisers
+    # stripped control characters only, so a job name carrying RLO/LRM passed
+    # through all three unchanged. Fork-PR authors control job names, those land
+    # in `anomalies[].detail`, SKILL.md orders the coordinator to REPORT that
+    # field, and this repo is PUBLIC. One class now covers every string that
+    # reaches a reported field; a site that drops back to the control-only form
+    # re-opens exactly that hole, so the gate compares the sites to each other.
     BRANCH="$(jq -r '.headRefName // ""' <<<"$pr_raw")"
     BRANCH_SAFE="$(jq -r '(.headRefName // "") | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")' <<<"$pr_raw")"
     MERGE_STATE="$(jq -r '(.mergeStateStatus // "") | gsub("[^A-Z_]"; "")' <<<"$pr_raw")"
@@ -325,12 +335,22 @@ if [ -n "$pr_raw" ]; then
     # first, so no emitted name can contain a newline; the capture is what
     # lets the exit status be checked at all.
     empty_out="$(jq -r '
-      def clean: gsub("[\u0000-\u001f\u007f]"; " ");
+      def clean: gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ");
+      # `//` falls back only on null/false, so `.name // .context` KEEPS an
+      # empty-string name and the entry then vanishes at the `[ -n "$ck" ]`
+      # guard below — found, emitted, silently discarded, verdict `healthy`.
+      # That is the headline signal of this probe producing the confident
+      # wrong answer its header calls worse than having no probe at all, so
+      # absence is tested by LENGTH and never by `//`.
+      def firstnonempty($a; $b): if (($a | length) > 0) then $a
+                                 elif (($b | length) > 0) then $b
+                                 else "(unnamed)" end;
       [ .statusCheckRollup[]?
         | select( ((.status // "") == "")
                   and ((.conclusion // "") == "")
                   and ((.state // "") == "") )
-        | ((.name // .context // "(unnamed)") | clean) ] | unique | .[]
+        | (firstnonempty(((.name // "") | tostring); ((.context // "") | tostring)) | clean)
+      ] | unique | .[]
     ' <<<"$pr_raw")" || empty_rc=$?
     if [ "$empty_rc" -ne 0 ]; then
       # A generator that died is not "no anomalies found" — it is no read at all.
@@ -338,6 +358,11 @@ if [ -n "$pr_raw" ]; then
     else
       ROLLUP_CHECK="ran"
       while IFS= read -r ck; do
+        # The generator now guarantees a non-empty token per matching entry
+        # (`clean` only SUBSTITUTES characters, never deletes, and the
+        # fallback is a literal), so this guard can only skip the single
+        # empty line a here-string yields for empty input. It must never
+        # again be the thing that decides whether an anomaly is reported.
         [ -n "$ck" ] && add_anomaly empty_state_check "$ck is in the rollup with no status, conclusion or state"
       done <<<"$empty_out"
     fi
@@ -446,6 +471,24 @@ if [ -n "$HEAD" ]; then
         # RUN_CHECK here would certify a comparison that had no subject, which
         # is the `clean`-means-measured door one more layer down.
         SELF_REASON="no_required_baseline"
+      elif [ "$RUNS_TRUNCATED" != "no" ]; then
+        # A TRUNCATED page cannot certify completeness. The header states this
+        # cuts both ways and names under-detection as the direction that
+        # matters: a page boundary landing inside the oldest included head`s
+        # run set shrinks the intersection, the missing run is not required of
+        # anybody, and the comparison reaches `clean` -> `healthy`. Measured on
+        # two fixtures differing ONLY in truncation, same underlying reality:
+        # the full page gave `degraded (unattributed)` and the 100-run page
+        # gave `healthy`. That is the acceptance criterion of #285 failing in
+        # the file that exists to satisfy it, so truncation is consulted by the
+        # verdict and not merely reported beside it.
+        #
+        # `!= "no"` and not `= "yes"`: `unknown` means the flag itself could
+        # not be read, which certifies nothing either. Anomalies already found
+        # are still reported - they are first-party measurements, and the
+        # anomaly branch is ahead of this one - so this suppresses only the
+        # claim to have looked EVERYWHERE, never a positive finding.
+        SELF_REASON="runs_page_truncated"
       else
         RUN_CHECK="ran"
       fi
@@ -460,7 +503,7 @@ if [ -n "$HEAD" ]; then
         fi
       else
         missing_rc=0
-        missing_out="$(jq -r '.missing[] | gsub("[\u0000-\u001f\u007f]"; " ")' <<<"$derived")" || missing_rc=$?
+        missing_out="$(jq -r '.missing[] | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")' <<<"$derived")" || missing_rc=$?
         if [ "$missing_rc" -ne 0 ]; then
           # Same rule as the rollup generator: RUN_CHECK was set above, so a
           # silent failure here would certify a comparison it discarded.
@@ -573,12 +616,17 @@ if command -v curl >/dev/null 2>&1; then
               ( [ .components[]? | select((.status // "") != "operational")
                   | select(relevant(.name)) | "\(.name): \(.status)" ] | join("; ") )
             ] | map(select(. != "")) | join(" | ")
+            | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")
         ' <<<"$status_raw" 2>/dev/null)"
+        # The gsub above is what strips BIDI; `tr` is byte-oriented and cannot
+        # match a multibyte RLO at all, so it is kept only as a belt-and-braces
+        # pass over the shell-assembled result. Third-party text, but it reaches
+        # the same reported field as the first-party strings.
         STATUS_DETAIL="$(printf '%s' "$STATUS_DETAIL" | tr -d '\000-\037\177')"
         [ -n "$STATUS_DETAIL" ] || STATUS_DETAIL="an incident is open on a check-relevant component" ;;
       operational)
         STATUS_DETAIL="no check-relevant component is impaired"
-        page_desc="$(jq -r 'if (.status | type) == "object" then (.status.description // "") else "" end' <<<"$status_raw" 2>/dev/null | tr -d '\000-\037\177')"
+        page_desc="$(jq -r '(if (.status | type) == "object" then (.status.description // "") else "" end) | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")' <<<"$status_raw" 2>/dev/null | tr -d '\000-\037\177')"
         [ -z "$page_desc" ] || STATUS_DETAIL="$STATUS_DETAIL (page-wide: $page_desc)" ;;
       *)
         STATUS_DETAIL="the status payload carried no recognisable status, incidents or components" ;;

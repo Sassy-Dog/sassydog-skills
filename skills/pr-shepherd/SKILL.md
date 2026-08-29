@@ -73,7 +73,16 @@ Run it synchronously — backgrounding the watcher orphans PRs at "checks pendin
 
 A `gh` call that *errors* is already handled everywhere: an API-failure tick proves nothing, and every caller knows it. The unhandled case is a call that **succeeds and returns incomplete data**, which a coordinator then reads as live state. Measured on 2026-08-26 during a platform outage: `gh pr view --json statusCheckRollup` exited 0 carrying two checks and no `ci`; no `CI` workflow run existed for that head across ~40 minutes while the two prior heads on the same branch each had one within minutes; `mergeStateStatus` read `BLOCKED`; later `ci` appeared in the rollup with an **empty state** and still no run behind it. Nothing errored. Three hypotheses were produced — Actions queueing, a workflow path filter, a transient miss — and all three were wrong, and the proposed remedy (close and reopen the PR to re-trigger CI) could have made things worse during an outage. Degradation is a recurring operating mode here, not an exception.
 
-Run the probe when a watch has gone nowhere — a required check that never appears, a rollup that shrank, a tick that reconciles to the same nothing. **Do not wait for `poll-prs.sh` to tell you so**: its pending filter reads an empty-state rollup entry as *not pending*, so the exact placeholder this probe treats as the #285 fingerprint makes the poller report every PR terminal. Reconciling those two readers is a separate change to an untouched file, so until it lands the trigger is a stalled `mergeStateStatus`, a missing required check, or your own judgement — not a poller that went quiet. Note also that the three `gh` calls carry no timeout, so run it where a hang costs you a tick rather than a loop:
+Run the probe when a watch has gone nowhere — a required check that never appears, a rollup that shrank, a tick that reconciles to the same nothing. **Do not wait for `poll-prs.sh` to tell you so**, and do not read that as the poller being the only sibling that disagrees with this probe. Three readers classify the same rollup entry, and no two of them agree across all of its shapes — measured, not assumed:
+
+| rollup entry | this probe | `poll-prs.sh` pending filter | `merge-shepherd.sh` `checks()` |
+| --- | --- | --- | --- |
+| `status`/`conclusion`/`state` all `""` | anomaly | not pending | **pending** |
+| `conclusion: null`, no `status` | anomaly | **pending** | not pending |
+| `conclusion` absent, no `status` | anomaly | **pending** | not pending |
+| `StatusContext` with `state: ""` | anomaly | not pending | not pending |
+
+So “the poller went quiet” is evidence for the first and last shapes only; for the middle two the poller reports *pending*, which is the opposite of what this paragraph used to claim. And `merge-shepherd.sh` — the only one of the three that **writes** — reads the first shape opposite to the poller, which is the disagreement that can actually merge something. Both siblings carry parity comments naming each other, and those comments are silent about exactly these shapes. Reconciling the three is a separate change to two untouched files, so until it lands the trigger is a stalled `mergeStateStatus`, a missing required check, or your own judgement — never a poller that went quiet. Note also that the three `gh` calls carry no timeout, so run it where a hang costs you a tick rather than a loop:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/probe-platform-health.sh --pr "$PR" --repo "$REPO"

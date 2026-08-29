@@ -256,6 +256,65 @@ RUNS_DISPATCH='{"workflow_runs":[
   {"name":"CI","event":"pull_request","head_sha":"9900aab"},
   {"name":"Release","event":"workflow_dispatch","head_sha":"9900aab"}]}'
 
+# An empty-state entry whose `name` is the EMPTY STRING, and one whose
+# `context` is. jq's `//` falls back only on null/false, so both used to
+# survive the generator as "" and then vanish at the shell guard - found,
+# emitted, silently discarded, verdict `healthy`. Head and runs are
+# PR_CLEAN's, so the run comparison resolves clean and the empty-state entry
+# is the ONLY signal in play; without that pairing the case could pass for
+# the wrong reason.
+PR_EMPTY_NAME='{"number":301,"headRefOid":"aa11bb2","headRefName":"feat/clean",
+  "mergeStateStatus":"BLOCKED",
+  "statusCheckRollup":[
+    {"__typename":"CheckRun","name":"Analyze (actions)","status":"COMPLETED","conclusion":"SUCCESS"},
+    {"__typename":"CheckRun","name":"","status":"","conclusion":"","state":""}]}'
+PR_EMPTY_CONTEXT='{"number":301,"headRefOid":"aa11bb2","headRefName":"feat/clean",
+  "mergeStateStatus":"BLOCKED",
+  "statusCheckRollup":[
+    {"__typename":"CheckRun","name":"Analyze (actions)","status":"COMPLETED","conclusion":"SUCCESS"},
+    {"__typename":"StatusContext","context":"","state":""}]}'
+
+# The two conjuncts M15 never reached. A check still RUNNING (status
+# IN_PROGRESS, conclusion null) is the most common PR state in this org, so a
+# regression dropping the `.status` conjunct fabricates `degraded` on every PR
+# with CI mid-flight; the second entry is the mirror for `.conclusion`.
+# NEITHER matches the shipped predicate, so the unmutated run is healthy and
+# each mutant has somewhere to move.
+PR_MIDFLIGHT='{"number":301,"headRefOid":"aa11bb2","headRefName":"feat/clean",
+  "mergeStateStatus":"BLOCKED",
+  "statusCheckRollup":[
+    {"__typename":"CheckRun","name":"CI / build","status":"IN_PROGRESS","conclusion":null},
+    {"__typename":"CheckRun","name":"CI / lint","status":"","conclusion":"SUCCESS"}]}'
+
+# A FULL page (100 runs) is what the probe reads as truncated. Its comparison
+# is RUNS_CLEAN's and resolves clean, so the only difference between this
+# fixture and RUNS_CLEAN is that the page is full - which is the whole point:
+# same underlying reality, and before the fix the pair gave `healthy` and
+# `degraded`. The padding repeats a workflow already on a prior head, so it
+# adds no name to any set and cannot change the intersection.
+RUNS_TRUNCATED_FULL="$(jq -cn '{workflow_runs:
+  ([{name:"CI",event:"pull_request",head_sha:"aa11bb2"},
+    {name:"CodeQL",event:"pull_request",head_sha:"aa11bb2"},
+    {name:"CI",event:"pull_request",head_sha:"9900aab"},
+    {name:"CodeQL",event:"pull_request",head_sha:"9900aab"}]
+   + [range(96) | {name:"CI",event:"pull_request",head_sha:"9900aab"}])}')"
+
+# Hostile first-party text. A fork-PR author controls BOTH the branch name and
+# the job name, and both reach reported fields. Built with jq rather than typed
+# so the bytes are unambiguous. Every other fixture in this file is clean
+# ASCII, which is exactly why all six sanitisers were removable with the gate
+# green before this existed.
+BIDI_RLO="$(jq -rn '"\u202e"')"
+BIDI_LRM="$(jq -rn '"\u200e"')"
+PR_HOSTILE="$(jq -cn --arg rlo "$BIDI_RLO" --arg lrm "$BIDI_LRM" '{
+  number:301, headRefOid:"aa11bb2",
+  headRefName:("feat/x" + $rlo + "y" + $lrm + "z"),
+  mergeStateStatus:"BLOCKED",
+  statusCheckRollup:[
+    {__typename:"CheckRun", name:"Analyze (actions)", status:"COMPLETED", conclusion:"SUCCESS"},
+    {__typename:"CheckRun", name:("CI" + $rlo + "job" + $lrm + "k"),
+     status:"", conclusion:"", state:""}]}')"
+
 STATUS_GREEN='{"status":{"indicator":"none","description":"All Systems Operational"},
   "components":[{"name":"Actions","status":"operational"},
                 {"name":"API Requests","status":"operational"},
@@ -327,6 +386,41 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
 field() { jq -r "$1 // \"\"" <<<"$STDOUT" 2>/dev/null; }
 kinds() { jq -r '[.anomalies[].kind] | sort | join(",")' <<<"$STDOUT" 2>/dev/null; }
 errkinds() { jq -r '[.probe_errors[].kind] | sort | join(",")' <<<"$STDOUT" 2>/dev/null; }
+
+# Does any REPORTED VALUE carry a character the sanitisers must strip?
+#
+# Scoped to scalar VALUES, never to the serialized document: the class includes
+# U+0000-U+001F, the pretty-printed JSON is full of newlines, and a whole-text
+# test therefore answers "yes" for every run including the clean ones. Measured
+# - it made the unmutated baseline look unsafe and the mutant indistinguishable
+# from it, so the proof reported UNDETECTED while the probe was behaving.
+#
+# Written as CODEPOINT arithmetic rather than a character class so this file
+# states the spec in a form that cannot be silently mangled by a copy: the
+# class is U+0000-U+001F, U+007F, U+200E/U+200F, U+202A-U+202E, U+2066-U+2069.
+# It is deliberately NOT harvested from the probe - that would let a probe which
+# narrowed its class narrow the assertion with it. Section 26's source-level
+# check is what compares the probe's own sites to each other.
+UNSAFE_JQ='def is_unsafe: explode | any(
+  . < 32 or . == 127 or . == 8206 or . == 8207
+  or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297));'
+
+json_has_unsafe() { # <json text> -> yes|no
+    local r
+    r="$(jq -r "$UNSAFE_JQ"' [paths(scalars) as $p | getpath($p) | tostring | select(is_unsafe)] | length > 0' <<<"$1" 2>/dev/null)"
+    if [ "$r" = "true" ]; then echo yes; else echo no; fi
+}
+
+# The stderr line is plain text, so its own line structure is legitimate: TAB
+# and NEWLINE are excluded, everything else in the class is not.
+text_has_unsafe() { # <text> -> yes|no
+    local r
+    r="$(jq -rn --arg t "$1" '$t | explode | any(
+            (. < 32 and . != 9 and . != 10 and . != 13) or . == 127
+            or . == 8206 or . == 8207
+            or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297))' 2>/dev/null)"
+    if [ "$r" = "true" ]; then echo yes; else echo no; fi
+}
 
 dump() {
     printf '%s\n' "$STDERR" | sed 's/^/          | E /' >&2
@@ -891,7 +985,9 @@ canon_blocks() { # <file> <heading> — one flattened block per line
 # opening words, so a drifted row says which paragraph moved.
 CANON_2B=(
     "1622634225"   # A `gh` call that *errors* is already handled everywhere…
-    "3407308534"   # Run the probe when a watch has gone nowhere…
+    "1892531078"   # Run the probe when a watch has gone nowhere…
+    "2635286258"   # | rollup entry | this probe | poll-prs.sh | merge-shepherd.sh
+    "1899200383"   # So "the poller went quiet" is evidence for…
     "3301345540"   # ```bash … probe-platform-health.sh --pr …
     "1562190426"   # It returns one of exactly **four** verdicts…
     "3181854606"   # | Verdict | What it means | … the four rows
@@ -964,7 +1060,106 @@ VERDICT="$(jq -r '.verdict // "«no verdict»"' <<<"$STDOUT" 2>/dev/null)"
 expect_verdict "with no PLATFORM_* set, the default component scope still excludes Copilot" "healthy"
 
 # ==============================================================================
-echo "24. mutations" >&2
+echo "24. an empty-string name is an ANOMALY, not a silently dropped entry" >&2
+# jq's `//` falls back only on null/false. `.name // .context // "(unnamed)"`
+# therefore KEEPS an empty-string name, the shell guard `[ -n "$ck" ]` drops the
+# entry, and the probe answers `healthy` on a rollup it had already flagged.
+# The `(unnamed)` fallback was dead code, which is the tell that coverage was
+# intended and never landed.
+D="$(scenario emptyname "$PR_EMPTY_NAME" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "an empty-string check name is degraded (unattributed), never healthy" "degraded (unattributed)"
+expect_kind "and it is reported as an empty-state check" "empty_state_check"
+expect_field "the fallback name reaches the detail, so the entry is nameable" \
+    '.anomalies[0].detail' "(unnamed) is in the rollup with no status, conclusion or state"
+
+D="$(scenario emptyctx "$PR_EMPTY_CONTEXT" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "an empty-string StatusContext context is degraded too, not dropped" "degraded (unattributed)"
+
+# The predicate has THREE conjuncts and M15 mutated only `.state`, so dropping
+# `.status` or `.conclusion` was undetected. This fixture is what gives those
+# two mutants somewhere to move: a check still RUNNING and a concluded check
+# with no status, NEITHER of which is an empty-state placeholder. It also
+# creates the `midflight` scenario the mutants below reuse - a mutant naming a
+# scenario no case builds runs against a missing directory and reports
+# `unknown` for both arms, which reads as UNDETECTED for the wrong reason.
+D="$(scenario midflight "$PR_MIDFLIGHT" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "a check mid-flight is NOT an empty-state placeholder" "healthy"
+expect_field "and nothing is reported against it" '.anomalies | length' "0"
+
+# ==============================================================================
+echo "25. a TRUNCATED runs page cannot earn clean" >&2
+# `truncated` was computed, recorded and then ignored by the decision that
+# consumes it. The header names under-detection as the direction that matters:
+# a page boundary inside the oldest included head's run set shrinks the
+# intersection, so the missing run is required of nobody and the comparison
+# reaches `clean` -> `healthy`. That is #285's own acceptance criterion failing
+# inside the file written to satisfy it.
+D="$(scenario trunc "$PR_CLEAN" "$RUNS_TRUNCATED_FULL" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "a full page resolves unknown, never healthy" "unknown"
+expect_field "the probe says it did not measure" '.self_measured' "not_measured"
+expect_field "and names truncation as the reason" '.self_measured_reason' "runs_page_truncated"
+expect_field "while still REPORTING the flag, which is what a caller reads" \
+    '.checks_run.runs_page_truncated' "yes"
+
+# The control, and it is the half that makes the pair a measurement rather than
+# an assertion: the SAME reality on a page that is not full is still healthy,
+# so this section cannot pass by making the probe pessimistic about everything.
+D="$(scenario notrunc "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "the same reality on a SHORT page is healthy" "healthy"
+
+# ==============================================================================
+echo "26. every string reaching a reported field is sanitised, bidi included" >&2
+# A fork-PR author controls branch and job names; both land in reported fields
+# and this repo is PUBLIC. The probe's own comment claimed the check-name
+# sanitiser stopped the same injection BRANCH_SAFE does - it did not, stripping
+# control characters only, so RLO/LRM passed through three of the five sites.
+D="$(scenario hostile "$PR_HOSTILE" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+if [ "$(json_has_unsafe "$STDOUT")" = "no" ]; then
+    ok "no control or bidi character survives into any reported JSON value"
+else
+    bad "a control or bidi character reached a reported JSON value"
+fi
+if [ "$(text_has_unsafe "$STDERR")" = "no" ]; then
+    ok "nor into the human-readable stderr line"
+else
+    bad "a control or bidi character reached the probe's stderr line"
+fi
+# The fixture must actually CARRY the hostile characters, or both checks above
+# pass by measuring nothing - which is the state every other fixture is in.
+if [ "$(text_has_unsafe "$PR_HOSTILE")" = "yes" ]; then
+    ok "and the fixture really does carry them, so the pair is not vacuous"
+else
+    bad "the hostile fixture carries no unsafe character; section 26 proves nothing"
+fi
+
+# Source-level, and it asks a question the behavioural pair cannot: do the
+# probe's own sanitiser sites still agree with EACH OTHER? A site that drops
+# back to the control-only class is the finding itself, and a fixture only ever
+# covers the sites its own payload happens to reach.
+sani_sites="$(grep -c 'gsub("\[\\u0000' "$PROBE")"
+sani_classes="$(grep -o 'gsub("\[\\u0000[^"]*\]"' "$PROBE" | sort -u | wc -l | tr -d ' ')"
+if [ "$sani_classes" = "1" ]; then
+    ok "all reported-string sanitisers carry ONE identical character class"
+else
+    bad "the reported-string sanitisers carry $sani_classes different classes; they must be one"
+fi
+# Vacuity floor: a census that stopped matching would report "one class" while
+# measuring nothing at all, which is how a clean tree and a broken extractor
+# look identical.
+if [ "${sani_sites:-0}" -ge 5 ]; then
+    ok "and the census still finds them ($sani_sites sites, floor 5)"
+else
+    bad "the sanitiser census found only $sani_sites sites (floor 5) - the extractor is broken, not the tree"
+fi
+
+# ==============================================================================
+echo "27. mutations" >&2
 MUTANT="$WORK/mutant.sh"
 apply_mutation() { # <label> <exact from-line> <to-line> [source] [dest]
     local label="$1" from="$2" to="$3" src="${4:-$PROBE}" dst="${5:-$MUTANT}" rc=0
@@ -1098,6 +1293,31 @@ MUTANTS=(
   '                  and true )' \
   healthy '--pr 301' 'degraded (unattributed)' \
   'a healthy StatusContext (vercel: SUCCESS) would be read as an empty-state placeholder')"
+"$(row "M15b the empty-state predicate drops its .status conjunct" \
+  '        | select( ((.status // "") == "")' \
+  '        | select( true' \
+  midflight '--pr 301' 'degraded (unattributed)' \
+  'a check still RUNNING would be read as an empty-state placeholder, fabricating degraded on every PR with CI mid-flight')"
+"$(row "M15c the empty-state predicate drops its .conclusion conjunct" \
+  '                  and ((.conclusion // "") == "")' \
+  '                  and true' \
+  midflight '--pr 301' 'degraded (unattributed)' \
+  'a concluded check with no status would be read as an empty-state placeholder')"
+"$(row "M20 absence is tested with // again instead of by length" \
+  '        | (firstnonempty(((.name // "") | tostring); ((.context // "") | tostring)) | clean)' \
+  '        | ((.name // .context // "(unnamed)") | clean)' \
+  emptyname '--pr 301' 'healthy' \
+  'an empty-string check name would be found, emitted and then silently discarded, and the probe would answer healthy')"
+"$(row "M21 truncation stops being consulted by the verdict" \
+  '      elif [ "$RUNS_TRUNCATED" != "no" ]; then' \
+  '      elif false; then' \
+  trunc '--pr 301' 'healthy' \
+  'a truncated page would earn clean, so an under-detected missing run would resolve healthy')"
+"$(row "M22 the check-name sanitiser drops back to control characters only" \
+  '      def clean: gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ");' \
+  '      def clean: gsub("[\u0000-\u001f\u007f]"; " ");' \
+  hostile '--pr 301' 'unsafe' \
+  'a bidi override in a fork-controlled job name would reach a reported field')"
 )
 
 mut_ran=0
@@ -1125,6 +1345,19 @@ for r in "${MUTANTS[@]}"; do
             ok "$m_label CAUGHT: $m_why"
         else
             bad "$m_label UNDETECTED: reason '$mut_reason' (unmutated: '$good_reason'); declared '$m_want'"
+        fi
+    elif [ "$m_wrong" = "unsafe" ]; then
+        # The harm is neither a verdict nor a reason: hostile text reaches a
+        # REPORTED field unsanitised. BOTH sides are asserted - the unmutated
+        # run must be clean and the mutant must not be - because checking only
+        # the mutant passes just as happily on a fixture carrying no hostile
+        # character at all, which is the state every fixture here was in.
+        good_unsafe="$(json_has_unsafe "$good_stdout")"
+        mut_unsafe="$(json_has_unsafe "$STDOUT")"
+        if [ "$mut_unsafe" = "yes" ] && [ "$good_unsafe" = "no" ]; then
+            ok "$m_label CAUGHT: $m_why"
+        else
+            bad "$m_label UNDETECTED: unmutated unsafe=$good_unsafe, mutant unsafe=$mut_unsafe"
         fi
     elif [ "$m_wrong" = "«exit»" ]; then
         if [ "$good_status" -eq 0 ] && [ "$STATUS" -ne 0 ]; then
@@ -1213,7 +1446,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=125
+EXPECTED_CASES=141
 CROSS_FILE_MUTANTS=4          # M16, M17, M18, M19
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + CROSS_FILE_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
