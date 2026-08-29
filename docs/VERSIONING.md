@@ -83,7 +83,7 @@ bash scripts/stamp-version.sh --dry-run  # preview without writing
 
 Commit the stamped manifest in the release PR — the committed value **is**
 the release. Never hand-edit `version`. After the merge, consumer machines
-still update manually (`claude plugin update sassy-dog@sassydog-skills`
+still update manually (`claude plugin update --scope <scope> sassy-dog@sassydog-skills`
 — see README "Updating / Troubleshooting", under "`claude plugin marketplace
 update` is not a plugin update", which is where the content check lives).
 
