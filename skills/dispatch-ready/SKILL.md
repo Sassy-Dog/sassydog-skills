@@ -465,12 +465,72 @@ drop a `declared (PR read failed)` entry — a degraded check is an outcome too.
 declared but the repo is not enabled for the preview, say so once rather than every tick:
 `stacks: #1720→#1722 declared but stacks unavailable in this repo — sequencing by dependency instead`.
 
-## 7. Terminal states — drain complete, drain stalled
+## 7. Terminal states — drain complete, drain stalled, drain degraded
 
-A drain loop ends itself in exactly two states. Both must be **confirmed from live GitHub state
+A drain loop ends itself in exactly three states. All must be **confirmed from live GitHub state
 read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live
 state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave
-the loop alone, write no stall record, and let the next tick re-check.
+the loop alone, write no stall or degraded record, and let the next tick re-check.
+
+### DRAIN DEGRADED
+
+**Evaluated BEFORE COMPLETE and STALLED, and that order is the rule rather than a presentation
+choice.** §7 already refuses to act on a tick whose live state could not be verified — *the tick
+proves nothing*. A degraded platform is that same condition arriving **without an error**: the
+reads succeed, return incomplete data, and COMPLETE and STALLED consume them as fact. Measured
+2026-08-26 — PR #283's required `ci` never fired during an outage, two consecutive ticks reported
+the state accurately and did nothing, and the coordinator then proposed closing and reopening the
+PR, which during an outage could leave it worse than doing nothing. Evaluating this state after
+the other two lets a degraded read produce a confident terminal verdict first.
+
+This state **consumes** `pr-shepherd`'s probe and never re-derives platform health itself:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/probe-platform-health.sh --pr "$PR" --repo "$REPO"
+```
+
+Run it against **ONE** in-flight PR, not each: the verdict is about the platform, not the PR, and
+a per-PR fan-out multiplies calls into a service already struggling.
+
+Three conjuncts, and each excludes a normal state the loop already handles:
+
+1. **In-flight is non-zero and nothing moved this tick** — no dispatch, no merge, no tracked PR
+   changing state. In-flight zero belongs to COMPLETE and STALLED; this state exists for the case
+   neither can see, where work EXISTS and cannot progress.
+2. **Nothing this loop is permitted to advance** — §2's discriminator, reused and unchanged. A
+   **red** check is a failure with its own redispatch path, so the loop still has an action and
+   this conjunct is false. A **pending** check that is genuinely queued is the loop waiting, not
+   the loop stuck. An active **foreign** claim resolves without a human.
+3. **The probe returns a `degraded` verdict** — `degraded (attributed)` or `degraded
+   (unattributed)`, and nothing else. **`unknown` is NOT degraded**, and it is the one a later
+   *these both mean trouble* sweep will fold in: `unknown` means the probe could not measure,
+   which is precisely the state that must not stop a loop. `healthy` is not degraded either — if
+   the platform is fine and work is stuck, that is STALLED's question or a real defect, and
+   stopping the loop would hide it.
+
+**Two-tick confirmation, the same shape as STALLED and for the same reason**: a flaky call is not
+an outage. The record is `.git/dispatch-ready-degraded.json` — its **own** file, not the stall
+record. They answer different questions, a tick can legitimately be mid-confirmation on neither,
+one, or both, and sharing one file would let either confirmation clear the other's clock.
+
+- **No record** → write this tick's verdict and finish normally, appending to the tick report:
+  `degraded: suspected — <verdict>; a second degraded tick ends the loop`.
+- **Record present** → DEGRADED is confirmed. Delete the record and announce loudly:
+
+```text
+DRAIN DEGRADED — the platform is degraded and nothing in flight can progress:
+  probe: degraded (attributed) — Actions: major_outage
+  in flight: #286 (PR #305 — required check `ci` has no run for the head)
+Loop <id> cancelled — the platform recovers on its own; restart the drain once it has.
+```
+
+Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one.
+
+Any tick that dispatches, merges, or reads a `healthy` verdict deletes a leftover
+`.git/dispatch-ready-degraded.json`: recovery resets the confirmation clock exactly as progress
+resets the stall clock. An `unknown` verdict **leaves the record alone** — it is neither progress
+nor degradation, and clearing on it would let one unreadable status page reset a genuine two-tick
+outage count indefinitely.
 
 ### DRAIN COMPLETE
 
@@ -707,7 +767,9 @@ prompt is this dispatch-ready invocation.
   the candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is
   worse than a few extra no-op ticks.
 
-Safety rails: self-cancel ONLY on a terminal state confirmed above. For COMPLETE, anything still
+Safety rails: self-cancel ONLY on a terminal state confirmed above. For DEGRADED, a single
+degraded tick, a `healthy` verdict, an `unknown` verdict, a red check, a genuinely pending check
+or an active foreign claim all mean the loop may still make progress — stay alive. For COMPLETE, anything still
 claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until
 actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over
 the same set, or the state they disagree about ticks forever.
