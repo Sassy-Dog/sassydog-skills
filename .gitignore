@@ -2,3 +2,8 @@
 node_modules/
 *.log
 .claude/worktrees/
+
+# Scratch space for throwaway artifacts (screenshots, HAR dumps, scratch
+# scripts). Ignored so a scratch file cannot be committed by accident, and
+# ignored by markdownlint too -- a scratch .md here must not redden preflight.
+tmp/
