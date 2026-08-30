@@ -106,11 +106,17 @@
 # nothing, and reported `clean` -> `healthy` on a branch whose CI had never
 # started. That is #285 one step EARLIER than the incident it was written for,
 # and the dominant branch shape in this org. So each first-party check reports
-# whether it could RUN, and `clean` requires that at least one of them did:
-#   * the run comparison runs only with at least one prior head on the branch
-#     AND a non-empty intersection across them (an empty one compared nothing);
-#   * the empty-state check runs only with a non-empty rollup.
-# ONLY THE RUN COMPARISON EARNS `clean`. The empty-state check is a real signal
+# whether it could RUN. ONLY THE RUN COMPARISON EARNS `clean` -- the sentence
+# that used to stand here said `clean` requires that "at least one of them did"
+# and then listed BOTH checks, which is the exact inverse of the rule four lines
+# below it, in the same paragraph. A reader who stopped at the list concluded
+# the empty-state check could earn `clean`, which is the door the rule exists to
+# nail shut. `ROLLUP_CHECK` is REPORTED in `checks_run` and contributes
+# anomalies; it is consulted by no verdict path at all.
+# The run comparison earns `clean` only with at least one prior head on the
+# branch, a non-empty intersection across them (an empty one compared nothing),
+# a head past the age floor, an untruncated runs page, and a rollup that is not
+# empty while runs exist on this head. The empty-state check is a real signal
 # but it detects a MALFORMED rollup entry and can never detect an ABSENT one —
 # which is #285's headline signal — so a rollup that simply lacks `ci` looks
 # identical to a healthy one through it. Accepting it as sufficient left this
@@ -118,8 +124,11 @@
 # rollup on a single-commit branch reported `healthy`.
 # Not earned -> `not_measured`, whose green-page row is `unknown`, and the
 # REASON is preserved rather than blanked — `no_prior_heads`,
-# `no_required_baseline` and `head_too_fresh` are precisely why the verdict is
-# not a measurement.
+# `no_required_baseline`, `head_too_fresh`, `runs_page_truncated`,
+# `rollup_empty_with_runs`, `head_age_unknown`, `run_comparison_failed`,
+# `pr_read_failed`, `probe_errors_present`, `no_pr_given` and
+# `nothing_measurable` are precisely why the verdict is not a measurement. That
+# list is the full set the code emits; if you add a reason, add it here.
 #
 # A gh TRANSPORT FAILURE IS `not_measured`, NOT AN ANOMALY, and this is a
 # deliberate reading of #285 rather than a slip. #285 lists "gh calls erroring
@@ -160,13 +169,21 @@
 # THE BASELINE IS AN INTERSECTION, NOT A UNION, and the whitelist beside it is
 # the other half of the same guard. A workflow legitimately absent from one head
 # is ordinary: `paths:`/`paths-ignore:` filters (the norm in the monorepos this
-# ships to), an `if:` condition, a workflow this very PR renames or deletes. So
+# ships to), an `if:` condition. So
 # a workflow counts as missing only if it ran on EVERY prior head examined and
 # on none of the current one. And only head-triggered events are compared at
 # all — a `workflow_dispatch` or `schedule` run on a prior head can never recur
 # on this one, so a union-and-blacklist reading reports it missing forever.
-# KNOWN LIMIT, stated rather than patched: a path filter that matched every
-# prior head and not this one still reports a missing run. That is why this
+# KNOWN LIMIT, stated rather than patched, and it has TWO shapes rather than
+# one. (a) A path filter that matched every prior head and not this one still
+# reports a missing run. (b) A workflow THIS VERY PR renames or deletes does
+# too, and that shape was wrongly listed above as covered — the intersection
+# guard makes a workflow ordinary when it is absent from SOME PRIOR head, and a
+# deletion is absent from the CURRENT one, which is the opposite arrangement.
+# Measured: prior heads running CI+Docs and a current head running CI only
+# returns `degraded (unattributed)` naming `Docs`, i.e. the probe attributes the
+# PR-s own change to the platform. Listing it as handled was worse than not
+# mentioning it, because the next maintainer would not add it here. That is why this
 # verdict is `unattributed` and why the probe gates nothing — a false positive
 # costs an explanation, never a decision.
 #
@@ -176,15 +193,25 @@
 #   OVER-detect: dropping a whole prior head takes `required` from ["CI"] to
 #     ["CI","Docs"] on a branch where a path filter had skipped that head, and
 #     fabricates a missing-run anomaly.
-#   UNDER-detect, and this is the direction that reaches `healthy`: the page
+#   UNDER-detect, and this WAS the direction that reached `healthy`: the page
 #     boundary lands INSIDE the oldest included head's run set, so that head
 #     contributes a TRUNCATED set, the intersection shrinks, and a genuinely
-#     missing workflow drops out of `required`. Measured on one fixture, the
-#     full page gives `degraded (unattributed)` and the truncated page gives
-#     `healthy`.
-# `truncated` is emitted so a caller can see when either is possible. It gets
-# likelier on busy branches, which is one more reason the verdict this feeds is
-# `unattributed` and the probe gates nothing.
+#     missing workflow drops out of `required`. Measured on two fixtures
+#     differing ONLY in truncation, same underlying reality: the full page gave
+#     `degraded (unattributed)` and the 100-run page gave `healthy`.
+# That is now CLOSED. `truncated` was computed, reported, and then ignored by
+# the one decision that consumes it, which is why recording it as a known limit
+# was not enough. A truncated page no longer earns `clean`: it yields
+# `not_measured` with reason `runs_page_truncated`. The test is `!= "no"` and
+# not `= "yes"`, because `unknown` means the flag itself could not be read and
+# certifies nothing either.
+# `truncated` is still emitted, since suppressing the claim to completeness is
+# not the same as hiding why. The ACCEPTED COST is real and is not a defect:
+# on a branch with >= 100 head-triggered runs the probe can no longer emit
+# `healthy` at all, only `unknown`. Over-detection is unchanged and still
+# possible. Note also that `>= 100` against `per_page=100` cannot distinguish a
+# complete 100-run page from a truncated one, so a branch sitting at exactly
+# 100 is treated as truncated -- fail-closed, and deliberate.
 #
 # Read-only. Never merges, enqueues, re-runs, closes, reopens or comments.
 #
@@ -265,6 +292,31 @@ add_error() { # <scope: first_party|attribution> <kind> <detail>
 SELF="not_measured"
 SELF_REASON="no_pr_given"
 HEAD=""
+# ONE definition of what may not reach a reported field, injected into every jq
+# program that sanitises one. Written as CODEPOINTS rather than a regex class,
+# and that is forced rather than stylistic: the Unicode TAG BLOCK
+# (U+E0000-U+E007F) is the standard invisible ASCII-mirroring carrier for
+# prompt injection, it lives OUTSIDE the BMP, and jq's `\uXXXX` escape cannot
+# express a non-BMP codepoint at all -- so the regex class this replaces was
+# structurally incapable of covering the one carrier that matters most here,
+# no matter how carefully it was transcribed.
+#
+# A fork-PR author controls branch and job names; those reach `anomalies[].detail`
+# and `head_ref`; SKILL.md tells the coordinator -- which holds merge authority --
+# to REPORT that field; and this repo is PUBLIC by exception. Bidi alone was the
+# wrong threat model.
+#
+# Covered: C0 (<32), DEL, U+0085 NEL, U+061C ALM, U+200E/U+200F, U+2028/U+2029
+# line+paragraph separators, U+202A-U+202E bidi embedding/override,
+# U+2066-U+2069 bidi isolates, U+E0000-U+E007F tag block.
+# Each is REPLACED by a space, never deleted, so a sanitised value can never
+# become empty and re-enter the empty-name path this file already closed once.
+UNSAFE_JQ_DEF='def unsafe_cp: . < 32 or . == 127 or . == 133 or . == 1564
+    or (. >= 8206 and . <= 8207) or (. >= 8232 and . <= 8233)
+    or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297)
+    or (. >= 917504 and . <= 917631);
+  def clean: explode | map(if unsafe_cp then 32 else . end) | implode;'
+
 BRANCH=""
 BRANCH_SAFE=""
 HEAD_AGE=""
@@ -305,7 +357,7 @@ if [ -n "$PR" ]; then
     # reaches a reported field; a site that drops back to the control-only form
     # re-opens exactly that hole, so the gate compares the sites to each other.
     BRANCH="$(jq -r '.headRefName // ""' <<<"$pr_raw")"
-    BRANCH_SAFE="$(jq -r '(.headRefName // "") | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")' <<<"$pr_raw")"
+    BRANCH_SAFE="$(jq -r "$UNSAFE_JQ_DEF"' (.headRefName // "") | clean' <<<"$pr_raw")"
     MERGE_STATE="$(jq -r '(.mergeStateStatus // "") | gsub("[^A-Z_]"; "")' <<<"$pr_raw")"
     if ! jq -e 'has("statusCheckRollup") and has("mergeStateStatus")' >/dev/null 2>&1 <<<"$pr_raw"; then
       HEAD=""
@@ -334,8 +386,7 @@ if [ -n "$pr_raw" ]; then
     # is safe here BECAUSE the sanitiser below strips control characters
     # first, so no emitted name can contain a newline; the capture is what
     # lets the exit status be checked at all.
-    empty_out="$(jq -r '
-      def clean: gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ");
+    empty_out="$(jq -r "$UNSAFE_JQ_DEF"'
       # `//` falls back only on null/false, so `.name // .context` KEEPS an
       # empty-string name and the entry then vanishes at the `[ -n "$ck" ]`
       # guard below — found, emitted, silently discarded, verdict `healthy`.
@@ -471,6 +522,26 @@ if [ -n "$HEAD" ]; then
         # RUN_CHECK here would certify a comparison that had no subject, which
         # is the `clean`-means-measured door one more layer down.
         SELF_REASON="no_required_baseline"
+      elif [ "${rollup_n:-0}" -eq 0 ] && [ "$n_cur" -gt 0 ]; then
+        # An EMPTY rollup beside runs that DID happen on this head is two API
+        # surfaces contradicting each other, which is #285 itself in its most
+        # extreme form: `gh pr view --json statusCheckRollup` exiting 0 with
+        # fewer checks than reality, here with ALL of them missing. The
+        # empty-state read is skipped entirely when the rollup has no entries
+        # (there is nothing to iterate), so `ROLLUP_CHECK` stays `not_run`, no
+        # anomaly is raised, and the run comparison earned `clean` UNOPPOSED.
+        # Measured: verdict `healthy`, zero anomalies, zero probe_errors.
+        #
+        # The sibling this file must agree with already refuses the same shape:
+        # `merge-shepherd.sh` carries a dedicated empty-rollup gate on the
+        # principle that `CLEAN` plus zero checks is not green. The probe held
+        # both halves of the contradiction — `rollup_n` and `n_cur` — and
+        # compared them nowhere.
+        #
+        # `n_cur > 0` is the whole guard: a repo with no CI at all has an empty
+        # rollup AND no runs, which is ordinary and must stay `clean`. This
+        # fires only when runs exist and the rollup denies them.
+        SELF_REASON="rollup_empty_with_runs"
       elif [ "$RUNS_TRUNCATED" != "no" ]; then
         # A TRUNCATED page cannot certify completeness. The header states this
         # cuts both ways and names under-detection as the direction that
@@ -503,7 +574,7 @@ if [ -n "$HEAD" ]; then
         fi
       else
         missing_rc=0
-        missing_out="$(jq -r '.missing[] | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")' <<<"$derived")" || missing_rc=$?
+        missing_out="$(jq -r "$UNSAFE_JQ_DEF"' .missing[] | clean' <<<"$derived")" || missing_rc=$?
         if [ "$missing_rc" -ne 0 ]; then
           # Same rule as the rollup generator: RUN_CHECK was set above, so a
           # silent failure here would certify a comparison it discarded.
@@ -586,6 +657,25 @@ if command -v curl >/dev/null 2>&1; then
         elif ((type == "object")
               and (((.components | type) == "array") or ((.incidents | type) == "array")) | not)
         then "unknown"
+        # A payload carrying NEITHER a component nor an incident answers
+        # nothing. It is not a green platform, it is a page with no content,
+        # and reading it as `operational` resolves `healthy` through whatever
+        # is actually happening.
+        elif ((((.components // []) | length) == 0)
+              and (((.incidents // []) | length) == 0)) then "unknown"
+        # A scope matching NO component name cannot answer either, and this is
+        # the door an OPERATOR opens by accident. `relevant` asks whether a
+        # component NAME CONTAINS a scope token, so the MORE SPECIFIC value
+        # `github actions` matches the component `Actions` not at all while
+        # `actions` matches it: a plausible-looking PLATFORM_STATUS_COMPONENTS
+        # override silently disables attribution AND manufactures `operational`
+        # through a live outage. Measured, Actions in `major_outage`:
+        # `actions,api requests` -> incident, `github actions` -> operational,
+        # `zzz-nope` -> operational. An EMPTY scope was already `unknown` for
+        # exactly this reason; a scope that filters to nothing is the same fact
+        # arriving one step later, and it was the THIRD door into `healthy`.
+        elif ((((.components // []) | length) > 0)
+              and (([ .components[]? | select(relevant(.name)) ] | length) == 0)) then "unknown"
         else
           ([ .components[]? | select((.status // "") != "operational") | select(relevant(.name)) ]) as $comp
           | ([ .incidents[]?
@@ -601,7 +691,7 @@ if command -v curl >/dev/null 2>&1; then
     fi
     case "$STATUS" in
       incident)
-        STATUS_DETAIL="$(jq -r --arg comps "$STATUS_COMPONENTS" '
+        STATUS_DETAIL="$(jq -r "$UNSAFE_JQ_DEF" --arg comps "$STATUS_COMPONENTS" '
           ($comps | ascii_downcase | split(",") | map(sub("^ +";"") | sub(" +$";"")) | map(select(length > 0))) as $rel
           | (if (.status | type) == "object" then (.status.indicator // "") else "" end) as $ind
           | (($ind == "major") or ($ind == "critical")) as $broad
@@ -616,7 +706,7 @@ if command -v curl >/dev/null 2>&1; then
               ( [ .components[]? | select((.status // "") != "operational")
                   | select(relevant(.name)) | "\(.name): \(.status)" ] | join("; ") )
             ] | map(select(. != "")) | join(" | ")
-            | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")
+            | clean
         ' <<<"$status_raw" 2>/dev/null)"
         # The gsub above is what strips BIDI; `tr` is byte-oriented and cannot
         # match a multibyte RLO at all, so it is kept only as a belt-and-braces
@@ -626,10 +716,14 @@ if command -v curl >/dev/null 2>&1; then
         [ -n "$STATUS_DETAIL" ] || STATUS_DETAIL="an incident is open on a check-relevant component" ;;
       operational)
         STATUS_DETAIL="no check-relevant component is impaired"
-        page_desc="$(jq -r '(if (.status | type) == "object" then (.status.description // "") else "" end) | gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ")' <<<"$status_raw" 2>/dev/null | tr -d '\000-\037\177')"
+        page_desc="$(jq -r "$UNSAFE_JQ_DEF"' (if (.status | type) == "object" then (.status.description // "") else "" end) | clean' <<<"$status_raw" 2>/dev/null | tr -d '\000-\037\177')"
         [ -z "$page_desc" ] || STATUS_DETAIL="$STATUS_DETAIL (page-wide: $page_desc)" ;;
       *)
-        STATUS_DETAIL="the status payload carried no recognisable status, incidents or components" ;;
+        # Covers THREE distinct ways attribution can fail, and must not assert
+        # any one of them: an unrecognisable payload, a payload carrying no
+        # components AND no incidents, and a configured scope that matched no
+        # component name. Naming only the first was false for the other two.
+        STATUS_DETAIL="the status page could not attribute: unrecognisable, empty, or no component matched the configured scope" ;;
     esac
   else
     add_error attribution status_unparsable "the status endpoint returned no parsable JSON"

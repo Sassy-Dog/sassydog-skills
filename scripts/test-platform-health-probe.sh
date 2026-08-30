@@ -306,13 +306,18 @@ RUNS_TRUNCATED_FULL="$(jq -cn '{workflow_runs:
 # green before this existed.
 BIDI_RLO="$(jq -rn '"\u202e"')"
 BIDI_LRM="$(jq -rn '"\u200e"')"
-PR_HOSTILE="$(jq -cn --arg rlo "$BIDI_RLO" --arg lrm "$BIDI_LRM" '{
+# U+E0041, in the Unicode TAG BLOCK — non-BMP, so it is written as a surrogate
+# pair. This is the character a regex class could not express at all, which is
+# why the shared class is codepoint arithmetic; without it in the fixture the
+# tag-block mutant has nothing to leak and its proof is vacuous.
+TAG_CHR="$(jq -rn '"\udb40\udc41"')"
+PR_HOSTILE="$(jq -cn --arg rlo "$BIDI_RLO" --arg lrm "$BIDI_LRM" --arg tag "$TAG_CHR" '{
   number:301, headRefOid:"aa11bb2",
   headRefName:("feat/x" + $rlo + "y" + $lrm + "z"),
   mergeStateStatus:"BLOCKED",
   statusCheckRollup:[
     {__typename:"CheckRun", name:"Analyze (actions)", status:"COMPLETED", conclusion:"SUCCESS"},
-    {__typename:"CheckRun", name:("CI" + $rlo + "job" + $lrm + "k"),
+    {__typename:"CheckRun", name:("CI" + $rlo + "job" + $lrm + "k" + $tag + "z"),
      status:"", conclusion:"", state:""}]}')"
 
 STATUS_GREEN='{"status":{"indicator":"none","description":"All Systems Operational"},
@@ -370,7 +375,7 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
     PLATFORM_STATUS_TIMEOUT=5 \
     PLATFORM_PROBE_MIN_AGE=300 \
-    PLATFORM_STATUS_COMPONENTS="actions,api requests,webhooks,pull requests,git operations" \
+    PLATFORM_STATUS_COMPONENTS="${SCOPE_OVERRIDE:-actions,api requests,webhooks,pull requests,git operations}" \
         bash "$script" --repo mock-org/mock-repo "$@" >"$WORK/stdout" 2>"$WORK/stderr"
     STATUS=$?
     STDOUT="$(cat "$WORK/stdout")"
@@ -397,13 +402,16 @@ errkinds() { jq -r '[.probe_errors[].kind] | sort | join(",")' <<<"$STDOUT" 2>/d
 #
 # Written as CODEPOINT arithmetic rather than a character class so this file
 # states the spec in a form that cannot be silently mangled by a copy: the
-# class is U+0000-U+001F, U+007F, U+200E/U+200F, U+202A-U+202E, U+2066-U+2069.
+# class is U+0000-U+001F, U+007F, U+0085, U+061C, U+200E/U+200F,
+# U+2028/U+2029, U+202A-U+202E, U+2066-U+2069 and the U+E0000-U+E007F tag block.
 # It is deliberately NOT harvested from the probe - that would let a probe which
 # narrowed its class narrow the assertion with it. Section 26's source-level
 # check is what compares the probe's own sites to each other.
 UNSAFE_JQ='def is_unsafe: explode | any(
-  . < 32 or . == 127 or . == 8206 or . == 8207
-  or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297));'
+  . < 32 or . == 127 or . == 133 or . == 1564
+  or (. >= 8206 and . <= 8207) or (. >= 8232 and . <= 8233)
+  or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297)
+  or (. >= 917504 and . <= 917631));'
 
 json_has_unsafe() { # <json text> -> yes|no
     local r
@@ -417,8 +425,10 @@ text_has_unsafe() { # <text> -> yes|no
     local r
     r="$(jq -rn --arg t "$1" '$t | explode | any(
             (. < 32 and . != 9 and . != 10 and . != 13) or . == 127
-            or . == 8206 or . == 8207
-            or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297))' 2>/dev/null)"
+            or . == 133 or . == 1564
+            or (. >= 8206 and . <= 8207) or (. >= 8232 and . <= 8233)
+            or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297)
+            or (. >= 917504 and . <= 917631))' 2>/dev/null)"
     if [ "$r" = "true" ]; then echo yes; else echo no; fi
 }
 
@@ -984,16 +994,16 @@ canon_blocks() { # <file> <heading> — one flattened block per line
 # Regenerate after a deliberate §2b edit; the trailing comment is the block's
 # opening words, so a drifted row says which paragraph moved.
 CANON_2B=(
-    "1622634225"   # A `gh` call that *errors* is already handled everywhere…
+    "1622634225"   # A `gh` call that *errors*…
     "1892531078"   # Run the probe when a watch has gone nowhere…
-    "2635286258"   # | rollup entry | this probe | poll-prs.sh | merge-shepherd.sh
-    "1899200383"   # So "the poller went quiet" is evidence for…
+    "2635286258"   # | rollup entry | probe | poll-prs | merge-shepherd
+    "67846098"   # So "the poller went quiet"…
     "3301345540"   # ```bash … probe-platform-health.sh --pr …
     "1562190426"   # It returns one of exactly **four** verdicts…
     "3181854606"   # | Verdict | What it means | … the four rows
-    "409465134"    # **A green status page is NOT evidence of health.**…
+    "409465134"   # **A green status page is NOT evidence of health.**…
     "2796344907"   # **An unreachable status endpoint contributes `unknown`**…
-    "3178527757"   # **There are two doors into `healthy`…**
+    "1330756923"   # `clean` also needs the age floor + untruncated page; **two doors**…
     "1955687869"   # **Never a gate.**…
 )
 canon_i=0
@@ -1142,24 +1152,72 @@ fi
 # probe's own sanitiser sites still agree with EACH OTHER? A site that drops
 # back to the control-only class is the finding itself, and a fixture only ever
 # covers the sites its own payload happens to reach.
-sani_sites="$(grep -c 'gsub("\[\\u0000' "$PROBE")"
-sani_classes="$(grep -o 'gsub("\[\\u0000[^"]*\]"' "$PROBE" | sort -u | wc -l | tr -d ' ')"
-if [ "$sani_classes" = "1" ]; then
-    ok "all reported-string sanitisers carry ONE identical character class"
+# The class is no longer a regex literal repeated per site: it is ONE jq
+# definition injected into every program that sanitises. That is forced, not
+# stylistic — the Unicode tag block is outside the BMP and jq's `\uXXXX`
+# escape cannot express it, so a regex class could not cover it at any number
+# of sites. So the question changed from "do the classes agree" to "is there
+# exactly one, and does every sanitising program get it".
+sani_def="$(grep -c "^UNSAFE_JQ_DEF='" "$PROBE")"
+sani_sites="$(grep -c '"\$UNSAFE_JQ_DEF"' "$PROBE")"
+if [ "$sani_def" = "1" ]; then
+    ok "there is exactly ONE definition of the unsafe class"
 else
-    bad "the reported-string sanitisers carry $sani_classes different classes; they must be one"
+    bad "found $sani_def definitions of the unsafe class; there must be exactly one"
+fi
+if grep -q 'gsub("\[\\u0000' "$PROBE"; then
+    bad "a per-site regex sanitiser class is back; it cannot express the non-BMP tag block"
+else
+    ok "no per-site regex class remains, so no site can silently lose the tag block"
 fi
 # Vacuity floor: a census that stopped matching would report "one class" while
 # measuring nothing at all, which is how a clean tree and a broken extractor
 # look identical.
 if [ "${sani_sites:-0}" -ge 5 ]; then
-    ok "and the census still finds them ($sani_sites sites, floor 5)"
+    ok "and every sanitising program is injected with it ($sani_sites sites, floor 5)"
 else
     bad "the sanitiser census found only $sani_sites sites (floor 5) - the extractor is broken, not the tree"
 fi
 
 # ==============================================================================
-echo "27. mutations" >&2
+echo "27. the OTHER two doors into healthy, both found after the first three fixes" >&2
+# The header's "two doors" is a TAXONOMY (first-party, attribution), not a count
+# of bugs. These are two more concrete paths through it, and both reported
+# `healthy` on a platform that was not.
+
+# Door 3 (attribution). `relevant` asks whether a component NAME CONTAINS a
+# scope token, so the MORE SPECIFIC `github actions` matches the component
+# `Actions` not at all. An operator-settable value therefore silently disabled
+# attribution AND manufactured `operational` through a live incident.
+SCOPE_OVERRIDE="github actions"
+D="$(scenario narrowscope "$PR_CLEAN" "$RUNS_CLEAN" 3600 incident)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "a scope matching NO component is unknown, never healthy" "unknown"
+expect_field "and the status page is unknown, not a manufactured operational" '.status_page' "unknown"
+unset SCOPE_OVERRIDE
+# The control: the SAME payload under a scope that does match still attributes.
+D="$(scenario widescope "$PR_CLEAN" "$RUNS_CLEAN" 3600 incident)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "while a scope that DOES match still attributes the incident" "degraded (attributed)"
+
+# Door 4 (first-party). An empty rollup skips the empty-state read entirely —
+# there is nothing to iterate — so `ROLLUP_CHECK` stays `not_run`, no anomaly is
+# raised, and the run comparison earns `clean` UNOPPOSED. That is #285's own
+# shape at its most extreme: `gh pr view` exiting 0 with ALL checks missing.
+# `merge-shepherd.sh` already refuses it; the probe held both halves of the
+# contradiction and compared them nowhere.
+D="$(scenario emptyrollup "$PR_EMPTY_ROLLUP" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "an empty rollup beside runs that DID happen is unknown, never healthy" "unknown"
+expect_field "and the reason names the contradiction" '.self_measured_reason' "rollup_empty_with_runs"
+# The control that keeps this from being blanket pessimism: a repo with no CI at
+# all has an empty rollup AND no runs, which is ordinary.
+D="$(scenario nocirepo "$PR_EMPTY_ROLLUP" "$RUNS_EMPTY" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_field "a repo with no CI at all is not blamed for it" '.self_measured_reason' "no_prior_heads"
+
+# ==============================================================================
+echo "28. mutations" >&2
 MUTANT="$WORK/mutant.sh"
 apply_mutation() { # <label> <exact from-line> <to-line> [source] [dest]
     local label="$1" from="$2" to="$3" src="${4:-$PROBE}" dst="${5:-$MUTANT}" rc=0
@@ -1313,16 +1371,41 @@ MUTANTS=(
   '      elif false; then' \
   trunc '--pr 301' 'healthy' \
   'a truncated page would earn clean, so an under-detected missing run would resolve healthy')"
-"$(row "M22 the check-name sanitiser drops back to control characters only" \
-  '      def clean: gsub("[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]"; " ");' \
-  '      def clean: gsub("[\u0000-\u001f\u007f]"; " ");' \
+"$(row "M22 the unsafe class loses the Unicode TAG BLOCK" \
+  '    or (. >= 917504 and . <= 917631);' \
+  '    ;' \
   hostile '--pr 301' 'unsafe' \
-  'a bidi override in a fork-controlled job name would reach a reported field')"
+  'the standard invisible ASCII-mirroring carrier for prompt injection would reach a reported field')"
+"$(row "M22b the unsafe class loses the bidi overrides" \
+  '    or (. >= 8234 and . <= 8238) or (. >= 8294 and . <= 8297)' \
+  '    or false' \
+  hostile '--pr 301' 'unsafe' \
+  'an RLO in a fork-controlled job name would reach a reported field')"
+"$(row "M23 the scope-matches-nothing guard is removed" \
+  '        elif ((((.components // []) | length) > 0)' \
+  '        elif (false and (((.components // []) | length) > 0)' \
+  narrowscope '--pr 301' 'healthy' \
+  'an operator-settable component scope matching nothing would classify a live outage operational' \
+  'github actions')"
+"$(row "M24 the empty-rollup contradiction guard is removed" \
+  '      elif [ "${rollup_n:-0}" -eq 0 ] && [ "$n_cur" -gt 0 ]; then' \
+  '      elif false; then' \
+  emptyrollup '--pr 301' 'healthy' \
+  'an empty rollup beside runs that did happen would let the run comparison earn clean unopposed')"
 )
 
 mut_ran=0
 for r in "${MUTANTS[@]}"; do
-    IFS="$US" read -r m_label m_from m_to m_dir m_args m_wrong m_why <<<"$r"
+    IFS="$US" read -r m_label m_from m_to m_dir m_args m_wrong m_why m_scope <<<"$r"
+    # OPTIONAL 8th field. A mutant whose harm only appears under a particular
+    # PLATFORM_STATUS_COMPONENTS must run under it for BOTH arms — the baseline
+    # too, or the comparison is against a different configuration than the
+    # mutant and the proof is meaningless. Measured: without this, M23 ran both
+    # arms under the default scope, both returned the same verdict, and the
+    # mutant reported UNDETECTED for a reason that had nothing to do with the
+    # guard it removes. Rows omitting the field leave it empty, and run_probe
+    # falls back to the default scope.
+    SCOPE_OVERRIDE="$m_scope"
     apply_mutation "$m_label" "$m_from" "$m_to" || continue
     mut_ran=$((mut_ran + 1))
     # Baseline first: the SHIPPED script on the very same scenario. Without it a
@@ -1370,6 +1453,7 @@ for r in "${MUTANTS[@]}"; do
     else
         bad "$m_label UNDETECTED: the mutant returned '$VERDICT' (unmutated: '$good_verdict'); the declared wrong verdict was '$m_wrong'"
     fi
+    unset SCOPE_OVERRIDE
 done
 if [ "$mut_ran" -eq "${#MUTANTS[@]}" ]; then
     ok "every declared probe mutant ran (${#MUTANTS[@]} of ${#MUTANTS[@]})"
@@ -1446,7 +1530,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=141
+EXPECTED_CASES=148
 CROSS_FILE_MUTANTS=4          # M16, M17, M18, M19
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + CROSS_FILE_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
