@@ -796,6 +796,18 @@ section_of() { # <file> <heading prefix>
 # as "not found" — so every must-NOT-name assertion below failed OPEN, which is
 # gate 30's whole subject (#256) landing on the gate that exists to refuse
 # exactly this class of silent pass.
+# region_text <file> <start heading prefix> <end heading prefix> — `section_of`
+# stops at the NEXT `##+ ` line, which truncates any section that has
+# subheadings: §7 ends at `### DRAIN DEGRADED` and §4 at `### Collision`, so a
+# scan over either measured a fraction of it and reported clean. This one is
+# bounded by an explicit end heading instead.
+region_text() {
+    awk -v h="$2" -v e="$3" '
+        substr($0, 1, length(h)) == h { inseg = 1; next }
+        inseg && substr($0, 1, length(e)) == e { exit }
+        inseg { print }
+    ' "$1" | tr '\n' ' ' | tr -s ' \t'
+}
 section_text() { # <file> <heading prefix>
     local s
     s="$(section_of "$1" "$2")"
@@ -855,8 +867,15 @@ fi
 # redispatch sites do not live in pr-shepherd at all. #285's scope note is
 # explicit that ACTING on the verdict is separate work, so naming the probe in
 # any of these is a deliberate change that must come back through this gate.
+# `dispatch-ready/SKILL.md` is NOT here, and its absence is a scoped decision
+# rather than an exemption (#286). Its §7 legitimately consults the verdict to
+# reach DRAIN DEGRADED — a decision to STOP, which writes nothing — while its
+# §2 and §4, the hold/merge/redispatch and selection surfaces, must not. That is
+# the same shape this gate already applies to pr-shepherd's own file, whose §2b
+# legitimately uses the vocabulary: SECTION-scoped, never file-scoped. The
+# section scan is below, and it carries a POSITIVE control so the carve-out
+# cannot silently widen from "§7 may" to "the file may".
 DECISION_DOCS=(
-    "$REPO_ROOT/skills/dispatch-ready/SKILL.md"
     "$REPO_ROOT/skills/take-it/SKILL.md"
     "$REPO_ROOT/skills/send-it/SKILL.md"
 )
@@ -877,6 +896,38 @@ if [ -z "$vocab_hits" ]; then
 else
     bad "a decision surface consults the platform verdict by name rather than by filename: $vocab_hits"
 fi
+# dispatch-ready's ACTION sections. §7 may name the probe (#286); §2 and §4 may
+# not — those are where a PR is held, merged, redispatched or an issue selected,
+# and #285's never-a-gate rule is drawn on exactly that act-vs-stop line.
+DR_SKILL="$REPO_ROOT/skills/dispatch-ready/SKILL.md"
+dr_vocab=""
+for spec in "## 2. Reconcile in-flight|## 3. Compute capacity" "## 4. Select from Ready|## 5."; do
+    heading="${spec%%|*}"; endh="${spec##*|}"
+    dr_text="$(region_text "$DR_SKILL" "$heading" "$endh")"
+    [ -n "$dr_text" ] || dr_vocab="$dr_vocab$heading: EMPTY SECTION (renamed? the scan over it is vacuous)"$'\n'
+    for lit in "${VERDICT_VOCAB[@]}"; do
+        if grep -qF -- "$lit" <<<"$dr_text"; then dr_vocab="$dr_vocab$heading: $lit"$'\n'; fi
+    done
+    if grep -qF -- "probe-platform-health" <<<"$dr_text"; then
+        dr_vocab="$dr_vocab$heading: names the probe script"$'\n'
+    fi
+done
+if [ -z "$dr_vocab" ]; then
+    ok "dispatch-ready's ACTION sections (2, 4) consult neither the probe nor its vocabulary"
+else
+    bad "dispatch-ready wired the verdict into an action surface, which #285 forbids and #286 does not license: $dr_vocab"
+fi
+
+# POSITIVE CONTROL. The carve-out is "§7 may", and a scan that finds the verdict
+# nowhere in dispatch-ready would report the two assertions above as clean while
+# measuring a file in which #286 was reverted. So §7 must actually name it.
+dr_s7="$(region_text "$DR_SKILL" "### DRAIN DEGRADED" "### DRAIN COMPLETE")"
+if grep -qF -- "probe-platform-health" <<<"$dr_s7" && grep -qF -- "degraded (attributed)" <<<"$dr_s7"; then
+    ok "and §7 DOES name the probe and its vocabulary, so the carve-out is live rather than vacuous"
+else
+    bad "§7 no longer consults the probe — #286's DRAIN DEGRADED is gone, and the scans above prove nothing"
+fi
+
 # pr-shepherd's OWN decision sections are the nearest surface of all and were
 # in neither corpus above — the filename check covers them, but the filename is
 # not how a gating rule gets written. Its §2b legitimately uses the vocabulary,
@@ -1005,6 +1056,7 @@ CANON_2B=(
     "2796344907"   # **An unreachable status endpoint contributes `unknown`**…
     "1330756923"   # `clean` also needs the age floor + untruncated page; **two doors**…
     "1955687869"   # **Never a gate.**…
+    "2952808899"   # **ONE carve-out** — a decision to STOP, #286
 )
 canon_i=0
 canon_bad=""
@@ -1530,7 +1582,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=148
+EXPECTED_CASES=150
 CROSS_FILE_MUTANTS=4          # M16, M17, M18, M19
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + CROSS_FILE_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then

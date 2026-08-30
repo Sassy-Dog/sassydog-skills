@@ -659,7 +659,7 @@
 #      the mock's label store is seeded from the `taxonomy` emitter, gate 8's
 #      no-third-copy rule. Mock gh only: no repo, no network.
 #  32. drain terminal-state tests (scripts/test-drain-terminal-states.sh) —
-#      `dispatch-ready` §7's two terminal states must COVER the state where
+#      `dispatch-ready` §7's terminal states must COVER the state where
 #      Ready is empty, in-flight is zero, and an open unmerged PR sits there
 #      that this loop is not permitted to advance (issue #282). They did not:
 #      COMPLETE is vetoed by the open PR and STALLED required Ready non-empty,
@@ -779,6 +779,17 @@
 #      which catch a literal DELETION and nothing subtler. That asymmetry is
 #      measured and stated rather than papered over by widening the greps.
 #      Two tracked files, no gh, no network.
+#      IT NOW PINS A THIRD TERMINAL STATE (issue #286). DRAIN DEGRADED ends a
+#      loop that is ticking into a void under a platform outage: measured, an
+#      18-tick three-hour run that reported the state accurately, did nothing,
+#      and then proposed closing and reopening a PR mid-outage. It CONSUMES
+#      #285's probe rather than re-deriving health, is EVALUATED FIRST because
+#      a degraded platform is exactly when COMPLETE's and STALLED's live reads
+#      stop being trustworthy, and reaches the SAME stop path — a second cancel
+#      implementation is the defect, not the feature. `unknown` is deliberately
+#      NOT degraded and is the collapse a later sweep will make: it means the
+#      probe could not measure, which is precisely the state that must not stop
+#      a loop. COMPLETE and STALLED are untouched.
 #  33. audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh) — the
 #      nine `*-reviewer` agents serve TWO orchestrators and only one of them
 #      scored a reviewer that came back with nothing. `pr-review-orchestrator`
