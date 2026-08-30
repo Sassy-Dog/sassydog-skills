@@ -12,5 +12,5 @@
     "MD029": false, // ordered-list prefixes — template fences interrupt numbering by design
     "MD003": false  // heading style — template render-rule comments before frontmatter confuse style inference
   },
-  "ignores": ["node_modules", ".claude/worktrees", ".superpowers"]
+  "ignores": ["node_modules", ".claude/worktrees", ".superpowers", "tmp"]
 }
