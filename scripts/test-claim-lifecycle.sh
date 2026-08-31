@@ -195,6 +195,30 @@ case "$cmd" in
                 desc=$(printf '%s' "$line" | cut -f3)
                 jq -n --arg c "$color" --arg d "$desc" \
                     '{color: $c, description: $d}' | jq -r "${jq_expr:-.}" ;;
+            graphql)
+                # The claim-cycle timeline (#287). A row is
+                #   number<TAB>assigned_at<TAB>inprogress_labeled_at
+                # and an EMPTY label time models an issue that was never
+                # claimed — the operator's own self-assignment, which is the
+                # shape this whole conjunct exists to tell apart.
+                if [ "${MOCK_FAIL_TIMELINE:-0}" = "1" ]; then
+                    echo "gh: HTTP 502 Bad Gateway" >&2
+                    exit 1
+                fi
+                gnum=""
+                for a in "$@"; do
+                    case "$a" in num=*) gnum="${a#num=}" ;; esac
+                done
+                line=$(row "$MOCK_TIMELINE" "$gnum")
+                g_as=$(printf '%s' "$line" | cut -f2)
+                g_lb=$(printf '%s' "$line" | cut -f3)
+                jq -n --arg me "${MOCK_LOGIN:-tester}" --arg a "$g_as" --arg l "$g_lb" '
+                    { data: { repository: { issue: { timelineItems: { nodes:
+                        ( (if $a == "" then [] else
+                            [{__typename:"AssignedEvent", createdAt:$a, assignee:{login:$me}}] end)
+                        + (if $l == "" then [] else
+                            [{__typename:"LabeledEvent", createdAt:$l, label:{name:"in-progress"}}] end)
+                        ) } } } } }' ;;
             *) echo "mock gh: unhandled api path: $path" >&2; exit 1 ;;
         esac ;;
     issue)
@@ -324,7 +348,36 @@ BLOCKED="blocked"
     printf '14\ttester,someone-else\t\tOPEN\n'
     printf '15\t\tbug,sev:high\tOPEN\n'
     printf '16\ttester\t\tCLOSED\n'
+    printf '17\ttester\t\tOPEN\n'
+    printf '18\ttester\t\tOPEN\n'
 } >"$MOCK_ISSUES"
+
+# The claim-cycle timeline (#287). Every shape above that is assigned to @me
+# needs a row, because the fourth conjunct reads it before clearing anything.
+#
+# The DEFAULT pair mirrors what was MEASURED on a real claim: `claim` writes the
+# label and the assignee in ONE `gh issue edit`, and they do NOT share a
+# timestamp — the label lands one second BEFORE the assignment. A fixture with
+# identical timestamps would let a `>=` rule pass that real residue defeats, so
+# the ordering is part of the fixture rather than an incidental detail.
+#
+#   17  @me, assigned LONG AFTER the last claim cycle -> self-assignment
+#   18  @me, never claimed at all (no label event)     -> self-assignment
+export MOCK_TIMELINE="$WORK/timeline.tsv"
+{
+    printf '10\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n'
+    # 11 carries a PAST @me claim cycle even though a human holds it now — @me
+    # claimed it, released, and someone took it. Without this row the FOURTH
+    # conjunct is what stops the clear rather than the arm under test, and M1
+    # and M6 report `UNDETECTED` for a reason unrelated to what they mutate.
+    # Measured: they did exactly that until this row existed.
+    printf '11\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n' 
+    printf '12\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n'
+    printf '14\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n'
+    printf '16\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n'
+    printf '17\t2026-08-30T18:00:00Z\t2026-08-30T14:38:41Z\n'
+    printf '18\t2026-08-30T18:00:00Z\t\n'
+} >"$MOCK_TIMELINE"
 
 # --- helpers -----------------------------------------------------------------
 # OUT/ERR/RC hold the last run; EDITS holds only the `issue edit` lines it wrote.
@@ -460,6 +513,57 @@ elif ! has "$(detail_of)" "CLOSED"; then
     bad "(f) the closed issue was left alone but the reason did not say why: '$(detail_of)'"
 else
     ok "(f) a CLOSED issue keeps its assignee: the who-shipped-it record survives promote"
+fi
+
+# --- 3b. the operator's OWN self-assignment (issue #287) ---------------------
+# `@me` is the operator's personal login, not a loop identity, so the three
+# conjuncts above are true of loop residue AND of an issue the human running the
+# loop assigned to themselves. The discriminator is whether `in-progress` was
+# ever LABELLED at that assignment, since `claim` writes both halves together.
+
+# (r1) assigned LONG AFTER the last claim cycle ended -> a fresh human act.
+run_claim promote 17
+if cleared; then
+    bad "(r1) promote stripped a self-assignment made after the last claim cycle: $EDITS"
+elif [ "$(result_of)" != "ok" ]; then
+    bad "(r1) promote did not complete: result=$(result_of)"
+elif ! has "$ERR" "self-assignment"; then
+    bad "(r1) nothing on stderr called it a self-assignment: $ERR"
+else
+    ok "(r1) an assignment made after the last cycle is left alone and REPORTED"
+fi
+
+# (r2) never claimed at all — no in-progress LabeledEvent anywhere.
+run_claim promote 18
+if cleared; then
+    bad "(r2) promote stripped an assignee on an issue that was never claimed: $EDITS"
+elif ! has "$ERR" "self-assignment"; then
+    bad "(r2) nothing on stderr called it a self-assignment: $ERR"
+else
+    ok "(r2) an issue that was never claimed keeps its assignee"
+fi
+
+# (r3) THE CONTROL. Without it (g) and (h) pass on a gate that clears nothing at
+# all, which is the same green a broken timeline probe produces.
+run_claim promote 10
+if cleared; then
+    ok "(r3) and genuine residue STILL clears, so the conjunct discriminates rather than just refusing"
+else
+    bad "(r3) the claim-cycle conjunct blocked genuine residue too — it refuses everything: $EDITS"
+fi
+
+# (r4) THE claim -> block -> promote PATH, decided explicitly (#287 acceptance 3).
+# `block` strips both labels and leaves the assignee, so this residue has no
+# close and no reopen anywhere in its history — a reopen-evidence conjunct would
+# miss it entirely. The in-progress LabeledEvent from the original claim is
+# still there, so it CLEARS, and that is the decision rather than a side effect.
+printf '19\ttester\t%s\tOPEN\n' "$BLOCKED" >>"$MOCK_ISSUES"
+printf '19\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n' >>"$MOCK_TIMELINE"
+run_claim promote 19
+if cleared; then
+    ok "(r4) claim -> block -> promote residue clears: no close, no reopen, but the claim cycle is in the timeline"
+else
+    bad "(r4) the block path's residue was not cleared, and #287 requires that path to be decided: $EDITS"
 fi
 
 # --- 4. the probe's transport ------------------------------------------------
@@ -886,6 +990,7 @@ MUTANTS=(
 "M9 short-read guard	    if [[ \"\$read_ok\" != \"1\" ]]; then	    if false; then	MOCK_SHORT_VIEW=1	promote 10	state-arm	a truncated probe result is reported as the state arm's verdict instead of malformed"
 "M10 the gate stops resetting its reported verdict	    RESIDUE_NOTE=\"\"	    :	-	promote 10 13	false-detail-13	one issue's REPORT leaks into the next one's JSON, claiming a write that never happened"
 "M8 not-found tolerance re-widened to promote	    promote) REMOVALS=() ;;	    promote) REMOVALS=(\"\$READY_LABEL\") ;;	MOCK_MISSING_LABEL=$READY	promote 10	false-clear	a promote that wrote nothing reports ok and claims the residue was cleared"
+"M12 the claim-cycle conjunct is neutered	    case \"\$cycle\" in	    case \"residue\" in	-	promote 18	cleared	without the claim-cycle conjunct, promote strips the OPERATOR's own self-assignment and a cold agent is dispatched onto work a human is already doing"
 "M11 removal-token match re-widened to the bare error string	                    if [[ \"\$err\" == *\"'\$rl'\"* ]]; then	                    if true; then	MOCK_MISSING_LABEL=$INPROG	claim 13	false-ok	a claim whose ADD half failed reports ok, so the loop believes an unclaimed issue was claimed and dispatches it again"
 )
 
@@ -1003,7 +1108,7 @@ fi
 # twice, and a live edition during review carried 24 against 22 actual cases —
 # adding one case while removing another nets zero and passes silently either
 # way, so the number that cannot be re-derived is at least only written once.
-EXPECTED_CASES=34
+EXPECTED_CASES=38
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"

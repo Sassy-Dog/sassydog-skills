@@ -282,6 +282,12 @@ fi
 # residue gate, which can only tell residue from a live claim by comparing the
 # assignee against @me. Degrades to no guard / no clear when unknown — an
 # unresolved login is unknown, and unknown is not verified.
+# Seconds of slack between a claim's LabeledEvent and its AssignedEvent. They
+# come from ONE `gh issue edit` and are NOT simultaneous — measured one second
+# apart, label first — so a zero grace rejects genuine residue. Wide enough to
+# hold a same-edit pair, narrow enough that an assignment made after the last
+# cycle ended is still a self-assignment. See promote_residue_gate() (#287).
+RESIDUE_GRACE=120
 ME=""
 if [[ "$SUB" == "claim" || "$SUB" == "promote" ]]; then
     ME=$(gh api user --jq .login 2>/dev/null || true)
@@ -327,19 +333,31 @@ fi
 #   - a probe that could not run (login unresolved, read failed, malformed
 #     result) — unknown is not verified.
 #
-# KNOWN LIMIT, stated rather than papered over. `@me` is the OPERATOR's login,
-# not a loop identity, so the loop's residue and the operator's own
-# self-assignment are byte-identical: an issue the operator assigned to
-# themselves without setting in-progress matches the shape above and its
-# assignment is cleared. #281 asserts the shape "cannot have come from anywhere
-# else"; that is true of any OTHER account and false of the operator's own, and
-# the honest form of the claim is the narrower one. Distinguishing them needs
-# positive evidence of a completed claim cycle (a closing-PR reference, a
-# reopen event, or a marker `release` leaves behind) — a fourth conjunct #281
-# does not sanction and whose absence its acceptance criteria depend on, so it
-# is filed as issue #287 rather than guessed at here. Note reopen evidence
-# ALONE is not the fix: `block` strips both labels and leaves the assignee, so
-# claim -> block -> promote is the same residue with no close in its history.
+# THAT LIMIT IS NOW CLOSED (issue #287), and the shape of the fix is worth more
+# than the fix. `@me` is the OPERATOR's login, not a loop identity, so the
+# loop's residue and the operator's own self-assignment were byte-identical:
+# an issue the operator assigned to themselves without setting in-progress
+# matched the three conjuncts above and had its assignment cleared. #281
+# asserts the shape "cannot have come from anywhere else"; that is true of any
+# OTHER account and false of the operator's own.
+#
+# The FOURTH conjunct is positive evidence of a completed claim cycle, and the
+# evidence chosen is deliberately NOT the obvious one. #281 named a closing-PR
+# reference or a reopen event; both miss the claim -> block -> promote path,
+# which produces the same residue with no close and no reopen anywhere in its
+# history, because `block` strips both labels and leaves the assignee. What
+# covers every path is the in-progress LABELLING itself: `claim` writes the
+# label and the assignee in ONE edit, so a real claim always leaves a
+# LabeledEvent beside its AssignedEvent and a self-assignment leaves an
+# AssignedEvent alone. See promote_residue_gate() for the grace window that
+# same-edit pair requires — the two events are NOT simultaneous, and a rule
+# without it rejects genuine residue.
+#
+# THE REMAINING LIMIT is narrower and is stated rather than closed: a human who
+# self-assigns an issue and then adds `in-progress` BY HAND has performed
+# something this gate cannot distinguish from a claim, because it is one in
+# every observable respect. Failing to clear stays the safe direction, so the
+# gate reports and a human clears by hand.
 #
 # `--force` deliberately does NOT widen this. It is claim's double-pick
 # override; letting it strip an assignee here would hand the loop a way to
@@ -405,6 +423,79 @@ promote_residue_gate() {  # $1=issue number
         echo "issue-claim: #$n is $state — the assignee records who shipped it, left alone" >&2
         return 0
     fi
+
+    # FOURTH CONJUNCT (#287) — positive evidence that a CLAIM CYCLE happened.
+    #
+    # The three conjuncts above are true of loop residue AND of an issue the
+    # OPERATOR self-assigned, because `@me` is the operator's personal login
+    # rather than a loop identity: `claim` assigns the human running the loop,
+    # and every session shares it. #281's "it cannot have come from anywhere
+    # else" is true of any OTHER account and false of the operator's own. Left
+    # there, `promote` strips a human's own assignment, §4 stops skipping the
+    # issue, and a cold worktree agent is dispatched onto work a human is
+    # already doing — the double-pick the claim guard exists to prevent,
+    # reached through the promotion path instead.
+    #
+    # The evidence is that `in-progress` was ever LABELLED on this issue at the
+    # time of the assignment. `claim` writes both halves in ONE `gh issue edit`,
+    # so a real claim always leaves a LabeledEvent beside its AssignedEvent;
+    # a human who self-assigns leaves an AssignedEvent alone.
+    #
+    # WHY A GRACE WINDOW, and why the obvious rule is wrong. The two events are
+    # written by one API call and DO NOT share a timestamp: measured on #286,
+    # `LabeledEvent in-progress` at 14:38:41Z and `AssignedEvent` at 14:38:42Z —
+    # the label lands one second BEFORE the assignment. So "the label event is
+    # at or after the assign event" rejects genuine residue. The test is
+    # `label >= assign - RESIDUE_GRACE` instead, which keeps a same-edit pair
+    # together while still refusing an assignment made minutes or days after the
+    # last claim cycle ended.
+    #
+    # This deliberately COVERS the claim -> block -> promote path, which has no
+    # close and no reopen anywhere in its history and which a reopen-evidence
+    # conjunct would miss: `block` strips both labels and leaves the assignee,
+    # so the LabeledEvent from the original claim is still the discriminator.
+    # That is #287's third acceptance item, decided rather than left to fall out.
+    #
+    # Timestamps are compared in jq (`fromdateiso8601`), never with `date`,
+    # which takes incompatible flags on BSD and GNU.
+    #
+    # DEGRADES TO NOT CLEARING. Failing to clear is the safe direction — it
+    # reports, and a human clears by hand — so an unreadable timeline, an
+    # unparsable payload or a missing `gh` all leave the assignee in place.
+    local tl cycle
+    if ! tl=$(gh api graphql -f query='
+        query($owner:String!,$name:String!,$num:Int!){
+          repository(owner:$owner,name:$name){
+            issue(number:$num){
+              timelineItems(last:100, itemTypes:[ASSIGNED_EVENT,LABELED_EVENT]){
+                nodes{ __typename
+                  ... on AssignedEvent { createdAt assignee { ... on User { login } } }
+                  ... on LabeledEvent  { createdAt label { name } } } } } } }' \
+        -F owner="${REPO%%/*}" -F name="${REPO##*/}" -F num="$n" 2>/dev/null); then
+        RESIDUE_NOTE="assignee '$assignees' left alone: claim-cycle history unreadable"
+        echo "issue-claim: #$n — could not read the timeline, so a claim residue cannot be told from a self-assignment; left in place" >&2
+        return 0
+    fi
+    cycle=$(jq -r --arg me "$ME" --arg lab "$INPROG_LABEL" --argjson grace "$RESIDUE_GRACE" '
+        (.data.repository.issue.timelineItems.nodes // []) as $ns
+        | ([ $ns[] | select(.__typename == "AssignedEvent" and ((.assignee.login // "") == $me)) | .createdAt ] | last) as $a
+        | ([ $ns[] | select(.__typename == "LabeledEvent"  and ((.label.name    // "") == $lab)) | .createdAt ] | last) as $l
+        | if   $a == null then "no_assign_event"
+          elif $l == null then "never_claimed"
+          elif (($l | fromdateiso8601) >= (($a | fromdateiso8601) - $grace)) then "residue"
+          else "self_assigned"
+          end' <<<"$tl" 2>/dev/null)
+    case "$cycle" in
+        residue) : ;;
+        never_claimed|self_assigned)
+            RESIDUE_NOTE="assignee '$assignees' left alone: no claim cycle precedes this assignment ($cycle)"
+            echo "issue-claim: #$n is assigned to '$assignees' with no $INPROG_LABEL ever labelled at that assignment — a self-assignment, not loop residue; left alone" >&2
+            return 0 ;;
+        *)
+            RESIDUE_NOTE="assignee '$assignees' left alone: claim-cycle probe returned '${cycle:-empty}'"
+            echo "issue-claim: #$n — the claim-cycle probe returned '${cycle:-empty}'; unknown is not verified, so the assignee is left in place" >&2
+            return 0 ;;
+    esac
 
     # The inverse of the exact token `claim` wrote. The DECISION is recorded
     # here; the tense is not, because this runs before the edit does — a past
