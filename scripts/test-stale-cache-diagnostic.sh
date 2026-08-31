@@ -26,6 +26,13 @@
 #      documented rule true of what a reader actually sees. Drop either and the
 #      block reports "current" for a path that was never compared.
 #
+# A PROCESS NOTE, because it cost a CI cycle here. `preflight.sh` runs shellcheck
+# over a `git ls-files` corpus, so a NEW gate that has not been `git add`ed yet
+# is INVISIBLE to it: preflight passed locally on this very file while CI failed
+# on a real SC2034 in it. That is the same trap CLAUDE.md records for gate 34's
+# first edition, which shipped a `| grep -q` bug because both its files were
+# still untracked. `git add` a new script BEFORE trusting a green preflight.
+#
 # It reads two tracked files. No gh, no network, no repo mutation.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -148,11 +155,19 @@ has "$VERS_FLAT" "git log -1 -G" \
 has "$VERS_FLAT" "which is not the same thing" \
     "stating why plain 'git log -1 -- <path>' answers a different question"
 
+# VERSIONING must not claim a per-merge stamp EXISTS. #296's criterion 1 is
+# blocked on branch protection owned by Terraform in another repo, so a doc
+# asserting the manifest tracks every merge would send a reader to a version
+# comparison that cannot work — which is the #12 idiom arriving from the other
+# direction, and the reason this veto reads the emphasis-stripped copy too.
+absent "$VERS_FLAT" "$VERS_EMPH" 'stamped on every merge|auto-?stamped on merge|version is bumped on every merge' \
+    "VERSIONING claims no per-merge stamp, which does not exist"
+
 # --- 7. vacuity floor ---------------------------------------------------------
 # A floor beneath the count cannot tell "everything measured" from "an extractor
 # silently stopped matching". Set just under today's total so a collapse fails
 # and a deliberate trim does not.
-FLOOR=26
+FLOOR=27
 if [ "$asserts" -ge "$FLOOR" ]; then
     ok "assertion floor met ($asserts >= $FLOOR)"
 else
