@@ -1592,6 +1592,26 @@ else
     failed "platform-health-probe tests (scripts/test-platform-health-probe.sh)"
 fi
 
+# --- 35. stale-cache diagnostic ------------------------------------------------
+# The stale-cache diagnostic and the no-auto-stamp record (issues #296, #301).
+# NONE of #301's three decisions was pinned by anything, and the idiom it
+# deleted — `ls` the cache directory and compare the version STRING — was itself
+# shipped deliberately in #12 and survived until #296 measured it giving the
+# wrong answer: cache and clone both at `2026.8.100`, with 18 skill files and
+# all ten agents differing. A documented diagnostic that returns "current" on a
+# stale cache is worse than none, because a reader who runs it stops looking.
+# Its assertions on the compare block are SCOPED TO THE CODE FENCE, not the
+# file: checking the flattened README for `2>&1`, `[ -d ` and the directory
+# names passed on a README whose code block had each of them removed, because
+# the paragraph underneath explains every one by name — a presence check
+# satisfied by the prose ABOUT a guard rather than by the guard. Three mutants
+# proved that before the window existed. Two tracked files, no gh, no network.
+if bash scripts/test-stale-cache-diagnostic.sh; then
+    pass "stale-cache diagnostic tests (scripts/test-stale-cache-diagnostic.sh)"
+else
+    failed "stale-cache diagnostic tests (scripts/test-stale-cache-diagnostic.sh)"
+fi
+
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then
     echo "preflight: all gates green" >&2
