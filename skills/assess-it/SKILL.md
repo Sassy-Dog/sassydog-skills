@@ -38,7 +38,7 @@ Follow the five phases. Full dispatch details, the finding schema, and exact `gh
 
 Dispatch the relevant `sassy-dog:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns findings in the shared schema with mandatory `file:line` evidence.
 
-**Record an outcome for every domain as the fan-out returns** — `returned`, `no report`, or `could not dispatch` — plus `not dispatched`, with its reason, for a domain the Phase-0 stack detection skipped. That ledger is Phase 4's input: a domain whose outcome is not `returned` is **dark**, and a dark domain is never scored as clean and never reported as "no findings". A reviewer that came back with nothing looks exactly like one that found nothing, and writing down which happened is the only thing that separates them. Carry the ledger through Phases 2 and 3 unchanged — nothing there adds a domain or clears one.
+**Record an outcome for every domain as the fan-out returns** — `returned`, `no report`, or `could not dispatch` — plus `not dispatched`, with its reason, for a domain the Phase-0 stack detection skipped. That ledger is Phase 4's input **and the Epic body's** (#294): a domain whose outcome is not `returned` is **dark**, and a dark domain is never scored as clean and never reported as "no findings". In the executive summary its rubric dimension scores `n/a — not measured (dark)`, never a number — the table and this rule otherwise leave no compliant answer, and an agent facing that invents a score, which is worse than a missing one because it is quantitative. A reviewer that came back with nothing looks exactly like one that found nothing, and writing down which happened is the only thing that separates them. Carry the ledger through Phases 2 and 3 unchanged — nothing there adds a domain or clears one.
 
 See **`orchestration.md`** for the agent→domain map, the four outcomes and what each one means, and the finding schema.
 
@@ -76,11 +76,11 @@ Cluster surviving findings so each cluster is one coherent PR (e.g. "harden GitH
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/align-labels.sh --repo "$REPO"             # create missing + correct drifted
    ```
 
-5. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
+5. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic **with the coverage block in its body**, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
 
 ### Phase 5 — Report
 
-Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed. **That reprint is session output, not part of the filed artefact.** Nothing in this skill writes the coverage into the Epic body, so the backlog itself still reads complete to whoever finds it later — reprinting here serves the operator who just approved the filing, and closing the durable half is [#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294). Say which domains were dark rather than implying the Epic records them.
+Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed. **The Epic body now carries that coverage block too** ([#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294)) — see `references/github-issue-ops.md` §4 — so the durable artefact records what was and was not audited, and a later reader of a backlog missing a whole domain is told so instead of finding a set that reads complete. This reprint is for the operator who just approved the filing; the Epic's copy is for everyone after them, and the two are not interchangeable: session output reaches one person once.
 
 ## Reference Files
 

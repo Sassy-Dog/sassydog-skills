@@ -99,7 +99,30 @@ CHILD_NUM=$(basename "$CHILD_URL")
 
 ## 4. Epic issue
 
-Body = the executive report from `assessment-rubric.md` (scores, strengths, biggest risks, "if I inherited this repo", top-10 ROI, 30/90/180-day roadmap), followed by the child list. Create the Epic **after** the children so you can list/link them.
+Body = the executive report from `assessment-rubric.md` (scores, strengths, biggest risks, "if I inherited this repo", top-10 ROI, 30/90/180-day roadmap), then **the coverage block**, then the child list. Create the Epic **after** the children so you can list/link them.
+
+### The coverage block is REQUIRED, and it is the durable half
+
+Phase 4's preview and Phase 5's report are **session output**: they tell the person who approved the filing which domains went dark, and they tell nobody else, ever. The Epic is the artefact that becomes the record. Without this block a backlog missing an entire domain **reads complete** to every later reader — which is the harm [#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294) is about, and the half [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284) deliberately left open.
+
+Render Phase 1's per-domain ledger verbatim, every domain, including the ones that returned:
+
+```markdown
+## Audit coverage
+
+| Domain | Outcome |
+| --- | --- |
+| architecture | returned |
+| security | **no report** |
+| testing | returned |
+| dx-docs | not dispatched (no docs surface — Phase 0) |
+
+**A domain that is not `returned` was NOT audited.** The absence of findings for it is not
+evidence of health, and this backlog is not complete with respect to it. Re-run the audit for
+those domains before treating this Epic as a full picture.
+```
+
+A domain skipped for cause by Phase 0 stays visibly apart from one that went dark: *nobody looked because there is nothing there* and *nobody looked and there might be* are different facts, and once both are merely missing from the Epic they are indistinguishable. **List every domain, never only the dark ones** — a block that appears only when something went wrong is a block whose absence a reader cannot interpret.
 
 ```bash
 EPIC_URL=$(gh issue create --repo "$REPO" \
@@ -141,6 +164,10 @@ If `POST .../sub_issues` returns 404/403 (older GHES, missing scope), fall back 
 
 1. Align the labels: `bash "$ALIGN" --repo "$REPO"` (section 2 — the taxonomy's owner, never a copy of its table).
 2. For each PR-sized cluster: re-check dedupe → create child issue → collect `CHILD_NUM`.
-3. Create the Epic with the executive report + child list.
+3. Create the Epic with the executive report + **the coverage block** + child list.
 4. Link every child as a sub-issue (or task-list fallback).
-5. Print Epic URL + child URLs.
+5. Print Epic URL + child URLs, and reprint the coverage ledger for the operator.
+
+**This list is the LAST instruction an agent reads, so it must not be a subset of the first.**
+It already omitted the executive summary once; a step named in section 4 above and missing here is
+a step that does not happen. If you add to the Epic body, add to this list in the same edit.
