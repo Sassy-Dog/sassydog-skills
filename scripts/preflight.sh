@@ -614,13 +614,20 @@
 #      exact whole-line awk match that fails unless it hit exactly once (the
 #      #262 lesson: `cmp -s` exits 2 on a missing file, which an `if` reads as
 #      "differs"), and each is caught by the edit it causes rather than by a
-#      literal an assertion greps for. STATED LIMIT: `@me` is the operator's
-#      login, not a loop identity, so the operator's own self-assignment is
-#      byte-identical to the residue; narrowing that needs a fourth conjunct
-#      #281 does not sanction, filed as issue #287 (where reopen evidence alone
-#      is recorded as insufficient — `block` leaves an assignee with no close in
-#      the history). A CLOSED issue is refused in the gate's own body, not left
-#      to the caller.
+#      literal an assertion greps for. THE STATED LIMIT IS NOW CLOSED (#287):
+#      `@me` is the operator's login, not a loop identity, so the operator's own
+#      self-assignment was byte-identical to the residue and `promote` stripped
+#      it — dispatching a cold agent onto work a human was already doing. The
+#      FOURTH conjunct is the in-progress LABELLING, not the closing-PR or
+#      reopen evidence #281 named: both of those miss claim -> block -> promote,
+#      which leaves the same residue with no close and no reopen anywhere in its
+#      history. `claim` writes label and assignee in ONE edit, so a real claim
+#      always leaves a LabeledEvent beside its AssignedEvent. The two are NOT
+#      simultaneous — measured one second apart, label first — so the test
+#      carries a grace window, and a fixture with identical timestamps would let
+#      a rule pass that real residue defeats. What remains stated rather than
+#      closed is a human who self-assigns and then adds `in-progress` by hand.
+#      A CLOSED issue is refused in the gate's own body, not left to the caller.
 #      IT PINS A SECOND DECISION (issue #288): the `not found` tolerance may
 #      only swallow a failure that IS a removal. #281 scoped it to the
 #      subcommands carrying a `--remove-label`, which fixed `promote` and left
