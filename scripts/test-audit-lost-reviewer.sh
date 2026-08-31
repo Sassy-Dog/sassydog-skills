@@ -232,7 +232,7 @@ bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 # CLAUDE.md sanctions; ASSERT_FLOOR is their SUM, derived below rather than
 # transcribed. A section that never runs, or that runs fewer assertions than it
 # declares, FAILS — which a bare numeric floor cannot do.
-SECTIONS=(windows:7 canon:59 inventory:10 residue:5 sibling:2 premise:3)
+SECTIONS=(windows:7 canon:59 inventory:10 residue:5 sibling:2 premise:3 durable:13)
 # Held OUTSIDE the array on purpose: while the registry block's own minimum was
 # a summand, deleting the block AND its entry shrank the floor by exactly what
 # the deletion removed, so two edits retired layer 3 at exit 0.
@@ -539,7 +539,7 @@ skill#b9	### Phase 0 — Scope & detect (you, the main agent)
 skill#b10	1. Resolve the target repo (cwd or the path/arg given). Confirm a GitHub remote: `gh repo view --json nameWithOwner,defaultBranchRef`. 2. Detect stack(s) by globbing manifests: `package.json`, `*.csproj`, `Cargo.toml`, `pubspec.yaml`, `*.tf`/`*.bicep`, `Dockerfile`, `.github/workflows/`, Nx/Bun/tRPC config. This decides which review agents to dispatch. 3. **Build the dedupe index** (used in Phase 2 and Phase 4): `gh issue list --state open --limit 500 --json number,title,labels,body` (also pull recently-closed for context). Keep it in memory for the whole run.
 skill#b11	### Phase 1 — Fan out (parallel review agents)
 skill#b12	Dispatch the relevant `sassy-dog:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns findings in the shared schema with mandatory `file:line` evidence.
-skill#b13	**Record an outcome for every domain as the fan-out returns** — `returned`, `no report`, or `could not dispatch` — plus `not dispatched`, with its reason, for a domain the Phase-0 stack detection skipped. That ledger is Phase 4's input: a domain whose outcome is not `returned` is **dark**, and a dark domain is never scored as clean and never reported as "no findings". A reviewer that came back with nothing looks exactly like one that found nothing, and writing down which happened is the only thing that separates them. Carry the ledger through Phases 2 and 3 unchanged — nothing there adds a domain or clears one.
+skill#b13	**Record an outcome for every domain as the fan-out returns** — `returned`, `no report`, or `could not dispatch` — plus `not dispatched`, with its reason, for a domain the Phase-0 stack detection skipped. That ledger is Phase 4's input **and the Epic body's** (#294): a domain whose outcome is not `returned` is **dark**, and a dark domain is never scored as clean and never reported as "no findings". In the executive summary its rubric dimension scores `n/a — not measured (dark)`, never a number — the table and this rule otherwise leave no compliant answer, and an agent facing that invents a score, which is worse than a missing one because it is quantitative. A reviewer that came back with nothing looks exactly like one that found nothing, and writing down which happened is the only thing that separates them. Carry the ledger through Phases 2 and 3 unchanged — nothing there adds a domain or clears one.
 skill#b14	See **`orchestration.md`** for the agent→domain map, the four outcomes and what each one means, and the finding schema.
 skill#b15	### Phase 2 — Adversarial review (you)
 skill#b16	For every finding: open the cited `file:line` and confirm the evidence is real and the problem genuine (not mere preference/convention); sanity-check severity, likelihood, and blast radius. Dedupe findings against each other **and against the Phase-0 GitHub index**. For high-impact findings, optionally dispatch perspective-diverse skeptic subagents prompted to *refute* — keep only survivors. Be skeptical by default; a false issue costs more than a missed one.
@@ -548,9 +548,9 @@ skill#b18	Cluster surviving findings so each cluster is one coherent PR (e.g. "h
 skill#b19	### Phase 4 — Preview, then file
 skill#b20	1. **Print the full preview**: the Epic (exec summary + scores) and every child issue (title, body, labels, and its dedupe decision). 2. **Print the Phase-1 ledger in that preview, before you ask for approval.** Every domain, with its outcome, rendered so a reader sees the coverage without opening anything:
 skill#b21	Print this block on **every** run, the all-clear included. A coverage line that shows up only when something went wrong teaches the reader that its absence means nothing, which is the habit that made a dark domain invisible in the first place (issue [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284)). 3. Now ask the user to approve, edit, or cancel. **File nothing yet.** A dark domain is surfaced, not a veto: it does not stop the run and does not block filing, and on approval everything that did come back is filed as normal. 4. On approval, **align the target repo's labels first** — the engineering-dimension + severity taxonomy is owned by one script in this plugin, and this skill invokes it rather than carrying a copy (issue #167). The path below is resolved when this skill loads; pass it on as `ALIGN=<that path>` to anything that needs it, because `references/*.md` are read raw and never get the substitution:
-skill#b22	5. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
+skill#b22	5. Then follow **`references/github-issue-ops.md`**: re-check dedupe per issue right before creation (comment on a match instead of duplicating), create child issues, create the Epic **with the coverage block in its body**, then attach each child as a **native sub-issue** (`gh api`), with a task-list fallback.
 skill#b23	### Phase 5 — Report
-skill#b24	Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed. **That reprint is session output, not part of the filed artefact.** Nothing in this skill writes the coverage into the Epic body, so the backlog itself still reads complete to whoever finds it later — reprinting here serves the operator who just approved the filing, and closing the durable half is [#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294). Say which domains were dark rather than implying the Epic records them.
+skill#b24	Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed. **The Epic body now carries that coverage block too** ([#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294)) — see `references/github-issue-ops.md` §4 — so the durable artefact records what was and was not audited, and a later reader of a backlog missing a whole domain is told so instead of finding a set that reads complete. This reprint is for the operator who just approved the filing; the Epic's copy is for everyone after them, and the two are not interchangeable: session output reaches one person once.
 skill#b25	## Reference Files
 skill#b26	- **`assessment-rubric.md`** — the 15 assessment areas, scoring (1–10 health/security/DX/maintainability), severity & likelihood definitions, and the executive-summary format. Review agents consult their section; you use it for the Epic summary. - **`orchestration.md`** — agent→domain map, per-agent scope, the four dispatch outcomes and the dark-domain rule, the finding output schema, and the adversarial-review / dedupe / grouping logic. - **`references/github-issue-ops.md`** — label *routing* (which dimension label a finding gets; the taxonomy itself is owned by `scripts/align-labels.sh`, never copied), child-issue & Epic body templates, and exact `gh`/`gh api` commands for dedupe, issue creation, and native sub-issue linking.
 skill#b27	## Red Flags — STOP
@@ -719,6 +719,59 @@ assert_absent "$_orch_flat" "lost-agent scoring" "residue: 'lost-agent scoring' 
 assert_absent "$_orch_flat" "unfixed, not overlooked" "residue: 'unfixed, not overlooked' is gone"
 assert_absent "$_orch_flat" "Recorded here so the absence" "residue: the 'recorded here' hedge is gone"
 assert_absent "$_orch_flat" "deliberately kept out of the prose-gate work" "residue: the deferral clause is gone"
+
+section durable "the coverage record reaches the FILED Epic, not only the session (issue #294)"
+
+# #284 closed the half that lands at the PREVIEW. This is the durable half, and
+# it is the one #284's own problem statement was about: Phase 4's preview and
+# Phase 5's report are session output, so a backlog missing a whole domain still
+# READS COMPLETE to whoever finds the Epic three weeks later.
+OPS="skills/assess-it/references/github-issue-ops.md"
+RUBRIC="skills/assess-it/assessment-rubric.md"
+for f in "$OPS" "$RUBRIC"; do
+    if [ -r "$f" ]; then ok "durable: read $f"; else bad "durable: missing file: $f"; fi
+done
+_ops_flat="$(flat "$(cat "$OPS")")"
+_rub_flat="$(flat "$(cat "$RUBRIC")")"
+
+# The Epic BODY, not the preview.
+assert_has "$_ops_flat" "then **the coverage block**, then the child list" \
+    "durable: the Epic body definition names the coverage block"
+assert_has "$_ops_flat" "## Audit coverage" \
+    "durable: the Epic body template carries the coverage heading"
+assert_has "$_ops_flat" "was NOT audited" \
+    "durable: the block states that a non-returned domain was not audited"
+
+# Every domain, not only the dark ones — a block that appears only on failure is
+# one whose ABSENCE a later reader cannot interpret.
+assert_has "$_ops_flat" "List every domain, never only the dark ones" \
+    "durable: the block lists every domain, so its absence is never ambiguous"
+
+# The LAST instruction an agent reads must not be a subset of the first. It
+# already omitted the executive summary once, which is how this gap survived.
+assert_has "$_ops_flat" "Create the Epic with the executive report + **the coverage block** + child list." \
+    "durable: the order of operations names the coverage block too"
+assert_has "$_ops_flat" "must not be a subset of the first" \
+    "durable: and says why that list must not drift from the section above it"
+
+# THE VETO. The old claim was that nothing writes coverage into the Epic; if it
+# comes back, the durable half has been reverted while every must-exist above
+# could still pass on a document that contains both.
+assert_absent "$(flat "$(cat "$SKILL")")" "Nothing in this skill writes the coverage into the Epic body" \
+    "durable: the 'nothing writes it to the Epic' claim is gone from SKILL.md"
+assert_absent "$_ops_flat" "Body = the executive report from .assessment-rubric.md. .scores[^)]*), followed by the child list" \
+    "durable: the Epic body definition no longer ends at the child list"
+
+# The rubric had NO abstain value, so a dark domain had no compliant score: the
+# table demanded a number and Phase 1 forbade scoring it clean. An agent facing
+# that invents one, and an invented score is worse than a missing one because it
+# is quantitative.
+assert_has "$_rub_flat" "not measured (dark)" \
+    "durable: the rubric carries an abstain value for a dark dimension"
+assert_has "$_rub_flat" "never a number" \
+    "durable: and forbids a number for a dark dimension"
+assert_has "$_rub_flat" "NOT a low score and NOT a clean one" \
+    "durable: the abstain row says it is neither a low score nor a clean one"
 
 section sibling "the diff-scoped rule survives untouched — this file is read for one fact"
 

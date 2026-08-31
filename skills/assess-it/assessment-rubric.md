@@ -6,12 +6,15 @@ The substance of a Staff+ engineering audit, distilled into reference the review
 
 Score each 1–10 (10 = excellent). Include a one-line justification per score.
 
+**A dimension whose reviewer went dark scores `n/a — not measured (dark)`, never a number.** This exists because the two rules otherwise collide and leave no compliant answer: the table required a score for every dimension, while `SKILL.md` Phase 1 forbids scoring a dark domain as clean. An agent facing that will **invent** a number, and an invented score is worse than a missing one precisely because it is quantitative — it looks measured, it sorts, and it goes into the Epic body a human reads three weeks later. `n/a` is not a bad score: a dark `Security` dimension says *nobody looked*, which is a different fact from *we looked and it is weak*, and collapsing the two is the whole of [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284) and [#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294).
+
 | Score | Meaning | Health / Security / DX / Maintainability / Architecture coherence |
 |---|---|---|
 | 9–10 | Exemplary | Few-to-no genuine risks; strong patterns; would onboard fast |
 | 6–8 | Solid | Healthy with addressable gaps |
 | 3–5 | At risk | Real liabilities; velocity or incidents likely |
 | 1–2 | Critical | Systemic problems; urgent remediation |
+| `n/a` | **Not measured (dark)** | The reviewer for this dimension did not return. NOT a low score and NOT a clean one — nothing was measured. |
 
 ## Severity × Likelihood (per finding)
 
