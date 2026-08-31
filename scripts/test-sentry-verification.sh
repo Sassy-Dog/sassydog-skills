@@ -216,8 +216,14 @@ bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 
 echo "Sentry verification + the four-key \`none\` form (issues #213, #261)"
 
-for f in "$DETECTION" "$CONTRACT" "$SKILL" "$TEMPLATE" "$INTERVIEW" "$UPDATE" "$MIGRATE" "$PLATE"; do
-    [ -r "$f" ] || bad "missing file: $f"
+# THE READ SET IS AN ARRAY, and that is the whole of #278. It was eight
+# variables iterated as literals, so its length existed nowhere and the count
+# was restated across three files with nothing recomputing it. Adding a file
+# here now moves every restatement, because the counts section below derives
+# from `${#READS[@]}` and reddens each site that disagrees.
+READS=("$DETECTION" "$CONTRACT" "$SKILL" "$TEMPLATE" "$INTERVIEW" "$UPDATE" "$MIGRATE" "$PLATE")
+for f in "${READS[@]}"; do
+    [ -r "$f" ] || bad "missing file: $f — if a document was renamed, move READS with it, then the tracked-file count and each of its restatement sites"
 done
 [ "$fails" -eq 0 ] || { echo "test-sentry-verification: FAILED" >&2; exit 1; }
 
@@ -1886,23 +1892,24 @@ dest_case "a determiner before a real noun still opens one" \
 #
 #   * NON-PARTITIVE free-floating counts -- the number sits beside a noun, so
 #     it reads safe by shape while the SET it counts may be elsewhere entirely.
-#     THE LIVE INSTANCE IS IN THIS FILE, and it is `the eight files`, which
-#     used to stand here as an illustration of the SHAPE and is in fact an
-#     instance of it. Measured: the read set is eight variables iterated as
-#     literals in a `for` loop, with no array length derived anywhere, and the
-#     count is restated at several sites across this file, `scripts/preflight.sh`
-#     and `CLAUDE.md`, with no member list beside any of them and no gate
-#     recomputing it. Issue #278 enumerates the sites rather than this block,
-#     because an inventory written from memory here would be the same defect one
-#     level down -- and a first draft of this sentence was short by four of
-#     them, which is the measurement that settled it. `the four names` genuinely is pinned, by a row count in
-#     this file; `the six-verb affirmative` enumerates its members beside it.
-#     So the example this bullet needs is the one it was using as a decoy, and
-#     it is left standing rather than fixed from here: this file is not the
-#     subject of the changeset that found it, and remediation is issue #278.
-#     That number matters: an untracked follow-up is indistinguishable from a
-#     decision not to fix, which is the deliberate-absence shape that rots
-#     quietest -- and the wording this replaced was backed by an issue too.
+#     THE INSTANCE THIS BULLET NAMED IS NOW HISTORICAL TOO, and it was in this
+#     very file: the tracked-file count, which used to stand here as an
+#     illustration of the SHAPE and was in fact an instance of it. The read set
+#     was variables iterated as literals in a `for` loop, its length existed
+#     nowhere, and the count was restated across this file, `scripts/preflight.sh`
+#     and `CLAUDE.md` with no member list beside any of them. Issue #278 closed
+#     it the way #276 closed the one before: the read set is an array, the
+#     counts section below derives from its length, and every restatement site
+#     is accounted for rather than looked up. `the four names` genuinely is
+#     pinned, by a row count in this file; `the six-verb affirmative`
+#     enumerates its members beside it.
+#
+#     SO THIS BULLET NOW NAMES NO LIVE INSTANCE, and that is stated rather than
+#     left to be inferred from an empty space. It is NOT evidence the tree is
+#     clean: the probe below cannot see this shape at all -- that is the point
+#     of the bullet -- so an absence here means nobody has found one since, not
+#     that none exists. Both instances it has carried were found by a READER,
+#     never by the probe, which is the instruction this block closes with.
 #
 #     THE INSTANCE PREVIOUSLY NAMED HERE IS NOW HISTORICAL, and how it was
 #     cited is worth more than the citation was. It was the closing summary of
@@ -3071,7 +3078,165 @@ fi
 # not worth carrying, and CLAUDE.md carried a wrong one ("39 semantic mutations,
 # 0 stale and 0 undetected, 59 assertions measured load-bearing") for exactly
 # that reason, in the one place a future editor trusts instead of re-measuring.
-ASSERT_FLOOR=120
+# ---------------------------------------------------------------------------
+# The tracked-file count is RE-DERIVED, never transcribed (issue #278)
+# ---------------------------------------------------------------------------
+# The same defect #276 closed for test-review-gate-decisions.sh, and this file's
+# own free-floating-count bullet had been naming it as the live instance since
+# then. The read set is `READS` now, so the count is its length; every place
+# that restates it is compared against that, and every spelled hit in a governed
+# region is ACCOUNTED FOR rather than looked up — a region carrying the right
+# number AND a wrong one must fail, which a bare must-exist check cannot see.
+#
+# KNOWN LIMITS, in the idiom the sibling gates use:
+#
+#   * DIGIT forms are invisible: `it reads 8 tracked files` beside a correct
+#     spelled count passes. Spelled words only, the same limit this file already
+#     states for its own partitive probe.
+#   * The regions are anchored on the SCRIPT NAME, never on a gate number or a
+#     line number — both rot, and this file has already been cited as "gate 26"
+#     while it was numbered 29.
+#   * A restatement varying the noun ("eight documents", "eight sources") sits
+#     outside `check_files` and is unseen. The noun is matched exactly, for the
+#     reason #276 records: a looser match starts colliding with other gates'
+#     counts in preflight's list, where `N tracked files` is how nearly every
+#     entry ends.
+echo "-- the tracked-file count is re-derived from READS, not transcribed"
+
+# Running from a COPY would measure the tracked file rather than the copy, so a
+# mutation applied to a tmpdir copy reports `undetected` while proving nothing
+# (#262). A mutation harness must edit the tracked file in place and restore it.
+SELF_278="scripts/test-sentry-verification.sh"
+if [ -r "$SELF_278" ]; then
+    ok "the counts section can read its own tracked path"
+else
+    bad "cannot read $SELF_278 — every count check below would be vacuous"
+fi
+
+NUM_WORDS_278=(zero one two three four five six seven eight nine ten eleven
+               twelve thirteen fourteen fifteen sixteen seventeen eighteen
+               nineteen twenty)
+NUMWORDS_278="$(IFS='|'; printf '%s' "${NUM_WORDS_278[*]:1}")"
+
+# One normaliser, three call sites. Leading comment and blockquote markers are
+# stripped, because a phrase wrapped across two comment lines otherwise joins as
+# `... eight # tracked files` and reads ABSENT — a false pass, and preflight's
+# gate list is hard-wrapped and already wraps mid-phrase. Emphasis is stripped
+# for the same reason: `**eight** tracked files` is the same miss in a hat, and
+# CLAUDE.md bolds constantly.
+normalize_278() {
+    sed -E -e 's/^[[:space:]]*(>[[:space:]]?)+//' -e 's/^[[:space:]]*#[[:space:]]?//' \
+           -e 's/\*//g' <<<"$1" | tr '\n' ' ' | tr -s ' '
+}
+
+# check_files <label> <region> <noun> <expected word> — every spelled count of
+# <noun> in the region must be the re-derived one, and at least one must be
+# stated. The left boundary stops `twenty-eight files` reading as `eight`.
+check_files() {
+    local label="$1" text="$2" noun="$3" want="$4" hits wrong
+    hits="$(grep -oiE "(^|[^A-Za-z-])($NUMWORDS_278) $noun" <<<"$text" \
+        | tr 'A-Z' 'a-z' | sed -E 's/^[^a-z]+//' | sort -u)"
+    if [ -z "$hits" ]; then
+        bad "$label states no '$noun' count at all — re-derived: $want $noun"
+        return
+    fi
+    wrong="$(grep -vxF "$want $noun" <<<"$hits" | tr '\n' ' ')"
+    if [ -n "$wrong" ]; then
+        bad "$label states ${wrong}— re-derived from READS: $want $noun"
+    else
+        ok "$label states $want $noun"
+    fi
+}
+
+n_files_278="${#READS[@]}"
+want_278=""
+[ "$n_files_278" -lt "${#NUM_WORDS_278[@]}" ] && want_278="${NUM_WORDS_278[$n_files_278]}"
+if [ -n "$want_278" ]; then
+    ok "the read set has $n_files_278 members, spelled '$want_278'"
+else
+    bad "the read set has $n_files_278 members, past the spelled-number table — extend NUM_WORDS_278"
+fi
+
+# VACUITY FLOOR on the derivation itself: a READS that matched nothing would
+# re-derive 0 and let every site below pass against a number nobody uses.
+if [ "$n_files_278" -ge 2 ]; then
+    ok "and that derivation is live ($n_files_278 members, floor 2)"
+else
+    bad "READS has $n_files_278 members — the derivation is broken, not the sites clean"
+fi
+
+# --- site 1: this file itself ------------------------------------------------
+# MINUS the free-floating-count bullet, and that exclusion is principled rather
+# than convenient: that bullet's whole job is to discuss counts in OTHER files,
+# so it QUOTES them, including one that spells out a DIFFERENT gate's read-set
+# size — a correct statement about test-review-gate-decisions.sh and a wrong one
+# about this file. (This comment deliberately describes that quotation instead
+# of repeating it: the first draft quoted it verbatim and thereby re-created the
+# very collision it is explaining, one level up, outside the window it defines.)
+# Including the bullet made the check fail on true prose, which
+# is the loud-false-red this repo prefers to avoid when the fix is a window
+# rather than a weaker rule. The window is anchored on the bullet's own text.
+self_full="$(cat "$SELF_278")"
+self_trimmed="$(awk '
+    /NON-PARTITIVE free-floating counts/ { skip = 1 }
+    skip && /^# A probe with a stated blind spot is honest/ { skip = 0 }
+    !skip { print }' <<<"$self_full")"
+# The exclusion must actually REMOVE something, or site 1 silently becomes the
+# whole file again and the reason for the window is lost with it.
+if [ "$(printf '%s' "$self_trimmed" | wc -l)" -lt "$(printf '%s' "$self_full" | wc -l)" ]; then
+    ok "the free-floating-count bullet is excluded from this file's own count scan"
+else
+    bad "the blind-spot bullet window matched nothing — site 1 is scanning the whole file, quotations included"
+fi
+self_278="$(normalize_278 "$self_trimmed")"
+check_files "this gate's own header and body" "$self_278" "tracked files" "$want_278"
+check_files "and its 'files this gate reads' phrasing" "$self_278" "files this gate reads" "$want_278"
+
+# --- site 2: preflight's gate description, anchored on the SCRIPT NAME --------
+# From the entry naming this script to the start of the next numbered entry.
+pf_desc="$(awk '
+    /scripts\/test-sentry-verification\.sh\)/ { inseg = 1 }
+    inseg && /^#  [0-9]+\. / && !/test-sentry-verification/ { exit }
+    inseg { print }' scripts/preflight.sh)"
+if [ -n "$pf_desc" ]; then
+    ok "preflight's gate description for this script resolves"
+    check_files "preflight's gate description" "$(normalize_278 "$pf_desc")" "files" "$want_278"
+else
+    bad "preflight's gate description for this script did not resolve — the check over it would be vacuous"
+fi
+
+# --- site 3: preflight's inline comment at the invocation --------------------
+# ONLY the contiguous comment block directly above THIS script's invocation.
+# A file-wide sweep for the phrase matched another gate's identical comment —
+# `Reads two tracked files: no gh, no network.` — and reported this site as
+# stating two. Every gate in preflight ends its entry the same way, so the
+# anchor has to be the invocation, not the phrase.
+pf_inv="$(awk '
+    /^if bash scripts\/test-sentry-verification\.sh; then/ { for (i = 1; i < n; i++) print buf[i]; exit }
+    /^#/ { buf[n++] = $0; next }
+    { n = 1 }' scripts/preflight.sh)"
+if [ -n "$pf_inv" ]; then
+    ok "preflight's invocation-site comment resolves"
+    check_files "preflight's invocation-site comment" "$(normalize_278 "$pf_inv")" "tracked files" "$want_278"
+else
+    bad "preflight's invocation-site comment did not resolve — the check over it would be vacuous"
+fi
+
+# --- site 4: CLAUDE.md's gate paragraph --------------------------------------
+# Bounded by the NEXT gate's opener, since CLAUDE.md's gate list is one line.
+cm_desc="$(awk -v RS='\n' '
+    { i = index($0, "scripts/test-sentry-verification.sh")
+      if (i > 0) { rest = substr($0, i)
+                   j = index(rest, "the sentry-counts tests")
+                   print (j > 0 ? substr(rest, 1, j) : rest) } }' CLAUDE.md)"
+if [ -n "$cm_desc" ]; then
+    ok "CLAUDE.md's paragraph for this gate resolves"
+    check_files "CLAUDE.md's gate paragraph" "$(normalize_278 "$cm_desc")" "tracked files" "$want_278"
+else
+    bad "CLAUDE.md's paragraph for this gate did not resolve — the check over it would be vacuous"
+fi
+
+ASSERT_FLOOR=130
 if [ "$asserts" -lt "$ASSERT_FLOOR" ]; then
     echo "test-sentry-verification: only $asserts assertions ran (floor $ASSERT_FLOOR) — an extractor is silently matching nothing" >&2
     exit 1
