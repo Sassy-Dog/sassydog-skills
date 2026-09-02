@@ -89,6 +89,42 @@
 # and reporting one as such is the confident wrong answer this file exists to
 # refuse. Cased and mutated in both directions.
 #
+# TWO WAYS THE PROBE CAN FAIL WITHOUT PRODUCING A WRONG VERDICT (issue #303),
+# and both are cased here because both are SILENT — the class this whole file
+# exists for, arriving through the probe's own machinery instead of through its
+# reasoning.
+#
+#   * AN EMITTER THAT DIES HANDS THE CALLER EXIT 0 AND EMPTY STDOUT. The final
+#     `jq -n` ran with no handler under a script with no `set -e` and an
+#     unconditional `exit 0`, so `jq -r .verdict` yielded the EMPTY STRING —
+#     not one of the four verdicts and not `unknown` either — while the stderr
+#     summary still printed and looked entirely normal. The handler is now
+#     mutation-proved by M25, which breaks the emitter (`--argjson anomalies ""`
+#     exits 2 and prints nothing) and requires `unknown` back. Delete the
+#     fallback and M25 reports the mutant as `«no output»`: UNDETECTED, red.
+#     Its exit code is asserted too, by the rule below.
+#   * A BOUND ON THE OPTIONAL CALL AND NONE ON THE LOAD-BEARING ONES. The
+#     attribution fetch — the half the probe's header calls never load-bearing —
+#     carried `--max-time`, while `gh pr view`, the commit read and the runs
+#     read carried nothing, in a script whose entire trigger condition is
+#     "GitHub may be degraded right now". Case 17b asserts all three run under
+#     `PLATFORM_GH_TIMEOUT`, over the SHIM's ledger and never over MOCK_CALLS,
+#     because the mock `gh` sees an identical argv either way — which is exactly
+#     why nothing caught this. Case 17c asserts that a bound which FIRES lands
+#     where every other non-zero gh exit lands: `not_measured`, reason
+#     preserved, and NO anomaly. Reporting our own cutoff as first-party
+#     evidence of degradation is the confident wrong answer reached through the
+#     mitigation for a different one, so it has its own mutant (M9d) beside the
+#     transport-failure one it mirrors.
+#
+# THE EXIT CODE IS NOW ASSERTED ON EVERY VERDICT-FORM MUTANT, not only on M7's
+# dedicated one. M7 proves the shipped `exit 0` is load-bearing; the per-mutant
+# check proves no OTHER path can grow an exit code carrying a verdict. The
+# emitter fallback is why that generalisation is worth having: it is the one
+# path that produces a verdict having measured nothing, which makes it the
+# obvious place for a later "surely THAT should fail loudly" to add a non-zero
+# exit and turn the diagnostic into the gate it must never be.
+#
 # NO `| grep -q` PIPELINE ANYWHERE (gate 30's rule, issue #256): `grep -q`
 # closes the pipe on its first match and `pipefail` promotes the writer's
 # SIGPIPE 141, which reports a caught mutation as a miss. An earlier edition of
@@ -104,6 +140,14 @@
 # other gh use (the cwd repo lookup) — so a machine with a real authenticated gh
 # behaves exactly like CI — and every env knob the probe reads is pinned, so an
 # operator's ambient PLATFORM_* setting cannot change what this measures.
+# `timeout` is shimmed for the SAME reason the knobs are pinned rather than to
+# fake anything: the host decides whether the real binary exists (macOS ships
+# none; coreutils installs it as `gtimeout`), and a gate that measures a bounded
+# probe on CI and an unbounded one on a laptop measures neither. The shim also
+# makes a FIRING bound testable with no sleep at all, since 124 is exactly what
+# the real binary reports and the probe's handling of 124 is the behaviour under
+# test. Its ledger is a SEPARATE file: a `timeout …` line in MOCK_CALLS would be
+# flagged by case 17 as a call outside the read-only contract.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-platform-health-probe.sh
@@ -170,6 +214,27 @@ if [ -f "$SCENARIO_DIR/status.unreachable" ]; then exit 7; fi
 cat "$SCENARIO_DIR/status.json"
 MOCK
 chmod +x "$BIN/curl"
+
+# `timeout` is SHIMMED for the same reason every PLATFORM_* knob is pinned: the
+# host decides whether the real binary exists (macOS ships none; coreutils
+# installs it as `gtimeout`), and a gate that measures a bounded probe on CI and
+# an unbounded one on a laptop measures neither. The shim also makes the bound
+# FIRING testable without a sleep, which is what `gh.timeout` does: 124 is the
+# code the real `timeout` reports for exactly that, and the probe's handling of
+# it is the behaviour under test.
+#
+# It records to MOCK_BOUNDS and NEVER to MOCK_CALLS: case 17 classifies every
+# line of MOCK_CALLS as a read or a write, and a `timeout …` line there would be
+# flagged as a call outside the read-only contract by the scan that exists to
+# catch a real one.
+cat >"$BIN/timeout" <<'MOCK'
+#!/usr/bin/env bash
+printf 'timeout %s\n' "$*" >>"${MOCK_BOUNDS:-/dev/null}"
+if [ -f "$SCENARIO_DIR/gh.timeout" ]; then exit 124; fi
+shift
+exec "$@"
+MOCK
+chmod +x "$BIN/timeout"
 
 # --- recorded payloads --------------------------------------------------------
 # The outage shape from #285: the rollup carries an empty-state `ci`, the head
@@ -369,11 +434,14 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     local script="$1" dir="$2"
     shift 2
     : >"$WORK/calls"
+    : >"$WORK/bounds"
     # Every PLATFORM_* knob the probe reads is pinned: an operator's ambient
     # setting must not change what this gate measures.
     PATH="$BIN:$PATH" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
+    MOCK_BOUNDS="$WORK/bounds" \
     PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
     PLATFORM_STATUS_TIMEOUT=5 \
+    PLATFORM_GH_TIMEOUT=30 \
     PLATFORM_PROBE_MIN_AGE=300 \
     PLATFORM_STATUS_COMPONENTS="${SCOPE_OVERRIDE:-actions,api requests,webhooks,pull requests,git operations}" \
         bash "$script" --repo mock-org/mock-repo "$@" >"$WORK/stdout" 2>"$WORK/stderr"
@@ -775,6 +843,56 @@ else
     bad "the probe made a call outside its read-only contract:"$'\n'"$offending"
 fi
 
+echo "17b. every gh call is bounded, and the OPTIONAL fetch is not the only one" >&2
+# The probe's whole trigger condition is "GitHub may be degraded right now", and
+# an edition of it bounded the ATTRIBUTION fetch — the half its own header calls
+# never load-bearing — while `gh pr view`, the commit read and the runs read ran
+# unbounded. A hang there costs the caller its tick, and the caller is a loop.
+# Asserted over the SHIM's own ledger rather than over MOCK_CALLS, because the
+# bound is invisible from inside the mock `gh`: it sees an identical argv either
+# way, which is exactly why nothing caught this.
+D_BOUND="$(scenario bounded "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D_BOUND" --pr 301
+bound_n="$(grep -c . "$WORK/bounds")"
+if [ "$bound_n" -eq 3 ]; then
+    ok "all three load-bearing gh calls ran under the bound ($bound_n)"
+else
+    bad "$bound_n bounded calls recorded, expected 3 (pr view, the commit read, the runs read)"
+    sed 's/^/          | B /' <"$WORK/bounds" >&2
+fi
+unbounded=""
+while IFS= read -r line; do
+    case "$line" in "timeout 30 gh "*) : ;; *) unbounded="$unbounded$line"$'\n' ;; esac
+done <"$WORK/bounds"
+if [ -z "$unbounded" ]; then
+    ok "  and each carried the configured PLATFORM_GH_TIMEOUT, not some other bound"
+else
+    bad "  a recorded bound did not carry PLATFORM_GH_TIMEOUT:"$'\n'"$unbounded"
+fi
+
+echo "17c. a bound that FIRES is a transport failure, never an anomaly" >&2
+# 124 is how `timeout` reports a fired bound. It must land where every other
+# non-zero gh exit lands — `not_measured`, reason preserved — and NOT in
+# `anomalies`, because a call we cut off ourselves tells us even less about the
+# platform than one that errored. Getting this wrong reports our own timeout as
+# evidence of degradation, which is the confident wrong answer this file exists
+# to refuse, reached through the mitigation for a different one.
+D_TMO="$(scenario ghtimeout "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+: >"$D_TMO/gh.timeout"
+run_probe "$PROBE" "$D_TMO" --pr 301
+expect_verdict "a timed-out gh call resolves unknown, never degraded" "unknown"
+expect_status "  and still exits 0" 0
+expect_field "  the run is not_measured" .self_measured "not_measured"
+expect_field "  and says which read it could not make" .self_measured_reason "pr_read_failed"
+expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
+expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
+tmo_detail="$(jq -r '[.probe_errors[].detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
+if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$tmo_detail"; then
+    ok "  and the detail names OUR bound rather than leaving a bare 'exited 124'"
+else
+    bad "  the detail does not name the bound that fired: '$tmo_detail'"; dump
+fi
+
 echo "18. exit codes carry no verdict, but still carry usage errors" >&2
 run_probe "$PROBE" "$D" --pr not-a-number
 expect_status "a usage error is the one non-zero exit" 1
@@ -1050,7 +1168,7 @@ CANON_2B=(
     "1622634225"   # A `gh` call that *errors*…
     "1892531078"   # Run the probe when a watch has gone nowhere…
     "2635286258"   # | rollup entry | probe | poll-prs | merge-shepherd
-    "67846098"   # So "the poller went quiet"…
+    "3517458475"   # So "the poller went quiet"… (ends on the PLATFORM_GH_TIMEOUT bound)
     "3301345540"   # ```bash … probe-platform-health.sh --pr …
     "1562190426"   # It returns one of exactly **four** verdicts…
     "3181854606"   # | Verdict | What it means | … the four rows
@@ -1093,6 +1211,8 @@ expect_default "the status endpoint defaults to githubstatus.com over https" \
     'STATUS_URL="${PLATFORM_STATUS_URL:-https://www.githubstatus.com/api/v2/summary.json}"'
 expect_default "the fetch timeout defaults to 5s" \
     'STATUS_TIMEOUT="${PLATFORM_STATUS_TIMEOUT:-5}"'
+expect_default "the per-call gh bound defaults to 30s" \
+    'GH_TIMEOUT="${PLATFORM_GH_TIMEOUT:-30}"'
 expect_default "the head-age floor defaults to 300s" \
     'MIN_AGE="${PLATFORM_PROBE_MIN_AGE:-300}"'
 # Both anomaly generators must CAPTURE their exit status. A process
@@ -1110,12 +1230,45 @@ expect_default "  and un-sets RUN_CHECK when the read it certifies never happene
     'RUN_CHECK="not_run"'
 expect_default "the component scope defaults to the check-relevant set" \
     'STATUS_COMPONENTS="${PLATFORM_STATUS_COMPONENTS:-actions,api requests,webhooks,pull requests,git operations}"'
+# The bound's two halves that no fixture can reach. `gtimeout` is the macOS
+# spelling and cannot be exercised while `timeout` is shimmed ahead of it; the
+# ABSENT-bound branch cannot be exercised at all, since hiding a binary from a
+# PATH the probe also needs jq on is not something a prepended shim directory
+# can do. Both are pinned at source level rather than left unpinned, because the
+# fallback is what keeps a host without coreutils working AT ALL.
+expect_default "the bound prefers timeout" \
+    'if command -v timeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="timeout"'
+expect_default "  and falls back to gtimeout, the macOS spelling" \
+    'elif command -v gtimeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="gtimeout"'
+expect_default "  and with neither present, records that the bound never applied" \
+    '|| add_error probe timeout_unavailable'
+# The emitter's own failure. No fixture can make the shipped `jq -n` fail — every
+# input reaching it is built by the script itself — so the handler is pinned at
+# source level here and mutation-proved by M25 below.
+expect_default "the verdict emitter captures its exit status" \
+    'emitted="$(jq -n'
+expect_default "  and re-parses the output before printing it" \
+    'if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$emitted"; then'
+expect_default "  and falls back to a hand-built verdict rather than empty stdout" \
+    '"self_measured_reason":"verdict_emitter_failed",'
+# ONE call site for `gh`, the same shape the destructive-action rule uses
+# elsewhere in this repo: a bound enforced per call site is a bound the next
+# call site forgets. The realistic regression is a new reader written as
+# `x="$(gh api …)"`, so that is what is refused.
+stray_gh="$(grep -nE '\$\(gh [a-z]' "$PROBE" || true)"
+if [ -z "$stray_gh" ]; then
+    ok "no gh call bypasses the bounded wrapper"
+else
+    bad "a gh call bypasses gh_bounded, so it carries no timeout:"$'\n'"$stray_gh"
+fi
 # And one BEHAVIOURAL run with the two behaviour-carrying knobs unset, so the
 # defaults are exercised and not merely read. The URL stays pinned: unsetting it
 # would reach the real network, which this gate must never do.
 D="$(scenario defaults "$PR_CLEAN" "$RUNS_CLEAN" 3600 irrelevant)"
 : >"$WORK/calls"
+: >"$WORK/bounds"
 PATH="$BIN:$PATH" SCENARIO_DIR="$D" MOCK_CALLS="$WORK/calls" \
+MOCK_BOUNDS="$WORK/bounds" \
 PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
     bash "$PROBE" --repo mock-org/mock-repo --pr 301 >"$WORK/stdout" 2>"$WORK/stderr"
 STATUS=$?
@@ -1356,10 +1509,15 @@ MUTANTS=(
   no-run-disjoint '--pr 301' 'healthy' \
   'an empty intersection would certify a comparison that had no subject')"
 "$(row "M9 a transport failure becomes an anomaly" \
-  '    add_error first_party gh_call_failed "gh pr view $PR exited $rc"' \
+  '    add_error first_party gh_call_failed "gh pr view $PR exited $rc$(gh_rc_note "$rc")"' \
   '    add_anomaly gh_call_failed "gh pr view $PR exited $rc"' \
   ghfail '--pr 283' 'degraded (unattributed)' \
   'an expired token or a closed laptop would be reported as platform degradation')"
+"$(row "M9d a FIRED BOUND becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh pr view $PR exited $rc$(gh_rc_note "$rc")"' \
+  '    add_anomaly gh_call_failed "gh pr view $PR exited $rc"' \
+  ghtimeout '--pr 301' 'degraded (unattributed)' \
+  'the probe would report its OWN timeout as first-party evidence that the platform is degraded')"
 "$(row "M9b the error ledger is not consulted" \
   'elif [ "$n_fp_errors" -gt 0 ]; then' \
   'elif false; then' \
@@ -1446,6 +1604,16 @@ MUTANTS=(
   '      elif false; then' \
   emptyrollup '--pr 301' 'healthy' \
   'an empty rollup beside runs that did happen would let the run comparison earn clean unopposed')"
+"$(row "M25 the verdict emitter dies" \
+  '  --argjson anomalies "$ANOMALIES" \' \
+  '  --argjson anomalies "" \' \
+  healthy '--pr 301' 'unknown' \
+  'a dead emitter would hand the caller exit 0 and EMPTY stdout, so jq -r .verdict yields the empty string — not one of the four verdicts, and not unknown either')"
+"$(row "M26 the gh bound is not applied" \
+  '    "$GH_TIMEOUT_CMD" "$GH_TIMEOUT" gh "$@"' \
+  '    gh "$@"' \
+  ghtimeout '--pr 301' 'healthy' \
+  'the three load-bearing calls would run unbounded again, and a hang would cost the calling loop its tick')"
 )
 
 mut_ran=0
@@ -1503,7 +1671,18 @@ for r in "${MUTANTS[@]}"; do
             bad "$m_label UNDETECTED: unmutated exit $good_status, mutant exit $STATUS — the exit-code assertion proves nothing"
         fi
     elif [ "$VERDICT" = "$m_wrong" ] && [ "$VERDICT" != "$good_verdict" ]; then
-        ok "$m_label CAUGHT: $m_why"
+        # The exit code is asserted on EVERY verdict-form mutant, not only on
+        # M7's dedicated one. M7 proves the shipped `exit 0` is load-bearing;
+        # this proves no OTHER path can grow an exit code that carries a
+        # verdict — which is where the emitter fallback lands, since it is the
+        # one path that produces a verdict without having measured anything and
+        # is therefore the obvious place for a later "surely THAT should fail
+        # loudly" to put a non-zero exit.
+        if [ "$STATUS" -eq 0 ]; then
+            ok "$m_label CAUGHT: $m_why"
+        else
+            bad "$m_label caught the verdict but exited $STATUS — a verdict must never travel in an exit code"
+        fi
     else
         bad "$m_label UNDETECTED: the mutant returned '$VERDICT' (unmutated: '$good_verdict'); the declared wrong verdict was '$m_wrong'"
     fi
@@ -1584,7 +1763,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=150
+EXPECTED_CASES=167
 CROSS_FILE_MUTANTS=4          # M16, M17, M18, M19
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + CROSS_FILE_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then

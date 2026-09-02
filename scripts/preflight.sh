@@ -907,6 +907,24 @@
 #      its sentence AND its inverse; never-a-gate is scanned for the verdict
 #      VOCABULARY as well as the filename, since the follow-up work will be
 #      written as "on a degraded verdict, hold the PR", naming no script.
+#      TWO FAILURES THAT PRODUCE NO WRONG VERDICT AT ALL are cased too (#303),
+#      because both are silent. The verdict emitter ran with no handler under a
+#      script with no `set -e` and an unconditional `exit 0`, so a dead `jq -n`
+#      handed the caller exit 0 and EMPTY stdout — `jq -r .verdict` yields the
+#      empty string, which is neither one of the four verdicts nor `unknown` —
+#      while the stderr summary still printed and looked normal; the hand-built
+#      fallback is mutation-proved by M25, and deleting it turns that mutant
+#      into a red `«no output»`. And the OPTIONAL attribution fetch was the only
+#      bounded call while the three LOAD-BEARING ones carried no timeout, in a
+#      script whose trigger condition is "GitHub may be degraded right now": all
+#      of them now run under `PLATFORM_GH_TIMEOUT`, asserted over a shimmed
+#      `timeout`'s own ledger rather than over the call log, since the mock `gh`
+#      sees an identical argv either way. A bound that FIRES is a transport
+#      failure like any other — `not_measured`, never an anomaly — with its own
+#      mutant beside the one it mirrors, since reporting our own cutoff as
+#      evidence of degradation is the confident wrong answer reached through the
+#      mitigation for a different one. The exit code is asserted on EVERY
+#      verdict-form mutant, so no path can grow one that carries a verdict.
 #      Mock `gh` AND mock `curl`, both recording every call so the read-only
 #      claim is measured by METHOD — per token, by prefix — not by path prefix:
 #      no repo, no network.
