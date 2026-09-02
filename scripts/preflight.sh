@@ -909,6 +909,43 @@
 #      its sentence AND its inverse; never-a-gate is scanned for the verdict
 #      VOCABULARY as well as the filename, since the follow-up work will be
 #      written as "on a degraded verdict, hold the PR", naming no script.
+#      TWO FAILURES THAT PRODUCE NO WRONG VERDICT AT ALL are cased too (#303),
+#      because both are silent. The verdict emitter ran with no handler under a
+#      script with no `set -e` and an unconditional `exit 0`, so a dead `jq -n`
+#      handed the caller exit 0 and EMPTY stdout — `jq -r .verdict` yields the
+#      empty string, which is neither one of the four verdicts nor `unknown` —
+#      while the stderr summary still printed and looked normal; the hand-built
+#      fallback is mutation-proved by M25, and deleting it turns that mutant
+#      into a red `«no output»`. And the OPTIONAL attribution fetch was the only
+#      bounded call while the three LOAD-BEARING ones carried no timeout, in a
+#      script whose trigger condition is "GitHub may be degraded right now": all
+#      of them now run under `PLATFORM_GH_TIMEOUT`, asserted over a shimmed
+#      `timeout`'s own ledger rather than over the call log, since the mock `gh`
+#      sees an identical argv either way. A bound that FIRES is a transport
+#      failure like any other — `not_measured`, never an anomaly — with its own
+#      mutant beside the one it mirrors, since reporting our own cutoff as
+#      evidence of degradation is the confident wrong answer reached through the
+#      mitigation for a different one. The exit code is asserted on EVERY
+#      verdict-form mutant, so no path can grow one that carries a verdict.
+#      BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER: the cwd repo lookup's
+#      `|| true` discarded the status, so a fired bound was reported as `not in
+#      a GitHub repo` — exit 1, empty stdout, inside a VALID checkout — and
+#      covering it meant the runner had to stop passing `--repo`, the flag that
+#      suppresses that call and structurally excluded the site from the
+#      three-call assertion. The bound has THREE branches and only one is
+#      reachable through a prepended shim, so the other two run under CURATED
+#      PATHs; an earlier edition called them impossible to exercise, which was
+#      false and cost the file its only coverage of the `probe` scope — the
+#      scope that must NOT make a run `not_measured`, or every host without
+#      coreutils reports `not_measured` on every run. Its filter is mutated
+#      out-of-loop, since no shimmed scenario produces such an entry. The bound
+#      VALUE is validated and the validation is cased: `00` is all digits, not
+#      empty and not the literal `0`, and `timeout 00 …` means no bound at all.
+#      A fired bound is 124 OR 137 — the latter when the child ignored TERM and
+#      the kill grace fired — and ONE predicate says so, since testing 124 at
+#      two sites independently left the path `-k` exists for as the one path
+#      neither site could name. On the repo lookup that status is read BEFORE
+#      the value, because a call killed after flushing leaves a fragment behind.
 #      Mock `gh` AND mock `curl`, both recording every call so the read-only
 #      claim is measured by METHOD — per token, by prefix — not by path prefix:
 #      no repo, no network.
