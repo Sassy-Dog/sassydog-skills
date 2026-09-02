@@ -844,8 +844,10 @@
 #      else about it is pinned here; gate 29 owns that file. Its floor is a
 #      section registry with per-section minimums whose sum is DERIVED, every
 #      token validated before arithmetic touches it, and `REGISTRY_MIN` held
-#      apart from the array. Three tracked files plus a listing of `agents/`,
-#      no gh, no network.
+#      apart from the array. Five tracked files — assess-it's SKILL.md,
+#      orchestration.md, github-issue-ops.md and assessment-rubric.md, plus the
+#      PR orchestrator for that one fact — and a listing of `agents/`, no gh,
+#      no network.
 #  34. platform-health-probe tests (scripts/test-platform-health-probe.sh) —
 #      pr-shepherd's degradation probe returns FOUR distinct verdicts and gates
 #      NOTHING (issue #285). The unhandled case was never a `gh` error, which

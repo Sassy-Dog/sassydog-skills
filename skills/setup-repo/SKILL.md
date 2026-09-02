@@ -27,6 +27,13 @@ rendering and content previews all live in the three generators. A bug in any of
 the generator, never here. This skill decides only *which* generators run, in *what order*, and
 what the run report says.
 
+**The trigger description above owns the broad intent ALONE, and that scope is deliberate.** Each
+of the three generators keeps its own specific vocabulary — "set up hooks for this repo", "add
+dependabot config here", "configure survey-work for this repo" — and a description here that
+swallowed those phrasings would make the specific invocations ambiguous: a user who names one area
+would land on the umbrella and get a three-generator plan they did not ask for. Broadening this
+description is the trigger-phrase tightening to refuse.
+
 ## Why the orchestrator exists
 
 **The gap is invisible.** A repo reached through one generator alone is a third of a setup, and

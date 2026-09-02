@@ -341,7 +341,8 @@ orch_flat="$(flatten "$ORCH")"
 # The first two editions of this gate tried a veto — an enumerated ERE for the
 # forbidden instruction shape, then the same thing with a polarity classifier
 # in front of it. Both were wrong in BOTH directions at once, which is the
-# family CLAUDE.md documents at length about test-sentry-verification.sh:
+# family `scripts/test-sentry-verification.sh` documents at length in its own
+# header:
 #
 #   * INERT WHERE IT MATTERS. The polarity edition suppressed any mention with
 #     a negator to its left in the same clause — and `no` is a negator, while
@@ -363,8 +364,11 @@ orch_flat="$(flatten "$ORCH")"
 #     a loop that stopped` had to have its object deleted to keep the gate
 #     green. Prose contorted around a gate is the anti-pattern, not the fix.
 #
-# A veto that is right needs the forward segmentation pass CLAUDE.md describes
-# and a battery that exercises SUPPRESSION rather than only clean strings —
+# A veto that is right needs the forward segmentation pass
+# `scripts/test-sentry-verification.sh`'s header describes (one over the token
+# array, since the boundary that would work is a comma a backward token-local
+# scan never reaches) and a battery that exercises SUPPRESSION rather than only
+# clean strings —
 # a dedicated issue, not a helper smuggled into this one. What replaces it is
 # what decision 5 already uses successfully two sections up, plus counting:
 #
@@ -1427,8 +1431,10 @@ fi
 # states this same contract for its OWN delivery in Step 5, ~30 lines below, so
 # a whole-file grep for any of these phrases is satisfied by decision 6's text
 # and reports a brief with no delivery item as covered — the exact mis-scoping
-# CLAUDE.md records test-sentry-verification.sh making six times. The window is
-# cut at the brief's own opening and at the next section banner.
+# that `scripts/test-sentry-verification.sh`'s header enumerates six instances
+# of, every one a way that gate was measured reporting a clean tree on a source
+# stating the inverse. The window is cut at the brief's own opening and at the
+# next section banner.
 # Bounded on ANY heading, never on `## Step 4` by name: this diff renumbered
 # the brief's own items 6/7, and a step inserted before Step 4 would silently
 # widen the window. The positive control below only catches an over-run that
@@ -1674,7 +1680,8 @@ fi
 # one. Before #280 the orchestrator carried an explicit known-limit bullet
 # saying the nine carried no delivery rule and the brief had no slot for one.
 # That was true when #279 wrote it and is false now, and a stale statement of
-# DELIBERATE ABSENCE is the variety CLAUDE.md singles out as rotting silently:
+# DELIBERATE ABSENCE is the variety `agents/dx-docs-reviewer.md` and
+# `agents/pr-review-orchestrator.md` both single out as rotting silently:
 # nothing fails when it stops being true, and the next reader takes it as
 # licence not to look. Its survival would also be the loudest possible sign the
 # rule above was reverted, so the veto is cheap and doubles as a revert probe.
@@ -1770,8 +1777,10 @@ num_word() {
 # `... six # tracked files` and reads ABSENT — a false pass, since preflight's
 # gate list is hard-wrapped and already wraps mid-phrase. Markdown emphasis is
 # stripped for the same reason one line down: `**six** tracked files` is the
-# same miss wearing a different hat, and CLAUDE.md bolds numerals constantly.
-# test-sentry-verification.sh runs an emphasis-stripped copy for exactly this.
+# same miss wearing a different hat, and one of the three regions read below is
+# markdown prose, where bolding a numeral is a one-keystroke edit no gate
+# forbids. test-sentry-verification.sh runs an emphasis-stripped copy for
+# exactly this.
 normalize_region() {
     sed -E -e 's/^[[:space:]]*(>[[:space:]]?)+//' -e 's/^[[:space:]]*#[[:space:]]?//' \
            -e 's/\*//g' -e 's/(^|[[:space:]])_+/\1/g' -e 's/_+([[:space:]]|\$)/\1/g' <<<"$1" \
@@ -1888,9 +1897,10 @@ fi
 # wrapped or bolded restatement in a fourth file cannot hide from it.
 sweep_phrase="decisions settled about the review gate"
 # Regular, non-symlink files handed to awk directly, never raw git pathspec
-# output: CLAUDE.md records the #263 measurement that a tracked symlink to
-# /dev/zero satisfies a readability test and awk reading it never returns, which
-# in a required gate is a hang with no diagnostic — the worst shape CI has.
+# output: `skills/github-issues/scripts/verify-issue-refs.sh` records the #263
+# measurement that a tracked symlink to /dev/zero satisfies a readability test
+# and awk reading it never returns, which in a required gate is a hang with no
+# diagnostic — the worst shape CI has.
 sweep_files=()
 while IFS= read -r -d '' f; do
     if [ -f "$f" ] && [ ! -L "$f" ]; then sweep_files+=("$f"); fi

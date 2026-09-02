@@ -1836,10 +1836,11 @@ dest_case "a determiner before a real noun still opens one" \
 #
 # THE RULE IS SHARPER THAN "NO NUMBERS", because a blanket ban would strip
 # counts that are perfectly safe. A count is safe when its MEMBERS ARE
-# ENUMERATED BESIDE IT, or when A GATE RE-DERIVES IT -- `CLAUDE.md`s "whose
-# transcription of the nine is the third-copy shape" floats free of any list
-# and is safe anyway, because `scripts/test-review-orchestrator-allowlist.sh`
-# recomputes the nine in CI and reddens if it drifts. Cite the gate by filename
+# ENUMERATED BESIDE IT, or when A GATE RE-DERIVES IT -- the config contract's
+# "the nine reviewers this plugin ships" floats free of any list and is safe
+# anyway, because `scripts/test-review-orchestrator-allowlist.sh` resolves every
+# reviewer it names against `agents/` and floors the extraction, so the count
+# cannot drift in CI. Cite the gate by filename
 # when relying on that, so a later sweep does not rewrite a count something is
 # already holding -- `six arms ... the ASCII dash, the en dash and all
 # four of and/but/so/then` cannot go stale silently, because the list is right
@@ -3123,7 +3124,8 @@ NUMWORDS_278="$(IFS='|'; printf '%s' "${NUM_WORDS_278[*]:1}")"
 # `... eight # tracked files` and reads ABSENT — a false pass, and preflight's
 # gate list is hard-wrapped and already wraps mid-phrase. Emphasis is stripped
 # for the same reason: `**eight** tracked files` is the same miss in a hat, and
-# CLAUDE.md bolds constantly.
+# site 4 is markdown prose, where bolding a numeral is a one-keystroke edit no
+# gate forbids.
 normalize_278() {
     sed -E -e 's/^[[:space:]]*(>[[:space:]]?)+//' -e 's/^[[:space:]]*#[[:space:]]?//' \
            -e 's/\*//g' <<<"$1" | tr '\n' ' ' | tr -s ' '

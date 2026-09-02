@@ -665,7 +665,7 @@ echo "13b. a first-party error is not a clean read either — the ledger is cons
 # runs and finds nothing, so `clean` is reachable — and reporting it would
 # certify a platform the probe half failed to read. Measured on the first
 # edition: `{"verdict":"healthy","probe_errors":[…,…]}`, contradicting this
-# file, SKILL.md and CLAUDE.md at once.
+# file and `skills/pr-shepherd/SKILL.md` at once.
 D="$(scenario errors-but-clean-rollup "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
 : >"$D/commit.fail"
 : >"$D/runs.fail"
