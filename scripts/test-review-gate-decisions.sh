@@ -365,10 +365,11 @@ orch_flat="$(flatten "$ORCH")"
 #     green. Prose contorted around a gate is the anti-pattern, not the fix.
 #
 # A veto that is right needs the forward segmentation pass
-# `scripts/test-sentry-verification.sh`'s header describes (one over the token
-# array, since the boundary that would work is a comma a backward token-local
-# scan never reaches) and a battery that exercises SUPPRESSION rather than only
-# clean strings —
+# `scripts/test-sentry-verification.sh` describes in its comma-parity
+# known-limit block, well below its header (one over the token array, since the
+# boundary that would work is a comma a backward token-local scan never
+# reaches), and a battery that exercises SUPPRESSION rather than only clean
+# strings —
 # a dedicated issue, not a helper smuggled into this one. What replaces it is
 # what decision 5 already uses successfully two sections up, plus counting:
 #

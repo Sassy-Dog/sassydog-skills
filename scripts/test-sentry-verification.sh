@@ -1836,13 +1836,23 @@ dest_case "a determiner before a real noun still opens one" \
 #
 # THE RULE IS SHARPER THAN "NO NUMBERS", because a blanket ban would strip
 # counts that are perfectly safe. A count is safe when its MEMBERS ARE
-# ENUMERATED BESIDE IT, or when A GATE RE-DERIVES IT -- the config contract's
-# "the nine reviewers this plugin ships" floats free of any list and is safe
-# anyway, because `scripts/test-review-orchestrator-allowlist.sh` resolves every
-# reviewer it names against `agents/` and floors the extraction, so the count
-# cannot drift in CI. Cite the gate by filename
-# when relying on that, so a later sweep does not rewrite a count something is
-# already holding -- `six arms ... the ASCII dash, the en dash and all
+# ENUMERATED BESIDE IT, or when A GATE RE-DERIVES IT -- `CLAUDE.md`s
+# tracked-file count for `scripts/test-review-gate-decisions.sh` floats free of
+# any list and is safe anyway, because that gate re-derives it from its own read
+# set and reddens every site restating it, `CLAUDE.md` included -- measured,
+# rewriting that number reddens the gate and names the site. Cite the gate by
+# filename when relying on that, so a later sweep does not rewrite a count
+# something is already holding.
+#
+# AND READ THE GATE BEFORE CITING IT, because holding the SET a number counts is
+# not holding the NUMBER. This bullet cited the `review_surfaces` transcription
+# in `config-contract.md` as an instance of this branch and it is NOT one:
+# `scripts/test-review-orchestrator-allowlist.sh` resolves the names it finds
+# there against `agents/`, but states in as many words that this transcription
+# is deliberately not floored -- and the nine names sit enumerated in that same
+# sentence anyway, which makes it the FIRST branch. Measured: deleting all nine
+# names while keeping the word `nine` leaves `bash scripts/preflight.sh` at
+# rc=0. `six arms ... the ASCII dash, the en dash and all
 # four of and/but/so/then` cannot go stale silently, because the list is right
 # there to check against. A count with no enumeration beside it is the unsafe
 # shape, and both stale ones were exactly that: `removing ANY of the ten` and

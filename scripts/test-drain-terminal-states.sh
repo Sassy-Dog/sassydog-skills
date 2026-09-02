@@ -144,9 +144,8 @@
 #   "BYTE-IDENTICAL" WOULD OVERSTATE IT. The comparison runs after `flat()`, so
 #   it is identity up to whitespace: a re-wrap passes, a reword does not. The
 #   inventory keeps each opener's first words only, so it is identity up to
-#   those. Both claims are stated that way here and in preflight's gate list —
-#   the two sites that describe this gate — because the weaker true claim is
-#   worth more than the stronger false one.
+#   those. Both claims are stated that way here and in preflight's gate list,
+#   because the weaker true claim is worth more than the stronger false one.
 #
 #   KNOWN LIMITS, stated rather than patched, and each one measured.
 #   (1) §2's AND §4's REMAINING BULLETS, §6 AND GUARDRAILS ARE INVENTORIED,
@@ -1058,13 +1057,13 @@ assert_in "$sec2_flat" 'admits DRAIN COMPLETE, so the loop self-cancels with the
 # WIDENING THE GREPS IS THE FIX TO REFUSE — the header of
 # `scripts/test-sentry-verification.sh` records this repo losing that argument
 # every review round, three veto generations deep, and a veto that works needs
-# the forward segmentation pass a different issue owns. The two must-not-exists are
-# LITERAL-DELETION checks against the pre-fix wording, not polarity judgements,
-# which is the posture test-audit-lost-reviewer.sh states. The `surface and
-# hold` veto does not collide with this bullet's own "A bare surface-and-hold
-# is what this replaces": that phrase is hyphenated, measured, and the hyphens
-# survive `emph_strip`. Rewording it to the spaced form is a loud false red,
-# which is the direction this repo prefers.
+# the forward segmentation pass a different issue owns. The two must-not-exists
+# are LITERAL-DELETION checks against the pre-fix wording, not polarity
+# judgements, which is the posture test-audit-lost-reviewer.sh states. The
+# `surface and hold` veto does not collide with this bullet's own "A bare
+# surface-and-hold is what this replaces": that phrase is hyphenated, measured,
+# and the hyphens survive `emph_strip`. Rewording it to the spaced form is a
+# loud false red, which is the direction this repo prefers.
 section conflicting "a CONFLICTING PR is demoted on sight, so it cannot hold in-flight open forever"
 
 # The stop literal is DUPLICATED from `conflicting_raw`'s declaration above, and
