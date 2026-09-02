@@ -937,8 +937,8 @@
 #      PATHs; an earlier edition called them impossible to exercise, which was
 #      false and cost the file its only coverage of the `probe` scope — the
 #      scope that must NOT make a run `not_measured`, or every host without
-#      coreutils reports `not_measured` on every run. Its filter is mutated
-#      out-of-loop, since no shimmed scenario produces such an entry. The bound
+#      coreutils reports `not_measured` on every run. Its filter is mutated on
+#      a curated PATH, since no shimmed scenario produces such an entry. The bound
 #      VALUE is validated and the validation is cased: `00` is all digits, not
 #      empty and not the literal `0`, and `timeout 00 …` means no bound at all.
 #      A fired bound is 124 OR 137 — the latter when the child ignored TERM and
@@ -946,9 +946,29 @@
 #      two sites independently left the path `-k` exists for as the one path
 #      neither site could name. On the repo lookup that status is read BEFORE
 #      the value, because a call killed after flushing leaves a fragment behind.
-#      Mock `gh` AND mock `curl`, both recording every call so the read-only
-#      claim is measured by METHOD — per token, by prefix — not by path prefix:
-#      no repo, no network.
+#      THE GATE'S OWN REACH WAS THE NEXT DEFECT (#302): a review ran 31
+#      mutations against the probe and 19 passed — three real wrong verdicts,
+#      the rest holes in this gate. Every "explains nothing" string is now
+#      pinned by CANON per branch, since a matcher accepting either of two
+#      needles for every branch passed an inversion telling the caller a stall
+#      is a real defect; the docs corpus is an EQUALITY over every tracked
+#      skill doc, and the two files that may name the probe are scanned by
+#      SECTION EQUALITY over their own headings, since pr-shepherd's SKILL.md
+#      was in no corpus and a hold rule in its §4 was green; the
+#      failed-generator door is cased BEHAVIOURALLY — a rollup of numbers kills
+#      the empty-state read for real, and a fault-injecting `jq` shim kills the
+#      missing-run read, which no payload can — after three source pins were
+#      each defeated; a bound that fires is cased and mutated at EVERY gh site
+#      through a selector on the shim, not only at the first call, which
+#      absorbed it; the emitter fallback is three keys rather than a 16-key
+#      copy of the schema, and the fallback mutants assert its exact key set;
+#      the name `gh` is a shell function in the probe, so the chokepoint is
+#      structural rather than a one-spelling grep, with calls-vs-bounds parity
+#      as the behaviour; the first-party count is by EXCLUSION so an
+#      unrecognised scope fails closed; and the out-of-loop mutants carry a
+#      ran-counter like the loop's. Mock `gh` AND mock `curl`, both recording
+#      every call so the read-only claim is measured by METHOD — per token, by
+#      prefix — not by path prefix: no repo, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
