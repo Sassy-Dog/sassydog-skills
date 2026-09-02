@@ -111,8 +111,12 @@ for d in ./dev ./run.sh; do [[ -x "$d" ]] && { dev_script="$d"; break; }; done
 # citing the file that records it, forever, in every repo that answered §2c
 # (issue #317). The sentry pathspec is symmetric on purpose even though its SDK
 # patterns never match the literal `sentry: none`: a hook or settings file that
-# mentions `sentry.init` in prose is documentation too. Pinned by
-# scripts/test-detect-capabilities.sh.
+# mentions `sentry.init` in prose is documentation too. The pathspec is
+# ROOT-ANCHORED — a nested `apps/web/.claude/…` still matches — because
+# setup-config writes its config at the repo root and nowhere else, so the shape
+# #317 measured cannot arise nested from the generator; a root `CLAUDE.md` is
+# outside `.claude/` and still matches too, deliberately. All of it, the
+# anchoring included, is pinned by scripts/test-detect-capabilities.sh.
 sentry="false"
 git grep -lqiE '@sentry/|sentry_flutter|sentry\.init|Sentry\.Init' -- ':(exclude)*.lock*' ':(exclude).claude/**' >/dev/null 2>&1 && sentry="true"
 posthog="false"

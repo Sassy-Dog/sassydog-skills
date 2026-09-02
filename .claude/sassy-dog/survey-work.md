@@ -38,10 +38,12 @@ the same reason it returns `posthog=true`: the word appears in this repo's own s
 
 **Expect `posthog` detection to contradict the config, and dismiss it.**
 `setup-config/scripts/detect-capabilities.sh` decides `posthog` with a bare tracked-tree grep for the
-word, and this repo *documents* PostHog across `skills/setup-config/` and several CI gates. So a
-refresh will find positive evidence against `posthog: none` and, correctly, stop and surface it
-rather than rewriting the key. The answer is still `none`: the hits are prose about the config
-format, not an analytics integration. Do not "fix" this by flipping the key or by deleting the word.
+word, and this repo *documents* PostHog in a dozen-odd tracked files spanning skills, CI gates and
+this repo's own guidance — run the grep for the current list rather than trusting a set written
+here. So a refresh will find positive evidence against `posthog: none` and, correctly, stop and
+surface it rather than rewriting the key. The answer is still `none`: the hits are prose about the
+config format, not an analytics integration. Do not "fix" this by flipping the key or by deleting
+the word.
 **This file is no longer one of those hits** — both greps exclude `.claude/**` since issue #317, so
 no repo's own recorded answer counts as evidence against itself any more. Here the contradiction is
 real and permanent; in a consumer that merely answered §2c it was manufactured, which is what that
