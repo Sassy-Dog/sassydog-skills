@@ -205,8 +205,9 @@
 # of every tracked Markdown and shell file asking which of them carry the
 # summary phrase. The twenty are the ASSERTED read set; the sweep opens far more
 # and asserts nothing about their content beyond that one phrase, so it is named
-# apart from the count, the way CLAUDE.md's gate-27 entry names its read set and
-# its tracked-Markdown sweep separately rather than adding them together. (That
+# apart from the count, the way preflight.sh's own entry for this script names
+# its read set and its tracked-source sweep separately rather than adding them
+# together. (That
 # entry's own wording is deliberately not quoted here: it carries a spelled
 # count, and quoting it would put a competing one inside this very window —
 # measured, it reddened this gate on the first run.)

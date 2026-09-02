@@ -1031,9 +1031,11 @@ echo "22. §2b is pinned by CANON, not by presence alone" >&2
 # this very section, both at exit 0: a paragraph telling the caller to hold a PR
 # on a degraded verdict, and one telling it a `healthy` verdict confirms the
 # stall is a real defect — precisely the two harms this gate's own header names.
-# CLAUDE.md records the same defeat for gates 29/32/33, which is why those moved
-# to canon. Canon compares every blank-line block of §2b for equality after
-# flattening, so ADDING prose fails as loudly as removing it. The accepted cost
+# preflight.sh's entries for test-review-gate-decisions.sh,
+# test-drain-terminal-states.sh and test-audit-lost-reviewer.sh record the same
+# defeat, which is why those moved to canon. Canon compares every blank-line
+# block of §2b for equality after flattening, so ADDING prose fails as loudly
+# as removing it. The accepted cost
 # is that a legitimate reword must update a checksum here: a loud false red,
 # which this repo prefers to a needle that can be satisfied and inverted at once.
 canon_blocks() { # <file> <heading> — one flattened block per line
