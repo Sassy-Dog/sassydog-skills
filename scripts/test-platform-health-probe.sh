@@ -56,8 +56,8 @@
 #      codes ARE a gate because gating is its job. (b) No sibling pr-shepherd
 #      script and no OTHER skill doc names the probe at all, over a sibling
 #      list held as an EQUALITY against `git ls-files` and a docs corpus that
-#      is EVERY tracked `skills/*/SKILL.md` and `skills/*/references/*.md`
-#      minus the two section-scoped files of decision 2 — so neither a new
+#      is EVERY tracked `.md` under `skills/`, at any depth, minus the two
+#      section-scoped files of decision 2 — so neither a new
 #      script nor a new reference doc can ship unscanned. The docs half was a
 #      hand-picked subset until #302: `skills/pr-shepherd/SKILL.md` was in no
 #      corpus at all, and gates 32/33 had already recorded that the SUBSET is
@@ -169,9 +169,11 @@
 # the run proceeded against it; the status is now read BEFORE the value (17d's
 # `gh.timeout.late`). And a fired bound is 124 OR 137: 137 is `timeout`'s
 # kill-grace exit when `gh` ignored TERM — the very path `-k 5` exists for — so
-# `bound_fired` accepts both, and 17c2 drives the 137 path at the first-party
-# sites. An edition that tested `-eq 124` alone recognised the bound everywhere
-# except there.
+# `bound_fired` accepts both, and 17c2 drives the 137 path at each of the three
+# first-party sites through the same selector 17c uses — an edition of 17c2
+# fired it at the first call alone, so a commit-site anomaly on 137 was green;
+# M9h and M9i are the 137 siblings of M9e and M9f. An edition of the probe
+# that tested `-eq 124` alone recognised the bound everywhere except there.
 #
 # THE BOUND HAS THREE BRANCHES AND ONLY ONE IS REACHABLE THROUGH $BIN, which is
 # why 17e and 17f run under CURATED PATHS rather than a prepended shim
@@ -234,6 +236,19 @@
 #     transcription checked only by the arithmetic at the bottom, whose message
 #     blamed a case — a deleted block plus one added case was green. `oo_ran`
 #     mirrors `mut_ran` and has its own ok/bad.
+#   * THE REVIEW OF THAT FIX FOUND FIVE MORE, each measured green and now red.
+#     `gh.killed` had no selector, so the 137 path was cased at the first call
+#     alone while this header said "at the first-party sites" (17c2 loops per
+#     site; M9h/M9i). The vocabulary had no bare form, so `on a degraded
+#     verdict, hold the PR` — the phrasing given as the reason the scan exists
+#     — passed (M31b). Heading lines were skipped by the section scan, so a
+#     rule written as a heading over a bland body passed (M31c). The scope
+#     census read an unquoted token only and floored below the site count, so
+#     `add_error "firstparty"` passed (M34 is the quoted form now; the census
+#     is an equality with the calling lines). And section 23 claimed no
+#     fixture could kill the emitter, which a check name over the argv cap
+#     does through the ledger builder (27c) — the same false-impossibility
+#     shape, re-authored in the fix for it.
 #
 # NOT CLOSED BY #302, recorded rather than implied: the three STRUCTURAL
 # sanitisers (`HEAD` hex-only, `MERGE_STATE`'s class, `BRANCH_ENC`'s `@uri`)
@@ -388,7 +403,13 @@ fi
 # kill grace had to fire — 128 + KILL, preserved after escalation. Measured on
 # coreutils 9.11: `timeout -k 1 1 bash -c 'trap "" TERM; sleep 10'` -> 137,
 # `timeout -k 1 1 sleep 10` -> 124. It is the path `-k` exists for.
-if [ -f "$SCENARIO_DIR/gh.killed" ]; then exit 137; fi
+# Same selector as `gh.timeout`, for the same reason: an empty file fires on
+# the first call, which absorbs it, and a commit-site `-eq 137` anomaly was
+# measured green while this shim had no selector (review of #315).
+if [ -f "$SCENARIO_DIR/gh.killed" ]; then
+    sel="$(cat "$SCENARIO_DIR/gh.killed")"
+    case "$*" in *"$sel"*) exit 137 ;; esac
+fi
 # `-k <grace>` is stripped the way the real binary parses it. Shifting a fixed
 # number of arguments instead would exec `5 30 gh …` the moment the probe
 # gained a kill-after, i.e. the shim would break on the change it exists to
@@ -441,8 +462,11 @@ BASH_BIN="$(command -v bash)"
 # interpolation (`"\(.name) (\(.event))"`, a string whatever `.name` is), and
 # `clean` is total over strings. Measured over null, object, number, array and
 # U+10FFFF names — all stringified, generator exit 0 — and a lone surrogate,
-# which the DERIVATION's parser rejects first, so DERIVED_OK catches it before
-# the generator runs. So the guard behind that generator had no behavioural
+# which never reaches the generator AS a surrogate: this host's jq
+# (1.7.1-apple) rejects it in the DERIVATION's parser, where DERIVED_OK catches
+# it, while other 1.7 builds replace it with U+FFFD and the derivation
+# succeeds — a plain string either way, and the generator survives either way.
+# So the guard behind that generator had no behavioural
 # case, and its three source-level pins were each defeatable (one needle also
 # matched the initialiser). Fault injection is the same answer the `timeout`
 # shim already gives for a bound that fires: `jq.fail` in the scenario names a
@@ -790,8 +814,9 @@ expect_errkind() { # <label> <kind>
     local k; k="$(errkinds)"
     if grep -qF -- "$2" <<<"$k"; then ok "$1"; else bad "$1 — probe_errors were '$k', expected to include $2"; dump; fi
 }
-# The six "explains nothing" strings are pinned by CANON, per branch, the way
-# §2b is. A needle cannot hold this field: a bare `nothing*` glob is satisfied
+# All eight `explains` strings — the six that say nothing and the two that
+# explain a stall — are pinned by CANON, per branch, the way §2b is. A needle
+# cannot hold this field: a bare `nothing*` glob is satisfied
 # by "nothing prevents escalating this stall as a real defect", and the
 # two-needle disjunction that replaced it accepted EITHER needle for EVERY
 # branch — so the `clean`-beside-incident branch rewritten as "nothing here is
@@ -811,30 +836,45 @@ explains_canon() { # <branch> -> the pinned cksum
         attributed-clean)      echo "779948060" ;;   # nothing about this PR — a platform incident is open, but…
         attributed-unmeasured) echo "3045748376" ;;   # nothing measured here — a platform incident is open, and…
         emitter-failed)        echo "3809799310" ;;   # nothing — the verdict emitter failed… (the fallback literal)
+        attributed-anomaly)    echo "1059178065" ;;   # a stall — an open platform incident on a check-relevant component…
+        unattributed)          echo "4169396744" ;;   # a stall — first-party evidence of degradation…
         *) echo "«no canon recorded for branch $1»" ;;
     esac
 }
-explains_ok() { # <branch> [json] -> yes|no: opens with `nothing` AND matches the branch's canon
+explains_on_canon() { # <branch> [json] -> yes|no: the emitted `explains` matches the branch's canon
     local e sum
     e="$(jq -r '.explains // ""' <<<"${2:-$STDOUT}" 2>/dev/null)"
-    case "$e" in nothing*) : ;; *) echo no; return ;; esac
     sum="$(printf '%s' "$e" | cksum | cut -d' ' -f1)"
     if [ "$sum" = "$(explains_canon "$1")" ]; then echo yes; else echo no; fi
 }
-expect_explains_nothing() { # <label> <branch>
+explains_ok() { # <branch> [json] -> yes|no: opens with `nothing` AND is on canon
     local e
+    e="$(jq -r '.explains // ""' <<<"${2:-$STDOUT}" 2>/dev/null)"
+    case "$e" in nothing*) explains_on_canon "$1" "${2:-$STDOUT}" ;; *) echo no ;; esac
+}
+explains_drift() { # <branch> — the got/want checksums for a failure message
+    local e; e="$(field .explains)"
+    printf 'got %s want %s: %s' "$(printf '%s' "$e" | cksum | cut -d' ' -f1)" "$(explains_canon "$1")" "$e"
+}
+expect_explains_nothing() { # <label> <branch>
     if [ "$(explains_ok "$2")" = "yes" ]; then
         ok "$1"
     else
-        e="$(field .explains)"
-        bad "$1 — explains for the '$2' branch is off canon (got $(printf '%s' "$e" | cksum | cut -d' ' -f1) want $(explains_canon "$2")): '$e'"; dump
+        bad "$1 — explains for the '$2' branch is off canon ($(explains_drift "$2"))"; dump
     fi
 }
-refute_explains_nothing() { # <label>
+expect_explains_stall() { # <label> <branch> — a degraded verdict explains a STALL, in the pinned words
+    # Both halves: it must NOT open by saying it explains nothing, and it must
+    # be the pinned string. The anomaly branches were held by the prefix alone
+    # until the review of #315 pointed out that a reword there was free.
     local e; e="$(field .explains)"
     case "$e" in
         nothing*) bad "$1 — a degraded verdict reported that it explains nothing: '$e'"; dump ;;
-        *) ok "$1" ;;
+        *) if [ "$(explains_on_canon "$2")" = "yes" ]; then
+               ok "$1"
+           else
+               bad "$1 — explains for the '$2' branch is off canon ($(explains_drift "$2"))"; dump
+           fi ;;
     esac
 }
 
@@ -860,7 +900,7 @@ expect_status "  and exits 0" 0
 expect_field "  first-party measurement is recorded as an anomaly" .self_measured "anomaly"
 expect_kind "  the missing CI workflow run is named" "missing_workflow_run"
 expect_kind "  the empty-state rollup entry is named" "empty_state_check"
-refute_explains_nothing "  a degraded verdict does NOT report that it explains nothing"
+expect_explains_stall "  a degraded verdict does NOT report that it explains nothing, and its words are pinned" attributed-anomaly
 
 echo "3. first-party anomaly + GREEN page = degraded (unattributed), never healthy (row 2)" >&2
 D="$(scenario unattributed "$PR_ANOMALY" "$RUNS_ANOMALY" 3600 green)"
@@ -869,7 +909,7 @@ expect_verdict "a green page does not refute a first-party anomaly" "degraded (u
 expect_field "  the page really was read as green (so this is not passing by accident)" \
     .status_page "operational"
 expect_status "  and exits 0" 0
-refute_explains_nothing "  the verdict explains the stall rather than explaining nothing"
+expect_explains_stall "  the verdict explains the stall rather than explaining nothing, in the pinned words" unattributed
 
 echo "4. clean first-party + UNREACHABLE endpoint = unknown (row 6)" >&2
 D="$(scenario unknown-clean "$PR_CLEAN" "$RUNS_CLEAN" 3600 unreachable)"
@@ -1233,19 +1273,33 @@ echo "17c2. the KILL GRACE firing is the same bound firing, on the path -k exist
 # the one path `-k 5` was added for — a `gh` ignoring TERM — was the one path
 # it could not name: a bare `exited 137` at the three first-party sites, and
 # at the lookup the 137 fell through control flow into `not in a GitHub repo`.
-D_KILL="$(scenario ghkilled "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-: >"$D_KILL/gh.killed"
-run_probe "$PROBE" "$D_KILL" --pr 301
-expect_verdict "a kill-grace exit resolves unknown, never degraded" "unknown"
-expect_status "  and still exits 0" 0
-expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
-expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
-kill_detail="$(jq -r '[.probe_errors[].detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
-if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$kill_detail" && grep -qF -- "kill grace" <<<"$kill_detail"; then
-    ok "  and the detail names the bound AND the grace, not a bare 'exited 137'"
-else
-    bad "  the detail does not name the bound and the grace: '$kill_detail'"; dump
-fi
+# PER SITE, like 17c: an empty `gh.killed` is absorbed by the first call, and
+# a commit-site `-eq 137` anomaly was measured green while only that call was
+# covered. The detail is asserted to name the site under test.
+for site in "pr view" "commits/" "actions/runs"; do
+    case "$site" in
+        "pr view")      kill_sc=ghkilled;        kill_sel="" ;;
+        "commits/")     kill_sc=ghkilled-commit; kill_sel="commits/" ;;
+        "actions/runs") kill_sc=ghkilled-runs;   kill_sel="actions/runs" ;;
+    esac
+    D_KILL="$(scenario "$kill_sc" "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+    printf '%s' "$kill_sel" >"$D_KILL/gh.killed"
+    run_probe "$PROBE" "$D_KILL" --pr 301
+    expect_verdict "[$site] a kill-grace exit resolves unknown, never degraded" "unknown"
+    expect_status "  and still exits 0" 0
+    expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
+    expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
+    kill_detail="$(jq -r '[.probe_errors[] | select(.kind == "gh_call_failed") | .detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
+    if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$kill_detail" && grep -qF -- "kill grace" <<<"$kill_detail"; then
+        ok "  and the detail names the bound AND the grace, not a bare 'exited 137'"
+    else
+        bad "  the detail does not name the bound and the grace: '$kill_detail'"; dump
+    fi
+    case "$kill_detail" in
+        *"$site"*) ok "  and it fired at the site under test, not at the first call" ;;
+        *) bad "  the grace fired somewhere other than '$site': '$kill_detail'"; dump ;;
+    esac
+done
 
 echo "17d. the cwd repo lookup is the FOURTH gh call, and it is bounded too" >&2
 # Structurally excluded from 17b, whose `-eq 3` counts only the calls that
@@ -1464,9 +1518,14 @@ scan_for_probe() { # <file...>  — echoes each file that names the probe
 # work will be written in verdict VOCABULARY — "on a degraded verdict, hold the
 # PR" names no script — and a filename-only scan reports that as clean; measured,
 # a section doing exactly that left this gate at exit 0. The two `degraded (…)`
-# literals are distinctive enough to scan for; `healthy` and `unknown` are
-# ordinary English and are deliberately NOT in the set.
-VERDICT_VOCAB=('degraded (attributed)' 'degraded (unattributed)' 'platform-degradation verdict')
+# literals are distinctive enough to scan for, and so is the BARE form the rule
+# will actually be written in: `on a degraded verdict, hold the PR` names
+# neither the script nor a parenthetical, and was measured green against the
+# two literals alone (review of #315) — the exact phrasing this comment gives
+# as the reason the scan exists. `healthy` and `unknown` are ordinary English
+# and are deliberately NOT in the set, and neither is a bare `degraded`, which
+# false-positives on the routines' `Load: fallback (degraded)` field.
+VERDICT_VOCAB=('degraded (attributed)' 'degraded (unattributed)' 'degraded (' 'degraded verdict' '`degraded` verdict' 'platform-degradation verdict')
 scan_for_verdict() { # <file...>  — echoes "<file>: <literal>" per hit
     local f lit
     for f in "$@"; do
@@ -1485,8 +1544,10 @@ else
     bad "the probe is referenced by a decision-making script, which makes it a gate: $hits"
 fi
 
-# THE DOCS CORPUS IS AN EQUALITY TOO. Every tracked skill doc — each
-# `skills/*/SKILL.md` and each `skills/*/references/*.md` — is scanned WHOLE,
+# THE DOCS CORPUS IS AN EQUALITY TOO. Every tracked `.md` under `skills/`, at
+# any depth — SKILL.md, references, and the assess-it orchestration docs that
+# sit beside their SKILL.md (a `SKILL.md` + `references/*.md` glob left those
+# two outside while this comment said "every") — is scanned WHOLE,
 # except the two files that legitimately name the probe, which are scanned
 # section by section below. An earlier edition listed take-it, send-it and
 # pr-shepherd's own references by hand, so `skills/pr-shepherd/SKILL.md` was in
@@ -1510,11 +1571,12 @@ while IFS= read -r ref; do
     [ -n "$ref" ] || continue
     case " $SECTION_SCOPED_DOCS " in *" $ref "*) continue ;; esac
     DECISION_DOCS+=("$REPO_ROOT/$ref")
-done < <(git ls-files 'skills/*/SKILL.md' 'skills/*/references/*.md')
+done < <(git ls-files 'skills/*.md')   # a git pathspec `*` crosses `/`, so this is every depth
 # Membership controls, so a listing that silently narrowed cannot report a
-# clean corpus: the files the hand-picked list used to name must still be in it.
+# clean corpus: the files the hand-picked list used to name must still be in
+# it, and so must one of the beside-SKILL.md docs the narrower glob missed.
 corpus_missing=""
-for must in skills/take-it/SKILL.md skills/send-it/SKILL.md skills/pr-shepherd/references/merge-queue.md; do
+for must in skills/take-it/SKILL.md skills/send-it/SKILL.md skills/pr-shepherd/references/merge-queue.md skills/assess-it/orchestration.md; do
     case " ${DECISION_DOCS[*]} " in *" $REPO_ROOT/$must "*) : ;; *) corpus_missing="$corpus_missing $must" ;; esac
 done
 if [ -z "$corpus_missing" ]; then
@@ -1535,8 +1597,11 @@ fi
 # allowlisted: its one legitimate mention is the canon-pinned never-a-gate
 # bullet, which is stripped before the scan so the REST of the list — exactly
 # where a gating exception gets written — is held to the same rule.
-section_by_ordinal() { # <file> <n> — flattened body of the n-th section (0 = preamble)
-    awk -v n="$2" '/^##+ /{c++; next} c==n {print}' "$1" | tr '\n' ' ' | tr -s ' \t'
+section_by_ordinal() { # <file> <n> — the n-th section flattened, HEADING INCLUDED (0 = preamble)
+    # The heading line is part of what is scanned: a rule written as a heading
+    # over a bland body (`#### On a degraded (attributed) verdict, hold the PR`)
+    # was measured green while only bodies were read (review of #315; M31c).
+    awk -v n="$2" '/^##+ /{c++; if (c == n) print; next} c==n {print}' "$1" | tr '\n' ' ' | tr -s ' \t'
 }
 scan_sections() { # <file> <allowlist, one heading per line> — echoes "<heading>: <hit>" per hit
     local f="$1" allow="$2" nheads i h body lit
@@ -1592,14 +1657,15 @@ else
     bad "dispatch-ready wired the verdict into a section #286 does not license: $dr_hits"
 fi
 
-# POSITIVE CONTROL. The carve-out is "§7 may", and a scan that finds the verdict
-# nowhere in dispatch-ready would report the two assertions above as clean while
-# measuring a file in which #286 was reverted. So §7 must actually name it.
+# POSITIVE CONTROL. The carve-out is "DRAIN DEGRADED may", and a scan that finds
+# the verdict nowhere in dispatch-ready would report the assertion above as
+# clean while measuring a file in which #286 was reverted. So that section must
+# actually name it.
 dr_s7="$(region_text "$DR_SKILL" "### DRAIN DEGRADED" "### DRAIN COMPLETE")"
 if grep -qF -- "probe-platform-health" <<<"$dr_s7" && grep -qF -- "degraded (attributed)" <<<"$dr_s7"; then
-    ok "and §7 DOES name the probe and its vocabulary, so the carve-out is live rather than vacuous"
+    ok "and DRAIN DEGRADED DOES name the probe and its vocabulary, so the carve-out is live rather than vacuous"
 else
-    bad "§7 no longer consults the probe — #286's DRAIN DEGRADED is gone, and the scans above prove nothing"
+    bad "DRAIN DEGRADED no longer consults the probe — #286's terminal state is gone, and the scan above proves nothing"
 fi
 
 # pr-shepherd's OWN sections are the nearest surface of all. Section equality:
@@ -1808,10 +1874,16 @@ expect_default "  and falls back to gtimeout, the macOS spelling" \
     'elif command -v gtimeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="gtimeout"'
 expect_default "  and with neither present, records that the bound never applied" \
     '|| add_error probe timeout_unavailable'
-# The emitter's own failure. No fixture can make the shipped `jq -n` fail — every
-# input reaching it is built by the script itself — so the handler is pinned at
-# source level here and mutation-proved by M25 and M29 below, which also hold
-# the fallback to its three keys.
+# The emitter's own failure. It IS reachable from a fixture, one way: its own
+# inputs are built by the script, but the LEDGER BUILDERS pass fixture text on
+# argv, so a check name over the argv cap kills `add_anomaly`'s `--arg d`
+# (exit 126, empty output), the ledger is left empty, and the emitter then dies
+# on `--argjson anomalies ""` — measured, and cased in 27c, which requires the
+# fallback back. An edition of this comment said no fixture could reach it,
+# the false-impossibility shape this file's own header calls worse than a
+# missing case. The handler is pinned at source level here as well, and
+# mutation-proved by M25 and M29 below, which also hold the fallback to its
+# three keys.
 expect_default "the verdict emitter captures its exit status" \
     'emitted="$(jq -n'
 expect_default "  and re-parses the output before printing it" \
@@ -1849,19 +1921,36 @@ fi
 # EVERY add_error SCOPE IS FROM THE CLOSED SET. The count is by exclusion now,
 # so a misspelt scope fails CLOSED at runtime (M34 proves it); this is the
 # other half — a misspelling is a red build rather than a quietly-counted
-# oddity in the ledger. Comment lines are excluded; the vacuity floor is the
-# number of sites, since a census that matched nothing would report a clean
-# set while measuring nothing.
-scope_violations() { # <probe source> — echoes every add_error scope outside {first_party, attribution, probe}
-    grep -v '^[[:space:]]*#' "$1" | grep -oE 'add_error [A-Za-z_]+' | awk '{print $2}' | sort -u \
-        | grep -v -x -e first_party -e attribution -e probe
+# oddity in the ledger. Comment lines are excluded; the second token is read
+# QUOTE-AGNOSTICALLY, since `add_error "firstparty"` passed a census that read
+# an unquoted token only (review of #315); and the vacuity check is an
+# EQUALITY between the tokens extracted and the code lines that call
+# `add_error`, so a census that stopped matching a call shape is red rather
+# than a clean set measured over fewer sites.
+scope_tokens() { # <probe source> — the scope token of every add_error call on a code line, quotes stripped
+    grep -v '^[[:space:]]*#' "$1" | grep -oE "add_error [\"']?[A-Za-z_]+" \
+        | sed -e 's/^add_error //' -e "s/^[\"']//"
 }
-scope_sites="$(grep -v '^[[:space:]]*#' "$PROBE" | grep -c 'add_error [a-z_]')"
+scope_violations() { # <probe source> — echoes every scope outside {first_party, attribution, probe}
+    scope_tokens "$1" | sort -u | grep -v -x -e first_party -e attribution -e probe
+}
+scope_lines="$(grep -v '^[[:space:]]*#' "$PROBE" | grep -c 'add_error ')"
+scope_n="$(scope_tokens "$PROBE" | grep -c .)"
 scope_bad="$(scope_violations "$PROBE")"
-if [ -z "$scope_bad" ] && [ "${scope_sites:-0}" -ge 12 ]; then
-    ok "every add_error call site uses a scope from the closed set ($scope_sites sites, floor 12)"
+if [ -z "$scope_bad" ] && [ "$scope_n" -gt 0 ] && [ "$scope_n" -eq "$scope_lines" ]; then
+    ok "every add_error call site uses a scope from the closed set ($scope_n tokens over $scope_lines calling lines)"
 else
-    bad "add_error scope outside the closed set, or the census broke ($scope_sites sites, floor 12): $scope_bad"
+    bad "add_error scope outside the closed set, or the census broke ($scope_n tokens over $scope_lines calling lines): $scope_bad"
+fi
+# And no other way to REACH the binary by name. `command -v gh`, `type gh`,
+# `which gh` and `hash gh` each answer for the function or for whatever is on
+# PATH, so after the shadow every one of them is vacuous — and a bound
+# "verified" through one would be a convention again.
+gh_lookup_n="$(grep -v '^[[:space:]]*#' "$PROBE" | grep -cE 'command -v gh|type gh|which gh|hash gh')"
+if [ "$gh_lookup_n" -eq 0 ]; then
+    ok "  and the probe never looks the binary up by name, which the shadow makes meaningless"
+else
+    bad "  the probe looks gh up by name on $gh_lookup_n code line(s); after the shadow that answers nothing"
 fi
 # And one BEHAVIOURAL run with the two behaviour-carrying knobs unset, so the
 # defaults are exercised and not merely read. The URL stays pinned: unsetting it
@@ -2062,6 +2151,41 @@ expect_field "  naming the failed comparison" .self_measured_reason "run_compari
 expect_errkind "  and it is on the ledger" "incomplete_payload"
 
 # ==============================================================================
+echo "27c. the ONE fixture-reachable emitter death: a check name over the argv cap" >&2
+# Section 23 used to say no fixture could kill the shipped `jq -n`. The
+# emitter's own inputs are script-built, but the LEDGER BUILDERS put fixture
+# text on argv — `add_anomaly … --arg d "<name> is in the rollup…"` — and the
+# probe already documents the argv cap for the runs payload. A check name past
+# it kills that jq at exec (E2BIG; bash reports 126 and no output), the ledger
+# is assigned the empty string, `n_anomalies` reads it as 0, the verdict
+# computes `healthy`, and the emitter dies on `--argjson anomalies ""` into the
+# fallback. Measured on this host (ARG_MAX 1,048,576) and true on Linux at a
+# lower cap (MAX_ARG_STRLEN 131,072), so 1.2 MB clears both. The probe FAILS
+# CLOSED here — this is not a wrong verdict — but the false impossibility was
+# the defect: CLAUDE.md tells the next editor to trust the header. The name is
+# built through stdin, since building it with `--arg` would die of the same
+# cap this case exists to cross.
+PR_HUGE_NAME="$(head -c 1200000 /dev/zero | tr '\0' 'a' | jq -Rs '{number:301, headRefOid:"aa11bb2",
+  headRefName:"feat/clean", mergeStateStatus:"BLOCKED",
+  statusCheckRollup:[{__typename:"CheckRun", name:., status:"", conclusion:"", state:""}]}')"
+D="$(scenario hugename "$PR_HUGE_NAME" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "a check name over the argv cap kills the ledger builder, and the run lands in the fallback as unknown" "unknown"
+expect_status "  and exits 0" 0
+expect_field "  through the fallback, which says so" .self_measured_reason "verdict_emitter_failed"
+huge_keys="$(jq -c 'keys' <<<"$STDOUT" 2>/dev/null)"
+if [ "$huge_keys" = '["explains","self_measured_reason","verdict"]' ]; then
+    ok "  with exactly the fallback's three keys"
+else
+    bad "  the object is not the three-key fallback: keys $huge_keys"; dump
+fi
+expect_explains_nothing "  in the fallback's pinned words" emitter-failed
+case "$STDERR" in
+    *"the verdict emitter failed (jq exited 2)"*) ok "  and the summary names the emitter dying on its input, which is the mechanism claimed" ;;
+    *) bad "  the summary does not name the emitter dying on its input: '$(printf '%.200s' "$STDERR")'"; dump ;;
+esac
+
+# ==============================================================================
 echo "28. mutations" >&2
 MUTANT="$WORK/mutant.sh"
 apply_mutation() { # <label> <exact from-line> <to-line> [source] [dest]
@@ -2101,7 +2225,7 @@ row() { local IFS="$US"; printf '%s' "$*"; }
 # MUTANT PRODUCES, why it matters. The wrong verdict is checked against the
 # UNMUTATED run of the same scenario as well, so a stale declaration that
 # happens to equal the correct answer cannot report CAUGHT vacuously. Field 6
-# takes six FORMS, because not every harm is a verdict: a plain verdict;
+# takes seven FORMS, because not every harm is a verdict: a plain verdict;
 # `«exit»` (the exit code carries one); `reason:<r>` (the reason field);
 # `unsafe` (hostile text reaches a reported field); `field:<jq path>=<value>`
 # (any other reported field — M28c's harm is a `checks_run` that certifies a
@@ -2277,6 +2401,16 @@ MUTANTS=(
   '    if [ "$rc" -eq 124 ]; then add_anomaly gh_timeout "the runs read timed out"; else add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"; fi' \
   ghtimeout-runs '--pr 301' 'degraded (unattributed)' \
   'the runs read would report its OWN cutoff as degradation, invisible to every plain-failure case for the same reason')"
+"$(row "M9h the KILL GRACE at the commit read becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"' \
+  '    if [ "$rc" -eq 137 ]; then add_anomaly gh_killed "the commit read was killed"; else add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"; fi' \
+  ghkilled-commit '--pr 301' 'degraded (unattributed)' \
+  'the 137 sibling of M9e — measured green while 17c2 fired the grace at the first call alone')"
+"$(row "M9i the KILL GRACE at the runs read becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"' \
+  '    if [ "$rc" -eq 137 ]; then add_anomaly gh_killed "the runs read was killed"; else add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"; fi' \
+  ghkilled-runs '--pr 301' 'degraded (unattributed)' \
+  'the 137 sibling of M9f')"
 "$(row "M9g a FIRED BOUND at the repo lookup becomes an anomaly" \
   '    add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"' \
   '    add_anomaly gh_call_failed "gh repo view exited $rc"' \
@@ -2541,6 +2675,39 @@ if apply_mutation "M31 a hold rule is written into pr-shepherd's §4 Teardown" \
     esac
 fi
 
+# M31b — the same hold rule in the BARE wording the vocabulary scan exists for:
+# no script name, no parenthetical. Measured green against the two `degraded (…)`
+# literals alone (review of #315).
+M31B="$WORK/skill-teardown-bare-mutant.md"
+if apply_mutation "M31b a hold rule in bare 'degraded verdict' wording under §4" \
+    '### 4. Teardown and reconcile' \
+    '### 4. Teardown and reconcile'$'\n\n''On a degraded verdict, HOLD the PR and do not merge it this tick.' \
+    "$SKILL" "$M31B"; then
+    oo_ran=$((oo_ran + 1))
+    m31b_hits="$(scan_skill_sections "$M31B")"
+    case "$m31b_hits" in
+        *"### 4. Teardown and reconcile: degraded verdict"*)
+            ok "M31b CAUGHT: the bare wording is flagged, so the rule cannot be written around the literals" ;;
+        *) bad "M31b UNDETECTED: a bare 'degraded verdict' hold rule in §4 and the section scan reported '$m31b_hits'" ;;
+    esac
+fi
+
+# M31c — the rule written as a HEADING over a bland body. Only bodies were
+# scanned once, and this was green (review of #315).
+M31C="$WORK/skill-teardown-heading-mutant.md"
+if apply_mutation "M31c a hold rule written as a heading under §4" \
+    '### 4. Teardown and reconcile' \
+    '### 4. Teardown and reconcile'$'\n\n''#### On a `degraded (attributed)` verdict, hold the PR'$'\n\n''Wait for the next tick before doing anything else.' \
+    "$SKILL" "$M31C"; then
+    oo_ran=$((oo_ran + 1))
+    m31c_hits="$(scan_skill_sections "$M31C")"
+    case "$m31c_hits" in
+        *"#### On a \`degraded (attributed)\` verdict, hold the PR: degraded (attributed)"*)
+            ok "M31c CAUGHT: heading text is scanned, so a rule cannot hide in a heading over a bland body" ;;
+        *) bad "M31c UNDETECTED: a hold rule as a heading and the section scan reported '$m31c_hits'" ;;
+    esac
+fi
+
 # M32 — a gating bullet APPENDED to Guardrails, beside the canon-pinned one.
 # Canon is on that one bullet so the rest of the list stays free to change, and
 # "free to change" is exactly where a gating exception gets written; the scan
@@ -2577,9 +2744,15 @@ if apply_mutation "M33 two bare gh calls in the if- and pipeline forms" \
     m33_calls="$(grep -c '^gh ' "$WORK/calls")"
     if [ "$m33_bounds" -eq 5 ] && [ "$m33_calls" -eq 5 ] && [ "$VERDICT" = "healthy" ]; then
         ok "M33 BOUNDED: both bare calls ran under the bound with parity intact ($m33_calls calls, $m33_bounds bounds)"
-    else
-        bad "M33 ESCAPED: $m33_calls gh calls, $m33_bounds bounds, verdict '$VERDICT' — a bare gh call bypassed the shadow"
+    elif [ "$m33_bounds" -ne "$m33_calls" ]; then
+        # Parity broken: a call reached the binary without the shim seeing it.
+        bad "M33 ESCAPED: $m33_calls gh calls but $m33_bounds bounds — a bare gh call bypassed the shadow"
         sed 's/^/          | B /' <"$WORK/bounds" >&2
+    else
+        # Parity holds, so the shadow did its job; the count or the verdict is
+        # what moved, which is a stale mutation or a changed baseline, not an
+        # escape — and saying "bypassed" here would blame the wrong thing.
+        bad "M33 MISCOUNTED: $m33_calls gh calls and $m33_bounds bounds (expected 5 and 5), verdict '$VERDICT' — parity holds, so the baseline call count or the mutation changed, not the shadow"
     fi
 fi
 
@@ -2591,7 +2764,7 @@ fi
 M34="$WORK/scope-typo-mutant.sh"
 if apply_mutation "M34 a first-party call site is mis-scoped" \
     '      add_error first_party incomplete_payload "the empty-state read over the rollup failed (jq exited $empty_rc)"' \
-    '      add_error firstparty incomplete_payload "the empty-state read over the rollup failed (jq exited $empty_rc)"' \
+    '      add_error "firstparty" incomplete_payload "the empty-state read over the rollup failed (jq exited $empty_rc)"' \
     "$PROBE" "$M34"; then
     oo_ran=$((oo_ran + 1))
     m34_scan="$(scope_violations "$M34")"
@@ -2609,12 +2782,12 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=227
+EXPECTED_CASES=247
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked
 # against the ran-counter, so a deleted block is red on its own.
-OUT_OF_LOOP_MUTANTS=8         # M16, M17, M18, M19, M31, M32, M33, M34
+OUT_OF_LOOP_MUTANTS=10        # M16, M17, M18, M19, M31, M31b, M31c, M32, M33, M34
 if [ "$oo_ran" -eq "$OUT_OF_LOOP_MUTANTS" ]; then
     ok "every out-of-loop mutant ran ($oo_ran of $OUT_OF_LOOP_MUTANTS)"
 else

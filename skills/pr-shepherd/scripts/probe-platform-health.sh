@@ -202,9 +202,11 @@
 # to the emitter would have drifted out of it silently — #167's rule (never
 # transcribe the table), inside this file. It carries no measured value — not
 # even the digits-validated `pr` — because the measured values are precisely
-# what could not be serialised, and carrying one invites carrying the next. A
-# caller that needs more than the verdict from a run whose emitter died has a
-# broken jq, and its own `jq -r .verdict` is the next thing to fail.
+# what could not be serialised, and carrying one invites carrying the next —
+# and whatever killed the emitter (a ledger builder that died on the argv cap,
+# or jq itself) is exactly what would be re-run to produce a richer object.
+# Nothing here is reliable except the three literals, so nothing else is
+# offered.
 # THE TWO LEDGERS STAY `--argjson`, ON PURPOSE. `--arg` plus `try fromjson
 # catch []` would make the emitter unable to fail on inputs at all — and
 # measured, an empty `$ANOMALIES` already reads as ZERO anomalies at the

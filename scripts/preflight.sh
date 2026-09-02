@@ -870,8 +870,10 @@
 #      the directory, so a new script cannot ship unscanned. The SKILL.md half
 #      is SECTION-scoped, because a whole-file grep is satisfied by the probe's
 #      own §2b and by the bundled-script table and would read a probe wired into
-#      the merge section as clean; §1, §1b and §3 are asserted not to name it,
-#      mutation-proved by inserting a mention into §3. Two contract decisions
+#      the merge section as clean; every heading in the file is scanned by
+#      SECTION EQUALITY, with §2b and the script table as the only carve-outs,
+#      mutation-proved by a mention in §3 and by the measured hold rule in §4
+#      that a by-name list of §1/§1b/§3 left green. Two contract decisions
 #      are pinned together and must be read together: an unreachable endpoint
 #      never manufactures a `healthy` and never manufactures a `degraded` on its
 #      own, while an anomaly BESIDE an unreadable page stays
