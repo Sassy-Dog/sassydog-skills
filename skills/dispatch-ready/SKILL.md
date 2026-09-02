@@ -508,6 +508,18 @@ Three conjuncts, and each excludes a normal state the loop already handles:
    the platform is fine and work is stuck, that is STALLED's question or a real defect, and
    stopping the loop would hide it.
 
+**Report WHY an `unknown` could not measure, and treat a probe that says nothing as one.** The
+probe's `explains` field carries the reason behind an `unknown` and the first-party detail behind
+that — including its own `PLATFORM_GH_TIMEOUT` bound firing, which is the single most useful fact
+this loop can print during the outage the state exists for, and which the bare verdict flattens
+into the same sentence as "no `--pr` was given". So render the reason, not the word:
+`probe: unknown — not measured: pr_read_failed; gh pr view exited 124 — the 20s PLATFORM_GH_TIMEOUT
+bound fired`. A run that returns **no stdout at all** — killed by a tool timeout before it could
+emit, the one failure its own emitter fallback cannot answer because the script never reaches it —
+is `unknown` by the same rule and is reported as `probe: no verdict`. Neither form is `degraded`,
+neither stops the loop, and neither is `healthy`: a probe that did not speak is not a platform that
+is fine.
+
 **Two-tick confirmation, the same shape as STALLED and for the same reason**: a flaky call is not
 an outage. The record is `.git/dispatch-ready-degraded.json` — its **own** file, not the stall
 record. They answer different questions, a tick can legitimately be mid-confirmation on neither,
@@ -530,7 +542,8 @@ Any tick that dispatches, merges, or reads a `healthy` verdict deletes a leftove
 `.git/dispatch-ready-degraded.json`: recovery resets the confirmation clock exactly as progress
 resets the stall clock. An `unknown` verdict **leaves the record alone** — it is neither progress
 nor degradation, and clearing on it would let one unreadable status page reset a genuine two-tick
-outage count indefinitely.
+outage count indefinitely. A `no verdict` run leaves it alone for the same reason — it is an
+`unknown` that could not even say so.
 
 ### DRAIN COMPLETE
 

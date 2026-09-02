@@ -121,16 +121,33 @@
 #     mutation-proved by M25, which breaks the emitter (`--argjson anomalies ""`
 #     exits 2 and prints nothing) and requires `unknown` back. Delete the
 #     fallback and M25 reports the mutant as `«no output»`: UNDETECTED, red.
-#     Its exit code is asserted too, by the rule below. THE FALLBACK IS THREE
+#     Its exit code is asserted too, by the rule below. THE FALLBACK IS FOUR
 #     KEYS, and M25 asserts exactly those with the reason and the explains
 #     canon: the first edition was a 16-key literal mirroring the emitter — a
 #     second copy of the schema held in step by nothing, and renaming a key in
-#     it was measured green (#302). The ledgers stay `--argjson` ON PURPOSE,
-#     and M29 pins that: an empty `$ANOMALIES` already reads as zero anomalies
-#     at the verdict, so an emitter that cannot fail on its inputs (`--arg`
-#     plus `try fromjson catch []`) emits `healthy` beside an empty list. The
-#     emitter dying is the fail-closed door, and M29 corrupts the ledger and
-#     requires the fallback back.
+#     it was measured green (#302). It was THREE keys until #314, and the
+#     fourth is `pr`, admitted under a narrower rule than the one it relaxes —
+#     carry nothing that could be what broke the emitter — which `pr` alone
+#     satisfies because it is validated as digits with no leading zero and is
+#     therefore a bare JSON number by construction. Case 18 pins that premise
+#     (`--pr 007` is refused), and it is the whole argument: relax the
+#     validation and this literal stops being JSON on the one path that exists
+#     to answer a run that produced none. The ledgers stay `--argjson` ON
+#     PURPOSE, and M29 pins that: an empty `$ANOMALIES` already reads as zero
+#     anomalies at the verdict, so an emitter that cannot fail on its inputs
+#     (`--arg` plus `try fromjson catch []`) emits `healthy` beside an empty
+#     list. The emitter dying is the fail-closed door, and M29 corrupts the
+#     ledger and requires the fallback back.
+#     THE STDERR LINE NAMES WHICH INPUT BROKE IT, and that is asserted rather
+#     than assumed (#314). This failure is unreproducible after the fact — the
+#     ledgers die with the process — so that line is the entire forensic
+#     record, and it named the exit code alone. Every `fallback` mutant now
+#     requires both ledgers reported with their byte lengths, and the
+#     `fallback:<LEDGER>` form requires the named one reported as FAILED:
+#     M29 corrupts `$ANOMALIES` and 27c reaches the same state through the
+#     argv cap, while M25 is the contrasting shape where both ledgers parse
+#     and the emitter itself is what died. Those two stories call for
+#     different fixes and `jq exited 2` cannot tell them apart.
 #   * A BOUND ON THE OPTIONAL CALL AND NONE ON THE LOAD-BEARING ONES. The
 #     attribution fetch — the half the probe's header calls never load-bearing —
 #     carried `--max-time`, while `gh pr view`, the commit read and the runs
@@ -145,35 +162,96 @@
 #     covered `gh pr view` alone while the commit and runs sites could report
 #     their own cutoff as an anomaly with the gate green (measured, #302). The
 #     shim now takes a selector; 17c loops over the three sites and asserts
-#     the detail names the one under test, and 17d fires the fourth. Reporting
+#     the detail names the one under test. There is no fourth site any more —
+#     see the repo-derivation paragraph. Reporting
 #     our own cutoff as first-party evidence of degradation is the confident
 #     wrong answer reached through the mitigation for a different one, so it
-#     has its own mutant PER SITE (M9d, M9e, M9f, M9g) beside the
+#     has its own mutant PER SITE (M9d, M9e, M9f) beside the
 #     transport-failure one it mirrors — M9e and M9f in the exact shape that
 #     keeps recording an error on every OTHER non-zero exit, so no
 #     plain-failure case can see them.
+#     17c also asserts that the fired bound reaches `explains` and the stderr
+#     summary, not `probe_errors[].detail` alone — see the explains paragraph.
 #
-# BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER, and one did. The cwd repo
-# lookup ended in `|| true`, which discards the status — harmless while the call
-# could only fail by erroring, and a lie the moment a bound could fire: 124
-# became indistinguishable from an empty result and was reported as `not in a
-# GitHub repo and --repo not given`, exit 1 with empty stdout, INSIDE A VALID
-# CHECKOUT. Case 17d covers it, and covering it needed the runner to stop
-# passing `--repo`, since that flag suppresses this call — which is why 17b's
-# `-eq 3` structurally excluded the site and no case reached it. A fired bound
-# there now records the same `first_party gh_call_failed` the other three sites
-# record and the run carries on to a real verdict.
-# There were TWO wrong answers at that site, not one. The second: the status was
-# tested AFTER the emptiness check, so a call the bound cut off after `gh` had
-# flushed a slug left a real-looking fragment that passed the shape check and
-# the run proceeded against it; the status is now read BEFORE the value (17d's
-# `gh.timeout.late`). And a fired bound is 124 OR 137: 137 is `timeout`'s
+# BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER, AND THE ANSWER TO THAT WAS TO
+# STOP MAKING THE CALL (issue #314). The cwd repo lookup was `gh repo view`,
+# ending in `|| true`, which discards the status — harmless while the call could
+# only fail by erroring, and a lie the moment a bound could fire: 124 became
+# indistinguishable from an empty result and was reported as `not in a GitHub
+# repo and --repo not given`, exit 1 with empty stdout, INSIDE A VALID CHECKOUT.
+# #312 taught the site 124 and 137 and left every OTHER non-zero exit — a 5xx,
+# an expired token, a dead link — producing that same false cause, which is the
+# whole class rather than two codes of it. The site was answering a LOCAL
+# question through a REMOTE call, in the one script whose trigger condition is
+# "GitHub may be failing right now", so it is now `git rev-parse` plus
+# `git remote get-url origin` and the bounded `gh` sites are three.
+#   17d is what that costs and what it buys. The cwd became an INPUT — the
+#   derivation reads the working directory, not an argument — so the runner
+#   grew `CWD_OVERRIDE` and this file builds real one-commit-less git repos
+#   under `$WORK`: three URL forms git actually writes, one with no `origin`,
+#   one with an unparsable remote, and a bare directory outside any work tree
+#   (asserted to BE outside one, since a `$TMPDIR` inside a checkout would make
+#   that case measure the opposite branch). Running from `$REPO_ROOT` instead
+#   would derive whatever `origin` this checkout has — a fork's slug on a fork
+#   PR, and this repo is PUBLIC — so an equality there is vacuous or
+#   host-dependent. Each failure shape yields exit 0, a verdict, and
+#   `first_party repo_lookup_failed` naming which input broke; M9g is the
+#   mutation, turning that entry into an ANOMALY, which would report a local
+#   fact about the operator's machine as evidence that GitHub is degraded.
+#   TWO MUST-NOT-EXIST HALVES, because either alone is weak. The mock `gh`'s
+#   `repo` arm now FAILS LOUDLY rather than answering, so the call reddens
+#   wherever it reappears; and 17d greps the call log for it by name, so the
+#   failure says which regression rather than "unhandled invocation". `git` is
+#   in the read-only corpus for the reason `gh repo view` used to be: a
+#   `git fetch` or `git remote add` written into the derivation leaves no `gh`
+#   line for case 17 to classify, and the two read subcommands are whitelisted
+#   by their FULL form so a flag added to either is offending.
+#   There were TWO wrong answers at that site, not one, and the second is now
+#   unreachable rather than fixed: the status was tested AFTER the emptiness
+#   check, so a call the bound cut off after `gh` had flushed a slug left a
+#   real-looking fragment that passed the shape check. A local `git remote
+#   get-url` cannot half-flush a slug to a bound that no longer exists, so the
+#   `gh.timeout.late` shim arm that drove it is DELETED rather than kept — an
+#   unreachable branch in a gate is the false impossibility this header calls
+#   worse than a missing case.
+# A fired bound is 124 OR 137: 137 is `timeout`'s
 # kill-grace exit when `gh` ignored TERM — the very path `-k 5` exists for — so
 # `bound_fired` accepts both, and 17c2 drives the 137 path at each of the three
 # first-party sites through the same selector 17c uses — an edition of 17c2
 # fired it at the first call alone, so a commit-site anomaly on 137 was green;
 # M9h and M9i are the 137 siblings of M9e and M9f. An edition of the probe
 # that tested `-eq 124` alone recognised the bound everywhere except there.
+#
+# THE WORST CASE IS A CONSTRAINT AND SECTION 23 RE-DERIVES IT (issue #314).
+# Each bounded site can burn `PLATFORM_GH_TIMEOUT` plus the fixed kill grace and
+# the `curl` runs after all of them, so the ceiling is
+# `sites x (bound + grace) + status timeout`. At the previous 30s default with
+# four sites that was 145s against the 120s default tool timeout of the harness
+# the shipped callers run under — and a harness kill yields NO JSON AND NO
+# STDERR, which is #303's shape one layer up and which the emitter fallback
+# cannot answer because the script never reaches it. The default is 20s and the
+# worst case 80s. Every term is READ FROM THE PROBE'S SOURCE and `sites` comes
+# from 17b's MEASURED bound count, never from a transcription, so a fourth
+# bounded call re-derives the sum instead of leaving a stale number in a
+# comment; both the probe header and §2b are then required to state the same
+# figure, because a ceiling nobody can read is one an operator raises by
+# accident. `GH_TIMEOUT_PINNED` is the runner's single transcription of the
+# bound, consumed by run_probe and by 17b's per-line check, and it tracks the
+# SHIPPED default deliberately: pinning a value the probe never ships would
+# measure a configuration nobody runs.
+#
+# THE UNMEASURED `unknown` CARRIES ITS REASON, AND THE CANON STOPS AT A MARKER.
+# `unknown` spans "no `--pr` was given" and "GitHub hung for twenty seconds on
+# `gh pr view`", and both rendered as one sentence in `explains` and in the
+# stderr summary while the reason sat in `probe_errors[].detail`, which nothing
+# renders (#314). The branch now appends `(not measured: <reason>; <details>)`,
+# which is GENERATED text and cannot be a fixed checksum, so `explains_head`
+# splits on that literal marker and the canon holds the sentence exactly as
+# before. The suffix is asserted behaviourally instead — 17c requires the fired
+# bound in it AND on stderr, 17d requires each derivation failure — and the
+# interpolation is pinned at source in 23, since the canon can no longer see
+# it. The residual gap is stated: a reword hidden AFTER the marker is unpinned,
+# bounded only by the fact that nothing there is authored prose.
 #
 # THE BOUND HAS THREE BRANCHES AND ONLY ONE IS REACHABLE THROUGH $BIN, which is
 # why 17e and 17f run under CURATED PATHS rather than a prepended shim
@@ -191,6 +269,13 @@
 # reached `healthy` with a failed read on the ledger (measured, #302). Section
 # 23 holds every `add_error` site to the closed set, and M34 misspells one and
 # requires both the census to flag it and the run to fail closed.
+#   17e AND 17f ALSO BOUND THE STDERR WARNING, in opposite directions (#314).
+#   The JSON ledger is not a channel a human reads: macOS ships no `timeout`, so
+#   an operator running this by hand without coreutils saw `platform: healthy`
+#   every time and learned the bound never applied on the day a `gh` call hung
+#   the session — the one day there is no output to learn it from. 17e requires
+#   the line, 17f requires its ABSENCE where a bound exists, because a warning
+#   printed unconditionally is one an operator learns to skip.
 #
 # THE BOUND VALUE IS VALIDATED AND THE VALIDATION IS CASED (17g). The whole
 # block was uncased: deleting it left this gate green. `00` is the shape that
@@ -256,6 +341,17 @@
 # gate green, and no fixture drives hostile text through `missing_out` or the
 # status detail. That is the residual half of #302's original finding 4, out of
 # its acceptance; a later editor should expect those mutations to still pass.
+# #314 ADDS ONE TO THAT LIST, stated rather than left to be found. First-party
+# `probe_errors[].detail` values now reach the STDERR summary too, through the
+# `explains` tail, where before they reached the JSON alone. Every variable part
+# of a detail is sanitised (`BRANCH_SAFE`) or structurally constrained (`$HEAD`
+# hex-only, `$PR` digits, `$rc` a number, `$repo_why` a literal, a DERIVED
+# `$REPO` from a safe character set) — with one exception that predates this and
+# is unchanged by it: a `--repo` VALUE is only shape-checked `owner/name`, so a
+# caller who passes hostile text there can put it in a reported field. It was
+# already in the JSON details; it is now also on the stderr line. Section 26's
+# fixtures do not drive it, because `--repo` is the coordinator's own argument
+# rather than a fork-PR author's.
 #
 # THE EXIT CODE IS NOW ASSERTED ON EVERY VERDICT-FORM MUTANT, not only on M7's
 # dedicated one. M7 proves the shipped `exit 0` is load-bearing; the per-mutant
@@ -276,11 +372,13 @@
 # Network-free: PATH-shimmed mock `gh` AND mock `curl`, both serving recorded
 # payloads from a scenario directory and recording every invocation, so the
 # read-only claim is measured rather than asserted, by METHOD and not merely by
-# path prefix. `--repo` is passed everywhere EXCEPT the lookup cases in 17d,
-# which drop it precisely to reach the probe's only other gh use (the cwd repo
-# lookup); the mock `gh` answers `repo view`, so a machine with a real
-# authenticated gh still behaves exactly like CI — remove that mock arm and 17d
-# reaches the real one. Every env knob the probe reads is pinned, so an
+# path prefix. `--repo` is passed everywhere EXCEPT the derivation cases in 17d,
+# which drop it precisely to reach the local repo derivation; the mock `gh`'s
+# `repo` arm now REFUSES rather than answering, so `gh repo view` reddens
+# wherever it comes back. `git` is SHIMMED BUT NOT FAKED — every invocation is
+# logged and then handed to the real binary, whose answers are what 17d's
+# fixture repositories are for, since a stub would measure the stub's idea of a
+# remote URL rather than git's. Every env knob the probe reads is pinned, so an
 # operator's ambient PLATFORM_* setting cannot change what this measures.
 # `timeout` is shimmed for the SAME reason the knobs are pinned rather than to
 # fake anything: the host decides whether the real binary exists (macOS ships
@@ -329,13 +427,16 @@ cat >"$BIN/gh" <<'MOCK'
 printf 'gh %s\n' "$*" >>"$MOCK_CALLS"
 case "${1:-}" in
     repo)
-        # The cwd repo lookup. Every case that passes --repo suppresses it, which
-        # is why it went unmocked until case 17d exercised it deliberately.
-        if [ "${2:-}" != "view" ]; then
-            echo "mock gh: unhandled repo subcommand: $*" >&2; exit 1
-        fi
-        if [ -f "$SCENARIO_DIR/repo.fail" ]; then exit 4; fi
-        echo "mock-org/mock-repo"
+        # A MUST-NOT-EXIST ARM (issue #314). The cwd repo lookup used to be
+        # `gh repo view` and this arm answered it; the probe now derives the slug
+        # from the `origin` remote with `git`, so reaching this at all means the
+        # remote call is back. Failing loudly rather than deleting the arm is
+        # deliberate: a deleted arm falls through to the catch-all, which says
+        # `unhandled invocation` and reads like a fixture problem, while 17d's
+        # explicit "no `gh repo view` in the call log" assertion names the
+        # regression. Both are wanted — this one fires wherever the probe runs.
+        echo "mock gh: the probe must not call 'gh repo view' — the repo is derived locally (#314): $*" >&2
+        exit 1
         ;;
     pr)
         if [ "${2:-}" != "view" ]; then
@@ -367,6 +468,24 @@ if [ -f "$SCENARIO_DIR/status.unreachable" ]; then exit 7; fi
 cat "$SCENARIO_DIR/status.json"
 MOCK
 chmod +x "$BIN/curl"
+
+# `git` is LOGGED, NEVER FAKED (issue #314). The repo derivation replaced a `gh`
+# call with two local git reads, and a local command that the read-only scan
+# cannot see is exactly the hole the `gh` chokepoint closed one layer up: a
+# `git fetch`, a `git remote add` or a `git config --global` written here would
+# leave no trace in MOCK_CALLS and case 17 would report the run clean. So every
+# invocation is recorded and then handed to the REAL binary, whose answers are
+# what the fixture repositories below are for — a stub would measure the stub's
+# idea of a remote URL rather than git's.
+{
+    echo '#!/usr/bin/env bash'
+    printf "GIT_REAL='%s'\n" "$(command -v git)"
+    cat <<'MOCK'
+printf 'git %s\n' "$*" >>"${MOCK_CALLS:-/dev/null}"
+exec "$GIT_REAL" "$@"
+MOCK
+} >"$BIN/git"
+chmod +x "$BIN/git"
 
 # `timeout` is SHIMMED for the same reason every PLATFORM_* knob is pinned: the
 # host decides whether the real binary exists (macOS ships none; coreutils
@@ -416,10 +535,14 @@ fi
 # measure, and every bounded call would fail for a reason unrelated to the test.
 if [ "${1:-}" = "-k" ]; then shift 2; fi
 shift
-# The bound firing AFTER the child flushed stdout: the output is real, and the
-# status is still 124. This is `timeout` killing `gh repo view` mid-flight, and
-# the probe must read the status before it reads the (possibly truncated) value.
-if [ -f "$SCENARIO_DIR/gh.timeout.late" ]; then "$@"; exit 124; fi
+# A `gh.timeout.late` arm lived here until #314: the bound firing AFTER the child
+# had flushed stdout, so a real-looking fragment survived a call we cut off. It
+# existed for ONE site, the `gh repo view` repo lookup, which is now a local git
+# read and can neither be bounded nor half-flush a slug. The arm is removed
+# rather than kept "in case": an unreachable branch in a gate is the false
+# impossibility this file's own header calls worse than a missing case, and the
+# three surviving `gh` sites all parse their output through jq, which rejects a
+# truncated payload on its own.
 exec "$@"
 MOCK
 chmod +x "$BIN/timeout"
@@ -438,8 +561,8 @@ chmod +x "$BIN/timeout"
 BIN_NT="$WORK/bin-no-timeout"
 BIN_GT="$WORK/bin-gtimeout"
 mkdir -p "$BIN_NT" "$BIN_GT"
-cp "$BIN/gh" "$BIN/curl" "$BIN_NT/"
-cp "$BIN/gh" "$BIN/curl" "$BIN_GT/"
+cp "$BIN/gh" "$BIN/curl" "$BIN/git" "$BIN_NT/"
+cp "$BIN/gh" "$BIN/curl" "$BIN/git" "$BIN_GT/"
 cp "$BIN/timeout" "$BIN_GT/gtimeout"
 # Everything else the probe and the mocks reach for, resolved ONCE from the real
 # PATH and symlinked in. `bash` and `env` are here because the mocks carry a
@@ -455,6 +578,41 @@ for t in bash env jq tr cat sed; do
     fi
 done
 BASH_BIN="$(command -v bash)"
+
+# --- the cwd fixtures ---------------------------------------------------------
+# REAL git repositories, because the probe's repo derivation is now a LOCAL read
+# (issue #314) and its subject is the working directory rather than an argv
+# value. Every case before this one ran from `$REPO_ROOT`, where `origin` is
+# whatever the developer or the CI checkout happens to point at — a fork's slug
+# on a fork PR — so an assertion on the DERIVED value taken there would either be
+# vacuous or host-dependent. A fixture repo with a remote this file chose makes
+# `.repo` an equality.
+#
+# FIVE OF THEM, one per branch of the derivation plus the URL forms git actually
+# writes. `not-a-repo` is a bare directory under `$WORK`, which `mktemp -d` puts
+# outside any checkout — assert that, rather than assuming it, because a `$TMPDIR`
+# inside a repo would make the "not in a work tree" case silently measure the
+# opposite branch.
+CWD_SSH="$WORK/cwd-ssh"
+CWD_HTTPS="$WORK/cwd-https"
+CWD_SSHPROTO="$WORK/cwd-sshproto"
+CWD_NOORIGIN="$WORK/cwd-noorigin"
+CWD_BADURL="$WORK/cwd-badurl"
+CWD_NOREPO="$WORK/cwd-not-a-repo"
+mkdir -p "$CWD_NOREPO"
+make_cwd() { # <dir> [origin url]
+    mkdir -p "$1"
+    ( cd "$1" && git init -q . >/dev/null 2>&1 && \
+      { [ -z "${2:-}" ] || git remote add origin "$2"; } ) || return 1
+}
+CWD_MISSING=""
+make_cwd "$CWD_SSH"       "git@github.com:mock-org/mock-repo.git"       || CWD_MISSING="$CWD_MISSING ssh"
+make_cwd "$CWD_HTTPS"     "https://github.com/mock-org/mock-repo.git"   || CWD_MISSING="$CWD_MISSING https"
+make_cwd "$CWD_SSHPROTO"  "ssh://git@github.com/mock-org/mock-repo"     || CWD_MISSING="$CWD_MISSING sshproto"
+make_cwd "$CWD_NOORIGIN"                                                || CWD_MISSING="$CWD_MISSING noorigin"
+# A local-path remote is what a clone of a sibling checkout carries, so the
+# unparsable case is a real shape rather than a contrived string.
+make_cwd "$CWD_BADURL"    "/some/local/path/mock-repo.git"              || CWD_MISSING="$CWD_MISSING badurl"
 
 # A THIRD PATH, carrying a `jq` that can be told to DIE on one program. The
 # missing-run generator cannot be killed by any payload: its input is the
@@ -479,7 +637,7 @@ BASH_BIN="$(command -v bash)"
 # it.
 BIN_JQ="$WORK/bin-jqfault"
 mkdir -p "$BIN_JQ"
-cp "$BIN/gh" "$BIN/curl" "$BIN/timeout" "$BIN_JQ/"
+cp "$BIN/gh" "$BIN/curl" "$BIN/timeout" "$BIN/git" "$BIN_JQ/"
 JQ_REAL="$(command -v jq)"
 {
     echo '#!/usr/bin/env bash'
@@ -703,23 +861,34 @@ scenario() { # <name> <pr_json> <runs_json> <head_age_secs> <status kind>
 
 # --- runner -------------------------------------------------------------------
 STDOUT=""; STDERR=""; STATUS=0; VERDICT=""
+# ONE transcription of the bound the runner pins, consumed by run_probe below and
+# by 17b's per-line assertion. It tracks the SHIPPED default deliberately — the
+# knob is pinned so an operator's ambient value cannot change what this gate
+# measures, and pinning a value the probe never ships would measure a
+# configuration nobody runs. Section 23 is what holds the source line to it.
+GH_TIMEOUT_PINNED=20
 run_probe() { # <script> <scenario_dir> [extra probe args...]
     local script="$1" dir="$2"
     shift 2
     : >"$WORK/calls"
     : >"$WORK/bounds"
     : >"$WORK/jqfaults"
-    # THREE OPTIONAL OVERRIDES, each defaulting to the pinned value so a case
+    # FOUR OPTIONAL OVERRIDES, each defaulting to the pinned value so a case
     # that does not set one measures exactly what it used to.
     #   PATH_OVERRIDE       a curated PATH, for the two bound branches $BIN
     #                       cannot reach (no timeout at all; gtimeout only),
     #                       or $BIN_JQ, the fault-injecting jq.
-    #   REPO_ARG_OVERRIDE   "none" drops --repo, which is what reaches the cwd
-    #                       repo lookup — the FOURTH gh call, suppressed by
-    #                       every other case here and therefore unexercised
-    #                       until one asked for it.
+    #   REPO_ARG_OVERRIDE   "none" drops --repo, which is what reaches the repo
+    #                       derivation — suppressed by every other case here and
+    #                       therefore unexercised until one asked for it.
+    #   CWD_OVERRIDE        the directory the probe RUNS IN. Only the derivation
+    #                       reads it, and only when --repo is absent, but the two
+    #                       travel together: dropping --repo without choosing a
+    #                       cwd measures whatever `origin` this checkout has,
+    #                       which on a fork PR is not this repo at all (#314).
     #   GH_TIMEOUT_OVERRIDE a bad bound value, for the validation cases.
     local run_path="${PATH_OVERRIDE:-$BIN:$PATH}"
+    local run_cwd="${CWD_OVERRIDE:-$REPO_ROOT}"
     local repo_arg="--repo mock-org/mock-repo"
     [ "${REPO_ARG_OVERRIDE:-}" = "none" ] && repo_arg=""
     # `$BASH_BIN` and not a bare `bash`: a curated PATH_OVERRIDE has to carry
@@ -727,15 +896,20 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     # the SAME assignment, so a bare `bash` is looked up in the restricted PATH.
     # Every PLATFORM_* knob the probe reads is pinned: an operator's ambient
     # setting must not change what this gate measures.
+    # A SUBSHELL, because the cwd is now an input: `cd` has to be undone before
+    # the next case, and every path this function touches is already absolute.
     # shellcheck disable=SC2086
-    PATH="$run_path" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
-    MOCK_BOUNDS="$WORK/bounds" MOCK_JQFAULTS="$WORK/jqfaults" \
-    PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
-    PLATFORM_STATUS_TIMEOUT=5 \
-    PLATFORM_GH_TIMEOUT="${GH_TIMEOUT_OVERRIDE:-30}" \
-    PLATFORM_PROBE_MIN_AGE=300 \
-    PLATFORM_STATUS_COMPONENTS="${SCOPE_OVERRIDE:-actions,api requests,webhooks,pull requests,git operations}" \
-        "$BASH_BIN" "$script" $repo_arg "$@" >"$WORK/stdout" 2>"$WORK/stderr"
+    (
+        cd "$run_cwd" || exit 99
+        PATH="$run_path" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
+        MOCK_BOUNDS="$WORK/bounds" MOCK_JQFAULTS="$WORK/jqfaults" \
+        PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
+        PLATFORM_STATUS_TIMEOUT=5 \
+        PLATFORM_GH_TIMEOUT="${GH_TIMEOUT_OVERRIDE:-$GH_TIMEOUT_PINNED}" \
+        PLATFORM_PROBE_MIN_AGE=300 \
+        PLATFORM_STATUS_COMPONENTS="${SCOPE_OVERRIDE:-actions,api requests,webhooks,pull requests,git operations}" \
+            "$BASH_BIN" "$script" $repo_arg "$@"
+    ) >"$WORK/stdout" 2>"$WORK/stderr"
     STATUS=$?
     STDOUT="$(cat "$WORK/stdout")"
     STDERR="$(cat "$WORK/stderr")"
@@ -841,10 +1015,23 @@ explains_canon() { # <branch> -> the pinned cksum
         *) echo "«no canon recorded for branch $1»" ;;
     esac
 }
+# THE CANON HOLDS THE HEAD, AND THE MARKER IS WHAT MAKES THAT SAFE (issue #314).
+# The unmeasured-`unknown` branch now appends `(not measured: <reason>; <first-
+# party details>)`, which is GENERATED text — reason and ledger detail — and so
+# cannot be a fixed checksum. Splitting on the literal marker keeps the
+# canonical sentence exactly as checksummable as it was, and confines what the
+# canon cannot see to a suffix whose own content is asserted behaviourally in
+# 17c, 17d and 13, and whose marker is pinned at source level in 23. A reword
+# hidden AFTER the marker is the residual gap; it is bounded by the fact that
+# nothing between `(not measured: ` and the closing paren is authored prose.
+EXPLAINS_TAIL_MARK=' (not measured: '
+explains_head() { # <explains string> — the canonical half, with any generated tail removed
+    printf '%s' "${1%%"$EXPLAINS_TAIL_MARK"*}"
+}
 explains_on_canon() { # <branch> [json] -> yes|no: the emitted `explains` matches the branch's canon
     local e sum
     e="$(jq -r '.explains // ""' <<<"${2:-$STDOUT}" 2>/dev/null)"
-    sum="$(printf '%s' "$e" | cksum | cut -d' ' -f1)"
+    sum="$(explains_head "$e" | cksum | cut -d' ' -f1)"
     if [ "$sum" = "$(explains_canon "$1")" ]; then echo yes; else echo no; fi
 }
 explains_ok() { # <branch> [json] -> yes|no: opens with `nothing` AND is on canon
@@ -861,6 +1048,27 @@ expect_explains_nothing() { # <label> <branch>
         ok "$1"
     else
         bad "$1 — explains for the '$2' branch is off canon ($(explains_drift "$2"))"; dump
+    fi
+}
+# THE GENERATED TAIL, asserted where the canon stops (issue #314). The reason an
+# `unknown` could not measure is the probe's most useful output during an outage
+# and reached NO human channel: `explains` and the stderr summary rendered "the
+# probe could not measure" for a `gh pr view` GitHub hung on for twenty seconds
+# and for "no --pr was given" alike. Both channels are checked, because the
+# summary interpolates `explains` — a rewrite that stops doing so would leave
+# the JSON right and the operator's line wrong.
+expect_explains_names() { # <label> <needle> — the tail, in the JSON AND on stderr
+    local e tail
+    e="$(field .explains)"
+    tail="${e#*"$EXPLAINS_TAIL_MARK"}"
+    if [ "$tail" = "$e" ]; then
+        bad "$1 — explains carries no '$EXPLAINS_TAIL_MARK' tail at all: '$e'"; dump
+    elif ! grep -qF -- "$2" <<<"$tail"; then
+        bad "$1 — the tail does not name '$2': '$tail'"; dump
+    elif ! grep -qF -- "$2" <<<"$STDERR"; then
+        bad "$1 — the JSON names '$2' but the stderr summary does not: '$(printf '%.200s' "$STDERR")'"; dump
+    else
+        ok "$1"
     fi
 }
 expect_explains_stall() { # <label> <branch> — a degraded verdict explains a STALL, in the pinned words
@@ -1155,9 +1363,13 @@ fi
 # matches PREFIXES, because the attached forms are what `gh` documents and what
 # people type — `-XPUT`, `-fbody=x`, `--field=body=x` and `--input=-` all slipped
 # past a space-padded substring test, and `gh api` becomes a POST the moment any
-# `-f` is present. A FUNCTION, because 17d runs it too: the `gh repo view`
-# whitelist entry was dead in the only scan that used it, since every case
-# here passes `--repo` and the fourth call never entered this corpus.
+# `-f` is present. A FUNCTION, because 17d runs it too, and `git` is in the
+# corpus for the reason `gh repo view` used to be: the repo derivation is a
+# LOCAL command now (#314), and a local write — `git fetch`, `git remote add`,
+# `git config --global` — leaves no `gh` line to classify. The two read
+# subcommands are whitelisted by their full form, so `git remote add` and
+# `git rev-parse HEAD --write-something` are both offending; `gh repo view` is
+# NOT whitelisted any more, because the probe must not make that call at all.
 offending_calls() { # <calls file> — echoes every recorded call outside the read-only contract
     local line tok
     while IFS= read -r line; do
@@ -1168,7 +1380,8 @@ offending_calls() { # <calls file> — echoes every recorded call outside the re
             esac
         done
         case "$line" in
-            "gh pr view "*|"gh api repos/"*|"gh repo view "*|"curl "*) : ;;
+            "gh pr view "*|"gh api repos/"*|"curl "*) : ;;
+            "git rev-parse --is-inside-work-tree"|"git remote get-url origin") : ;;
             *) printf '%s\n' "$line" ;;
         esac
     done <"$1"
@@ -1197,12 +1410,19 @@ else
     bad "$bound_n bounded calls recorded, expected 3 (pr view, the commit read, the runs read)"
     sed 's/^/          | B /' <"$WORK/bounds" >&2
 fi
+# MEASURED HERE, CONSUMED IN 23. The worst-case arithmetic §2b and the probe
+# header both state is `sites x (bound + grace) + status timeout`, and `sites`
+# is the one term a source-level assertion cannot read off a line. Taking it
+# from this run rather than transcribing `3` is CLAUDE.md's rule about counts:
+# add a fourth bounded call and the ceiling assertion re-derives itself instead
+# of going quietly stale. 17d proves the no---repo path adds none.
+BOUNDED_SITES="$bound_n"
 unbounded=""
 while IFS= read -r line; do
     # `-k 5` is asserted here too: without a kill-after, `timeout` sends TERM
     # and then WAITS for the child, so a `gh` ignoring TERM leaves the bound
     # bounding nothing — this wrapper's own failure mode, surviving inside it.
-    case "$line" in "timeout -k 5 30 gh "*) : ;; *) unbounded="$unbounded$line"$'\n' ;; esac
+    case "$line" in "timeout -k 5 $GH_TIMEOUT_PINNED gh "*) : ;; *) unbounded="$unbounded$line"$'\n' ;; esac
 done <"$WORK/bounds"
 if [ -z "$unbounded" ]; then
     ok "  and each carried the configured PLATFORM_GH_TIMEOUT plus a kill-after"
@@ -1239,7 +1459,8 @@ echo "17c. a bound that FIRES is a transport failure, never an anomaly — at EV
 # case could see it — left the gate green. The selector fires the bound at
 # the site under test and lets the earlier calls succeed; the detail is then
 # asserted to name that site, so the loop cannot pass three times on the
-# first call. The lookup site is the fourth, and 17d fires it.
+# first call. There is no fourth site: the repo derivation is local now (#314),
+# which is what 17d measures instead.
 for site in "pr view" "commits/" "actions/runs"; do
     case "$site" in
         "pr view")      tmo_sc=ghtimeout;        tmo_sel="";             tmo_reason="pr_read_failed" ;;
@@ -1265,6 +1486,14 @@ for site in "pr view" "commits/" "actions/runs"; do
         *"$site"*) ok "  and it fired at the site under test, not at the first call" ;;
         *) bad "  the bound fired somewhere other than '$site': '$tmo_detail'"; dump ;;
     esac
+    # THE REASON REACHES THE HUMAN CHANNELS (issue #314). This detail lived in
+    # `probe_errors[].detail`, which nothing renders — so `explains` and the
+    # stderr summary said "the probe could not measure" for a GitHub call the
+    # probe itself cut off after twenty seconds and for `no --pr was given`
+    # alike, on the one verdict an operator reads during the incident this
+    # probe was written for.
+    expect_explains_names "  and explains — the field callers report — names the fired bound" \
+        "PLATFORM_GH_TIMEOUT bound fired"
 done
 
 echo "17c2. the KILL GRACE firing is the same bound firing, on the path -k exists for" >&2
@@ -1301,85 +1530,107 @@ for site in "pr view" "commits/" "actions/runs"; do
     esac
 done
 
-echo "17d. the cwd repo lookup is the FOURTH gh call, and it is bounded too" >&2
-# Structurally excluded from 17b, whose `-eq 3` counts only the calls that
-# happen once --repo is given. Every other case here passes --repo, so this site
-# had no coverage at all — and it is the one where bounding the call CREATED a
-# confident wrong answer: `|| true` discarded the status, so a fired bound
-# (124) was indistinguishable from an empty result and was reported as `not in
-# a GitHub repo and --repo not given`, exit 1, empty stdout, inside a valid
-# checkout. Reproduced with a stub `timeout` returning 124.
+echo "17d. the repo is derived LOCALLY, and a failed derivation still reaches a verdict" >&2
+# THIS SITE WAS THE FOURTH `gh` CALL AND IS NOW NONE (issue #314). `gh repo view`
+# answers "which repo is this checkout" through the network, and on a 5xx, an
+# expired token or a dead link it exits 1 with EMPTY STDOUT — indistinguishable
+# from "not in a repo", which is what the probe then printed, inside a valid
+# checkout, while GitHub was failing. #312 bounded the call and taught it 124 and
+# 137; every other non-zero exit still produced the false cause. So the slug now
+# comes from the `origin` remote via git, and this case measures three things
+# nothing else can: the call is GONE, the derivation is correct across the URL
+# forms git writes, and every way it can fail still yields a verdict.
+#
+# The cwd is an INPUT here, which is why these runs carry CWD_OVERRIDE. Running
+# from `$REPO_ROOT` would derive whatever `origin` this checkout has — a fork's
+# slug on a fork PR, and this repo is PUBLIC so fork PRs are ordinary — and an
+# equality against that is either vacuous or host-dependent.
+if [ -z "$CWD_MISSING" ]; then
+    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable)"
+else
+    bad "the cwd fixtures could not be built; missing:$CWD_MISSING"
+fi
+# The bare-directory fixture must really be outside a checkout, or the
+# "not in a work tree" case below silently measures the opposite branch.
+if [ "$( cd "$CWD_NOREPO" && git rev-parse --is-inside-work-tree 2>/dev/null )" = "true" ]; then
+    bad "the not-a-repo fixture IS inside a work tree — \$TMPDIR sits in a checkout on this host"
+else
+    ok "  and the not-a-repo fixture really is outside any work tree"
+fi
+
 D_LOOKUP="$(scenario lookup "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP" --pr 301
-lookup_n="$(grep -c . "$WORK/bounds")"
-if [ "$lookup_n" -eq 4 ]; then
-    ok "with no --repo, the lookup runs under the bound as well ($lookup_n calls)"
-else
-    bad "$lookup_n bounded calls recorded with no --repo, expected 4"
-    sed 's/^/          | B /' <"$WORK/bounds" >&2
-fi
-lookup_calls="$(grep -c '^gh ' "$WORK/calls")"
-if [ "$lookup_calls" -eq "$lookup_n" ]; then
-    ok "  parity holds with the lookup in the log ($lookup_calls = $lookup_n)"
-else
-    bad "  $lookup_calls gh calls logged against $lookup_n bounds with no --repo"
-fi
-# The fourth call enters the read-only corpus HERE — every other case passes
-# --repo, so case 17's `gh repo view` whitelist entry was dead in the only scan
-# that used it, and a lookup rewritten as a write would never have been seen.
-lookup_offending="$(offending_calls "$WORK/calls")"
-if [ -z "$lookup_offending" ]; then
-    ok "  and the lookup is a read too, classified by the same scan as the other three"
-else
-    bad "  the lookup run made a call outside the read-only contract:"$'\n'"$lookup_offending"
-fi
-expect_verdict "  and the run still resolves normally" "healthy"
+for form in ssh https sshproto; do
+    case "$form" in
+        ssh)      lookup_cwd="$CWD_SSH" ;;
+        https)    lookup_cwd="$CWD_HTTPS" ;;
+        sshproto) lookup_cwd="$CWD_SSHPROTO" ;;
+    esac
+    REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$lookup_cwd" run_probe "$PROBE" "$D_LOOKUP" --pr 301
+    expect_field "[$form] the slug is derived from the origin remote" .repo "mock-org/mock-repo"
+    expect_verdict "  and the run resolves normally on it" "healthy"
+    # THE MUST-NOT-EXIST HALF. The mock `gh` refuses `repo view` outright, so a
+    # regression also reddens the verdict — but a call log naming it says WHICH
+    # regression, and a later mock that grew the arm back would still be caught.
+    if grep -q '^gh repo view' "$WORK/calls"; then
+        bad "  the probe called 'gh repo view' — the derivation is remote again"
+        sed 's/^/          | C /' <"$WORK/calls" >&2
+    else
+        ok "  and no 'gh repo view' appears in the call log at all"
+    fi
+    lookup_n="$(grep -c . "$WORK/bounds")"
+    if [ "$lookup_n" -eq "$BOUNDED_SITES" ]; then
+        ok "  with no --repo the bounded-call count is UNCHANGED ($lookup_n) — the fourth site is gone"
+    else
+        bad "  $lookup_n bounded calls with no --repo, expected $BOUNDED_SITES (17b's measured count)"
+        sed 's/^/          | B /' <"$WORK/bounds" >&2
+    fi
+    # The git reads enter the read-only corpus HERE, for the reason the fourth
+    # `gh` call used to: every other case passes --repo, so nothing else in this
+    # file exercises them, and a `git fetch` or a `git remote add` written into
+    # the derivation would leave no `gh` line for case 17 to classify.
+    lookup_offending="$(offending_calls "$WORK/calls")"
+    if [ -z "$lookup_offending" ]; then
+        ok "  and its git reads are classified read-only by the same scan as the gh calls"
+    else
+        bad "  the derivation made a call outside the read-only contract:"$'\n'"$lookup_offending"
+    fi
+done
 
-D_LOOKUP_TMO="$(scenario lookuptimeout "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-: >"$D_LOOKUP_TMO/gh.timeout"
-REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP_TMO" --pr 301
-expect_status "a timed-out lookup exits 0 — it is a platform symptom, not a usage error" 0
-expect_verdict "  and emits a VERDICT rather than dying with a false cause" "unknown"
-expect_field "  naming the lookup, not the PR it never got to read" \
-    .self_measured_reason "repo_lookup_timed_out"
-expect_errkind "  recorded like the other three gh sites, not with a private spelling" \
-    "gh_call_failed"
-if grep -qF -- "not in a GitHub repo" <<<"$STDERR"; then
-    bad "  the old false cause is still printed inside a valid checkout: '$STDERR'"
+# THE THREE FAILURE SHAPES. Each one used to be, or would have been, exit 1 with
+# no verdict at all; each is now `first_party repo_lookup_failed`, a real
+# verdict, and a reason that names which input broke.
+for shape in noorigin badurl notree; do
+    case "$shape" in
+        noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
+        badurl)   fail_cwd="$CWD_BADURL";   fail_why="not a github.com owner/name URL" ;;
+        notree)   fail_cwd="$CWD_NOREPO";   fail_why="not inside a git work tree" ;;
+    esac
+    REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$fail_cwd" run_probe "$PROBE" "$D_LOOKUP" --pr 301
+    expect_status "[$shape] a failed derivation exits 0 — it is a symptom, not a usage error" 0
+    expect_verdict "  and emits a VERDICT rather than dying with no output" "unknown"
+    expect_field "  naming the derivation, not the PR it never got to read" \
+        .self_measured_reason "repo_lookup_failed"
+    expect_errkind "  on the first-party ledger, so the run cannot read as measured" \
+        "repo_lookup_failed"
+    expect_field "  and .repo is null rather than a half-derived slug" '(.repo // "null")' "null"
+    expect_explains_names "  with the reason on the field callers report" "$fail_why"
+    if grep -qF -- "not in a GitHub repo" <<<"$STDERR"; then
+        bad "  the old false cause is still printed: '$STDERR'"
+    else
+        ok "  and the old 'not in a GitHub repo' exit is gone entirely"
+    fi
+done
+# THE REMOTE URL IS NEVER REPORTED. An https remote can carry a token in its
+# userinfo, `probe_errors[].detail` is a field SKILL.md orders the coordinator to
+# REPORT, and this repo is PUBLIC — so the unparsable case, the one branch that
+# has a URL in hand and nothing to say about it, must name the input and not its
+# value. Asserted over the WHOLE object and the stderr line, not just the detail.
+REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$CWD_BADURL" run_probe "$PROBE" "$D_LOOKUP" --pr 301
+if grep -qF -- "/some/local/path" <<<"$STDOUT$STDERR"; then
+    bad "the unparsable origin URL was echoed into a reported field: a credential in one would leak"
+    dump
 else
-    ok "  and never claims 'not in a GitHub repo' when the repo was simply unreachable"
-fi
-
-# The same lookup, ended by the KILL GRACE. 137 is control flow here: recognise
-# 124 alone and it falls through to the usage error, which is the bug the
-# lookup fix closes, re-opened by the mitigation added beside it.
-D_LOOKUP_KILL="$(scenario lookupkilled "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-: >"$D_LOOKUP_KILL/gh.killed"
-REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP_KILL" --pr 301
-expect_status "a kill-grace lookup exits 0 too" 0
-expect_field "  with the same reason as a TERM-honouring one" \
-    .self_measured_reason "repo_lookup_timed_out"
-if grep -qF -- "not in a GitHub repo" <<<"$STDERR"; then
-    bad "  137 fell through to the false cause: '$STDERR'"
-else
-    ok "  and the false cause is not reachable through 137 either"
-fi
-
-# The bound firing AFTER `gh repo view` flushed a slug. The value is real and
-# possibly truncated; the status is still 124. Testing emptiness first discarded
-# that status, so the run proceeded against the fragment, passed the owner/name
-# shape check on it, and every downstream ledger entry named a false cause.
-D_LOOKUP_LATE="$(scenario lookuplate "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-: >"$D_LOOKUP_LATE/gh.timeout.late"
-REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP_LATE" --pr 301
-expect_verdict "a lookup cut off after flushing output is still a timed-out lookup" "unknown"
-expect_field "  the status is read before the value, so the reason is the bound" \
-    .self_measured_reason "repo_lookup_timed_out"
-late_repo="$(jq -r 'if .repo == null then "null" else .repo end' <<<"$STDOUT" 2>/dev/null)"
-if [ "$late_repo" = "null" ]; then
-    ok "  and the fragment is discarded — .repo is null, not the slug the cut-off call flushed"
-else
-    bad "  a value produced by a call we cut off was kept: .repo = '$late_repo'"; dump
+    ok "an unparsable origin URL is named as an input and never quoted back"
 fi
 
 echo "17e. a host with NO timeout binary still measures, and says the bound did not apply" >&2
@@ -1414,6 +1665,17 @@ if [ "$nt_bounds" -eq 0 ]; then
 else
     bad "  $nt_bounds bounds recorded on a PATH with no timeout — the shim leaked in"
 fi
+# AND IT SAYS SO ON STDERR (issue #314). The ledger is JSON; macOS ships no
+# `timeout`, so an operator running this by hand on a laptop without coreutils
+# reads `platform: healthy` every time and learns the bound never applied on the
+# day a `gh` call hangs the session — the one day there is no output to learn it
+# from. 17f is the other half: the line must be ABSENT when a bound exists, or
+# it is a warning nobody will read twice.
+if grep -qF -- "neither timeout nor gtimeout on PATH" <<<"$STDERR"; then
+    ok "  and it warns once on stderr, the channel a hand invocation actually reads"
+else
+    bad "  nothing on stderr says the bound never applied: '$(printf '%.200s' "$STDERR")'"; dump
+fi
 
 echo "17f. gtimeout — the macOS spelling, and the elif no shimmed PATH reaches" >&2
 # `timeout` is shimmed ahead of it everywhere else, so this branch was the OTHER
@@ -1433,6 +1695,13 @@ if grep -qF -- "timeout_unavailable" <<<"$gt_err"; then
     bad "  gtimeout was present but the probe reported the bound unavailable"
 else
     ok "  and nothing claims the bound was unavailable"
+fi
+# The negative half of 17e's stderr warning. A warning printed unconditionally
+# is one an operator learns to skip, so it is worth an assertion of its own.
+if grep -qF -- "neither timeout nor gtimeout on PATH" <<<"$STDERR"; then
+    bad "  and yet it warned about a missing bound on a host that has one: '$(printf '%.200s' "$STDERR")'"
+else
+    ok "  and it does NOT print the missing-bound warning where a bound exists"
 fi
 
 echo "17g. the bound value is validated, including the shapes that mean 'unbounded'" >&2
@@ -1457,6 +1726,17 @@ expect_status "a usage error is the one non-zero exit" 1
 # A lone trailing flag must not spin: `shift 2` with one arg left shifts nothing.
 run_probe "$PROBE" "$D" --pr 283 --min-age
 expect_status "a value-less trailing flag is rejected rather than looping forever" 1
+# `007` IS THE SHAPE THAT MATTERS, and it is `00`'s sibling one argument over
+# (issue #314). This value is interpolated into JSON as a BARE NUMBER — by the
+# emitter's `--argjson pr` and, since the fallback started carrying `pr`, by the
+# hand-built literal too — and `007` is not JSON. Digits-only alone therefore
+# left an argument that killed the emitter on its way in: the #303 door reached
+# through a flag rather than through a ledger, and the one input that could
+# malform the fallback written to answer it.
+run_probe "$PROBE" "$D" --pr 007
+expect_status "a leading-zero PR is refused: it would not be JSON in the emitter or the fallback" 1
+run_probe "$PROBE" "$D" --pr 0
+expect_status "  and so is 0, which is no PR at all" 1
 
 # ==============================================================================
 echo "19. no sibling script and no other skill consults the probe" >&2
@@ -1785,7 +2065,7 @@ CANON_2B=(
     "1622634225"   # A `gh` call that *errors*…
     "1892531078"   # Run the probe when a watch has gone nowhere…
     "2635286258"   # | rollup entry | probe | poll-prs | merge-shepherd
-    "3113014897"   # So "the poller went quiet"… (ends on the PLATFORM_GH_TIMEOUT bound)
+    "2899291126"   # So "the poller went quiet"… (ends on the bound, its 25s ceiling and the 80s worst case)
     "3301345540"   # ```bash … probe-platform-health.sh --pr …
     "1562190426"   # It returns one of exactly **four** verdicts…
     "3181854606"   # | Verdict | What it means | … the four rows
@@ -1828,10 +2108,45 @@ expect_default "the status endpoint defaults to githubstatus.com over https" \
     'STATUS_URL="${PLATFORM_STATUS_URL:-https://www.githubstatus.com/api/v2/summary.json}"'
 expect_default "the fetch timeout defaults to 5s" \
     'STATUS_TIMEOUT="${PLATFORM_STATUS_TIMEOUT:-5}"'
-expect_default "the per-call gh bound defaults to 30s" \
-    'GH_TIMEOUT="${PLATFORM_GH_TIMEOUT:-30}"'
+expect_default "the per-call gh bound defaults to 20s" \
+    'GH_TIMEOUT="${PLATFORM_GH_TIMEOUT:-20}"'
 expect_default "the head-age floor defaults to 300s" \
     'MIN_AGE="${PLATFORM_PROBE_MIN_AGE:-300}"'
+# THE WORST CASE MUST FIT INSIDE THE HARNESS THAT RUNS THE SHIPPED CALLERS
+# (issue #314). Every bounded site can burn `PLATFORM_GH_TIMEOUT` plus the fixed
+# kill grace, and the `curl` runs after all of them, so the ceiling is
+# `sites x (bound + grace) + status timeout`. At the previous 30s default with
+# four sites that was 145s against a 120s default tool timeout — and a harness
+# kill yields NO JSON AND NO STDERR, #303's shape one layer up, which the
+# emitter fallback cannot answer because the script never reaches it. Every term
+# is READ FROM THE SOURCE rather than transcribed, and `sites` comes from 17b's
+# measured bound count, so adding a bounded call re-derives this instead of
+# leaving a stale sum in a comment.
+tool_timeout_ceiling=120
+gh_default="$(sed -n 's/^GH_TIMEOUT="${PLATFORM_GH_TIMEOUT:-\([0-9][0-9]*\)}"$/\1/p' "$PROBE")"
+status_default="$(sed -n 's/^STATUS_TIMEOUT="${PLATFORM_STATUS_TIMEOUT:-\([0-9][0-9]*\)}"$/\1/p' "$PROBE")"
+kill_grace="$(sed -n 's/.*"\$GH_TIMEOUT_CMD" -k \([0-9][0-9]*\) .*/\1/p' "$PROBE")"
+ceiling_ok=1
+for v in "$gh_default" "$status_default" "$kill_grace" "$BOUNDED_SITES"; do
+    case "$v" in ""|*[!0-9]*) ceiling_ok=0 ;; esac
+done
+if [ "$ceiling_ok" -ne 1 ]; then
+    bad "the worst-case terms could not be read from the source (bound '$gh_default', grace '$kill_grace', status '$status_default', sites '$BOUNDED_SITES')"
+else
+    worst=$(( BOUNDED_SITES * (gh_default + kill_grace) + status_default ))
+    if [ "$worst" -lt "$tool_timeout_ceiling" ]; then
+        ok "the worst case fits the harness tool timeout: $BOUNDED_SITES x ($gh_default + $kill_grace) + $status_default = ${worst}s < ${tool_timeout_ceiling}s"
+    else
+        bad "the worst case is ${worst}s ($BOUNDED_SITES x ($gh_default + $kill_grace) + $status_default), at or past the ${tool_timeout_ceiling}s tool timeout — a killed run emits no JSON and no stderr"
+    fi
+fi
+# And the two documents that state that number must state the SAME one. A
+# ceiling nobody can read is a ceiling an operator raises by accident.
+if grep -qF -- "${worst:-«unreadable»}s" "$PROBE" && grep -qF -- "${worst:-«unreadable»}s" "$SKILL"; then
+    ok "  and both the probe header and §2b state it, so an operator sees it before raising the knob"
+else
+    bad "  the ${worst:-«unreadable»}s worst case is not stated in both the probe header and SKILL.md §2b"
+fi
 # Both anomaly generators must CAPTURE their exit status. A process
 # substitution's failure is invisible to pipefail, and RUN_CHECK is already
 # "ran" by the time the missing-run loop executes, so a dead generator would
@@ -1874,6 +2189,20 @@ expect_default "  and falls back to gtimeout, the macOS spelling" \
     'elif command -v gtimeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="gtimeout"'
 expect_default "  and with neither present, records that the bound never applied" \
     '|| add_error probe timeout_unavailable'
+# TWO GUARDED LINES, NOT ONE `if` BLOCK, and the shape is the point: the ledger
+# entry keeps the exact form pinned above while the stderr warning rides beside
+# it. Behavioural coverage is 17e (present) and 17f (absent); this pins the
+# channel, since a warning folded back into the JSON is invisible to a
+# hand invocation and that is the whole finding (#314).
+expect_default "  and warns once on stderr, which is where a hand invocation reads" \
+    'echo "warning: neither timeout nor gtimeout on PATH — gh calls run unbounded; install coreutils" >&2'
+# THE `explains` TAIL, at source level, beside the behavioural assertions in
+# 17c and 17d. The canon in `explains_canon` deliberately stops at the marker,
+# so the marker itself is the seam and nothing else holds it: delete this
+# interpolation and every `unknown` goes back to one sentence for every cause,
+# with the canon fully green because the head never changed.
+expect_default "the unmeasured unknown carries its reason into explains" \
+    'EXPLAINS="$EXPLAINS (not measured: ${SELF_REASON:-nothing_measurable}$(fp_details))"'
 # The emitter's own failure. It IS reachable from a fixture, one way: its own
 # inputs are built by the script, but the LEDGER BUILDERS pass fixture text on
 # argv, so a check name over the argv cap kills `add_anomaly`'s `--arg d`
@@ -1890,6 +2219,13 @@ expect_default "  and re-parses the output before printing it" \
     'if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$emitted"; then'
 expect_default "  and falls back to a hand-built verdict rather than empty stdout" \
     '"self_measured_reason":"verdict_emitter_failed",'
+# WHICH INPUT BROKE IT, on the one channel that will ever carry it. The emitter's
+# death is unreproducible after the fact — the ledgers die with the process — so
+# this stderr line is the whole forensic record, and until #314 it named the exit
+# code and not the cause (#312's review). The `fallback` mutant arm asserts the
+# behaviour; this pins the two ledgers being re-tested rather than described.
+expect_default "the emitter fallback re-tests each ledger and reports which failed" \
+    'emit_why="$emit_why; $(ledger_note ANOMALIES "$ANOMALIES"), $(ledger_note PROBE_ERRORS "$PROBE_ERRORS")"'
 # THE NAME `gh` IS THE CHOKEPOINT. A wrapper under its own name was a bound by
 # convention, and the grep that guarded it (`\$\(gh [a-z]`) refused exactly one
 # spelling: `gh api … | jq`, `if gh …; then`, `< <(gh …)`, `$( gh`,
@@ -2174,15 +2510,34 @@ expect_verdict "a check name over the argv cap kills the ledger builder, and the
 expect_status "  and exits 0" 0
 expect_field "  through the fallback, which says so" .self_measured_reason "verdict_emitter_failed"
 huge_keys="$(jq -c 'keys' <<<"$STDOUT" 2>/dev/null)"
-if [ "$huge_keys" = '["explains","self_measured_reason","verdict"]' ]; then
-    ok "  with exactly the fallback's three keys"
+if [ "$huge_keys" = '["explains","pr","self_measured_reason","verdict"]' ]; then
+    ok "  with exactly the fallback's four keys"
 else
-    bad "  the object is not the three-key fallback: keys $huge_keys"; dump
+    bad "  the object is not the four-key fallback: keys $huge_keys"; dump
 fi
+# THE ONE MEASURED VALUE THE FALLBACK CARRIES. `pr` is validated digits-only
+# with no leading zero, so it is a JSON number by construction and cannot be
+# what broke the emitter — and it is what tells a coordinator holding several
+# PRs which of them this dead run was about (#314). An edition of the fallback
+# carried nothing at all and was right about every other field.
+expect_field "  and the validated pr survives, so the dead run is attributable" .pr "301"
 expect_explains_nothing "  in the fallback's pinned words" emitter-failed
 case "$STDERR" in
-    *"the verdict emitter failed (jq exited 2)"*) ok "  and the summary names the emitter dying on its input, which is the mechanism claimed" ;;
+    *"the verdict emitter failed (jq exited 2;"*) ok "  and the summary names the emitter dying on its input, which is the mechanism claimed" ;;
     *) bad "  the summary does not name the emitter dying on its input: '$(printf '%.200s' "$STDERR")'"; dump ;;
+esac
+# AND WHICH INPUT BROKE IT — the half `jq exited 2` cannot carry. This failure
+# is unreproducible after the fact, so the stderr line is the entire forensic
+# record, and here it tells the whole causal chain: `add_anomaly` died at exec
+# on the argv cap, leaving `$ANOMALIES` the EMPTY STRING (0 bytes, unparsable),
+# which is what the emitter then died on. Without the per-ledger report,
+# `jq exited 2` is equally consistent with the emitter itself dying on a
+# perfectly good pair of ledgers — M25's shape, where both report `parsed` —
+# and the two call for different fixes.
+case "$STDERR" in
+    *'$ANOMALIES FAILED jq -e . (0 bytes)'*'$PROBE_ERRORS parsed'*)
+        ok "  and names the dead ledger builder's empty \$ANOMALIES as what the emitter choked on" ;;
+    *) bad "  the summary does not report each ledger and its byte length: '$(printf '%.300s' "$STDERR")'"; dump ;;
 esac
 
 # ==============================================================================
@@ -2231,15 +2586,21 @@ row() { local IFS="$US"; printf '%s' "$*"; }
 # (any other reported field — M28c's harm is a `checks_run` that certifies a
 # comparison whose read died, while the ledger still holds the verdict);
 # `explains:<branch>` (the mutant's `explains` falls off that branch's canon
-# while the unmutated one is on it); and `fallback` (the emitter died, and
-# the fallback that answered is `unknown`, exit 0, exactly three keys, the
-# reason `verdict_emitter_failed` and the fallback's own explains canon — so
-# a key renamed or dropped in the literal is red, which the 16-key edition
-# never was). Three OPTIONAL trailing fields follow, each applied to BOTH
-# arms: a PLATFORM_STATUS_COMPONENTS scope, `none` to drop --repo, and a PATH
-# key (`nt`, `gt`, `jqfault`) for the runs the default shimmed PATH cannot
-# reach. The PATH key is what lets M27 ride this loop; it used to sit outside
-# it, with a weaker check, because the runner could not set a curated PATH.
+# while the unmutated one is on it); and `fallback[:<LEDGER>]` (the emitter
+# died, and the fallback that answered is `unknown`, exit 0, exactly the four
+# keys, the reason `verdict_emitter_failed`, the fallback's own explains canon,
+# and a stderr line naming BOTH ledgers with their byte lengths — so a key
+# renamed or dropped in the literal is red, which the 16-key edition never was.
+# The optional `:<LEDGER>` additionally requires that ledger to be reported as
+# having FAILED `jq -e .`, which is what separates "the ledger was corrupt"
+# from "the ledger was fine and jq itself died": both are real, they call for
+# different fixes, and the stderr line is the only place either is ever
+# recorded). FOUR OPTIONAL trailing fields follow, each applied to BOTH arms:
+# a PLATFORM_STATUS_COMPONENTS scope, `none` to drop --repo, a PATH key (`nt`,
+# `gt`, `jqfault`) for the runs the default shimmed PATH cannot reach, and a
+# CWD key (`noorigin`) for a mutant whose harm only appears where the repo
+# derivation FAILS — which, since #314, is a property of the working directory
+# rather than of an argument, so it travels with `none` and never alone.
 MUTANTS=(
 "$(row "M1 green resolves to healthy" \
   '  anomaly/operational)    VERDICT="degraded (unattributed)" ;;' \
@@ -2411,12 +2772,12 @@ MUTANTS=(
   '    if [ "$rc" -eq 137 ]; then add_anomaly gh_killed "the runs read was killed"; else add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"; fi' \
   ghkilled-runs '--pr 301' 'degraded (unattributed)' \
   'the 137 sibling of M9f')"
-"$(row "M9g a FIRED BOUND at the repo lookup becomes an anomaly" \
-  '    add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"' \
-  '    add_anomaly gh_call_failed "gh repo view exited $rc"' \
-  lookuptimeout '--pr 301' 'degraded (unattributed)' \
-  'the fourth gh site would report its own cutoff as degradation — 17d already reddens on it, and the mutant keeps every site on the same ledger' \
-  '' none)"
+"$(row "M9g a FAILED REPO DERIVATION becomes an anomaly" \
+  '    add_error first_party repo_lookup_failed "$repo_why; pass --repo owner/name"' \
+  '    add_anomaly repo_lookup_failed "$repo_why"' \
+  lookup '--pr 301' 'degraded (unattributed)' \
+  'a checkout with no origin remote — a local fact about THIS machine — would be reported as first-party evidence that the PLATFORM is degraded; the site changed from a bounded gh call to a local git read in #314 and the rule did not' \
+  '' none '' noorigin)"
 "$(row "M27 the first-party scope filter is widened to count the probe scope" \
   "n_fp_errors=\"\$(jq -r '[.[] | select(.scope != \"attribution\" and .scope != \"probe\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
   "n_fp_errors=\"\$(jq -r '[.[] | select(.scope != \"attribution\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
@@ -2443,7 +2804,7 @@ MUTANTS=(
 "$(row "M29 the anomaly ledger is unparsable at emit time" \
   "ANOMALIES='[]'" \
   "ANOMALIES=''" \
-  healthy '--pr 301' 'fallback' \
+  healthy '--pr 301' 'fallback:ANOMALIES' \
   'a ledger that cannot be parsed already reads as ZERO anomalies at the verdict, so it must land in the fallback as unknown — an emitter that cannot fail on its inputs would emit healthy beside an empty list')"
 "$(row "M30 the clean-beside-incident explains is inverted" \
   '      EXPLAINS="nothing about this PR — a platform incident is open, but this PR'"'"'s own check data was compared and came back complete, so the incident is context and not an explanation for anything observed here"' \
@@ -2454,14 +2815,15 @@ MUTANTS=(
 
 mut_ran=0
 for r in "${MUTANTS[@]}"; do
-    IFS="$US" read -r m_label m_from m_to m_dir m_args m_wrong m_why m_scope m_repoarg m_path <<<"$r"
+    IFS="$US" read -r m_label m_from m_to m_dir m_args m_wrong m_why m_scope m_repoarg m_path m_cwd <<<"$r"
     # OPTIONAL trailing fields. A mutant whose harm only appears under a
-    # particular PLATFORM_STATUS_COMPONENTS, without --repo, or on a curated
-    # PATH must run that way for BOTH arms — the baseline too, or the
-    # comparison is against a different configuration than the mutant and the
-    # proof is meaningless. Measured: without this, M23 ran both arms under the
-    # default scope, both returned the same verdict, and the mutant reported
-    # UNDETECTED for a reason that had nothing to do with the guard it removes.
+    # particular PLATFORM_STATUS_COMPONENTS, without --repo, on a curated
+    # PATH, or in a particular working directory must run that way for BOTH
+    # arms — the baseline too, or the comparison is against a different
+    # configuration than the mutant and the proof is meaningless. Measured:
+    # without this, M23 ran both arms under the default scope, both returned
+    # the same verdict, and the mutant reported UNDETECTED for a reason that
+    # had nothing to do with the guard it removes.
     # Rows omitting a field leave it empty, and run_probe falls back to the
     # pinned default for it.
     SCOPE_OVERRIDE="$m_scope"
@@ -2472,6 +2834,11 @@ for r in "${MUTANTS[@]}"; do
         gt)      PATH_OVERRIDE="$BIN_GT" ;;
         jqfault) PATH_OVERRIDE="$BIN_JQ:$PATH" ;;
         *) bad "$m_label — unknown PATH key '$m_path'"; continue ;;
+    esac
+    case "$m_cwd" in
+        "")       CWD_OVERRIDE="" ;;
+        noorigin) CWD_OVERRIDE="$CWD_NOORIGIN" ;;
+        *) bad "$m_label — unknown CWD key '$m_cwd'"; continue ;;
     esac
     apply_mutation "$m_label" "$m_from" "$m_to" || continue
     mut_ran=$((mut_ran + 1))
@@ -2520,22 +2887,42 @@ for r in "${MUTANTS[@]}"; do
         else
             bad "$m_label UNDETECTED: unmutated on canon=$good_ex, mutant on canon=$mut_ex — explains reads '$(field .explains)'"
         fi
-    elif [ "$m_wrong" = "fallback" ]; then
+    elif [ "${m_wrong%%:*}" = "fallback" ]; then
         # The emitter died and the FALLBACK answered. Everything about that
-        # object is asserted, not only its verdict: exactly three keys, the
+        # object is asserted, not only its verdict: exactly the four keys, the
         # reason, its explains canon, exit 0 — so a renamed or dropped key in
         # the literal is red. The 16-key edition of the literal was a second
         # copy of the schema held in step by nothing, and renaming a key in it
-        # left this gate green.
+        # left this gate green; `pr` joined it in #314 under a narrower rule
+        # (carry nothing that could be what broke it), which is exactly the
+        # kind of relaxation that invites a second key with no such argument.
+        # The stderr line is asserted too: it is the ONLY forensic record this
+        # failure will ever leave, and naming both ledgers with their byte
+        # lengths is what makes "the emitter itself died" distinguishable from
+        # "an input was corrupt" after the fact.
         fb_keys="$(jq -c 'keys' <<<"$STDOUT" 2>/dev/null)"
         fb_reason="$(field .self_measured_reason)"
         fb_ex="$(explains_ok emitter-failed)"
+        fb_note=no
+        case "$STDERR" in
+            *'$ANOMALIES'*' bytes)'*'$PROBE_ERRORS'*' bytes)'*) fb_note=yes ;;
+        esac
+        # `fallback:<LEDGER>` additionally requires that ledger to be reported
+        # as having FAILED, which is the half a corruption mutant proves and an
+        # emitter-death mutant cannot.
+        fb_which="${m_wrong#fallback}"; fb_which="${fb_which#:}"
+        fb_named=yes
+        if [ -n "$fb_which" ]; then
+            fb_named=no
+            case "$STDERR" in *"\$$fb_which FAILED"*) fb_named=yes ;; esac
+        fi
         if [ "$VERDICT" = "unknown" ] && [ "$good_verdict" != "unknown" ] && [ "$STATUS" -eq 0 ] \
-           && [ "$fb_keys" = '["explains","self_measured_reason","verdict"]' ] \
-           && [ "$fb_reason" = "verdict_emitter_failed" ] && [ "$fb_ex" = "yes" ]; then
+           && [ "$fb_keys" = '["explains","pr","self_measured_reason","verdict"]' ] \
+           && [ "$fb_reason" = "verdict_emitter_failed" ] && [ "$fb_ex" = "yes" ] \
+           && [ "$fb_note" = "yes" ] && [ "$fb_named" = "yes" ]; then
             ok "$m_label CAUGHT: $m_why"
         else
-            bad "$m_label UNDETECTED, or the fallback drifted: verdict '$VERDICT' (unmutated '$good_verdict'), exit $STATUS, keys $fb_keys, reason '$fb_reason', explains on canon=$fb_ex"
+            bad "$m_label UNDETECTED, or the fallback drifted: verdict '$VERDICT' (unmutated '$good_verdict'), exit $STATUS, keys $fb_keys, reason '$fb_reason', explains on canon=$fb_ex, ledger note=$fb_note, names ${fb_which:-«none»}=$fb_named"
         fi
     elif [ "$m_wrong" = "unsafe" ]; then
         # The harm is neither a verdict nor a reason: hostile text reaches a
@@ -2572,7 +2959,7 @@ for r in "${MUTANTS[@]}"; do
     else
         bad "$m_label UNDETECTED: the mutant returned '$VERDICT' (unmutated: '$good_verdict'); the declared wrong verdict was '$m_wrong'"
     fi
-    unset SCOPE_OVERRIDE REPO_ARG_OVERRIDE PATH_OVERRIDE
+    unset SCOPE_OVERRIDE REPO_ARG_OVERRIDE PATH_OVERRIDE CWD_OVERRIDE
 done
 if [ "$mut_ran" -eq "${#MUTANTS[@]}" ]; then
     ok "every declared probe mutant ran (${#MUTANTS[@]} of ${#MUTANTS[@]})"
@@ -2782,7 +3169,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=247
+EXPECTED_CASES=285
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked

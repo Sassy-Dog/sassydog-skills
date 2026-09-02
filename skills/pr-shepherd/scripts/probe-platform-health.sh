@@ -49,7 +49,8 @@
 # Usage:
 #   probe-platform-health.sh [--pr <n>] [--repo owner/name]
 #                            [--status-url <url>] [--min-age <secs>]
-#   Repo defaults to the cwd checkout (gh repo view); --repo overrides.
+#   Repo defaults to the cwd checkout's `origin` remote, read LOCALLY with git
+#   and never through `gh` — see the derivation's own paragraph; --repo overrides.
 #   With no --pr there is NO first-party measurement, so a green page yields
 #   `unknown` rather than `healthy` — see the table below.
 #
@@ -58,10 +59,22 @@
 #                              (default https://www.githubstatus.com/api/v2/summary.json)
 #   PLATFORM_STATUS_TIMEOUT    seconds for that fetch (default 5)
 #   PLATFORM_GH_TIMEOUT        seconds before any ONE `gh` call is sent TERM
-#                              (default 30), applied with `timeout`/`gtimeout`
-#                              when either is on PATH. The true ceiling is this
-#                              PLUS a fixed 5s kill grace — see the bound's own
-#                              paragraph below.
+#                              (default 20), applied with `timeout`/`gtimeout`
+#                              when either is on PATH. The true per-call ceiling
+#                              is this PLUS a fixed 5s kill grace — 25s at the
+#                              default — see the bound's own paragraph below.
+#
+# THE WORST CASE IS 80 SECONDS, AND THAT NUMBER IS A CONSTRAINT RATHER THAN A
+# STATISTIC (issue #314). Three bounded `gh` sites at 25s each plus the 5s
+# `curl` is 3 x (20 + 5) + 5 = 80s, against the 120s default tool timeout of the
+# harness the shipped callers run under. That harness kills a run past its
+# timeout, and a killed run yields NO JSON AND NO STDERR — #303's shape one
+# layer up, which the emitter fallback cannot answer because the script never
+# reaches it. So the arithmetic has to fit with room, and the gate re-derives it
+# from these defaults rather than trusting this sentence. Raising
+# PLATFORM_GH_TIMEOUT past ~33 spends that room: the caller raising it owns the
+# tool timeout too. The earlier default was 30, which put the no---repo path at
+# 145s — over the limit, in the header's own documented invocation.
 #   PLATFORM_PROBE_MIN_AGE     head-age floor in seconds (default 300) — below it
 #                              the run-COMPARISON signals are SUPPRESSED, because
 #                              a workflow that has not started yet is not
@@ -132,7 +145,7 @@
 # `no_required_baseline`, `head_too_fresh`, `runs_page_truncated`,
 # `rollup_empty_with_runs`, `head_age_unknown`, `run_comparison_failed`,
 # `pr_read_failed`, `probe_errors_present`, `verdict_emitter_failed`,
-# `repo_lookup_timed_out`, `no_pr_given` and `nothing_measurable` are precisely
+# `repo_lookup_failed`, `no_pr_given` and `nothing_measurable` are precisely
 # why the verdict is not a measurement. That list is the full set the code
 # emits; if you add a reason, add it here.
 #
@@ -194,19 +207,24 @@
 # defended, so the file already treats them as possibly unusable). The status
 # is now captured and the output re-parsed before it is printed; on any failure
 # a minimal HAND-BUILT `unknown` object is emitted instead.
-# THAT OBJECT IS THREE KEYS — `verdict`, `self_measured_reason`
-# (`verdict_emitter_failed`) and `explains` — and deliberately NOT the
+# THAT OBJECT IS FOUR KEYS — `verdict`, `self_measured_reason`
+# (`verdict_emitter_failed`), `explains` and `pr` — and deliberately NOT the
 # emitter's shape. The first edition was a 16-key literal mirroring the
 # emitter: a second copy of the output schema, held in step by nothing.
 # Measured, renaming a key in it left the gate green, and the next key added
 # to the emitter would have drifted out of it silently — #167's rule (never
-# transcribe the table), inside this file. It carries no measured value — not
-# even the digits-validated `pr` — because the measured values are precisely
-# what could not be serialised, and carrying one invites carrying the next —
-# and whatever killed the emitter (a ledger builder that died on the argv cap,
-# or jq itself) is exactly what would be re-run to produce a richer object.
-# Nothing here is reliable except the three literals, so nothing else is
-# offered.
+# transcribe the table), inside this file. The rule that replaced it is not
+# "carry nothing" but "carry nothing that could be what broke it", and exactly
+# one measured value clears that bar: `pr` is validated at parse time as digits
+# with no leading zero, so it is a bare JSON number BY CONSTRUCTION and cannot
+# malform the literal, and it is the one fact a coordinator holding several PRs
+# needs to attribute a dead run to any of them (#314). An edition of this
+# paragraph refused it on the general principle and was right about every
+# OTHER field: `repo` is shape-checked and never sanitised, a wider grammar
+# than this literal can safely take, and the rest are precisely what could not
+# be serialised — re-interpolating one re-runs the failure inside its own
+# handler, since whatever killed the emitter (a ledger builder dying on the
+# argv cap, or jq itself) is what a richer object would have to re-run.
 # THE TWO LEDGERS STAY `--argjson`, ON PURPOSE. `--arg` plus `try fromjson
 # catch []` would make the emitter unable to fail on inputs at all — and
 # measured, an empty `$ANOMALIES` already reads as ZERO anomalies at the
@@ -297,7 +315,7 @@ set -uo pipefail
 
 STATUS_URL="${PLATFORM_STATUS_URL:-https://www.githubstatus.com/api/v2/summary.json}"
 STATUS_TIMEOUT="${PLATFORM_STATUS_TIMEOUT:-5}"
-GH_TIMEOUT="${PLATFORM_GH_TIMEOUT:-30}"
+GH_TIMEOUT="${PLATFORM_GH_TIMEOUT:-20}"
 MIN_AGE="${PLATFORM_PROBE_MIN_AGE:-300}"
 STATUS_COMPONENTS="${PLATFORM_STATUS_COMPONENTS:-actions,api requests,webhooks,pull requests,git operations}"
 REPO=""
@@ -330,7 +348,13 @@ done
 command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
 
 if [ -n "$PR" ]; then
-  case "$PR" in *[!0-9]*|"") echo "error: --pr must be numeric, got: $PR" >&2; exit 1 ;; esac
+  # `0*` for the SAME reason PLATFORM_GH_TIMEOUT rejects it, arriving by a
+  # different route: this value is interpolated into JSON as a bare number, both
+  # by the emitter's `--argjson pr` and by the hand-built fallback literal, and
+  # `007` is not JSON. Digits-only alone therefore left a `--pr` shape that
+  # killed the emitter on its way in — the #303 door, reached through an
+  # argument rather than through a ledger. There is no PR 0 either.
+  case "$PR" in *[!0-9]*|""|0*) echo "error: --pr must be a positive whole number with no leading zero, got: $PR" >&2; exit 1 ;; esac
 fi
 case "$MIN_AGE" in *[!0-9]*|"") echo "error: --min-age must be numeric seconds, got: $MIN_AGE" >&2; exit 1 ;; esac
 case "$STATUS_TIMEOUT" in
@@ -370,10 +394,10 @@ case "$STATUS_URL" in
   *) echo "error: the status URL must be https://, got: $STATUS_URL" >&2; exit 1 ;;
 esac
 
-# Resolved BEFORE the repo lookup, because that lookup is a `gh` call too and a
-# hang in it is a hang. `timeout` first, `gtimeout` second: on macOS the GNU
-# binary installs under the `g` prefix, and a probe that is bounded on CI and
-# unbounded on every developer laptop is the worse half of both worlds.
+# Resolved before any `gh` call, since a hang in the first one is a hang.
+# `timeout` first, `gtimeout` second: on macOS the GNU binary installs under the
+# `g` prefix, and a probe that is bounded on CI and unbounded on every developer
+# laptop is the worse half of both worlds.
 GH_TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="gtimeout"
@@ -406,8 +430,9 @@ bound_fired() { # <rc> — did OUR bound end this call?
   # this file tested for the single code 124 at two sites independently and so recognised
   # the bound firing everywhere EXCEPT on the path `-k 5` was added for — a
   # TERM-ignoring `gh` produced a bare `exited 137` at the three first-party
-  # sites and the false `not in a GitHub repo` at the lookup. Neither code is
-  # ours when no bound was applied, so both are gated on it.
+  # sites, and at the repo lookup that was then a `gh` call it fell through to
+  # the false `not in a GitHub repo`. Neither code is ours when no bound was
+  # applied, so both are gated on it.
   [ -n "$GH_TIMEOUT_CMD" ] || return 1
   case "$1" in 124|137) return 0 ;; *) return 1 ;; esac
 }
@@ -457,48 +482,120 @@ add_error() { # <scope: first_party|attribution|probe> <kind> <detail>
   PROBE_ERRORS="$(jq -c --arg s "$1" --arg k "$2" --arg d "$3" \
     '. + [{scope:$s, kind:$k, detail:$d}]' <<<"$PROBE_ERRORS")"
 }
+fp_details() { # — the first-party details, joined, prefixed `; `; nothing when there are none
+  # BY EXCLUSION, exactly like `n_fp_errors` below, and for the same reason: an
+  # unrecognised scope is first-party here too, so a misspelling at a
+  # first-party site cannot make its detail vanish from the one field a caller
+  # is told to read. Every detail on that ledger is already either a literal or
+  # a sanitised value, which is what makes this safe to append to a reported
+  # string.
+  local d
+  d="$(jq -r '[.[] | select(.scope != "attribution" and .scope != "probe") | .detail] | join("; ")' \
+      <<<"$PROBE_ERRORS" 2>/dev/null)"
+  [ -n "$d" ] || return 0
+  printf '; %s' "$d"
+}
 [ -n "$GH_TIMEOUT_CMD" ] || add_error probe timeout_unavailable \
   "neither timeout nor gtimeout is on PATH, so every gh call ran unbounded; PLATFORM_GH_TIMEOUT=$GH_TIMEOUT was not applied"
+# AND ONCE ON STDERR, because the JSON ledger is not a channel a human reads
+# (issue #314). macOS ships no `timeout`, so an operator running this by hand on
+# a laptop without coreutils sees `platform: healthy` every time and learns the
+# bound never applied on the day a `gh` call hangs their session — the one day
+# there is no output to learn it from. Two guarded lines rather than one `if`
+# block: the JSON entry keeps the exact shape the gate pins at source level.
+[ -n "$GH_TIMEOUT_CMD" ] || \
+  echo "warning: neither timeout nor gtimeout on PATH — gh calls run unbounded; install coreutils" >&2
 
-# THE REPO LOOKUP IS A `gh` CALL TOO, AND BOUNDING IT MADE ITS OLD DIAGNOSIS A
-# LIE. It used to end in `|| true`, which discards the status — harmless while
-# the call could only fail by erroring, and a NEW confident wrong answer the
-# moment a bound could fire: exit 124 became indistinguishable from an empty
-# result and was reported as `not in a GitHub repo and --repo not given`, exit
-# 1, empty stdout, INSIDE A PERFECTLY VALID CHECKOUT. That is this file's own
-# dominant bug class — an unknown converted into a confident wrong answer —
-# introduced by the mitigation for a different one, and measured with a stub
-# `timeout` that always returns 124.
+# THE REPO IS DERIVED LOCALLY, AND THIS IS THE ONE PLACE THIS PROBE DEPARTS FROM
+# ITS SIBLINGS (issue #314). `gh repo view --json nameWithOwner` answers a LOCAL
+# question — which repo is this checkout — through a REMOTE call, and on a
+# network failure, an expired token or a 5xx it exits 1 with empty stdout,
+# INDISTINGUISHABLE from "not in a repo at all". That is this file's dominant bug
+# class again: an unknown converted into a confident wrong answer, at the one
+# site whose trigger condition is "GitHub may be failing right now". Bounding the
+# call (#312) taught it 124 and 137 and nothing else, so every OTHER non-zero
+# exit inside a valid checkout still printed `not in a GitHub repo and --repo not
+# given` and exited 1 with no verdict. A probe that exists to run during an
+# outage must not need GitHub to work out where it is standing.
 #
-# So a fired bound here is NOT a usage error. It is the same first-party
-# transport failure the other three sites record, scoped and kinded IDENTICALLY
-# to them (`first_party gh_call_failed`) rather than given a private spelling:
-# it is a `gh` call we cut off ourselves, and the fourth site behaving like the
-# other three is the whole point. The run then carries on to a real VERDICT
-# instead of dying — `not_measured` with a reason that says so, which the status
-# page can still attribute. Exit 1 stays what it always was: no verdict exists.
-# An empty answer with no bound fired is still the ordinary usage error.
+# So the slug comes from the `origin` remote. `git rev-parse` and
+# `git remote get-url` read the local checkout and touch no network, which is why
+# neither needs the bound the `gh` sites carry — the bounded sites drop from four
+# to three, the worst-case runtime with them, and the exit-code special case
+# disappears entirely. The OTHER plugin scripts keep `gh repo view`: this one is
+# the deliberate exception, not a new convention, and the exception is earned by
+# what the probe is for rather than by tidiness.
+#
+# THE REMOTE URL IS NEVER REPORTED, and that is a security decision rather than
+# terseness. An https remote can carry credentials in its userinfo
+# (`https://x-access-token:ghs_...@github.com/o/n`), `probe_errors[].detail` is a
+# field SKILL.md orders the coordinator to REPORT, and this repo is PUBLIC by
+# exception. So a detail names WHICH input broke and never its value — the same
+# shape the emitter fallback's stderr line uses, and the reason no sanitiser is
+# needed at this site at all.
+#
+# THREE FAILURE SHAPES, ONE OUTCOME, AND NO USAGE ERROR AMONG THEM. Not inside a
+# work tree, no `origin`, or a URL this parser does not accept: each records its
+# own detail under one `first_party repo_lookup_failed`, sets REPO_OK=0, and the
+# run CARRIES ON to a real verdict — `not_measured`, which the status page can
+# still attribute. A caller standing outside a checkout now gets `unknown` with a
+# reason instead of exit 1 and no verdict at all; exit 1 stays what it always
+# was, a malformed argument, where no verdict exists.
+repo_from_remote() { # <remote url> — owner/name, or nothing
+  # DELIBERATELY STRICT, over exactly the three forms git writes for a github.com
+  # remote. A permissive parser's failure mode is a WRONG slug, which the probe
+  # would then measure a different repo through and report as this one; a strict
+  # parser's failure mode is `--repo`, which every shipped caller already passes.
+  # A host that is not exactly `github.com` is refused for the same reason: `gh`
+  # would query github.com regardless of what the remote said.
+  local u="$1" p=""
+  case "$u" in
+    https://*)        p="${u#https://}"; p="${p#*@}" ;;
+    ssh://*)          p="${u#ssh://}";   p="${p#*@}" ;;
+    git@github.com:*) p="github.com/${u#git@github.com:}" ;;
+    *) return 0 ;;
+  esac
+  case "$p" in github.com/*) p="${p#github.com/}" ;; *) return 0 ;; esac
+  p="${p%.git}"
+  p="${p%/}"
+  # EXACTLY two non-empty segments, from a character set that cannot inject. The
+  # value is interpolated into `gh` arguments and into reported details, so this
+  # shape check IS the sanitiser at this site — which is what lets the derived
+  # slug skip the class every other reported string is cleaned against.
+  case "$p" in ""|/*|*/) return 0 ;; */*/*) return 0 ;; */*) : ;; *) return 0 ;; esac
+  case "$p" in *[!A-Za-z0-9._/-]*) return 0 ;; esac
+  printf '%s' "$p"
+}
 REPO_OK=1
 if [ -z "$REPO" ]; then
-  rc=0
-  REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || rc=$?
-  # THE BOUND IS CONSULTED FIRST, INDEPENDENT OF OUTPUT. A `gh` killed after it
-  # has flushed stdout leaves a non-empty — and possibly TRUNCATED — slug behind
-  # it. Testing emptiness first discarded the status in that case, so the run
-  # proceeded against whatever fragment survived, passed the owner/name shape
-  # check on it, and every downstream ledger entry named a false cause. A value
-  # produced by a call we cut off is not a value; it is emptied here so nothing
-  # below can read it.
-  if bound_fired "$rc"; then
-    add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"
+  repo_why=""
+  if ! command -v git >/dev/null 2>&1; then
+    # Its own shape, because falling through to the work-tree branch would report
+    # "not inside a git work tree" on a host that simply has no git — the second
+    # false cause in a row, which is what this whole block was rewritten to stop.
+    repo_why="git is not installed, so the repo could not be derived from the checkout"
+  elif [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" != "true" ]; then
+    # The OUTPUT, not the exit status: inside a bare repo `git rev-parse` prints
+    # `false` and exits 0, and there is no worktree remote to read there either.
+    repo_why="the working directory is not inside a git work tree"
+  else
+    origin_url="$(git remote get-url origin 2>/dev/null)" || origin_url=""
+    if [ -z "$origin_url" ]; then
+      repo_why="the checkout has no 'origin' remote"
+    else
+      REPO="$(repo_from_remote "$origin_url")"
+      [ -n "$REPO" ] || repo_why="the 'origin' remote is not a github.com owner/name URL this probe parses"
+    fi
+  fi
+  if [ -n "$repo_why" ]; then
+    add_error first_party repo_lookup_failed "$repo_why; pass --repo owner/name"
     REPO=""
     REPO_OK=0
-  elif [ -z "$REPO" ]; then
-    echo "error: not in a GitHub repo and --repo not given" >&2; exit 1
   fi
 fi
-# Skipped when the lookup timed out: there is no value to shape-check, and the
-# owner/name message would be the second false cause in a row.
+# Guards the `--repo` VALUE alone now: a derived slug already satisfies this by
+# construction, and a failed derivation has nothing to shape-check — the
+# owner/name message there would be the second false cause in a row.
 if [ "$REPO_OK" -eq 1 ]; then
   case "$REPO" in */*) : ;; *) echo "error: repo must be owner/name, got: $REPO" >&2; exit 1 ;; esac
 fi
@@ -507,7 +604,7 @@ SELF="not_measured"
 SELF_REASON="no_pr_given"
 # Set BEFORE the first-party block, which is skipped without a repo: the reason
 # a caller sees must name the lookup, not the PR it never got to read.
-[ "$REPO_OK" -eq 1 ] || SELF_REASON="repo_lookup_timed_out"
+[ "$REPO_OK" -eq 1 ] || SELF_REASON="repo_lookup_failed"
 HEAD=""
 # ONE definition of what may not reach a reported field, injected into every jq
 # program that sanitises one. Written as CODEPOINTS rather than a regex class,
@@ -981,6 +1078,17 @@ case "$VERDICT" in
       EXPLAINS="nothing — this PR's own check data was read and was complete, but the status endpoint could not be, so nothing is attributed and this verdict never licenses escalating a stall as a real defect"
     else
       EXPLAINS="nothing — the probe could not measure; unknown is not health, and this verdict never licenses escalating a stall as a real defect"
+      # WHY IT COULD NOT MEASURE IS THE MOST USEFUL FACT THIS PROBE HOLDS, and
+      # until #314 it reached no human channel at all. `unknown` here spans
+      # "no --pr was given" and "GitHub hung for 20 seconds on `gh pr view`",
+      # and both rendered as the same sentence — the reason survived only in
+      # `probe_errors[].detail`, which nothing renders. The tail is APPENDED
+      # rather than woven in, so the canonical sentence above stays one
+      # checksummable literal and the generated half is bounded by a marker the
+      # gate can split on. `explains` is the field SKILL.md orders callers to
+      # report INSTEAD OF the verdict, so this is where the fact belongs; the
+      # stderr summary interpolates the same string and inherits it.
+      EXPLAINS="$EXPLAINS (not measured: ${SELF_REASON:-nothing_measurable}$(fp_details))"
     fi ;;
   "degraded (attributed)")
     if [ "$SELF" = "anomaly" ]; then
@@ -1036,14 +1144,23 @@ emitted="$(jq -n \
     explains:$explains}')" || emit_rc=$?
 
 if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$emitted"; then
-  # THREE KEYS, EVERY ONE A LITERAL — see the header for why it is not the
-  # emitter's shape and why `pr` is not carried either. Re-interpolating a
-  # measured value here would re-run the failure inside the handler for it; a
-  # placeholder that cannot itself fail is worth more than a richer one that
-  # can. `verdict` is `unknown` because that is the verdict for "nothing could
-  # be measured", and `explains` says so in the same words every other unknown
-  # does — a caller reporting this object must not read it as anything softer.
-  emitted='{"verdict":"unknown","self_measured_reason":"verdict_emitter_failed","explains":"nothing — the verdict emitter failed, so nothing that was measured survived; unknown is not health, and this verdict never licenses escalating a stall as a real defect"}'
+  # FOUR KEYS, THREE OF THEM LITERALS AND THE FOURTH ONE THAT CANNOT FAIL — see
+  # the header for why this is not the emitter's shape. The rule is not "carry
+  # nothing"; it is "carry nothing that could be what broke it". `pr` qualifies
+  # and no other field does: it is validated at parse time as digits with no
+  # leading zero, so it is a bare JSON number by construction and cannot
+  # malform this literal, and it is the one value that tells a caller reading a
+  # fallback object WHICH PR the dead run was about — without it, a coordinator
+  # holding several PRs cannot attribute the failure to any of them (#314).
+  # `repo` stays out: it is shape-checked (`owner/name`) and never sanitised,
+  # so it is a string with a wider grammar than this literal can safely take,
+  # and unlike `pr` it is not what a caller is missing. Every OTHER measured
+  # value stays out for the original reason — they are precisely what could not
+  # be serialised, and re-interpolating one re-runs the failure inside its own
+  # handler. `verdict` is `unknown` because that is the verdict for "nothing
+  # could be measured", and `explains` says so in the same words every other
+  # unknown does — a caller reporting this object must not read it as softer.
+  emitted='{"verdict":"unknown","self_measured_reason":"verdict_emitter_failed","pr":'"${PR:-null}"',"explains":"nothing — the verdict emitter failed, so nothing that was measured survived; unknown is not health, and this verdict never licenses escalating a stall as a real defect"}'
   # The two failures are reported apart. Folding them together printed
   # `the verdict emitter failed (jq exited 0)` on the empty-stdout branch — a
   # diagnostic contradicting itself on the exact door this whole change closes.
@@ -1052,6 +1169,22 @@ if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$e
   else
     emit_why="jq exited 0 but produced no usable object"
   fi
+  # AND WHICH INPUT BROKE IT. This failure is unreproducible after the fact —
+  # the ledgers die with the process — so this stderr line is the only forensic
+  # record there will ever be, and until #314 it named the exit code and not the
+  # cause. `$ANOMALIES` and `$PROBE_ERRORS` are the only two emitter inputs
+  # nothing validates before use, so each is re-tested here and reported with
+  # its byte length: an empty one and a 40 KB unparsable one are different
+  # stories, and "both parsed" is itself the answer that the emitter, not its
+  # inputs, is what died.
+  ledger_note() { # <name> <value>
+    if jq -e . >/dev/null 2>&1 <<<"$2"; then
+      printf '$%s parsed (%s bytes)' "$1" "${#2}"
+    else
+      printf '$%s FAILED jq -e . (%s bytes)' "$1" "${#2}"
+    fi
+  }
+  emit_why="$emit_why; $(ledger_note ANOMALIES "$ANOMALIES"), $(ledger_note PROBE_ERRORS "$PROBE_ERRORS")"
   SUMMARY="platform: unknown — the verdict emitter failed ($emit_why); nothing that was measured survived"
 else
   SUMMARY="platform: $VERDICT — explains $EXPLAINS"
