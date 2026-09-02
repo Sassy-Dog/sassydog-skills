@@ -260,7 +260,9 @@ chmod +x "$BIN/curl"
 # an unbounded one on a laptop measures neither. The shim also makes the bound
 # FIRING testable without a sleep, which is what `gh.timeout` does: 124 is the
 # code the real `timeout` reports for exactly that, and the probe's handling of
-# it is the behaviour under test.
+# it is the behaviour under test. `gh.killed` is its sibling for 137, the code
+# reported when TERM was ignored and the kill grace fired — the path `-k`
+# exists for, and the one an edition of the probe could not recognise.
 #
 # It records to MOCK_BOUNDS and NEVER to MOCK_CALLS: case 17 classifies every
 # line of MOCK_CALLS as a read or a write, and a `timeout …` line there would be
@@ -270,12 +272,21 @@ cat >"$BIN/timeout" <<'MOCK'
 #!/usr/bin/env bash
 printf 'timeout %s\n' "$*" >>"${MOCK_BOUNDS:-/dev/null}"
 if [ -f "$SCENARIO_DIR/gh.timeout" ]; then exit 124; fi
+# 137 is what the real binary reports when the child ignored TERM and the
+# kill grace had to fire — 128 + KILL, preserved after escalation. Measured on
+# coreutils 9.11: `timeout -k 1 1 bash -c 'trap "" TERM; sleep 10'` -> 137,
+# `timeout -k 1 1 sleep 10` -> 124. It is the path `-k` exists for.
+if [ -f "$SCENARIO_DIR/gh.killed" ]; then exit 137; fi
 # `-k <grace>` is stripped the way the real binary parses it. Shifting a fixed
 # number of arguments instead would exec `5 30 gh …` the moment the probe
 # gained a kill-after, i.e. the shim would break on the change it exists to
 # measure, and every bounded call would fail for a reason unrelated to the test.
 if [ "${1:-}" = "-k" ]; then shift 2; fi
 shift
+# The bound firing AFTER the child flushed stdout: the output is real, and the
+# status is still 124. This is `timeout` killing `gh repo view` mid-flight, and
+# the probe must read the status before it reads the (possibly truncated) value.
+if [ -f "$SCENARIO_DIR/gh.timeout.late" ]; then "$@"; exit 124; fi
 exec "$@"
 MOCK
 chmod +x "$BIN/timeout"
@@ -988,6 +999,26 @@ else
     bad "  the detail does not name the bound that fired: '$tmo_detail'"; dump
 fi
 
+echo "17c2. the KILL GRACE firing is the same bound firing, on the path -k exists for" >&2
+# `timeout -k 5 30 gh …` reports 124 when TERM sufficed and 137 when it did not
+# and the grace had to fire. An edition of the probe recognised 124 alone, so
+# the one path `-k 5` was added for — a `gh` ignoring TERM — was the one path
+# it could not name: a bare `exited 137` at the three first-party sites, and
+# at the lookup the 137 fell through control flow into `not in a GitHub repo`.
+D_KILL="$(scenario ghkilled "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+: >"$D_KILL/gh.killed"
+run_probe "$PROBE" "$D_KILL" --pr 301
+expect_verdict "a kill-grace exit resolves unknown, never degraded" "unknown"
+expect_status "  and still exits 0" 0
+expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
+expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
+kill_detail="$(jq -r '[.probe_errors[].detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
+if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$kill_detail" && grep -qF -- "kill grace" <<<"$kill_detail"; then
+    ok "  and the detail names the bound AND the grace, not a bare 'exited 137'"
+else
+    bad "  the detail does not name the bound and the grace: '$kill_detail'"; dump
+fi
+
 echo "17d. the cwd repo lookup is the FOURTH gh call, and it is bounded too" >&2
 # Structurally excluded from 17b, whose `-eq 3` counts only the calls that
 # happen once --repo is given. Every other case here passes --repo, so this site
@@ -1020,6 +1051,38 @@ if grep -qF -- "not in a GitHub repo" <<<"$STDERR"; then
     bad "  the old false cause is still printed inside a valid checkout: '$STDERR'"
 else
     ok "  and never claims 'not in a GitHub repo' when the repo was simply unreachable"
+fi
+
+# The same lookup, ended by the KILL GRACE. 137 is control flow here: recognise
+# 124 alone and it falls through to the usage error, which is the bug the
+# lookup fix closes, re-opened by the mitigation added beside it.
+D_LOOKUP_KILL="$(scenario lookupkilled "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+: >"$D_LOOKUP_KILL/gh.killed"
+REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP_KILL" --pr 301
+expect_status "a kill-grace lookup exits 0 too" 0
+expect_field "  with the same reason as a TERM-honouring one" \
+    .self_measured_reason "repo_lookup_timed_out"
+if grep -qF -- "not in a GitHub repo" <<<"$STDERR"; then
+    bad "  137 fell through to the false cause: '$STDERR'"
+else
+    ok "  and the false cause is not reachable through 137 either"
+fi
+
+# The bound firing AFTER `gh repo view` flushed a slug. The value is real and
+# possibly truncated; the status is still 124. Testing emptiness first discarded
+# that status, so the run proceeded against the fragment, passed the owner/name
+# shape check on it, and every downstream ledger entry named a false cause.
+D_LOOKUP_LATE="$(scenario lookuplate "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+: >"$D_LOOKUP_LATE/gh.timeout.late"
+REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP_LATE" --pr 301
+expect_verdict "a lookup cut off after flushing output is still a timed-out lookup" "unknown"
+expect_field "  the status is read before the value, so the reason is the bound" \
+    .self_measured_reason "repo_lookup_timed_out"
+late_repo="$(jq -r 'if .repo == null then "null" else .repo end' <<<"$STDOUT" 2>/dev/null)"
+if [ "$late_repo" = "null" ]; then
+    ok "  and the fragment is discarded — .repo is null, not the slug the cut-off call flushed"
+else
+    bad "  a value produced by a call we cut off was kept: .repo = '$late_repo'"; dump
 fi
 
 echo "17e. a host with NO timeout binary still measures, and says the bound did not apply" >&2
@@ -1994,7 +2057,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=187
+EXPECTED_CASES=198
 # Mutants that cannot ride the loop above. M16-M19 mutate ANOTHER file; M27
 # mutates the probe but needs a curated PATH the loop's runner does not set.
 OUT_OF_LOOP_MUTANTS=5         # M16, M17, M18, M19, M27

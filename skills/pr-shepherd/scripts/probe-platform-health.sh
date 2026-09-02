@@ -57,9 +57,11 @@
 #   PLATFORM_STATUS_URL        attribution endpoint
 #                              (default https://www.githubstatus.com/api/v2/summary.json)
 #   PLATFORM_STATUS_TIMEOUT    seconds for that fetch (default 5)
-#   PLATFORM_GH_TIMEOUT        seconds any ONE `gh` call may take (default 30),
-#                              applied with `timeout`/`gtimeout` when either is
-#                              on PATH — see the bound's own paragraph below.
+#   PLATFORM_GH_TIMEOUT        seconds before any ONE `gh` call is sent TERM
+#                              (default 30), applied with `timeout`/`gtimeout`
+#                              when either is on PATH. The true ceiling is this
+#                              PLUS a fixed 5s kill grace — see the bound's own
+#                              paragraph below.
 #   PLATFORM_PROBE_MIN_AGE     head-age floor in seconds (default 300) — below it
 #                              the run-COMPARISON signals are SUPPRESSED, because
 #                              a workflow that has not started yet is not
@@ -155,7 +157,12 @@
 # attribution fetch — the one its own header calls never load-bearing. A hang
 # there costs the caller its whole tick, and the caller is a loop. So every
 # `gh` call goes through `gh_bounded`, which prefixes `timeout`/`gtimeout` when
-# either is on PATH. `timeout` reports a fired bound as exit 124, which lands
+# either is on PATH. `timeout` reports a fired bound as exit 124 — or as 137
+# when the child ignored TERM and the 5s kill grace had to fire (128 + KILL,
+# preserved after escalation; measured on coreutils 9.11). BOTH are the bound
+# firing, and `bound_fired` is the ONE predicate that says so: an edition of
+# this file recognised 124 alone, which meant the exact path `-k 5` exists for
+# was the one path it could not name. Either code lands
 # in the SAME `gh_call_failed` path as any other non-zero exit: `not_measured`,
 # NEVER an anomaly. That is not a shortcut — it is the transport-failure rule
 # above applied unchanged, and it is the reading to keep: a call we cut off
@@ -360,11 +367,26 @@ gh_bounded() { # <gh args...> — the ONE place `gh` is invoked
     gh "$@"
   fi
 }
+bound_fired() { # <rc> — did OUR bound end this call?
+  # THE ONE PREDICATE, consulted by every site that cares. 124 is `timeout`'s
+  # "TERM sufficed" code; 137 is "TERM was ignored and the kill grace fired"
+  # (128 + KILL, which `timeout` preserves after it escalates). An edition of
+  # this file tested for the single code 124 at two sites independently and so recognised
+  # the bound firing everywhere EXCEPT on the path `-k 5` was added for — a
+  # TERM-ignoring `gh` produced a bare `exited 137` at the three first-party
+  # sites and the false `not in a GitHub repo` at the lookup. Neither code is
+  # ours when no bound was applied, so both are gated on it.
+  [ -n "$GH_TIMEOUT_CMD" ] || return 1
+  case "$1" in 124|137) return 0 ;; *) return 1 ;; esac
+}
 gh_rc_note() { # <rc> — names the bound when IT is what fired, and nothing otherwise
-  # 124 is `timeout`'s "the bound fired" code. Naming it matters because `gh`
-  # has no such exit code of its own, so an unannotated "exited 124" in the
-  # ledger reads as an unexplained gh failure rather than as our own cutoff.
-  if [ "$1" -eq 124 ] && [ -n "$GH_TIMEOUT_CMD" ]; then
+  # Naming it matters because `gh` has no such exit code of its own, so an
+  # unannotated "exited 124" or "exited 137" in the ledger reads as an
+  # unexplained gh failure rather than as our own cutoff.
+  bound_fired "$1" || return 0
+  if [ "$1" -eq 137 ]; then
+    printf ' — the %ss PLATFORM_GH_TIMEOUT bound fired, gh ignored TERM, and the 5s kill grace fired too' "$GH_TIMEOUT"
+  else
     printf ' — the %ss PLATFORM_GH_TIMEOUT bound fired' "$GH_TIMEOUT"
   fi
   return 0
@@ -380,10 +402,19 @@ add_error() { # <scope: first_party|attribution|probe> <kind> <detail>
   # failed status fetch is an attribution failure, and folding it in would turn
   # every unreachable-endpoint run into `not_measured`, erasing the difference
   # between "I read your PR and it was clean" and "I read nothing".
-  # `probe` is the third value and is neither: it reports on the probe's own
-  # machinery — a bound that could not be applied, an emitter that died — where
-  # the measurement itself is unaffected. It is recorded so the ledger is not
-  # silent about it, and it is scoped OUT of the first-party count on purpose.
+  # `probe` is the third value and is neither. Its ONE invariant is that it
+  # never feeds the first-party count below — that is the whole definition,
+  # and it holds for two kinds with DIFFERENT effects on the verdict:
+  #   timeout_unavailable     the measurement is intact and the verdict is
+  #                           whatever it would have been; this only records
+  #                           that the bound never applied.
+  #   verdict_emitter_failed  the measurement is DISCARDED and the verdict is
+  #                           forced to `unknown` — but by the hand-built
+  #                           fallback, which bypasses the count entirely,
+  #                           never by this scope being counted.
+  # An earlier edition defined the scope as "where the measurement itself is
+  # unaffected" and then listed the emitter as an example, which was its own
+  # counter-example. Do not restate the definition in terms of the verdict.
   PROBE_ERRORS="$(jq -c --arg s "$1" --arg k "$2" --arg d "$3" \
     '. + [{scope:$s, kind:$k, detail:$d}]' <<<"$PROBE_ERRORS")"
 }
@@ -412,13 +443,19 @@ REPO_OK=1
 if [ -z "$REPO" ]; then
   rc=0
   REPO="$(gh_bounded repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || rc=$?
-  if [ -z "$REPO" ]; then
-    if [ "$rc" -eq 124 ] && [ -n "$GH_TIMEOUT_CMD" ]; then
-      add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"
-      REPO_OK=0
-    else
-      echo "error: not in a GitHub repo and --repo not given" >&2; exit 1
-    fi
+  # THE BOUND IS CONSULTED FIRST, INDEPENDENT OF OUTPUT. A `gh` killed after it
+  # has flushed stdout leaves a non-empty — and possibly TRUNCATED — slug behind
+  # it. Testing emptiness first discarded the status in that case, so the run
+  # proceeded against whatever fragment survived, passed the owner/name shape
+  # check on it, and every downstream ledger entry named a false cause. A value
+  # produced by a call we cut off is not a value; it is emptied here so nothing
+  # below can read it.
+  if bound_fired "$rc"; then
+    add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"
+    REPO=""
+    REPO_OK=0
+  elif [ -z "$REPO" ]; then
+    echo "error: not in a GitHub repo and --repo not given" >&2; exit 1
   fi
 fi
 # Skipped when the lookup timed out: there is no value to shape-check, and the

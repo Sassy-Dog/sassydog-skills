@@ -939,6 +939,11 @@
 #      out-of-loop, since no shimmed scenario produces such an entry. The bound
 #      VALUE is validated and the validation is cased: `00` is all digits, not
 #      empty and not the literal `0`, and `timeout 00 …` means no bound at all.
+#      A fired bound is 124 OR 137 — the latter when the child ignored TERM and
+#      the kill grace fired — and ONE predicate says so, since testing 124 at
+#      two sites independently left the path `-k` exists for as the one path
+#      neither site could name. On the repo lookup that status is read BEFORE
+#      the value, because a call killed after flushing leaves a fragment behind.
 #      Mock `gh` AND mock `curl`, both recording every call so the read-only
 #      claim is measured by METHOD — per token, by prefix — not by path prefix:
 #      no repo, no network.
