@@ -117,6 +117,36 @@
 #     mitigation for a different one, so it has its own mutant (M9d) beside the
 #     transport-failure one it mirrors.
 #
+# BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER, and one did. The cwd repo
+# lookup ended in `|| true`, which discards the status — harmless while the call
+# could only fail by erroring, and a lie the moment a bound could fire: 124
+# became indistinguishable from an empty result and was reported as `not in a
+# GitHub repo and --repo not given`, exit 1 with empty stdout, INSIDE A VALID
+# CHECKOUT. Case 17d covers it, and covering it needed the runner to stop
+# passing `--repo`, since that flag suppresses this call — which is why 17b's
+# `-eq 3` structurally excluded the site and no case reached it. A fired bound
+# there now records the same `first_party gh_call_failed` the other three sites
+# record and the run carries on to a real verdict.
+#
+# THE BOUND HAS THREE BRANCHES AND ONLY ONE IS REACHABLE THROUGH $BIN, which is
+# why 17e and 17f run under CURATED PATHS rather than a prepended shim
+# directory. Do not delete them as redundant with the source-level assertions in
+# section 23: those assertions exist because an earlier edition of this file
+# declared these branches impossible to exercise, a claim that was simply false
+# and that cost the file its only coverage of the `probe` scope. The scope is
+# the point — `timeout_unavailable` must NOT make a run `not_measured`, or every
+# host without coreutils reports `not_measured` on every run — and M27 mutates
+# the filter that decides it. That mutant cannot ride the mutant loop, because
+# no scenario on the shimmed PATH produces a `probe`-scoped entry at all.
+#
+# THE BOUND VALUE IS VALIDATED AND THE VALIDATION IS CASED (17g). The whole
+# block was uncased: deleting it left this gate green. `00` is the shape that
+# matters — all digits, not empty, not the literal `0`, so it passed the first
+# spelling of the rule, and `timeout 00 …` means NO BOUND. Measured:
+# `gtimeout 00 sleep 2` returns 0 after the full two seconds, with no
+# `timeout_unavailable` recorded, so the ledger affirmatively implies a bound
+# that never applied.
+#
 # THE EXIT CODE IS NOW ASSERTED ON EVERY VERDICT-FORM MUTANT, not only on M7's
 # dedicated one. M7 proves the shipped `exit 0` is load-bearing; the per-mutant
 # check proves no OTHER path can grow an exit code carrying a verdict. The
@@ -184,6 +214,15 @@ cat >"$BIN/gh" <<'MOCK'
 #!/usr/bin/env bash
 printf 'gh %s\n' "$*" >>"$MOCK_CALLS"
 case "${1:-}" in
+    repo)
+        # The cwd repo lookup. Every case that passes --repo suppresses it, which
+        # is why it went unmocked until case 17d exercised it deliberately.
+        if [ "${2:-}" != "view" ]; then
+            echo "mock gh: unhandled repo subcommand: $*" >&2; exit 1
+        fi
+        if [ -f "$SCENARIO_DIR/repo.fail" ]; then exit 4; fi
+        echo "mock-org/mock-repo"
+        ;;
     pr)
         if [ "${2:-}" != "view" ]; then
             echo "mock gh: unhandled pr subcommand: $*" >&2; exit 1
@@ -231,10 +270,47 @@ cat >"$BIN/timeout" <<'MOCK'
 #!/usr/bin/env bash
 printf 'timeout %s\n' "$*" >>"${MOCK_BOUNDS:-/dev/null}"
 if [ -f "$SCENARIO_DIR/gh.timeout" ]; then exit 124; fi
+# `-k <grace>` is stripped the way the real binary parses it. Shifting a fixed
+# number of arguments instead would exec `5 30 gh …` the moment the probe
+# gained a kill-after, i.e. the shim would break on the change it exists to
+# measure, and every bounded call would fail for a reason unrelated to the test.
+if [ "${1:-}" = "-k" ]; then shift 2; fi
 shift
 exec "$@"
 MOCK
 chmod +x "$BIN/timeout"
+
+# TWO MORE PATHS, because the probe's bound has three branches and only one of
+# them was reachable through $BIN. An earlier edition of this file asserted the
+# other two "cannot be exercised at all" and pinned them at source level on that
+# basis; both returning reviewers of #312 disproved it by construction in
+# minutes, and the claim was the durable half of the defect — CLAUDE.md tells
+# the next editor to trust a gate header. A curated PATH carrying everything the
+# probe needs EXCEPT a timeout binary runs it perfectly well.
+#
+# BIN_NT: neither binary — the absent-bound branch.
+# BIN_GT: `gtimeout` only — the macOS spelling, and the `elif` no host with a
+#         plain `timeout` first on PATH can ever reach.
+BIN_NT="$WORK/bin-no-timeout"
+BIN_GT="$WORK/bin-gtimeout"
+mkdir -p "$BIN_NT" "$BIN_GT"
+cp "$BIN/gh" "$BIN/curl" "$BIN_NT/"
+cp "$BIN/gh" "$BIN/curl" "$BIN_GT/"
+cp "$BIN/timeout" "$BIN_GT/gtimeout"
+# Everything else the probe and the mocks reach for, resolved ONCE from the real
+# PATH and symlinked in. `bash` and `env` are here because the mocks carry a
+# `#!/usr/bin/env bash` shebang, and `env` searches the restricted PATH.
+NT_MISSING=""
+for t in bash env jq tr cat sed; do
+    t_path="$(command -v "$t" 2>/dev/null)"
+    if [ -n "$t_path" ]; then
+        ln -sf "$t_path" "$BIN_NT/$t"
+        ln -sf "$t_path" "$BIN_GT/$t"
+    else
+        NT_MISSING="$NT_MISSING $t"
+    fi
+done
+BASH_BIN="$(command -v bash)"
 
 # --- recorded payloads --------------------------------------------------------
 # The outage shape from #285: the rollup carries an empty-state `ci`, the head
@@ -435,16 +511,32 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     shift 2
     : >"$WORK/calls"
     : >"$WORK/bounds"
+    # THREE OPTIONAL OVERRIDES, each defaulting to the pinned value so a case
+    # that does not set one measures exactly what it used to.
+    #   PATH_OVERRIDE       a curated PATH, for the two bound branches $BIN
+    #                       cannot reach (no timeout at all; gtimeout only).
+    #   REPO_ARG_OVERRIDE   "none" drops --repo, which is what reaches the cwd
+    #                       repo lookup — the FOURTH gh call, suppressed by
+    #                       every other case here and therefore unexercised
+    #                       until one asked for it.
+    #   GH_TIMEOUT_OVERRIDE a bad bound value, for the validation cases.
+    local run_path="${PATH_OVERRIDE:-$BIN:$PATH}"
+    local repo_arg="--repo mock-org/mock-repo"
+    [ "${REPO_ARG_OVERRIDE:-}" = "none" ] && repo_arg=""
+    # `$BASH_BIN` and not a bare `bash`: a curated PATH_OVERRIDE has to carry
+    # every binary the probe reaches, and the interpreter is resolved through
+    # the SAME assignment, so a bare `bash` is looked up in the restricted PATH.
     # Every PLATFORM_* knob the probe reads is pinned: an operator's ambient
     # setting must not change what this gate measures.
-    PATH="$BIN:$PATH" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
+    # shellcheck disable=SC2086
+    PATH="$run_path" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
     MOCK_BOUNDS="$WORK/bounds" \
     PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
     PLATFORM_STATUS_TIMEOUT=5 \
-    PLATFORM_GH_TIMEOUT=30 \
+    PLATFORM_GH_TIMEOUT="${GH_TIMEOUT_OVERRIDE:-30}" \
     PLATFORM_PROBE_MIN_AGE=300 \
     PLATFORM_STATUS_COMPONENTS="${SCOPE_OVERRIDE:-actions,api requests,webhooks,pull requests,git operations}" \
-        bash "$script" --repo mock-org/mock-repo "$@" >"$WORK/stdout" 2>"$WORK/stderr"
+        "$BASH_BIN" "$script" $repo_arg "$@" >"$WORK/stdout" 2>"$WORK/stderr"
     STATUS=$?
     STDOUT="$(cat "$WORK/stdout")"
     STDERR="$(cat "$WORK/stderr")"
@@ -833,7 +925,7 @@ while IFS= read -r line; do
         esac
     done
     case "$line" in
-        "gh pr view "*|"gh api repos/"*|"curl "*) : ;;
+        "gh pr view "*|"gh api repos/"*|"gh repo view "*|"curl "*) : ;;
         *) offending="$offending$line"$'\n' ;;
     esac
 done <"$WORK/calls"
@@ -862,12 +954,15 @@ else
 fi
 unbounded=""
 while IFS= read -r line; do
-    case "$line" in "timeout 30 gh "*) : ;; *) unbounded="$unbounded$line"$'\n' ;; esac
+    # `-k 5` is asserted here too: without a kill-after, `timeout` sends TERM
+    # and then WAITS for the child, so a `gh` ignoring TERM leaves the bound
+    # bounding nothing — this wrapper's own failure mode, surviving inside it.
+    case "$line" in "timeout -k 5 30 gh "*) : ;; *) unbounded="$unbounded$line"$'\n' ;; esac
 done <"$WORK/bounds"
 if [ -z "$unbounded" ]; then
-    ok "  and each carried the configured PLATFORM_GH_TIMEOUT, not some other bound"
+    ok "  and each carried the configured PLATFORM_GH_TIMEOUT plus a kill-after"
 else
-    bad "  a recorded bound did not carry PLATFORM_GH_TIMEOUT:"$'\n'"$unbounded"
+    bad "  a recorded bound did not carry PLATFORM_GH_TIMEOUT and -k:"$'\n'"$unbounded"
 fi
 
 echo "17c. a bound that FIRES is a transport failure, never an anomaly" >&2
@@ -892,6 +987,109 @@ if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$tmo_detail"; then
 else
     bad "  the detail does not name the bound that fired: '$tmo_detail'"; dump
 fi
+
+echo "17d. the cwd repo lookup is the FOURTH gh call, and it is bounded too" >&2
+# Structurally excluded from 17b, whose `-eq 3` counts only the calls that
+# happen once --repo is given. Every other case here passes --repo, so this site
+# had no coverage at all — and it is the one where bounding the call CREATED a
+# confident wrong answer: `|| true` discarded the status, so a fired bound
+# (124) was indistinguishable from an empty result and was reported as `not in
+# a GitHub repo and --repo not given`, exit 1, empty stdout, inside a valid
+# checkout. Reproduced with a stub `timeout` returning 124.
+D_LOOKUP="$(scenario lookup "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP" --pr 301
+lookup_n="$(grep -c . "$WORK/bounds")"
+if [ "$lookup_n" -eq 4 ]; then
+    ok "with no --repo, the lookup runs under the bound as well ($lookup_n calls)"
+else
+    bad "$lookup_n bounded calls recorded with no --repo, expected 4"
+    sed 's/^/          | B /' <"$WORK/bounds" >&2
+fi
+expect_verdict "  and the run still resolves normally" "healthy"
+
+D_LOOKUP_TMO="$(scenario lookuptimeout "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+: >"$D_LOOKUP_TMO/gh.timeout"
+REPO_ARG_OVERRIDE=none run_probe "$PROBE" "$D_LOOKUP_TMO" --pr 301
+expect_status "a timed-out lookup exits 0 — it is a platform symptom, not a usage error" 0
+expect_verdict "  and emits a VERDICT rather than dying with a false cause" "unknown"
+expect_field "  naming the lookup, not the PR it never got to read" \
+    .self_measured_reason "repo_lookup_timed_out"
+expect_errkind "  recorded like the other three gh sites, not with a private spelling" \
+    "gh_call_failed"
+if grep -qF -- "not in a GitHub repo" <<<"$STDERR"; then
+    bad "  the old false cause is still printed inside a valid checkout: '$STDERR'"
+else
+    ok "  and never claims 'not in a GitHub repo' when the repo was simply unreachable"
+fi
+
+echo "17e. a host with NO timeout binary still measures, and says the bound did not apply" >&2
+# The branch an earlier edition of this file called impossible to exercise. It
+# is not: a curated PATH carrying everything the probe needs EXCEPT timeout runs
+# it fine. The claim mattered because it was load-bearing — it was the stated
+# reason this branch had no case, and CLAUDE.md tells the next editor to trust a
+# gate header. The behaviour under test is the SCOPE: `timeout_unavailable` is
+# `probe`-scoped, so it must NOT make the run not_measured. Scope it
+# `first_party` and every coreutils-less host reports `not_measured` on every
+# run, which is the whole reason the third scope exists.
+if [ -n "$NT_MISSING" ]; then
+    bad "the curated PATH could not be built; missing:$NT_MISSING"
+else
+    ok "the curated no-timeout PATH was built from the real one"
+fi
+D_NT="$(scenario notimeout "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+PATH_OVERRIDE="$BIN_NT" run_probe "$PROBE" "$D_NT" --pr 301
+expect_verdict "with no timeout binary the probe still measures and resolves" "healthy"
+expect_status "  and exits 0" 0
+expect_field "  the measurement is unaffected — NOT not_measured" .self_measured "clean"
+expect_errkind "  and the ledger says the bound never applied" "timeout_unavailable"
+nt_scope="$(jq -r '[.probe_errors[] | select(.kind == "timeout_unavailable") | .scope] | join(",")' <<<"$STDOUT" 2>/dev/null)"
+if [ "$nt_scope" = "probe" ]; then
+    ok "  scoped 'probe', so it cannot make a coreutils-less host unmeasured"
+else
+    bad "  timeout_unavailable is scoped '$nt_scope', expected 'probe'"; dump
+fi
+nt_bounds="$(grep -c . "$WORK/bounds")"
+if [ "$nt_bounds" -eq 0 ]; then
+    ok "  and no bound was recorded, so the case is not passing through the shim"
+else
+    bad "  $nt_bounds bounds recorded on a PATH with no timeout — the shim leaked in"
+fi
+
+echo "17f. gtimeout — the macOS spelling, and the elif no shimmed PATH reaches" >&2
+# `timeout` is shimmed ahead of it everywhere else, so this branch was the OTHER
+# half of the same false impossibility claim. A PATH carrying gtimeout alone is
+# what a coreutils-on-macOS host actually looks like.
+D_GT="$(scenario gtimeout "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+PATH_OVERRIDE="$BIN_GT" run_probe "$PROBE" "$D_GT" --pr 301
+expect_verdict "a gtimeout-only host resolves normally" "healthy"
+gt_bounds="$(grep -c . "$WORK/bounds")"
+if [ "$gt_bounds" -eq 3 ]; then
+    ok "  and its three load-bearing calls really did run under gtimeout ($gt_bounds)"
+else
+    bad "  $gt_bounds bounded calls under a gtimeout-only PATH, expected 3"
+fi
+gt_err="$(errkinds)"
+if grep -qF -- "timeout_unavailable" <<<"$gt_err"; then
+    bad "  gtimeout was present but the probe reported the bound unavailable"
+else
+    ok "  and nothing claims the bound was unavailable"
+fi
+
+echo "17g. the bound value is validated, including the shapes that mean 'unbounded'" >&2
+# The whole validation block was UNCASED: deleting it left the gate green. `00`
+# is the one that matters — all digits, not empty, not the literal `0`, so it
+# passed, and `timeout 00 …` is `timeout 0 …`, which is NO BOUND. Measured:
+# `gtimeout 00 sleep 2` returns 0 after the full two seconds. Worse than an
+# unbounded run, because no `timeout_unavailable` is recorded either, so the
+# ledger affirmatively implies a bound that never applied.
+D_VAL="$(scenario badbound "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+GH_TIMEOUT_OVERRIDE=abc run_probe "$PROBE" "$D_VAL" --pr 301
+expect_status "a non-numeric bound is a usage error" 1
+GH_TIMEOUT_OVERRIDE=0 run_probe "$PROBE" "$D_VAL" --pr 301
+expect_status "  a zero bound is refused rather than read as 'no bound'" 1
+GH_TIMEOUT_OVERRIDE=00 run_probe "$PROBE" "$D_VAL" --pr 301
+expect_status "  and so is 00, which is all digits and still means no bound" 1
+unset GH_TIMEOUT_OVERRIDE
 
 echo "18. exit codes carry no verdict, but still carry usage errors" >&2
 run_probe "$PROBE" "$D" --pr not-a-number
@@ -1168,7 +1366,7 @@ CANON_2B=(
     "1622634225"   # A `gh` call that *errors*…
     "1892531078"   # Run the probe when a watch has gone nowhere…
     "2635286258"   # | rollup entry | probe | poll-prs | merge-shepherd
-    "3517458475"   # So "the poller went quiet"… (ends on the PLATFORM_GH_TIMEOUT bound)
+    "3113014897"   # So "the poller went quiet"… (ends on the PLATFORM_GH_TIMEOUT bound)
     "3301345540"   # ```bash … probe-platform-health.sh --pr …
     "1562190426"   # It returns one of exactly **four** verdicts…
     "3181854606"   # | Verdict | What it means | … the four rows
@@ -1230,12 +1428,23 @@ expect_default "  and un-sets RUN_CHECK when the read it certifies never happene
     'RUN_CHECK="not_run"'
 expect_default "the component scope defaults to the check-relevant set" \
     'STATUS_COMPONENTS="${PLATFORM_STATUS_COMPONENTS:-actions,api requests,webhooks,pull requests,git operations}"'
-# The bound's two halves that no fixture can reach. `gtimeout` is the macOS
-# spelling and cannot be exercised while `timeout` is shimmed ahead of it; the
-# ABSENT-bound branch cannot be exercised at all, since hiding a binary from a
+# The bound's three branches, pinned at source level ALONGSIDE the behavioural
+# cases in 17e and 17f — never instead of them.
+#
+# AN EARLIER EDITION OF THIS COMMENT CLAIMED THESE TWO BRANCHES "cannot be
+# exercised at all", and that was FALSE. It reasoned that hiding a binary from a
 # PATH the probe also needs jq on is not something a prepended shim directory
-# can do. Both are pinned at source level rather than left unpinned, because the
-# fallback is what keeps a host without coreutils working AT ALL.
+# can do — true, and irrelevant, because the answer is not to prepend but to
+# REPLACE the PATH with a curated one. Both reviewers of #312 disproved it by
+# construction in minutes. The claim did real damage while it stood: it was the
+# stated reason these branches had no behavioural case, so nothing produced a
+# `probe`-scoped entry and nothing mutated the scope filter the entry exists to
+# stay out of — rewriting that filter to `select(.scope != "attribution")`, which
+# makes EVERY coreutils-less host report `not_measured` on every run, left this
+# gate fully green. A false impossibility in a gate header is worse than a
+# missing case, because CLAUDE.md tells the next editor to trust the header.
+# Note the shape of the error and not just the fact of it: it asserted what
+# could not be done without trying, and nothing here could ever have failed.
 expect_default "the bound prefers timeout" \
     'if command -v timeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="timeout"'
 expect_default "  and falls back to gtimeout, the macOS spelling" \
@@ -1610,7 +1819,7 @@ MUTANTS=(
   healthy '--pr 301' 'unknown' \
   'a dead emitter would hand the caller exit 0 and EMPTY stdout, so jq -r .verdict yields the empty string — not one of the four verdicts, and not unknown either')"
 "$(row "M26 the gh bound is not applied" \
-  '    "$GH_TIMEOUT_CMD" "$GH_TIMEOUT" gh "$@"' \
+  '    "$GH_TIMEOUT_CMD" -k 5 "$GH_TIMEOUT" gh "$@"' \
   '    gh "$@"' \
   ghtimeout '--pr 301' 'healthy' \
   'the three load-bearing calls would run unbounded again, and a hang would cost the calling loop its tick')"
@@ -1757,22 +1966,46 @@ if apply_mutation "M19 a dispatcher acts on the verdict without naming the scrip
     fi
 fi
 
+# M27 — the scope filter that keeps a `probe`-scoped entry out of the
+# first-party count. It cannot run in the loop above, because no scenario on the
+# shimmed PATH produces such an entry at all: it needs the curated no-timeout
+# PATH, which is exactly why this mutant did not exist while the branch was
+# called impossible to exercise. Its harm is the widest in this file — every
+# host without coreutils reporting `not_measured` on every run, silently, with
+# a green gate.
+M27="$WORK/scope-mutant.sh"
+if apply_mutation "M27 the first-party scope filter is widened" \
+    "n_fp_errors=\"\$(jq -r '[.[] | select(.scope == \"first_party\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
+    "n_fp_errors=\"\$(jq -r '[.[] | select(.scope != \"attribution\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
+    "$PROBE" "$M27"; then
+    PATH_OVERRIDE="$BIN_NT" run_probe "$PROBE" "$WORK/sc-notimeout" --pr 301
+    m27_good="$VERDICT"
+    PATH_OVERRIDE="$BIN_NT" run_probe "$M27" "$WORK/sc-notimeout" --pr 301
+    if [ "$VERDICT" = "unknown" ] && [ "$m27_good" = "healthy" ]; then
+        ok "M27 CAUGHT: a widened scope filter would make every coreutils-less host not_measured"
+    else
+        bad "M27 UNDETECTED: mutant '$VERDICT' (unmutated: '$m27_good'); expected unknown vs healthy"
+    fi
+fi
+
 # --- vacuity floor ------------------------------------------------------------
 # An EQUALITY, not a floor: every case above runs a fixed number of assertions on
 # every path (each helper ends in exactly one ok/bad, and each mutant contributes
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=167
-CROSS_FILE_MUTANTS=4          # M16, M17, M18, M19
-EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + CROSS_FILE_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
+EXPECTED_CASES=187
+# Mutants that cannot ride the loop above. M16-M19 mutate ANOTHER file; M27
+# mutates the probe but needs a curated PATH the loop's runner does not set.
+OUT_OF_LOOP_MUTANTS=5         # M16, M17, M18, M19, M27
+EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + OUT_OF_LOOP_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
-    bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} probe mutants + $CROSS_FILE_MUTANTS cross-file + 1 + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
+    bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} probe mutants + $OUT_OF_LOOP_MUTANTS out-of-loop + 1 + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
 fi
 
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then
-    echo "platform-health-probe tests: all pass ($asserts assertions, ${#MUTANTS[@]} probe mutants + $CROSS_FILE_MUTANTS cross-file)" >&2
+    echo "platform-health-probe tests: all pass ($asserts assertions, ${#MUTANTS[@]} probe mutants + $OUT_OF_LOOP_MUTANTS out-of-loop)" >&2
     exit 0
 fi
 echo "platform-health-probe tests: FAILURES above ($asserts assertions)" >&2

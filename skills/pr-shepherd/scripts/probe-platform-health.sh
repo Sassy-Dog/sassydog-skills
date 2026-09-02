@@ -130,9 +130,9 @@
 # `no_required_baseline`, `head_too_fresh`, `runs_page_truncated`,
 # `rollup_empty_with_runs`, `head_age_unknown`, `run_comparison_failed`,
 # `pr_read_failed`, `probe_errors_present`, `verdict_emitter_failed`,
-# `no_pr_given` and `nothing_measurable` are precisely why the verdict is not a
-# measurement. That list is the full set the code emits; if you add a reason,
-# add it here.
+# `repo_lookup_timed_out`, `no_pr_given` and `nothing_measurable` are precisely
+# why the verdict is not a measurement. That list is the full set the code
+# emits; if you add a reason, add it here.
 #
 # A gh TRANSPORT FAILURE IS `not_measured`, NOT AN ANOMALY, and this is a
 # deliberate reading of #285 rather than a slip. #285 lists "gh calls erroring
@@ -307,8 +307,23 @@ esac
 # bound" — a bound that silently means unbounded is the shape this whole file
 # refuses; drop `timeout` from PATH to get the unbounded behaviour, and the
 # probe will say so in `probe_errors`.
+#
+# `0*` AND NOT `0`, because rejecting the single character was not the same
+# rule. `00` is all digits, is not the empty string and is not the literal `0`,
+# so it passed — and `timeout 00 …` is `timeout 0 …`, which means NO BOUND.
+# Measured: `gtimeout 00 sleep 2` returns 0 after the full two seconds. That is
+# strictly worse than an unbounded run, because no `timeout_unavailable` is
+# recorded either, so the ledger affirmatively implies a bound that was never
+# applied — the exact shape the paragraph above says this file refuses, reached
+# through the validation written to enforce it. Leading zeros are therefore
+# rejected outright rather than stripped: a caller who wrote `00` meant
+# something, and guessing which thing is how this class of bug survives.
+#
+# STATUS_TIMEOUT above has the same hole and is deliberately NOT changed here —
+# it is pre-existing, out of this issue's scope, and reaches `curl --max-time`
+# rather than a command prefix. Do not "align" the two by loosening THIS one.
 case "$GH_TIMEOUT" in
-  *[!0-9]*|""|0) echo "error: PLATFORM_GH_TIMEOUT must be a positive number of seconds, got: $GH_TIMEOUT" >&2; exit 1 ;;
+  ""|*[!0-9]*|0*) echo "error: PLATFORM_GH_TIMEOUT must be a positive whole number of seconds with no leading zero, got: $GH_TIMEOUT" >&2; exit 1 ;;
 esac
 # The status URL reaches curl, so it is validated like any other argument. A
 # value starting `-K` is read by curl as `--config` and can set `output`,
@@ -332,8 +347,15 @@ gh_bounded() { # <gh args...> — the ONE place `gh` is invoked
   # PURE, deliberately: every call site runs this inside `$( )`, so an
   # `add_error` here would mutate PROBE_ERRORS in a SUBSHELL and the entry
   # would be silently discarded. The ledger is written by the callers.
+  # `-k 5` is not belt-and-braces. Without it `timeout` sends SIGTERM and then
+  # WAITS for the child, so a `gh` that ignores TERM makes the bound bound
+  # nothing at all — the precise failure this wrapper exists to prevent,
+  # surviving inside its own fix. `gh` is Go and honours TERM today, which
+  # makes this cheap insurance rather than a live bug, and the 5s grace is
+  # deliberately fixed: it is a kill delay, not a second knob for a caller to
+  # get wrong.
   if [ -n "$GH_TIMEOUT_CMD" ]; then
-    "$GH_TIMEOUT_CMD" "$GH_TIMEOUT" gh "$@"
+    "$GH_TIMEOUT_CMD" -k 5 "$GH_TIMEOUT" gh "$@"
   else
     gh "$@"
   fi
@@ -347,12 +369,6 @@ gh_rc_note() { # <rc> — names the bound when IT is what fired, and nothing oth
   fi
   return 0
 }
-
-if [ -z "$REPO" ]; then
-  REPO="$(gh_bounded repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
-  [ -n "$REPO" ] || { echo "error: not in a GitHub repo and --repo not given" >&2; exit 1; }
-fi
-case "$REPO" in */*) : ;; *) echo "error: repo must be owner/name, got: $REPO" >&2; exit 1 ;; esac
 
 ANOMALIES='[]'
 PROBE_ERRORS='[]'
@@ -374,8 +390,48 @@ add_error() { # <scope: first_party|attribution|probe> <kind> <detail>
 [ -n "$GH_TIMEOUT_CMD" ] || add_error probe timeout_unavailable \
   "neither timeout nor gtimeout is on PATH, so every gh call ran unbounded; PLATFORM_GH_TIMEOUT=$GH_TIMEOUT was not applied"
 
+# THE REPO LOOKUP IS A `gh` CALL TOO, AND BOUNDING IT MADE ITS OLD DIAGNOSIS A
+# LIE. It used to end in `|| true`, which discards the status — harmless while
+# the call could only fail by erroring, and a NEW confident wrong answer the
+# moment a bound could fire: exit 124 became indistinguishable from an empty
+# result and was reported as `not in a GitHub repo and --repo not given`, exit
+# 1, empty stdout, INSIDE A PERFECTLY VALID CHECKOUT. That is this file's own
+# dominant bug class — an unknown converted into a confident wrong answer —
+# introduced by the mitigation for a different one, and measured with a stub
+# `timeout` that always returns 124.
+#
+# So a fired bound here is NOT a usage error. It is the same first-party
+# transport failure the other three sites record, scoped and kinded IDENTICALLY
+# to them (`first_party gh_call_failed`) rather than given a private spelling:
+# it is a `gh` call we cut off ourselves, and the fourth site behaving like the
+# other three is the whole point. The run then carries on to a real VERDICT
+# instead of dying — `not_measured` with a reason that says so, which the status
+# page can still attribute. Exit 1 stays what it always was: no verdict exists.
+# An empty answer with no bound fired is still the ordinary usage error.
+REPO_OK=1
+if [ -z "$REPO" ]; then
+  rc=0
+  REPO="$(gh_bounded repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || rc=$?
+  if [ -z "$REPO" ]; then
+    if [ "$rc" -eq 124 ] && [ -n "$GH_TIMEOUT_CMD" ]; then
+      add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"
+      REPO_OK=0
+    else
+      echo "error: not in a GitHub repo and --repo not given" >&2; exit 1
+    fi
+  fi
+fi
+# Skipped when the lookup timed out: there is no value to shape-check, and the
+# owner/name message would be the second false cause in a row.
+if [ "$REPO_OK" -eq 1 ]; then
+  case "$REPO" in */*) : ;; *) echo "error: repo must be owner/name, got: $REPO" >&2; exit 1 ;; esac
+fi
+
 SELF="not_measured"
 SELF_REASON="no_pr_given"
+# Set BEFORE the first-party block, which is skipped without a repo: the reason
+# a caller sees must name the lookup, not the PR it never got to read.
+[ "$REPO_OK" -eq 1 ] || SELF_REASON="repo_lookup_timed_out"
 HEAD=""
 # ONE definition of what may not reach a reported field, injected into every jq
 # program that sanitises one. Written as CODEPOINTS rather than a regex class,
@@ -413,7 +469,7 @@ ROLLUP_CHECK="not_run"
 RUNS_TRUNCATED="unknown"
 
 # --- first-party measurement -------------------------------------------------
-if [ -n "$PR" ]; then
+if [ -n "$PR" ] && [ "$REPO_OK" -eq 1 ]; then
   SELF_REASON=""
   rc=0
   pr_raw="$(gh_bounded pr view "$PR" --repo "$REPO" \
@@ -884,7 +940,7 @@ emitted="$(jq -n \
   --argjson anomalies "$ANOMALIES" \
   --argjson probe_errors "$PROBE_ERRORS" \
   --argjson pr "${PR:-null}" \
-  '{repo:$repo, pr:$pr, verdict:$verdict,
+  '{repo:(if $repo == "" then null else $repo end), pr:$pr, verdict:$verdict,
     self_measured:$self,
     self_measured_reason:(if $self_reason == "" then null else $self_reason end),
     checks_run:{run_comparison:$run_check, rollup_empty_state:$rollup_check,
@@ -920,7 +976,15 @@ if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$e
     "head_sha":null, "head_ref":null, "head_age_seconds":null,
     "merge_state_status":null,
     "explains":"nothing — the verdict emitter failed, so nothing that was measured survived; unknown is not health, and this verdict never licenses escalating a stall as a real defect"}'
-  SUMMARY="platform: unknown — the verdict emitter failed (jq exited $emit_rc); nothing that was measured survived"
+  # The two failures are reported apart. Folding them together printed
+  # `the verdict emitter failed (jq exited 0)` on the empty-stdout branch — a
+  # diagnostic contradicting itself on the exact door this whole change closes.
+  if [ "$emit_rc" -ne 0 ]; then
+    emit_why="jq exited $emit_rc"
+  else
+    emit_why="jq exited 0 but produced no usable object"
+  fi
+  SUMMARY="platform: unknown — the verdict emitter failed ($emit_why); nothing that was measured survived"
 else
   SUMMARY="platform: $VERDICT — explains $EXPLAINS"
 fi

@@ -925,6 +925,20 @@
 #      evidence of degradation is the confident wrong answer reached through the
 #      mitigation for a different one. The exit code is asserted on EVERY
 #      verdict-form mutant, so no path can grow one that carries a verdict.
+#      BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER: the cwd repo lookup's
+#      `|| true` discarded the status, so a fired bound was reported as `not in
+#      a GitHub repo` — exit 1, empty stdout, inside a VALID checkout — and
+#      covering it meant the runner had to stop passing `--repo`, the flag that
+#      suppresses that call and structurally excluded the site from the
+#      three-call assertion. The bound has THREE branches and only one is
+#      reachable through a prepended shim, so the other two run under CURATED
+#      PATHs; an earlier edition called them impossible to exercise, which was
+#      false and cost the file its only coverage of the `probe` scope — the
+#      scope that must NOT make a run `not_measured`, or every host without
+#      coreutils reports `not_measured` on every run. Its filter is mutated
+#      out-of-loop, since no shimmed scenario produces such an entry. The bound
+#      VALUE is validated and the validation is cased: `00` is all digits, not
+#      empty and not the literal `0`, and `timeout 00 …` means no bound at all.
 #      Mock `gh` AND mock `curl`, both recording every call so the read-only
 #      claim is measured by METHOD — per token, by prefix — not by path prefix:
 #      no repo, no network.
