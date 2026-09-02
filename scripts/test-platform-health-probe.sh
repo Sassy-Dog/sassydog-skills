@@ -127,6 +127,15 @@
 # `-eq 3` structurally excluded the site and no case reached it. A fired bound
 # there now records the same `first_party gh_call_failed` the other three sites
 # record and the run carries on to a real verdict.
+# There were TWO wrong answers at that site, not one. The second: the status was
+# tested AFTER the emptiness check, so a call the bound cut off after `gh` had
+# flushed a slug left a real-looking fragment that passed the shape check and
+# the run proceeded against it; the status is now read BEFORE the value (17d's
+# `gh.timeout.late`). And a fired bound is 124 OR 137: 137 is `timeout`'s
+# kill-grace exit when `gh` ignored TERM — the very path `-k 5` exists for — so
+# `bound_fired` accepts both, and 17c2 drives the 137 path at the first-party
+# sites. An edition that tested `-eq 124` alone recognised the bound everywhere
+# except there.
 #
 # THE BOUND HAS THREE BRANCHES AND ONLY ONE IS REACHABLE THROUGH $BIN, which is
 # why 17e and 17f run under CURATED PATHS rather than a prepended shim
@@ -166,9 +175,11 @@
 # Network-free: PATH-shimmed mock `gh` AND mock `curl`, both serving recorded
 # payloads from a scenario directory and recording every invocation, so the
 # read-only claim is measured rather than asserted, by METHOD and not merely by
-# path prefix. `--repo` is always passed, which suppresses the probe's only
-# other gh use (the cwd repo lookup) — so a machine with a real authenticated gh
-# behaves exactly like CI — and every env knob the probe reads is pinned, so an
+# path prefix. `--repo` is passed everywhere EXCEPT the lookup cases in 17d,
+# which drop it precisely to reach the probe's only other gh use (the cwd repo
+# lookup); the mock `gh` answers `repo view`, so a machine with a real
+# authenticated gh still behaves exactly like CI — remove that mock arm and 17d
+# reaches the real one. Every env knob the probe reads is pinned, so an
 # operator's ambient PLATFORM_* setting cannot change what this measures.
 # `timeout` is shimmed for the SAME reason the knobs are pinned rather than to
 # fake anything: the host decides whether the real binary exists (macOS ships
