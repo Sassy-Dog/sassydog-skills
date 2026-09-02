@@ -54,15 +54,34 @@
 #      hold it. (a) Every verdict exits 0, so no `set -e`/`&&`/`if` can turn one
 #      into a gate — the deliberate asymmetry with stack-probe.sh, whose exit
 #      codes ARE a gate because gating is its job. (b) No sibling pr-shepherd
-#      script and no OTHER skill names the probe at all, over a sibling list held
-#      as an EQUALITY against `git ls-files`, so a new script cannot ship
-#      unscanned. Both are mutation-proved, (b) by wiring the probe into
-#      merge-shepherd.sh.
-#   2. THE SKILL.md CHECK IS SECTION-SCOPED, not file-scoped. A whole-file grep
-#      for the probe's name is satisfied by its own §2b and by the bundled-script
-#      table, so it would report a probe wired into the MERGE section as clean.
-#      The decision sections (§1, §1b, §3) are asserted to not name it, and that
-#      is mutation-proved by inserting a mention into §3.
+#      script and no OTHER skill doc names the probe at all, over a sibling
+#      list held as an EQUALITY against `git ls-files` and a docs corpus that
+#      is EVERY tracked `.md` under `skills/`, at any depth, minus the two
+#      section-scoped files of decision 2 — so neither a new
+#      script nor a new reference doc can ship unscanned. The docs half was a
+#      hand-picked subset until #302: `skills/pr-shepherd/SKILL.md` was in no
+#      corpus at all, and gates 32/33 had already recorded that the SUBSET is
+#      the defect, not the choice of subset. Both halves are mutation-proved,
+#      (b) by wiring the probe into merge-shepherd.sh and into pr-shepherd's
+#      own §4.
+#   2. THE SKILL.md CHECK IS SECTION-SCOPED, not file-scoped, AND THE SECTION
+#      LIST IS AN EQUALITY over the file's own headings. A whole-file grep for
+#      the probe's name is satisfied by its own §2b and by the bundled-script
+#      table, so it would report a probe wired into the MERGE section as
+#      clean; a by-name list of decision sections (§1, §1b, §3 — the earlier
+#      edition) reports a probe wired into §2 or §4 as clean, and a hold rule
+#      written into §4 Teardown was measured green. So every heading in
+#      pr-shepherd's SKILL.md is enumerated by ordinal and scanned for the
+#      filename AND the verdict vocabulary unless it is one of exactly two
+#      carve-outs — §2b, pinned by canon in 22, and the script table, asserted
+#      in 20 to name the probe — each asserted to exist exactly once so a
+#      rename cannot retire it. Guardrails is NOT a carve-out: its one
+#      legitimate mention is the canon-pinned never-a-gate bullet, stripped
+#      before the scan so the rest of the list, where a gating exception gets
+#      written, is held to the rule. dispatch-ready's SKILL.md is scanned the
+#      same way with DRAIN DEGRADED as its one carve-out (#286). Mutation-
+#      proved three ways: a mention in §3 (M17), the measured §4 hold rule
+#      (M31), and a gating bullet appended beside the canon one (M32).
 #   3. THE RUN COMPARISON IS RUN-TO-RUN, NOT ROLLUP-TO-RUN. `statusCheckRollup`
 #      names checks (for Actions, JOB names) and `actions/runs` names WORKFLOWS;
 #      differencing the two namespaces reports a missing check for every workflow
@@ -102,7 +121,16 @@
 #     mutation-proved by M25, which breaks the emitter (`--argjson anomalies ""`
 #     exits 2 and prints nothing) and requires `unknown` back. Delete the
 #     fallback and M25 reports the mutant as `«no output»`: UNDETECTED, red.
-#     Its exit code is asserted too, by the rule below.
+#     Its exit code is asserted too, by the rule below. THE FALLBACK IS THREE
+#     KEYS, and M25 asserts exactly those with the reason and the explains
+#     canon: the first edition was a 16-key literal mirroring the emitter — a
+#     second copy of the schema held in step by nothing, and renaming a key in
+#     it was measured green (#302). The ledgers stay `--argjson` ON PURPOSE,
+#     and M29 pins that: an empty `$ANOMALIES` already reads as zero anomalies
+#     at the verdict, so an emitter that cannot fail on its inputs (`--arg`
+#     plus `try fromjson catch []`) emits `healthy` beside an empty list. The
+#     emitter dying is the fail-closed door, and M29 corrupts the ledger and
+#     requires the fallback back.
 #   * A BOUND ON THE OPTIONAL CALL AND NONE ON THE LOAD-BEARING ONES. The
 #     attribution fetch — the half the probe's header calls never load-bearing —
 #     carried `--max-time`, while `gh pr view`, the commit read and the runs
@@ -112,10 +140,18 @@
 #     because the mock `gh` sees an identical argv either way — which is exactly
 #     why nothing caught this. Case 17c asserts that a bound which FIRES lands
 #     where every other non-zero gh exit lands: `not_measured`, reason
-#     preserved, and NO anomaly. Reporting our own cutoff as first-party
-#     evidence of degradation is the confident wrong answer reached through the
-#     mitigation for a different one, so it has its own mutant (M9d) beside the
-#     transport-failure one it mirrors.
+#     preserved, and NO anomaly — AT EVERY SITE. An empty `gh.timeout` fires
+#     on the first bounded call, which absorbs it, so an edition of 17c
+#     covered `gh pr view` alone while the commit and runs sites could report
+#     their own cutoff as an anomaly with the gate green (measured, #302). The
+#     shim now takes a selector; 17c loops over the three sites and asserts
+#     the detail names the one under test, and 17d fires the fourth. Reporting
+#     our own cutoff as first-party evidence of degradation is the confident
+#     wrong answer reached through the mitigation for a different one, so it
+#     has its own mutant PER SITE (M9d, M9e, M9f, M9g) beside the
+#     transport-failure one it mirrors — M9e and M9f in the exact shape that
+#     keeps recording an error on every OTHER non-zero exit, so no
+#     plain-failure case can see them.
 #
 # BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER, and one did. The cwd repo
 # lookup ended in `|| true`, which discards the status — harmless while the call
@@ -133,9 +169,11 @@
 # the run proceeded against it; the status is now read BEFORE the value (17d's
 # `gh.timeout.late`). And a fired bound is 124 OR 137: 137 is `timeout`'s
 # kill-grace exit when `gh` ignored TERM — the very path `-k 5` exists for — so
-# `bound_fired` accepts both, and 17c2 drives the 137 path at the first-party
-# sites. An edition that tested `-eq 124` alone recognised the bound everywhere
-# except there.
+# `bound_fired` accepts both, and 17c2 drives the 137 path at each of the three
+# first-party sites through the same selector 17c uses — an edition of 17c2
+# fired it at the first call alone, so a commit-site anomaly on 137 was green;
+# M9h and M9i are the 137 siblings of M9e and M9f. An edition of the probe
+# that tested `-eq 124` alone recognised the bound everywhere except there.
 #
 # THE BOUND HAS THREE BRANCHES AND ONLY ONE IS REACHABLE THROUGH $BIN, which is
 # why 17e and 17f run under CURATED PATHS rather than a prepended shim
@@ -145,8 +183,14 @@
 # and that cost the file its only coverage of the `probe` scope. The scope is
 # the point — `timeout_unavailable` must NOT make a run `not_measured`, or every
 # host without coreutils reports `not_measured` on every run — and M27 mutates
-# the filter that decides it. That mutant cannot ride the mutant loop, because
-# no scenario on the shimmed PATH produces a `probe`-scoped entry at all.
+# the filter that decides it, on the curated no-timeout PATH through the
+# loop's PATH field, since no scenario on the shimmed PATH produces a
+# `probe`-scoped entry at all. That filter counts by EXCLUSION now: naming
+# `first_party` made the scope an open enum whose only reader failed OPEN, so a
+# misspelt scope at a first-party site dropped out of the count and the run
+# reached `healthy` with a failed read on the ledger (measured, #302). Section
+# 23 holds every `add_error` site to the closed set, and M34 misspells one and
+# requires both the census to flag it and the run to fail closed.
 #
 # THE BOUND VALUE IS VALIDATED AND THE VALIDATION IS CASED (17g). The whole
 # block was uncased: deleting it left this gate green. `00` is the shape that
@@ -155,6 +199,63 @@
 # `gtimeout 00 sleep 2` returns 0 after the full two seconds, with no
 # `timeout_unavailable` recorded, so the ledger affirmatively implies a bound
 # that never applied.
+#
+# THE GATE'S OWN REACH WAS THE NEXT DEFECT (issue #302). The review of #300 ran
+# 31 mutations against the probe and 19 passed a gate whose header claimed to
+# refuse vacuous greens; three were real wrong verdicts, fixed there, and the
+# rest were holes HERE. Beyond the ones folded into the paragraphs above:
+#
+#   * `explains` IS PINNED BY CANON, PER BRANCH. The matcher accepted `nothing*`
+#     plus EITHER "never licenses escalating" OR "not an explanation", for
+#     every branch — the second needle existed for the clean-beside-incident
+#     branch and was offered to `healthy` and `unknown` too — so that branch
+#     rewritten to tell the caller "a stall that survives this verdict is a
+#     real defect — escalate it" passed. `explains` is the field SKILL.md
+#     orders callers to report instead of the verdict. All five reachable
+#     "nothing" strings and the fallback's are checksummed, and M30 is the
+#     measured inversion (the loop's `explains:` form).
+#   * THE FAILED-GENERATOR DOOR IS CASED BEHAVIOURALLY (27b). It was pinned by
+#     three source needles "because no fixture can make jq fail on a payload
+#     the earlier guards accept" — false for the empty-state read (a rollup of
+#     numbers does it) and true only for the missing-run read, whose input is
+#     the probe's own derivation; each needle was defeated with the gate green,
+#     one of them because it also matched the initialiser. A fixture drives the
+#     first and a fault-injecting `jq` shim on a curated PATH drives the second
+#     — the same answer the `timeout` shim gives for a bound that fires — and
+#     M28, M28b and M28c are the three defeats, now red.
+#   * THE NAME `gh` IS THE CHOKEPOINT. The probe's wrapper was a bound by
+#     convention and the grep guarding it refused one spelling in ten; a bare
+#     `gh api … >/dev/null` inserted into the probe ran unbounded with case 17
+#     whitelisting it. The probe now shadows `gh` with a function whose only
+#     reach to the binary is one `command gh`, asserted in 23 to occur exactly
+#     once and inside it; 17b and 17d assert calls-vs-bounds PARITY over the
+#     ledgers, and M33 inserts two bare calls in the shapes the grep missed and
+#     requires both to run under the bound. `timeout` resolves `gh` by execvp,
+#     so the mock is reached exactly the way the binary is.
+#   * OUT-OF-LOOP MUTANTS CARRY A RAN-COUNTER. Their count was a hand
+#     transcription checked only by the arithmetic at the bottom, whose message
+#     blamed a case — a deleted block plus one added case was green. `oo_ran`
+#     mirrors `mut_ran` and has its own ok/bad.
+#   * THE REVIEW OF THAT FIX FOUND FIVE MORE, each measured green and now red.
+#     `gh.killed` had no selector, so the 137 path was cased at the first call
+#     alone while this header said "at the first-party sites" (17c2 loops per
+#     site; M9h/M9i). The vocabulary had no bare form, so `on a degraded
+#     verdict, hold the PR` — the phrasing given as the reason the scan exists
+#     — passed (M31b). Heading lines were skipped by the section scan, so a
+#     rule written as a heading over a bland body passed (M31c). The scope
+#     census read an unquoted token only and floored below the site count, so
+#     `add_error "firstparty"` passed (M34 is the quoted form now; the census
+#     is an equality with the calling lines). And section 23 claimed no
+#     fixture could kill the emitter, which a check name over the argv cap
+#     does through the ledger builder (27c) — the same false-impossibility
+#     shape, re-authored in the fix for it.
+#
+# NOT CLOSED BY #302, recorded rather than implied: the three STRUCTURAL
+# sanitisers (`HEAD` hex-only, `MERGE_STATE`'s class, `BRANCH_ENC`'s `@uri`)
+# sit outside section 26's census and each was measured removable with this
+# gate green, and no fixture drives hostile text through `missing_out` or the
+# status detail. That is the residual half of #302's original finding 4, out of
+# its acceptance; a later editor should expect those mutations to still pass.
 #
 # THE EXIT CODE IS NOW ASSERTED ON EVERY VERDICT-FORM MUTANT, not only on M7's
 # dedicated one. M7 proves the shipped `exit 0` is load-bearing; the per-mutant
@@ -188,7 +289,9 @@
 # makes a FIRING bound testable with no sleep at all, since 124 is exactly what
 # the real binary reports and the probe's handling of 124 is the behaviour under
 # test. Its ledger is a SEPARATE file: a `timeout …` line in MOCK_CALLS would be
-# flagged by case 17 as a call outside the read-only contract.
+# flagged by case 17 as a call outside the read-only contract. A third curated
+# PATH carries a `jq` that dies on one named program (27b), with a ledger of
+# its own for the same reason.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-platform-health-probe.sh
@@ -279,15 +382,34 @@ chmod +x "$BIN/curl"
 # line of MOCK_CALLS as a read or a write, and a `timeout …` line there would be
 # flagged as a call outside the read-only contract by the scan that exists to
 # catch a real one.
+#
+# `gh.timeout` CARRIES A SELECTOR. An empty file fires on every bounded call,
+# which means the FIRST call always absorbs it and the later sites are never
+# reached: an edition of this gate had exactly that, so the fired-bound rule
+# was cased and mutated at `gh pr view` alone while the commit read and the
+# runs read — two of the four sites — could report their own cutoff as an
+# anomaly with the gate green. The file's content, when non-empty, is a
+# substring matched against the shim's argv, so a case can fire the bound at
+# the site it means to test (`commits/`, `actions/runs`) and let the earlier
+# calls succeed.
 cat >"$BIN/timeout" <<'MOCK'
 #!/usr/bin/env bash
 printf 'timeout %s\n' "$*" >>"${MOCK_BOUNDS:-/dev/null}"
-if [ -f "$SCENARIO_DIR/gh.timeout" ]; then exit 124; fi
+if [ -f "$SCENARIO_DIR/gh.timeout" ]; then
+    sel="$(cat "$SCENARIO_DIR/gh.timeout")"
+    case "$*" in *"$sel"*) exit 124 ;; esac
+fi
 # 137 is what the real binary reports when the child ignored TERM and the
 # kill grace had to fire — 128 + KILL, preserved after escalation. Measured on
 # coreutils 9.11: `timeout -k 1 1 bash -c 'trap "" TERM; sleep 10'` -> 137,
 # `timeout -k 1 1 sleep 10` -> 124. It is the path `-k` exists for.
-if [ -f "$SCENARIO_DIR/gh.killed" ]; then exit 137; fi
+# Same selector as `gh.timeout`, for the same reason: an empty file fires on
+# the first call, which absorbs it, and a commit-site `-eq 137` anomaly was
+# measured green while this shim had no selector (review of #315).
+if [ -f "$SCENARIO_DIR/gh.killed" ]; then
+    sel="$(cat "$SCENARIO_DIR/gh.killed")"
+    case "$*" in *"$sel"*) exit 137 ;; esac
+fi
 # `-k <grace>` is stripped the way the real binary parses it. Shifting a fixed
 # number of arguments instead would exec `5 30 gh …` the moment the probe
 # gained a kill-after, i.e. the shim would break on the change it exists to
@@ -333,6 +455,47 @@ for t in bash env jq tr cat sed; do
     fi
 done
 BASH_BIN="$(command -v bash)"
+
+# A THIRD PATH, carrying a `jq` that can be told to DIE on one program. The
+# missing-run generator cannot be killed by any payload: its input is the
+# probe's own derivation, every `.missing` element is produced by string
+# interpolation (`"\(.name) (\(.event))"`, a string whatever `.name` is), and
+# `clean` is total over strings. Measured over null, object, number, array and
+# U+10FFFF names — all stringified, generator exit 0 — and a lone surrogate,
+# which never reaches the generator AS a surrogate: this host's jq
+# (1.7.1-apple) rejects it in the DERIVATION's parser, where DERIVED_OK catches
+# it, while other 1.7 builds replace it with U+FFFD and the derivation
+# succeeds — a plain string either way, and the generator survives either way.
+# So the guard behind that generator had no behavioural
+# case, and its three source-level pins were each defeatable (one needle also
+# matched the initialiser). Fault injection is the same answer the `timeout`
+# shim already gives for a bound that fires: `jq.fail` in the scenario names a
+# substring of the program text, and the ONE call carrying it exits 5 with
+# nothing on stdout, which is exactly what a jq that died mid-read looks like
+# to the probe. Every other call reaches the real binary. Kept OUT of $BIN so
+# the ~15 jq calls per run pay the extra process only in the cases that ask
+# for it, and it appends to MOCK_JQFAULTS when it fires so a case can prove
+# the fault was injected rather than passing on a fixture that never reached
+# it.
+BIN_JQ="$WORK/bin-jqfault"
+mkdir -p "$BIN_JQ"
+cp "$BIN/gh" "$BIN/curl" "$BIN/timeout" "$BIN_JQ/"
+JQ_REAL="$(command -v jq)"
+{
+    echo '#!/usr/bin/env bash'
+    printf "JQ_REAL='%s'\n" "$JQ_REAL"
+    cat <<'MOCK'
+if [ -f "${SCENARIO_DIR:-/nonexistent}/jq.fail" ]; then
+    needle="$(cat "$SCENARIO_DIR/jq.fail")"
+    case "$*" in *"$needle"*)
+        printf 'jq %s\n' "$needle" >>"${MOCK_JQFAULTS:-/dev/null}"
+        exit 5 ;;
+    esac
+fi
+exec "$JQ_REAL" "$@"
+MOCK
+} >"$BIN_JQ/jq"
+chmod +x "$BIN_JQ/jq"
 
 # --- recorded payloads --------------------------------------------------------
 # The outage shape from #285: the rollup carries an empty-state `ci`, the head
@@ -449,6 +612,18 @@ PR_MIDFLIGHT='{"number":301,"headRefOid":"aa11bb2","headRefName":"feat/clean",
     {"__typename":"CheckRun","name":"CI / build","status":"IN_PROGRESS","conclusion":null},
     {"__typename":"CheckRun","name":"CI / lint","status":"","conclusion":"SUCCESS"}]}'
 
+# A rollup whose entries are NUMBERS. It passes every earlier guard — parsable,
+# both requested keys present, head and branch non-empty, rollup_n = 2 — and
+# then kills the empty-state generator for real (`.status` on a number is a jq
+# error, exit 5). This is the fixture an earlier header said could not exist
+# ("no fixture can make jq fail on a payload the earlier guards accept"), and
+# it is what gives the failed-generator door into `healthy` a behavioural case
+# instead of three defeatable source pins. Head and runs are PR_CLEAN's, so
+# the run comparison resolves clean and the dead generator is the ONLY thing
+# standing between this run and `healthy`.
+PR_BAD_ROLLUP='{"number":301,"headRefOid":"aa11bb2","headRefName":"feat/clean",
+  "mergeStateStatus":"CLEAN","statusCheckRollup":[1,2]}'
+
 # A FULL page (100 runs) is what the probe reads as truncated. Its comparison
 # is RUNS_CLEAN's and resolves clean, so the only difference between this
 # fixture and RUNS_CLEAN is that the page is full - which is the whole point:
@@ -533,10 +708,12 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     shift 2
     : >"$WORK/calls"
     : >"$WORK/bounds"
+    : >"$WORK/jqfaults"
     # THREE OPTIONAL OVERRIDES, each defaulting to the pinned value so a case
     # that does not set one measures exactly what it used to.
     #   PATH_OVERRIDE       a curated PATH, for the two bound branches $BIN
-    #                       cannot reach (no timeout at all; gtimeout only).
+    #                       cannot reach (no timeout at all; gtimeout only),
+    #                       or $BIN_JQ, the fault-injecting jq.
     #   REPO_ARG_OVERRIDE   "none" drops --repo, which is what reaches the cwd
     #                       repo lookup — the FOURTH gh call, suppressed by
     #                       every other case here and therefore unexercised
@@ -552,7 +729,7 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     # setting must not change what this gate measures.
     # shellcheck disable=SC2086
     PATH="$run_path" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
-    MOCK_BOUNDS="$WORK/bounds" \
+    MOCK_BOUNDS="$WORK/bounds" MOCK_JQFAULTS="$WORK/jqfaults" \
     PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
     PLATFORM_STATUS_TIMEOUT=5 \
     PLATFORM_GH_TIMEOUT="${GH_TIMEOUT_OVERRIDE:-30}" \
@@ -637,28 +814,67 @@ expect_errkind() { # <label> <kind>
     local k; k="$(errkinds)"
     if grep -qF -- "$2" <<<"$k"; then ok "$1"; else bad "$1 — probe_errors were '$k', expected to include $2"; dump; fi
 }
-expect_explains_nothing() { # <label>
-    # BOTH halves. A bare `nothing*` glob is satisfied by "nothing prevents
-    # escalating this stall as a real defect" — the exact inversion of the rule,
-    # passing the matcher that exists to guard it.
-    local e; e="$(field .explains)"
-    case "$e" in
-        nothing*)
-            if grep -qF -- "never licenses escalating" <<<"$e"; then
-                ok "$1"
-            elif grep -qF -- "not an explanation" <<<"$e"; then
-                ok "$1"
-            else
-                bad "$1 — explains opens with 'nothing' but drops the never-escalate half: '$e'"; dump
-            fi ;;
-        *) bad "$1 — explains reads '$e', which does not open by saying it explains nothing"; dump ;;
+# All eight `explains` strings — the six that say nothing and the two that
+# explain a stall — are pinned by CANON, per branch, the way §2b is. A needle
+# cannot hold this field: a bare `nothing*` glob is satisfied
+# by "nothing prevents escalating this stall as a real defect", and the
+# two-needle disjunction that replaced it accepted EITHER needle for EVERY
+# branch — so the `clean`-beside-incident branch rewritten as "nothing here is
+# unexplained: a green page is not an explanation, so a stall that survives
+# this verdict is a real defect — escalate it" passed, measured, gate green.
+# `explains` is the field SKILL.md orders callers to report INSTEAD OF the
+# verdict, and "a healthy verdict confirms the stall is a real defect" is the
+# exact harm this file's header names. Canon is exact by construction: the
+# accepted cost is a checksum to regenerate on a deliberate reword, a loud
+# false red, which this repo prefers to a matcher that can be inverted.
+# Regenerate with: printf '%s' "<string>" | cksum | cut -d' ' -f1
+explains_canon() { # <branch> -> the pinned cksum
+    case "$1" in
+        healthy)               echo "51897600" ;;   # nothing — a green status page is not evidence of health…
+        unknown-clean)         echo "1308946592" ;;   # nothing — this PR's own check data was read and was complete…
+        unknown-unmeasured)    echo "3415400899" ;;   # nothing — the probe could not measure…
+        attributed-clean)      echo "779948060" ;;   # nothing about this PR — a platform incident is open, but…
+        attributed-unmeasured) echo "3045748376" ;;   # nothing measured here — a platform incident is open, and…
+        emitter-failed)        echo "3809799310" ;;   # nothing — the verdict emitter failed… (the fallback literal)
+        attributed-anomaly)    echo "1059178065" ;;   # a stall — an open platform incident on a check-relevant component…
+        unattributed)          echo "4169396744" ;;   # a stall — first-party evidence of degradation…
+        *) echo "«no canon recorded for branch $1»" ;;
     esac
 }
-refute_explains_nothing() { # <label>
+explains_on_canon() { # <branch> [json] -> yes|no: the emitted `explains` matches the branch's canon
+    local e sum
+    e="$(jq -r '.explains // ""' <<<"${2:-$STDOUT}" 2>/dev/null)"
+    sum="$(printf '%s' "$e" | cksum | cut -d' ' -f1)"
+    if [ "$sum" = "$(explains_canon "$1")" ]; then echo yes; else echo no; fi
+}
+explains_ok() { # <branch> [json] -> yes|no: opens with `nothing` AND is on canon
+    local e
+    e="$(jq -r '.explains // ""' <<<"${2:-$STDOUT}" 2>/dev/null)"
+    case "$e" in nothing*) explains_on_canon "$1" "${2:-$STDOUT}" ;; *) echo no ;; esac
+}
+explains_drift() { # <branch> — the got/want checksums for a failure message
+    local e; e="$(field .explains)"
+    printf 'got %s want %s: %s' "$(printf '%s' "$e" | cksum | cut -d' ' -f1)" "$(explains_canon "$1")" "$e"
+}
+expect_explains_nothing() { # <label> <branch>
+    if [ "$(explains_ok "$2")" = "yes" ]; then
+        ok "$1"
+    else
+        bad "$1 — explains for the '$2' branch is off canon ($(explains_drift "$2"))"; dump
+    fi
+}
+expect_explains_stall() { # <label> <branch> — a degraded verdict explains a STALL, in the pinned words
+    # Both halves: it must NOT open by saying it explains nothing, and it must
+    # be the pinned string. The anomaly branches were held by the prefix alone
+    # until the review of #315 pointed out that a reword there was free.
     local e; e="$(field .explains)"
     case "$e" in
         nothing*) bad "$1 — a degraded verdict reported that it explains nothing: '$e'"; dump ;;
-        *) ok "$1" ;;
+        *) if [ "$(explains_on_canon "$2")" = "yes" ]; then
+               ok "$1"
+           else
+               bad "$1 — explains for the '$2' branch is off canon ($(explains_drift "$2"))"; dump
+           fi ;;
     esac
 }
 
@@ -674,7 +890,7 @@ expect_field "  and it says which check earned that (the run comparison ran)" \
 expect_field "  the page is recorded as operational" .status_page "operational"
 expect_field "  no anomaly from job names, and none from the StatusContext entry" \
     '(.anomalies | length | tostring)' "0"
-expect_explains_nothing "  and healthy is reported as explaining nothing"
+expect_explains_nothing "  and healthy is reported as explaining nothing, in the pinned words" healthy
 
 echo "2. first-party anomaly + relevant incident = degraded (attributed) (row 1)" >&2
 D="$(scenario attributed "$PR_ANOMALY" "$RUNS_ANOMALY" 3600 incident)"
@@ -684,7 +900,7 @@ expect_status "  and exits 0" 0
 expect_field "  first-party measurement is recorded as an anomaly" .self_measured "anomaly"
 expect_kind "  the missing CI workflow run is named" "missing_workflow_run"
 expect_kind "  the empty-state rollup entry is named" "empty_state_check"
-refute_explains_nothing "  a degraded verdict does NOT report that it explains nothing"
+expect_explains_stall "  a degraded verdict does NOT report that it explains nothing, and its words are pinned" attributed-anomaly
 
 echo "3. first-party anomaly + GREEN page = degraded (unattributed), never healthy (row 2)" >&2
 D="$(scenario unattributed "$PR_ANOMALY" "$RUNS_ANOMALY" 3600 green)"
@@ -693,7 +909,7 @@ expect_verdict "a green page does not refute a first-party anomaly" "degraded (u
 expect_field "  the page really was read as green (so this is not passing by accident)" \
     .status_page "operational"
 expect_status "  and exits 0" 0
-refute_explains_nothing "  the verdict explains the stall rather than explaining nothing"
+expect_explains_stall "  the verdict explains the stall rather than explaining nothing, in the pinned words" unattributed
 
 echo "4. clean first-party + UNREACHABLE endpoint = unknown (row 6)" >&2
 D="$(scenario unknown-clean "$PR_CLEAN" "$RUNS_CLEAN" 3600 unreachable)"
@@ -703,7 +919,7 @@ expect_field "  the page is recorded as unknown, never operational" .status_page
 expect_field "  first-party measurement really was clean, so the verdict came from the page" \
     .self_measured "clean"
 expect_status "  and exits 0" 0
-expect_explains_nothing "  and unknown is reported as explaining nothing"
+expect_explains_nothing "  and unknown is reported as explaining nothing, in the pinned words" unknown-clean
 
 echo "5. first-party anomaly + UNREACHABLE endpoint = degraded (unattributed) (row 3)" >&2
 D="$(scenario unattributed-dark "$PR_ANOMALY" "$RUNS_ANOMALY" 3600 unreachable)"
@@ -719,7 +935,7 @@ run_probe "$PROBE" "$D" --pr 301
 expect_verdict "an open incident on a check-relevant component still attributes" \
     "degraded (attributed)"
 expect_field "  but the first-party read is still reported as clean" .self_measured "clean"
-expect_explains_nothing "  and it must NOT claim to explain check data the same payload shows is complete"
+expect_explains_nothing "  and it must NOT claim to explain check data the same payload shows is complete" attributed-clean
 
 echo "7. nothing measured first-party (no --pr): rows 7, 8 and 9" >&2
 D="$(scenario nomeasure-green "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
@@ -727,10 +943,12 @@ run_probe "$PROBE" "$D"
 expect_verdict "row 8: unmeasured over a green page is unknown, never healthy" "unknown"
 expect_field "  and says so" .self_measured "not_measured"
 expect_field "  naming why it could not measure" .self_measured_reason "no_pr_given"
+expect_explains_nothing "  and an unmeasured unknown explains nothing, in the pinned words" unknown-unmeasured
 D="$(scenario nomeasure-incident "$PR_CLEAN" "$RUNS_CLEAN" 3600 incident)"
 run_probe "$PROBE" "$D"
 expect_verdict "row 7: an open incident still attributes without a first-party signal" \
     "degraded (attributed)"
+expect_explains_nothing "  but explains nothing about THIS PR, since nothing first-party was measured" attributed-unmeasured
 D="$(scenario nomeasure-dark "$PR_CLEAN" "$RUNS_CLEAN" 3600 unreachable)"
 run_probe "$PROBE" "$D"
 expect_verdict "row 9: nothing measured and an unreadable page is unknown" "unknown"
@@ -937,20 +1155,25 @@ fi
 # matches PREFIXES, because the attached forms are what `gh` documents and what
 # people type — `-XPUT`, `-fbody=x`, `--field=body=x` and `--input=-` all slipped
 # past a space-padded substring test, and `gh api` becomes a POST the moment any
-# `-f` is present.
-offending=""
-while IFS= read -r line; do
-    for tok in $line; do
-        case "$tok" in
-            -X*|--method*|-f*|-F*|--field*|--raw-field*|--input*)
-                offending="$offending$line"$'\n'; continue 2 ;;
+# `-f` is present. A FUNCTION, because 17d runs it too: the `gh repo view`
+# whitelist entry was dead in the only scan that used it, since every case
+# here passes `--repo` and the fourth call never entered this corpus.
+offending_calls() { # <calls file> — echoes every recorded call outside the read-only contract
+    local line tok
+    while IFS= read -r line; do
+        for tok in $line; do
+            case "$tok" in
+                -X*|--method*|-f*|-F*|--field*|--raw-field*|--input*)
+                    printf '%s\n' "$line"; continue 2 ;;
+            esac
+        done
+        case "$line" in
+            "gh pr view "*|"gh api repos/"*|"gh repo view "*|"curl "*) : ;;
+            *) printf '%s\n' "$line" ;;
         esac
-    done
-    case "$line" in
-        "gh pr view "*|"gh api repos/"*|"gh repo view "*|"curl "*) : ;;
-        *) offending="$offending$line"$'\n' ;;
-    esac
-done <"$WORK/calls"
+    done <"$1"
+}
+offending="$(offending_calls "$WORK/calls")"
 if [ -z "$offending" ]; then
     ok "every recorded call is a read: no method flag, no field flag, no write verb"
 else
@@ -986,29 +1209,63 @@ if [ -z "$unbounded" ]; then
 else
     bad "  a recorded bound did not carry PLATFORM_GH_TIMEOUT and -k:"$'\n'"$unbounded"
 fi
+# PARITY, beside the count. The count says the three expected calls ran under
+# the bound; parity says NO call did not: every `gh` line in the call log has
+# a `timeout … gh` line in the shim's ledger. A new reader written as
+# `gh api … | jq` or `if gh api …; then` lands in MOCK_CALLS whatever its
+# shape, and if it bypassed the bound it is absent from MOCK_BOUNDS. Measured
+# before the probe shadowed `gh`: a bare `gh api … >/dev/null` inserted after
+# the repo lookup ran unbounded, case 17 whitelisted it as a read, and the
+# source grep for `$(gh ` refused one spelling in ten — gate green.
+gh_calls="$(grep -c '^gh ' "$WORK/calls")"
+if [ "$gh_calls" -eq "$bound_n" ]; then
+    ok "  and every gh call in the log has a bound in the ledger ($gh_calls = $bound_n)"
+else
+    bad "  $gh_calls gh calls were logged but $bound_n ran under the bound — a reader bypasses the shadow"
+    sed 's/^/          | C /' <"$WORK/calls" >&2
+fi
 
-echo "17c. a bound that FIRES is a transport failure, never an anomaly" >&2
+echo "17c. a bound that FIRES is a transport failure, never an anomaly — at EVERY site" >&2
 # 124 is how `timeout` reports a fired bound. It must land where every other
 # non-zero gh exit lands — `not_measured`, reason preserved — and NOT in
 # `anomalies`, because a call we cut off ourselves tells us even less about the
 # platform than one that errored. Getting this wrong reports our own timeout as
 # evidence of degradation, which is the confident wrong answer this file exists
 # to refuse, reached through the mitigation for a different one.
-D_TMO="$(scenario ghtimeout "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-: >"$D_TMO/gh.timeout"
-run_probe "$PROBE" "$D_TMO" --pr 301
-expect_verdict "a timed-out gh call resolves unknown, never degraded" "unknown"
-expect_status "  and still exits 0" 0
-expect_field "  the run is not_measured" .self_measured "not_measured"
-expect_field "  and says which read it could not make" .self_measured_reason "pr_read_failed"
-expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
-expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
-tmo_detail="$(jq -r '[.probe_errors[].detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
-if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$tmo_detail"; then
-    ok "  and the detail names OUR bound rather than leaving a bare 'exited 124'"
-else
-    bad "  the detail does not name the bound that fired: '$tmo_detail'"; dump
-fi
+# PER SITE, because an empty `gh.timeout` fires on the FIRST bounded call and
+# the first call absorbs it: an edition of this case covered `gh pr view`
+# alone, and rewriting either later site to raise an anomaly on 124 — while
+# still recording an error on every OTHER non-zero exit, so no plain-failure
+# case could see it — left the gate green. The selector fires the bound at
+# the site under test and lets the earlier calls succeed; the detail is then
+# asserted to name that site, so the loop cannot pass three times on the
+# first call. The lookup site is the fourth, and 17d fires it.
+for site in "pr view" "commits/" "actions/runs"; do
+    case "$site" in
+        "pr view")      tmo_sc=ghtimeout;        tmo_sel="";             tmo_reason="pr_read_failed" ;;
+        "commits/")     tmo_sc=ghtimeout-commit; tmo_sel="commits/";     tmo_reason="" ;;
+        "actions/runs") tmo_sc=ghtimeout-runs;   tmo_sel="actions/runs"; tmo_reason="" ;;
+    esac
+    D_TMO="$(scenario "$tmo_sc" "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+    printf '%s' "$tmo_sel" >"$D_TMO/gh.timeout"
+    run_probe "$PROBE" "$D_TMO" --pr 301
+    expect_verdict "[$site] a timed-out gh call resolves unknown, never degraded" "unknown"
+    expect_status "  and still exits 0" 0
+    expect_field "  the run is not_measured" .self_measured "not_measured"
+    [ -z "$tmo_reason" ] || expect_field "  and says which read it could not make" .self_measured_reason "$tmo_reason"
+    expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
+    expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
+    tmo_detail="$(jq -r '[.probe_errors[] | select(.kind == "gh_call_failed") | .detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
+    if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$tmo_detail"; then
+        ok "  and the detail names OUR bound rather than leaving a bare 'exited 124'"
+    else
+        bad "  the detail does not name the bound that fired: '$tmo_detail'"; dump
+    fi
+    case "$tmo_detail" in
+        *"$site"*) ok "  and it fired at the site under test, not at the first call" ;;
+        *) bad "  the bound fired somewhere other than '$site': '$tmo_detail'"; dump ;;
+    esac
+done
 
 echo "17c2. the KILL GRACE firing is the same bound firing, on the path -k exists for" >&2
 # `timeout -k 5 30 gh …` reports 124 when TERM sufficed and 137 when it did not
@@ -1016,19 +1273,33 @@ echo "17c2. the KILL GRACE firing is the same bound firing, on the path -k exist
 # the one path `-k 5` was added for — a `gh` ignoring TERM — was the one path
 # it could not name: a bare `exited 137` at the three first-party sites, and
 # at the lookup the 137 fell through control flow into `not in a GitHub repo`.
-D_KILL="$(scenario ghkilled "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-: >"$D_KILL/gh.killed"
-run_probe "$PROBE" "$D_KILL" --pr 301
-expect_verdict "a kill-grace exit resolves unknown, never degraded" "unknown"
-expect_status "  and still exits 0" 0
-expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
-expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
-kill_detail="$(jq -r '[.probe_errors[].detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
-if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$kill_detail" && grep -qF -- "kill grace" <<<"$kill_detail"; then
-    ok "  and the detail names the bound AND the grace, not a bare 'exited 137'"
-else
-    bad "  the detail does not name the bound and the grace: '$kill_detail'"; dump
-fi
+# PER SITE, like 17c: an empty `gh.killed` is absorbed by the first call, and
+# a commit-site `-eq 137` anomaly was measured green while only that call was
+# covered. The detail is asserted to name the site under test.
+for site in "pr view" "commits/" "actions/runs"; do
+    case "$site" in
+        "pr view")      kill_sc=ghkilled;        kill_sel="" ;;
+        "commits/")     kill_sc=ghkilled-commit; kill_sel="commits/" ;;
+        "actions/runs") kill_sc=ghkilled-runs;   kill_sel="actions/runs" ;;
+    esac
+    D_KILL="$(scenario "$kill_sc" "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+    printf '%s' "$kill_sel" >"$D_KILL/gh.killed"
+    run_probe "$PROBE" "$D_KILL" --pr 301
+    expect_verdict "[$site] a kill-grace exit resolves unknown, never degraded" "unknown"
+    expect_status "  and still exits 0" 0
+    expect_errkind "  the ledger records it as a transport failure" "gh_call_failed"
+    expect_field "  and it raised NO anomaly" '(.anomalies | length | tostring)' "0"
+    kill_detail="$(jq -r '[.probe_errors[] | select(.kind == "gh_call_failed") | .detail] | join(" ")' <<<"$STDOUT" 2>/dev/null)"
+    if grep -qF -- "PLATFORM_GH_TIMEOUT bound fired" <<<"$kill_detail" && grep -qF -- "kill grace" <<<"$kill_detail"; then
+        ok "  and the detail names the bound AND the grace, not a bare 'exited 137'"
+    else
+        bad "  the detail does not name the bound and the grace: '$kill_detail'"; dump
+    fi
+    case "$kill_detail" in
+        *"$site"*) ok "  and it fired at the site under test, not at the first call" ;;
+        *) bad "  the grace fired somewhere other than '$site': '$kill_detail'"; dump ;;
+    esac
+done
 
 echo "17d. the cwd repo lookup is the FOURTH gh call, and it is bounded too" >&2
 # Structurally excluded from 17b, whose `-eq 3` counts only the calls that
@@ -1046,6 +1317,21 @@ if [ "$lookup_n" -eq 4 ]; then
 else
     bad "$lookup_n bounded calls recorded with no --repo, expected 4"
     sed 's/^/          | B /' <"$WORK/bounds" >&2
+fi
+lookup_calls="$(grep -c '^gh ' "$WORK/calls")"
+if [ "$lookup_calls" -eq "$lookup_n" ]; then
+    ok "  parity holds with the lookup in the log ($lookup_calls = $lookup_n)"
+else
+    bad "  $lookup_calls gh calls logged against $lookup_n bounds with no --repo"
+fi
+# The fourth call enters the read-only corpus HERE — every other case passes
+# --repo, so case 17's `gh repo view` whitelist entry was dead in the only scan
+# that used it, and a lookup rewritten as a write would never have been seen.
+lookup_offending="$(offending_calls "$WORK/calls")"
+if [ -z "$lookup_offending" ]; then
+    ok "  and the lookup is a read too, classified by the same scan as the other three"
+else
+    bad "  the lookup run made a call outside the read-only contract:"$'\n'"$lookup_offending"
 fi
 expect_verdict "  and the run still resolves normally" "healthy"
 
@@ -1232,9 +1518,14 @@ scan_for_probe() { # <file...>  — echoes each file that names the probe
 # work will be written in verdict VOCABULARY — "on a degraded verdict, hold the
 # PR" names no script — and a filename-only scan reports that as clean; measured,
 # a section doing exactly that left this gate at exit 0. The two `degraded (…)`
-# literals are distinctive enough to scan for; `healthy` and `unknown` are
-# ordinary English and are deliberately NOT in the set.
-VERDICT_VOCAB=('degraded (attributed)' 'degraded (unattributed)' 'platform-degradation verdict')
+# literals are distinctive enough to scan for, and so is the BARE form the rule
+# will actually be written in: `on a degraded verdict, hold the PR` names
+# neither the script nor a parenthetical, and was measured green against the
+# two literals alone (review of #315) — the exact phrasing this comment gives
+# as the reason the scan exists. `healthy` and `unknown` are ordinary English
+# and are deliberately NOT in the set, and neither is a bare `degraded`, which
+# false-positives on the routines' `Load: fallback (degraded)` field.
+VERDICT_VOCAB=('degraded (attributed)' 'degraded (unattributed)' 'degraded (' 'degraded verdict' '`degraded` verdict' 'platform-degradation verdict')
 scan_for_verdict() { # <file...>  — echoes "<file>: <literal>" per hit
     local f lit
     for f in "$@"; do
@@ -1253,28 +1544,94 @@ else
     bad "the probe is referenced by a decision-making script, which makes it a gate: $hits"
 fi
 
-# The rule says "no merge, HOLD, BLOCK or REDISPATCH decision", and the block and
-# redispatch sites do not live in pr-shepherd at all. #285's scope note is
-# explicit that ACTING on the verdict is separate work, so naming the probe in
-# any of these is a deliberate change that must come back through this gate.
-# `dispatch-ready/SKILL.md` is NOT here, and its absence is a scoped decision
-# rather than an exemption (#286). Its §7 legitimately consults the verdict to
-# reach DRAIN DEGRADED — a decision to STOP, which writes nothing — while its
-# §2 and §4, the hold/merge/redispatch and selection surfaces, must not. That is
-# the same shape this gate already applies to pr-shepherd's own file, whose §2b
-# legitimately uses the vocabulary: SECTION-scoped, never file-scoped. The
-# section scan is below, and it carries a POSITIVE control so the carve-out
-# cannot silently widen from "§7 may" to "the file may".
-DECISION_DOCS=(
-    "$REPO_ROOT/skills/take-it/SKILL.md"
-    "$REPO_ROOT/skills/send-it/SKILL.md"
-)
+# THE DOCS CORPUS IS AN EQUALITY TOO. Every tracked `.md` under `skills/`, at
+# any depth — SKILL.md, references, and the assess-it orchestration docs that
+# sit beside their SKILL.md (a `SKILL.md` + `references/*.md` glob left those
+# two outside while this comment said "every") — is scanned WHOLE,
+# except the two files that legitimately name the probe, which are scanned
+# section by section below. An earlier edition listed take-it, send-it and
+# pr-shepherd's own references by hand, so `skills/pr-shepherd/SKILL.md` was in
+# no corpus at all — a hold rule written into its §4 Teardown or its §2 Watch
+# checks was invisible (measured, gate green) — and a new
+# `skills/*/references/*.md` shipped unscanned. Gates 32/33 recorded the same
+# lesson: the SUBSET was the defect, not the choice of subset. The rule says
+# "no merge, HOLD, BLOCK or REDISPATCH decision", and those sites do not all
+# live in pr-shepherd; #285's scope note is explicit that ACTING on the verdict
+# is separate work, so naming the probe in any skill doc is a deliberate change
+# that must come back through this gate. `dispatch-ready/SKILL.md` is one of
+# the two section-scoped files, and that is a scoped decision rather than an
+# exemption (#286): its DRAIN DEGRADED legitimately consults the verdict to
+# reach a decision to STOP, which writes nothing, while every other section —
+# §2 and §4 in particular, the hold/merge/redispatch and selection surfaces —
+# must not. The section scan carries a POSITIVE control so the carve-out
+# cannot silently widen from "DRAIN DEGRADED may" to "the file may".
+SECTION_SCOPED_DOCS="skills/pr-shepherd/SKILL.md skills/dispatch-ready/SKILL.md"
+DECISION_DOCS=()
 while IFS= read -r ref; do
-    [ -n "$ref" ] && DECISION_DOCS+=("$REPO_ROOT/$ref")
-done < <(git ls-files 'skills/pr-shepherd/references/*.md')
+    [ -n "$ref" ] || continue
+    case " $SECTION_SCOPED_DOCS " in *" $ref "*) continue ;; esac
+    DECISION_DOCS+=("$REPO_ROOT/$ref")
+done < <(git ls-files 'skills/*.md')   # a git pathspec `*` crosses `/`, so this is every depth
+# Membership controls, so a listing that silently narrowed cannot report a
+# clean corpus: the files the hand-picked list used to name must still be in
+# it, and so must one of the beside-SKILL.md docs the narrower glob missed.
+corpus_missing=""
+for must in skills/take-it/SKILL.md skills/send-it/SKILL.md skills/pr-shepherd/references/merge-queue.md skills/assess-it/orchestration.md; do
+    case " ${DECISION_DOCS[*]} " in *" $REPO_ROOT/$must "*) : ;; *) corpus_missing="$corpus_missing $must" ;; esac
+done
+if [ -z "$corpus_missing" ]; then
+    ok "the docs corpus is every tracked skill doc minus the two section-scoped files (${#DECISION_DOCS[@]} docs)"
+else
+    bad "the docs corpus lost a file the old hand-picked list carried:$corpus_missing"
+fi
+
+# SECTION EQUALITY for the two files that may name the probe. Every heading in
+# the file is enumerated; each section is either on the file's short allowlist
+# — asserted to exist, so a rename cannot retire the carve-out — or scanned for
+# the filename AND the vocabulary. The preamble before the first heading is
+# section 0 and is scanned too. An earlier edition scanned §1, §1b and §3 of
+# pr-shepherd and §2 and §4 of dispatch-ready BY NAME, leaving pr-shepherd's
+# §2, §4 and Guardrails, and dispatch-ready's §1, §3, §5, §6 and the rest of
+# §7, unscanned — measured: a hold rule in §4 Teardown and a gating bullet
+# appended to Guardrails both left this gate green. Guardrails is NOT
+# allowlisted: its one legitimate mention is the canon-pinned never-a-gate
+# bullet, which is stripped before the scan so the REST of the list — exactly
+# where a gating exception gets written — is held to the same rule.
+section_by_ordinal() { # <file> <n> — the n-th section flattened, HEADING INCLUDED (0 = preamble)
+    # The heading line is part of what is scanned: a rule written as a heading
+    # over a bland body (`#### On a degraded (attributed) verdict, hold the PR`)
+    # was measured green while only bodies were read (review of #315; M31c).
+    awk -v n="$2" '/^##+ /{c++; if (c == n) print; next} c==n {print}' "$1" | tr '\n' ' ' | tr -s ' \t'
+}
+scan_sections() { # <file> <allowlist, one heading per line> — echoes "<heading>: <hit>" per hit
+    local f="$1" allow="$2" nheads i h body lit
+    nheads="$(grep -c '^##\{1,\} ' "$f")"
+    i=0
+    while [ "$i" -le "$nheads" ]; do
+        if [ "$i" -eq 0 ]; then h="(preamble)"; else h="$(grep '^##\{1,\} ' "$f" | sed -n "${i}p")"; fi
+        body="$(section_by_ordinal "$f" "$i")"
+        i=$((i + 1))
+        if grep -qxF -- "$h" <<<"$allow"; then
+            # An allowlisted section that is EMPTY is a renamed carve-out.
+            [ -n "$body" ] || printf '%s: EMPTY ALLOWLISTED SECTION\n' "$h"
+            continue
+        fi
+        if grep -qF -- "$PROBE_BASENAME" <<<"$body"; then printf '%s: names %s\n' "$h" "$PROBE_BASENAME"; fi
+        for lit in "${VERDICT_VOCAB[@]}"; do
+            if grep -qF -- "$lit" <<<"$body"; then printf '%s: %s\n' "$h" "$lit"; fi
+        done
+    done
+}
+GR_BULLET_LIT='- **Never let the platform-degradation verdict gate anything.**'
+PS_ALLOW="### 2b. Platform degradation probe — when a watch goes nowhere"$'\n'"## Bundled scripts"
+scan_skill_sections() { # <pr-shepherd SKILL.md, or a mutant of it> — the canon bullet stripped first
+    grep -vF -- "$GR_BULLET_LIT" "$1" >"$WORK/skill.nobullet"
+    scan_sections "$WORK/skill.nobullet" "$PS_ALLOW"
+}
+
 doc_hits="$(scan_for_probe "${DECISION_DOCS[@]}")"
 if [ -z "$doc_hits" ]; then
-    ok "no dispatching skill and no pr-shepherd reference doc names the probe (${#DECISION_DOCS[@]} docs)"
+    ok "no skill doc outside the two section-scoped files names the probe"
 else
     # A MISSING: line fails here too: a renamed path that silently drops out of
     # the corpus leaves the ok-line reporting a doc count it never read.
@@ -1286,54 +1643,51 @@ if [ -z "$vocab_hits" ]; then
 else
     bad "a decision surface consults the platform verdict by name rather than by filename: $vocab_hits"
 fi
-# dispatch-ready's ACTION sections. §7 may name the probe (#286); §2 and §4 may
-# not — those are where a PR is held, merged, redispatched or an issue selected,
-# and #285's never-a-gate rule is drawn on exactly that act-vs-stop line.
+# dispatch-ready, by section equality. DRAIN DEGRADED may name the probe
+# (#286); EVERY other section — §2 and §4, where a PR is held, merged,
+# redispatched or an issue selected, and the ones the by-name scan never read
+# — may not. #285's never-a-gate rule is drawn on exactly that act-vs-stop line.
 DR_SKILL="$REPO_ROOT/skills/dispatch-ready/SKILL.md"
-dr_vocab=""
-for spec in "## 2. Reconcile in-flight|## 3. Compute capacity" "## 4. Select from Ready|## 5."; do
-    heading="${spec%%|*}"; endh="${spec##*|}"
-    dr_text="$(region_text "$DR_SKILL" "$heading" "$endh")"
-    [ -n "$dr_text" ] || dr_vocab="$dr_vocab$heading: EMPTY SECTION (renamed? the scan over it is vacuous)"$'\n'
-    for lit in "${VERDICT_VOCAB[@]}"; do
-        if grep -qF -- "$lit" <<<"$dr_text"; then dr_vocab="$dr_vocab$heading: $lit"$'\n'; fi
-    done
-    if grep -qF -- "probe-platform-health" <<<"$dr_text"; then
-        dr_vocab="$dr_vocab$heading: names the probe script"$'\n'
-    fi
-done
-if [ -z "$dr_vocab" ]; then
-    ok "dispatch-ready's ACTION sections (2, 4) consult neither the probe nor its vocabulary"
+DR_ALLOW="### DRAIN DEGRADED"
+dr_hits="$(scan_sections "$DR_SKILL" "$DR_ALLOW")"
+dr_n="$(grep -c '^##\{1,\} ' "$DR_SKILL")"
+if [ -z "$dr_hits" ]; then
+    ok "every section of dispatch-ready outside DRAIN DEGRADED consults neither the probe nor its vocabulary ($dr_n headings + preamble)"
 else
-    bad "dispatch-ready wired the verdict into an action surface, which #285 forbids and #286 does not license: $dr_vocab"
+    bad "dispatch-ready wired the verdict into a section #286 does not license: $dr_hits"
 fi
 
-# POSITIVE CONTROL. The carve-out is "§7 may", and a scan that finds the verdict
-# nowhere in dispatch-ready would report the two assertions above as clean while
-# measuring a file in which #286 was reverted. So §7 must actually name it.
+# POSITIVE CONTROL. The carve-out is "DRAIN DEGRADED may", and a scan that finds
+# the verdict nowhere in dispatch-ready would report the assertion above as
+# clean while measuring a file in which #286 was reverted. So that section must
+# actually name it.
 dr_s7="$(region_text "$DR_SKILL" "### DRAIN DEGRADED" "### DRAIN COMPLETE")"
 if grep -qF -- "probe-platform-health" <<<"$dr_s7" && grep -qF -- "degraded (attributed)" <<<"$dr_s7"; then
-    ok "and §7 DOES name the probe and its vocabulary, so the carve-out is live rather than vacuous"
+    ok "and DRAIN DEGRADED DOES name the probe and its vocabulary, so the carve-out is live rather than vacuous"
 else
-    bad "§7 no longer consults the probe — #286's DRAIN DEGRADED is gone, and the scans above prove nothing"
+    bad "DRAIN DEGRADED no longer consults the probe — #286's terminal state is gone, and the scan above proves nothing"
 fi
 
-# pr-shepherd's OWN decision sections are the nearest surface of all and were
-# in neither corpus above — the filename check covers them, but the filename is
-# not how a gating rule gets written. Its §2b legitimately uses the vocabulary,
-# so this is section-scoped rather than file-scoped.
-sec_vocab=""
-for heading in "### 1. Mergeable check" "### 1b. Stack check" "### 3. Merge or enqueue greens"; do
-    sec_text="$(section_text "$SKILL" "$heading")"
-    [ -n "$sec_text" ] || sec_vocab="$sec_vocab$heading: EMPTY SECTION (renamed? the scan over it is vacuous)"$'\n'""
-    for lit in "${VERDICT_VOCAB[@]}"; do
-        if grep -qF -- "$lit" <<<"$sec_text"; then sec_vocab="$sec_vocab$heading: $lit"$'\n'; fi
-    done
-done
-if [ -z "$sec_vocab" ]; then
-    ok "and pr-shepherd's own decision sections use none of it either"
+# pr-shepherd's OWN sections are the nearest surface of all. Section equality:
+# every heading except §2b (canon-pinned in 22) and the script table (asserted
+# to name the probe in 20) is scanned, Guardrails with its canon bullet removed.
+# The filename is not how a gating rule gets written, so this scans the
+# vocabulary too.
+ps_hits="$(scan_skill_sections "$SKILL")"
+ps_n="$(grep -c '^##\{1,\} ' "$SKILL")"
+if [ -z "$ps_hits" ]; then
+    ok "every section of pr-shepherd's SKILL.md outside §2b and the script table is clean of the probe and its vocabulary ($ps_n headings + preamble)"
 else
-    bad "the verdict vocabulary reached a pr-shepherd decision section: $sec_vocab"
+    bad "the verdict reached a pr-shepherd section outside its carve-outs: $ps_hits"
+fi
+ps_allow_bad=""
+while IFS= read -r h; do
+    [ "$(grep -cxF -- "$h" "$SKILL")" = "1" ] || ps_allow_bad="$ps_allow_bad [$h]"
+done <<<"$PS_ALLOW"
+if [ -z "$ps_allow_bad" ]; then
+    ok "and both carve-out headings exist exactly once, so the allowlist names live sections"
+else
+    bad "a carve-out heading is missing or duplicated, so the scan around it is vacuous:$ps_allow_bad"
 fi
 
 # ==============================================================================
@@ -1345,20 +1699,11 @@ for heading in "### 2b. Platform degradation probe" "## Bundled scripts"; do
         bad "'$heading' does not name $PROBE_BASENAME — the section is missing or renamed"
     fi
 done
-for heading in "### 1. Mergeable check" "### 1b. Stack check" "### 3. Merge or enqueue greens"; do
-    # FAIL CLOSED on an empty window first. `section_of` returns nothing for a
-    # heading prefix that matches nothing, and an empty section passes every
-    # must-NOT-name check below — so a rename silently RETIRES this scan, which
-    # is the `window_is_bounded` lesson. Measured: renaming §1 and wiring a hold
-    # decision into it left this gate green.
-    if [ -z "$(section_text "$SKILL" "$heading")" ]; then
-        bad "'$heading' resolves to an EMPTY section — renamed or removed, and every scan over it is now vacuous"
-    elif section_names_probe "$SKILL" "$heading"; then
-        bad "'$heading' names $PROBE_BASENAME — the verdict has reached a decision section"
-    else
-        ok "'$heading' does not consult the probe"
-    fi
-done
+# The must-NOT-name half is section 19's equality scan: every heading that is
+# not one of the two above is scanned by ordinal, so a renamed §1 cannot retire
+# its own scan the way a by-name window could (the `window_is_bounded` lesson —
+# measured, renaming §1 and wiring a hold decision into it left an earlier
+# edition green).
 GUARDRAILS="$(section_text "$SKILL" "## Guardrails")"
 if grep -qF -- "Never let the platform-degradation verdict gate anything." <<<"$GUARDRAILS"; then
     ok "Guardrails carries the never-a-gate rule"
@@ -1490,16 +1835,20 @@ expect_default "the head-age floor defaults to 300s" \
 # Both anomaly generators must CAPTURE their exit status. A process
 # substitution's failure is invisible to pipefail, and RUN_CHECK is already
 # "ran" by the time the missing-run loop executes, so a dead generator would
-# affirmatively certify a comparison whose result it discarded. Source-level,
-# because no fixture can make jq fail on a payload the earlier guards accept.
+# affirmatively certify a comparison whose result it discarded. These pins sit
+# ALONGSIDE the behavioural pair in 27b and its mutants M28/M28b/M28c, never
+# instead of them. An earlier edition pinned the guards HERE ALONE, "because
+# no fixture can make jq fail on a payload the earlier guards accept" — false
+# for the empty-state generator (a rollup of numbers does it), and every one of
+# its needles was defeatable: `RUN_CHECK="not_run"` also matched the
+# initialiser, so deleting the reset at the use site passed; `if false` in
+# place of the guard passed; a guard body replaced with `ROLLUP_CHECK="ran"`
+# passed. All three measured, gate green. Only the capture lines are pinned
+# now; what the guards DO is measured.
 expect_default "the empty-state generator captures its exit status" \
     'empty_out="$(jq -r '
-expect_default "  and checks it before trusting the read" \
-    'if [ "$empty_rc" -ne 0 ]; then'
 expect_default "the missing-run generator captures its exit status" \
     'missing_out="$(jq -r '
-expect_default "  and un-sets RUN_CHECK when the read it certifies never happened" \
-    'RUN_CHECK="not_run"'
 expect_default "the component scope defaults to the check-relevant set" \
     'STATUS_COMPONENTS="${PLATFORM_STATUS_COMPONENTS:-actions,api requests,webhooks,pull requests,git operations}"'
 # The bound's three branches, pinned at source level ALONGSIDE the behavioural
@@ -1525,24 +1874,83 @@ expect_default "  and falls back to gtimeout, the macOS spelling" \
     'elif command -v gtimeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="gtimeout"'
 expect_default "  and with neither present, records that the bound never applied" \
     '|| add_error probe timeout_unavailable'
-# The emitter's own failure. No fixture can make the shipped `jq -n` fail — every
-# input reaching it is built by the script itself — so the handler is pinned at
-# source level here and mutation-proved by M25 below.
+# The emitter's own failure. It IS reachable from a fixture, one way: its own
+# inputs are built by the script, but the LEDGER BUILDERS pass fixture text on
+# argv, so a check name over the argv cap kills `add_anomaly`'s `--arg d`
+# (exit 126, empty output), the ledger is left empty, and the emitter then dies
+# on `--argjson anomalies ""` — measured, and cased in 27c, which requires the
+# fallback back. An edition of this comment said no fixture could reach it,
+# the false-impossibility shape this file's own header calls worse than a
+# missing case. The handler is pinned at source level here as well, and
+# mutation-proved by M25 and M29 below, which also hold the fallback to its
+# three keys.
 expect_default "the verdict emitter captures its exit status" \
     'emitted="$(jq -n'
 expect_default "  and re-parses the output before printing it" \
     'if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$emitted"; then'
 expect_default "  and falls back to a hand-built verdict rather than empty stdout" \
     '"self_measured_reason":"verdict_emitter_failed",'
-# ONE call site for `gh`, the same shape the destructive-action rule uses
-# elsewhere in this repo: a bound enforced per call site is a bound the next
-# call site forgets. The realistic regression is a new reader written as
-# `x="$(gh api …)"`, so that is what is refused.
-stray_gh="$(grep -nE '\$\(gh [a-z]' "$PROBE" || true)"
-if [ -z "$stray_gh" ]; then
-    ok "no gh call bypasses the bounded wrapper"
+# THE NAME `gh` IS THE CHOKEPOINT. A wrapper under its own name was a bound by
+# convention, and the grep that guarded it (`\$\(gh [a-z]`) refused exactly one
+# spelling: `gh api … | jq`, `if gh …; then`, `< <(gh …)`, `$( gh`,
+# `$(command gh` and a bare `gh api … >/dev/null` all passed — the last one
+# measured, inserted after the repo lookup, with case 17 whitelisting the call
+# and the gate green. The probe now shadows the binary with a function, so
+# every spelling is bounded by construction. Pinned here is the SHAPE that
+# makes that true — the shadow exists, and `command gh`, the one reach to the
+# binary, occurs exactly once and inside it — while 17b's calls-vs-bounds
+# parity is the behaviour and M33 adds two bare calls in the shapes the grep
+# missed and requires both to run under the bound.
+shadow_n="$(grep -c '^gh() {' "$PROBE")"
+if [ "$shadow_n" -eq 1 ]; then
+    ok "the probe shadows gh with a function, so the name is the chokepoint"
 else
-    bad "a gh call bypasses gh_bounded, so it carries no timeout:"$'\n'"$stray_gh"
+    bad "found $shadow_n definitions of gh() in the probe; the bound is a convention again"
+fi
+# Code lines only: the comment inside the shadow names `command gh` as well.
+cmd_gh_lines="$(grep -n 'command gh' "$PROBE" | grep -v ':[[:space:]]*#')"
+cmd_gh_n="$(printf '%s\n' "$cmd_gh_lines" | grep -c .)"
+shadow_range="$(awk '/^gh\(\) \{/{s=NR} s && /^\}/{print s "-" NR; exit}' "$PROBE")"
+cmd_gh_ln="${cmd_gh_lines%%:*}"
+if [ "$cmd_gh_n" -eq 1 ] && [ -n "$shadow_range" ] \
+   && [ "$cmd_gh_ln" -ge "${shadow_range%-*}" ] && [ "$cmd_gh_ln" -le "${shadow_range#*-}" ]; then
+    ok "  and 'command gh' occurs exactly once, inside the shadow (line $cmd_gh_ln of $shadow_range)"
+else
+    bad "  'command gh' must occur exactly once and inside gh(): $cmd_gh_n occurrence(s) [$cmd_gh_lines], shadow spans '$shadow_range'"
+fi
+# EVERY add_error SCOPE IS FROM THE CLOSED SET. The count is by exclusion now,
+# so a misspelt scope fails CLOSED at runtime (M34 proves it); this is the
+# other half — a misspelling is a red build rather than a quietly-counted
+# oddity in the ledger. Comment lines are excluded; the second token is read
+# QUOTE-AGNOSTICALLY, since `add_error "firstparty"` passed a census that read
+# an unquoted token only (review of #315); and the vacuity check is an
+# EQUALITY between the tokens extracted and the code lines that call
+# `add_error`, so a census that stopped matching a call shape is red rather
+# than a clean set measured over fewer sites.
+scope_tokens() { # <probe source> — the scope token of every add_error call on a code line, quotes stripped
+    grep -v '^[[:space:]]*#' "$1" | grep -oE "add_error [\"']?[A-Za-z_]+" \
+        | sed -e 's/^add_error //' -e "s/^[\"']//"
+}
+scope_violations() { # <probe source> — echoes every scope outside {first_party, attribution, probe}
+    scope_tokens "$1" | sort -u | grep -v -x -e first_party -e attribution -e probe
+}
+scope_lines="$(grep -v '^[[:space:]]*#' "$PROBE" | grep -c 'add_error ')"
+scope_n="$(scope_tokens "$PROBE" | grep -c .)"
+scope_bad="$(scope_violations "$PROBE")"
+if [ -z "$scope_bad" ] && [ "$scope_n" -gt 0 ] && [ "$scope_n" -eq "$scope_lines" ]; then
+    ok "every add_error call site uses a scope from the closed set ($scope_n tokens over $scope_lines calling lines)"
+else
+    bad "add_error scope outside the closed set, or the census broke ($scope_n tokens over $scope_lines calling lines): $scope_bad"
+fi
+# And no other way to REACH the binary by name. `command -v gh`, `type gh`,
+# `which gh` and `hash gh` each answer for the function or for whatever is on
+# PATH, so after the shadow every one of them is vacuous — and a bound
+# "verified" through one would be a convention again.
+gh_lookup_n="$(grep -v '^[[:space:]]*#' "$PROBE" | grep -cE 'command -v gh|type gh|which gh|hash gh')"
+if [ "$gh_lookup_n" -eq 0 ]; then
+    ok "  and the probe never looks the binary up by name, which the shadow makes meaningless"
+else
+    bad "  the probe looks gh up by name on $gh_lookup_n code line(s); after the shadow that answers nothing"
 fi
 # And one BEHAVIOURAL run with the two behaviour-carrying knobs unset, so the
 # defaults are exercised and not merely read. The URL stays pinned: unsetting it
@@ -1707,6 +2115,77 @@ run_probe "$PROBE" "$D" --pr 301
 expect_field "a repo with no CI at all is not blamed for it" '.self_measured_reason' "no_prior_heads"
 
 # ==============================================================================
+echo "27b. a generator that DIES is no read at all — both doors, behaviourally" >&2
+# The failed-generator door into `healthy`, which the header enumerates and
+# which had no behavioural case: three source-level pins, each defeatable. Two
+# generators, two mechanisms. The empty-state read dies on a REAL fixture — a
+# rollup whose entries are numbers passes every earlier guard and `.status` on
+# a number is a jq error. The missing-run read cannot be killed by any payload
+# (see BIN_JQ), so its guard is reached by fault injection instead, with the
+# shim's own ledger proving the fault landed. Both guards must turn a dead read
+# into "no read happened": not_measured, the check reported as not_run, an
+# error on the ledger. Measured on the guard-less shape: `healthy`, `clean`,
+# `probe_errors: []` — on a run whose read died.
+D="$(scenario badrollup "$PR_BAD_ROLLUP" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "a rollup of numbers kills the empty-state read, and the run is unknown, never healthy" "unknown"
+expect_field "  the read is reported as not having run" .checks_run.rollup_empty_state "not_run"
+expect_errkind "  and the dead generator is on the ledger" "incomplete_payload"
+expect_field "  which is why the run is not measured" .self_measured_reason "probe_errors_present"
+expect_field "  while the run comparison DID run, so clean was exactly one guard away" \
+    .checks_run.run_comparison "ran"
+
+D="$(scenario jqfault "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+printf '%s' '.missing[] | clean' >"$D/jq.fail"
+PATH_OVERRIDE="$BIN_JQ:$PATH" run_probe "$PROBE" "$D" --pr 301
+jqf_n="$(grep -c . "$WORK/jqfaults")"
+if [ "$jqf_n" -eq 1 ]; then
+    ok "the fault was injected into the missing-run generator exactly once"
+else
+    bad "$jqf_n faults recorded, expected 1 — the case is not reaching the generator it exists to kill"
+fi
+expect_verdict "  and a dead missing-run read is unknown, never healthy" "unknown"
+expect_field "  the comparison is UN-certified: RUN_CHECK was already ran, and is reset" \
+    .checks_run.run_comparison "not_run"
+expect_field "  naming the failed comparison" .self_measured_reason "run_comparison_failed"
+expect_errkind "  and it is on the ledger" "incomplete_payload"
+
+# ==============================================================================
+echo "27c. the ONE fixture-reachable emitter death: a check name over the argv cap" >&2
+# Section 23 used to say no fixture could kill the shipped `jq -n`. The
+# emitter's own inputs are script-built, but the LEDGER BUILDERS put fixture
+# text on argv — `add_anomaly … --arg d "<name> is in the rollup…"` — and the
+# probe already documents the argv cap for the runs payload. A check name past
+# it kills that jq at exec (E2BIG; bash reports 126 and no output), the ledger
+# is assigned the empty string, `n_anomalies` reads it as 0, the verdict
+# computes `healthy`, and the emitter dies on `--argjson anomalies ""` into the
+# fallback. Measured on this host (ARG_MAX 1,048,576) and true on Linux at a
+# lower cap (MAX_ARG_STRLEN 131,072), so 1.2 MB clears both. The probe FAILS
+# CLOSED here — this is not a wrong verdict — but the false impossibility was
+# the defect: CLAUDE.md tells the next editor to trust the header. The name is
+# built through stdin, since building it with `--arg` would die of the same
+# cap this case exists to cross.
+PR_HUGE_NAME="$(head -c 1200000 /dev/zero | tr '\0' 'a' | jq -Rs '{number:301, headRefOid:"aa11bb2",
+  headRefName:"feat/clean", mergeStateStatus:"BLOCKED",
+  statusCheckRollup:[{__typename:"CheckRun", name:., status:"", conclusion:"", state:""}]}')"
+D="$(scenario hugename "$PR_HUGE_NAME" "$RUNS_CLEAN" 3600 green)"
+run_probe "$PROBE" "$D" --pr 301
+expect_verdict "a check name over the argv cap kills the ledger builder, and the run lands in the fallback as unknown" "unknown"
+expect_status "  and exits 0" 0
+expect_field "  through the fallback, which says so" .self_measured_reason "verdict_emitter_failed"
+huge_keys="$(jq -c 'keys' <<<"$STDOUT" 2>/dev/null)"
+if [ "$huge_keys" = '["explains","self_measured_reason","verdict"]' ]; then
+    ok "  with exactly the fallback's three keys"
+else
+    bad "  the object is not the three-key fallback: keys $huge_keys"; dump
+fi
+expect_explains_nothing "  in the fallback's pinned words" emitter-failed
+case "$STDERR" in
+    *"the verdict emitter failed (jq exited 2)"*) ok "  and the summary names the emitter dying on its input, which is the mechanism claimed" ;;
+    *) bad "  the summary does not name the emitter dying on its input: '$(printf '%.200s' "$STDERR")'"; dump ;;
+esac
+
+# ==============================================================================
 echo "28. mutations" >&2
 MUTANT="$WORK/mutant.sh"
 apply_mutation() { # <label> <exact from-line> <to-line> [source] [dest]
@@ -1743,9 +2222,24 @@ US=$'\037'
 row() { local IFS="$US"; printf '%s' "$*"; }
 
 # Fields: label, from-line, to-line, scenario, probe args, THE WRONG VERDICT THE
-# MUTANT PRODUCES (or «exit»), why it matters. The wrong verdict is checked
-# against the UNMUTATED run of the same scenario as well, so a stale declaration
-# that happens to equal the correct answer cannot report CAUGHT vacuously.
+# MUTANT PRODUCES, why it matters. The wrong verdict is checked against the
+# UNMUTATED run of the same scenario as well, so a stale declaration that
+# happens to equal the correct answer cannot report CAUGHT vacuously. Field 6
+# takes seven FORMS, because not every harm is a verdict: a plain verdict;
+# `«exit»` (the exit code carries one); `reason:<r>` (the reason field);
+# `unsafe` (hostile text reaches a reported field); `field:<jq path>=<value>`
+# (any other reported field — M28c's harm is a `checks_run` that certifies a
+# comparison whose read died, while the ledger still holds the verdict);
+# `explains:<branch>` (the mutant's `explains` falls off that branch's canon
+# while the unmutated one is on it); and `fallback` (the emitter died, and
+# the fallback that answered is `unknown`, exit 0, exactly three keys, the
+# reason `verdict_emitter_failed` and the fallback's own explains canon — so
+# a key renamed or dropped in the literal is red, which the 16-key edition
+# never was). Three OPTIONAL trailing fields follow, each applied to BOTH
+# arms: a PLATFORM_STATUS_COMPONENTS scope, `none` to drop --repo, and a PATH
+# key (`nt`, `gt`, `jqfault`) for the runs the default shimmed PATH cannot
+# reach. The PATH key is what lets M27 ride this loop; it used to sit outside
+# it, with a weaker check, because the runner could not set a curated PATH.
 MUTANTS=(
 "$(row "M1 green resolves to healthy" \
   '  anomaly/operational)    VERDICT="degraded (unattributed)" ;;' \
@@ -1890,27 +2384,95 @@ MUTANTS=(
 "$(row "M25 the verdict emitter dies" \
   '  --argjson anomalies "$ANOMALIES" \' \
   '  --argjson anomalies "" \' \
-  healthy '--pr 301' 'unknown' \
+  healthy '--pr 301' 'fallback' \
   'a dead emitter would hand the caller exit 0 and EMPTY stdout, so jq -r .verdict yields the empty string — not one of the four verdicts, and not unknown either')"
 "$(row "M26 the gh bound is not applied" \
   '    "$GH_TIMEOUT_CMD" -k 5 "$GH_TIMEOUT" gh "$@"' \
-  '    gh "$@"' \
+  '    command gh "$@"' \
   ghtimeout '--pr 301' 'healthy' \
   'the three load-bearing calls would run unbounded again, and a hang would cost the calling loop its tick')"
+"$(row "M9e a FIRED BOUND at the commit read becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"' \
+  '    if [ "$rc" -eq 124 ]; then add_anomaly gh_timeout "the commit read timed out"; else add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"; fi' \
+  ghtimeout-commit '--pr 301' 'degraded (unattributed)' \
+  'the commit read would report its OWN cutoff as degradation; every plain failure still records an error, so only a bound firing at THIS site can see it — measured undetected while only the pr view site had a case')"
+"$(row "M9f a FIRED BOUND at the runs read becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"' \
+  '    if [ "$rc" -eq 124 ]; then add_anomaly gh_timeout "the runs read timed out"; else add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"; fi' \
+  ghtimeout-runs '--pr 301' 'degraded (unattributed)' \
+  'the runs read would report its OWN cutoff as degradation, invisible to every plain-failure case for the same reason')"
+"$(row "M9h the KILL GRACE at the commit read becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"' \
+  '    if [ "$rc" -eq 137 ]; then add_anomaly gh_killed "the commit read was killed"; else add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"; fi' \
+  ghkilled-commit '--pr 301' 'degraded (unattributed)' \
+  'the 137 sibling of M9e — measured green while 17c2 fired the grace at the first call alone')"
+"$(row "M9i the KILL GRACE at the runs read becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"' \
+  '    if [ "$rc" -eq 137 ]; then add_anomaly gh_killed "the runs read was killed"; else add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"; fi' \
+  ghkilled-runs '--pr 301' 'degraded (unattributed)' \
+  'the 137 sibling of M9f')"
+"$(row "M9g a FIRED BOUND at the repo lookup becomes an anomaly" \
+  '    add_error first_party gh_call_failed "gh repo view exited $rc$(gh_rc_note "$rc")"' \
+  '    add_anomaly gh_call_failed "gh repo view exited $rc"' \
+  lookuptimeout '--pr 301' 'degraded (unattributed)' \
+  'the fourth gh site would report its own cutoff as degradation — 17d already reddens on it, and the mutant keeps every site on the same ledger' \
+  '' none)"
+"$(row "M27 the first-party scope filter is widened to count the probe scope" \
+  "n_fp_errors=\"\$(jq -r '[.[] | select(.scope != \"attribution\" and .scope != \"probe\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
+  "n_fp_errors=\"\$(jq -r '[.[] | select(.scope != \"attribution\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
+  notimeout '--pr 301' 'unknown' \
+  'every host without coreutils would report not_measured on every run, silently' \
+  '' '' nt)"
+"$(row "M28 the empty-state guard certifies a read that died" \
+  '      add_error first_party incomplete_payload "the empty-state read over the rollup failed (jq exited $empty_rc)"' \
+  '      ROLLUP_CHECK="ran"' \
+  badrollup '--pr 301' 'healthy' \
+  'a rollup the generator could not read would be certified as read, and the run comparison would earn clean unopposed — measured undetected under three source pins')"
+"$(row "M28b the missing-run guard is neutered" \
+  '        if [ "$missing_rc" -ne 0 ]; then' \
+  '        if false; then' \
+  jqfault '--pr 301' 'healthy' \
+  'a dead missing-run read would leave RUN_CHECK=ran and the comparison it discarded would earn clean' \
+  '' '' jqfault)"
+"$(row "M28c the missing-run guard stops un-certifying the comparison" \
+  '          RUN_CHECK="not_run"' \
+  '          :' \
+  jqfault '--pr 301' 'field:.checks_run.run_comparison=ran' \
+  'the ledger still holds the verdict, but checks_run would certify a comparison whose read died; the needle for this line also matched the initialiser, so its source pin was vacuous' \
+  '' '' jqfault)"
+"$(row "M29 the anomaly ledger is unparsable at emit time" \
+  "ANOMALIES='[]'" \
+  "ANOMALIES=''" \
+  healthy '--pr 301' 'fallback' \
+  'a ledger that cannot be parsed already reads as ZERO anomalies at the verdict, so it must land in the fallback as unknown — an emitter that cannot fail on its inputs would emit healthy beside an empty list')"
+"$(row "M30 the clean-beside-incident explains is inverted" \
+  '      EXPLAINS="nothing about this PR — a platform incident is open, but this PR'"'"'s own check data was compared and came back complete, so the incident is context and not an explanation for anything observed here"' \
+  '      EXPLAINS="nothing here is unexplained: a green page is not an explanation, so a stall that survives this verdict is a real defect — escalate it"' \
+  clean-incident '--pr 301' 'explains:attributed-clean' \
+  'the field SKILL.md orders callers to report INSTEAD OF the verdict would tell them a stall is a real defect — measured green under a matcher that accepted either needle for every branch')"
 )
 
 mut_ran=0
 for r in "${MUTANTS[@]}"; do
-    IFS="$US" read -r m_label m_from m_to m_dir m_args m_wrong m_why m_scope <<<"$r"
-    # OPTIONAL 8th field. A mutant whose harm only appears under a particular
-    # PLATFORM_STATUS_COMPONENTS must run under it for BOTH arms — the baseline
-    # too, or the comparison is against a different configuration than the
-    # mutant and the proof is meaningless. Measured: without this, M23 ran both
-    # arms under the default scope, both returned the same verdict, and the
-    # mutant reported UNDETECTED for a reason that had nothing to do with the
-    # guard it removes. Rows omitting the field leave it empty, and run_probe
-    # falls back to the default scope.
+    IFS="$US" read -r m_label m_from m_to m_dir m_args m_wrong m_why m_scope m_repoarg m_path <<<"$r"
+    # OPTIONAL trailing fields. A mutant whose harm only appears under a
+    # particular PLATFORM_STATUS_COMPONENTS, without --repo, or on a curated
+    # PATH must run that way for BOTH arms — the baseline too, or the
+    # comparison is against a different configuration than the mutant and the
+    # proof is meaningless. Measured: without this, M23 ran both arms under the
+    # default scope, both returned the same verdict, and the mutant reported
+    # UNDETECTED for a reason that had nothing to do with the guard it removes.
+    # Rows omitting a field leave it empty, and run_probe falls back to the
+    # pinned default for it.
     SCOPE_OVERRIDE="$m_scope"
+    REPO_ARG_OVERRIDE="$m_repoarg"
+    case "$m_path" in
+        "")      PATH_OVERRIDE="" ;;
+        nt)      PATH_OVERRIDE="$BIN_NT" ;;
+        gt)      PATH_OVERRIDE="$BIN_GT" ;;
+        jqfault) PATH_OVERRIDE="$BIN_JQ:$PATH" ;;
+        *) bad "$m_label — unknown PATH key '$m_path'"; continue ;;
+    esac
     apply_mutation "$m_label" "$m_from" "$m_to" || continue
     mut_ran=$((mut_ran + 1))
     # Baseline first: the SHIPPED script on the very same scenario. Without it a
@@ -1933,6 +2495,47 @@ for r in "${MUTANTS[@]}"; do
             ok "$m_label CAUGHT: $m_why"
         else
             bad "$m_label UNDETECTED: reason '$mut_reason' (unmutated: '$good_reason'); declared '$m_want'"
+        fi
+    elif [ "${m_wrong#field:}" != "$m_wrong" ]; then
+        # Any other reported field: `field:<jq path>=<value>`. Both arms are
+        # read, and the exit code is asserted as it is for a verdict.
+        m_spec="${m_wrong#field:}"
+        m_path_jq="${m_spec%%=*}"; m_want="${m_spec#*=}"
+        good_val="$(jq -r "$m_path_jq // \"\"" <<<"$good_stdout" 2>/dev/null)"
+        mut_val="$(field "$m_path_jq")"
+        if [ "$mut_val" = "$m_want" ] && [ "$mut_val" != "$good_val" ] && [ "$STATUS" -eq 0 ]; then
+            ok "$m_label CAUGHT: $m_why"
+        else
+            bad "$m_label UNDETECTED: $m_path_jq = '$mut_val' (unmutated: '$good_val'), exit $STATUS; declared '$m_want'"
+        fi
+    elif [ "${m_wrong#explains:}" != "$m_wrong" ]; then
+        # The harm is an `explains` that has left its branch's canon while the
+        # unmutated one is on it. Both arms, so a canon that no string matches
+        # cannot report CAUGHT on a mutant that changed nothing relevant.
+        m_branch="${m_wrong#explains:}"
+        good_ex="$(explains_ok "$m_branch" "$good_stdout")"
+        mut_ex="$(explains_ok "$m_branch")"
+        if [ "$good_ex" = "yes" ] && [ "$mut_ex" = "no" ]; then
+            ok "$m_label CAUGHT: $m_why"
+        else
+            bad "$m_label UNDETECTED: unmutated on canon=$good_ex, mutant on canon=$mut_ex — explains reads '$(field .explains)'"
+        fi
+    elif [ "$m_wrong" = "fallback" ]; then
+        # The emitter died and the FALLBACK answered. Everything about that
+        # object is asserted, not only its verdict: exactly three keys, the
+        # reason, its explains canon, exit 0 — so a renamed or dropped key in
+        # the literal is red. The 16-key edition of the literal was a second
+        # copy of the schema held in step by nothing, and renaming a key in it
+        # left this gate green.
+        fb_keys="$(jq -c 'keys' <<<"$STDOUT" 2>/dev/null)"
+        fb_reason="$(field .self_measured_reason)"
+        fb_ex="$(explains_ok emitter-failed)"
+        if [ "$VERDICT" = "unknown" ] && [ "$good_verdict" != "unknown" ] && [ "$STATUS" -eq 0 ] \
+           && [ "$fb_keys" = '["explains","self_measured_reason","verdict"]' ] \
+           && [ "$fb_reason" = "verdict_emitter_failed" ] && [ "$fb_ex" = "yes" ]; then
+            ok "$m_label CAUGHT: $m_why"
+        else
+            bad "$m_label UNDETECTED, or the fallback drifted: verdict '$VERDICT' (unmutated '$good_verdict'), exit $STATUS, keys $fb_keys, reason '$fb_reason', explains on canon=$fb_ex"
         fi
     elif [ "$m_wrong" = "unsafe" ]; then
         # The harm is neither a verdict nor a reason: hostile text reaches a
@@ -1969,7 +2572,7 @@ for r in "${MUTANTS[@]}"; do
     else
         bad "$m_label UNDETECTED: the mutant returned '$VERDICT' (unmutated: '$good_verdict'); the declared wrong verdict was '$m_wrong'"
     fi
-    unset SCOPE_OVERRIDE
+    unset SCOPE_OVERRIDE REPO_ARG_OVERRIDE PATH_OVERRIDE
 done
 if [ "$mut_ran" -eq "${#MUTANTS[@]}" ]; then
     ok "every declared probe mutant ran (${#MUTANTS[@]} of ${#MUTANTS[@]})"
@@ -1977,12 +2580,21 @@ else
     bad "only $mut_ran of ${#MUTANTS[@]} declared probe mutants ran — the rest proved nothing"
 fi
 
+# The out-of-loop mutants below carry a RAN-COUNTER of their own, mirroring
+# `mut_ran`. OUT_OF_LOOP_MUTANTS used to be a hand transcription that only the
+# arithmetic at the bottom consulted, and its message blamed "a case was added
+# or skipped" — so a deleted block plus one added case was green (measured).
+# A block counts itself only after its mutation applied, exactly as the loop
+# does, and the equality at the bottom has its own ok/bad.
+oo_ran=0
+
 # M16 — wire the probe into the merge writer. The scan in section 19 must flag it.
 M16="$WORK/merge-shepherd-mutant.sh"
 if apply_mutation "M16 the probe is wired into the merge writer" \
     'set -uo pipefail' \
     'set -uo pipefail; bash "$(dirname "$0")/probe-platform-health.sh" --pr "$PR" || exit 30' \
     "$SCRIPTS_DIR/merge-shepherd.sh" "$M16"; then
+    oo_ran=$((oo_ran + 1))
     if [ -n "$(scan_for_probe "$M16")" ]; then
         ok "M16 CAUGHT: a merge writer consulting the platform verdict is flagged"
     else
@@ -1997,11 +2609,13 @@ if apply_mutation "M17 the probe is named in the merge section" \
     '### 3. Merge or enqueue greens' \
     '### 3. Merge or enqueue greens'$'\n\n''Run `probe-platform-health.sh` and hold the merge on a degraded verdict.' \
     "$SKILL" "$M17"; then
-    if section_names_probe "$M17" "### 3. Merge or enqueue greens"; then
-        ok "M17 CAUGHT: a probe mention inside the merge section is flagged"
-    else
-        bad "M17 UNDETECTED: the merge section was wired to the probe and the section scan stayed clean"
-    fi
+    oo_ran=$((oo_ran + 1))
+    m17_hits="$(scan_skill_sections "$M17")"
+    case "$m17_hits" in
+        *"### 3. Merge or enqueue greens: names"*)
+            ok "M17 CAUGHT: a probe mention inside the merge section is flagged by the section scan" ;;
+        *) bad "M17 UNDETECTED: the merge section was wired to the probe and the section scan reported '$m17_hits'" ;;
+    esac
 fi
 
 # M18 — genuinely ADD a block to §2b, which is the mode canon exists to catch:
@@ -2012,6 +2626,7 @@ if apply_mutation "M18 §2b is inverted by ADDING a paragraph" \
     '### 3. Merge or enqueue greens' \
     '**Acting on the verdict.** When the probe returns `degraded`, hold the PR for this tick and skip the merge; a `healthy` verdict is the confirmation you want, and a stall that survives it is a real defect to escalate.'$'\n\n''### 3. Merge or enqueue greens' \
     "$SKILL" "$M18"; then
+    oo_ran=$((oo_ran + 1))
     m18_i=0
     m18_bad=0
     while IFS= read -r blk; do
@@ -2033,32 +2648,131 @@ if apply_mutation "M19 a dispatcher acts on the verdict without naming the scrip
     '## Guardrails' \
     '## Guardrails'$'\n\n''On `degraded (attributed)`, hold the PR and do not redispatch; on `healthy`, the stall is a real defect, so escalate it.' \
     "$REPO_ROOT/skills/dispatch-ready/SKILL.md" "$M19"; then
-    if [ -n "$(scan_for_verdict "$M19")" ]; then
-        ok "M19 CAUGHT: a decision surface consulting the verdict by name is flagged"
+    oo_ran=$((oo_ran + 1))
+    m19_hits="$(scan_sections "$M19" "$DR_ALLOW")"
+    case "$m19_hits" in
+        *"## Guardrails: degraded (attributed)"*)
+            ok "M19 CAUGHT: a decision surface consulting the verdict by name is flagged by the section scan" ;;
+        *) bad "M19 UNDETECTED: dispatch-ready was wired to the verdict and the section scan reported '$m19_hits'" ;;
+    esac
+fi
+
+# M31 — the measured hole: a hold rule written into §4 Teardown of pr-shepherd's
+# own SKILL.md, naming the script AND the vocabulary, in the section where
+# merge-vs-hold is acted on. The file was in no corpus and §4 in no section
+# list, so this was green.
+M31="$WORK/skill-teardown-mutant.md"
+if apply_mutation "M31 a hold rule is written into pr-shepherd's §4 Teardown" \
+    '### 4. Teardown and reconcile' \
+    '### 4. Teardown and reconcile'$'\n\n''Run `probe-platform-health.sh`; on a `degraded (attributed)` verdict, HOLD the PR and do not merge it.' \
+    "$SKILL" "$M31"; then
+    oo_ran=$((oo_ran + 1))
+    m31_hits="$(scan_skill_sections "$M31")"
+    case "$m31_hits" in
+        *"### 4. Teardown and reconcile: names"*)
+            ok "M31 CAUGHT: a hold rule in §4 is flagged — the section list is an equality over the headings" ;;
+        *) bad "M31 UNDETECTED: §4 was wired to the probe and the section scan reported '$m31_hits'" ;;
+    esac
+fi
+
+# M31b — the same hold rule in the BARE wording the vocabulary scan exists for:
+# no script name, no parenthetical. Measured green against the two `degraded (…)`
+# literals alone (review of #315).
+M31B="$WORK/skill-teardown-bare-mutant.md"
+if apply_mutation "M31b a hold rule in bare 'degraded verdict' wording under §4" \
+    '### 4. Teardown and reconcile' \
+    '### 4. Teardown and reconcile'$'\n\n''On a degraded verdict, HOLD the PR and do not merge it this tick.' \
+    "$SKILL" "$M31B"; then
+    oo_ran=$((oo_ran + 1))
+    m31b_hits="$(scan_skill_sections "$M31B")"
+    case "$m31b_hits" in
+        *"### 4. Teardown and reconcile: degraded verdict"*)
+            ok "M31b CAUGHT: the bare wording is flagged, so the rule cannot be written around the literals" ;;
+        *) bad "M31b UNDETECTED: a bare 'degraded verdict' hold rule in §4 and the section scan reported '$m31b_hits'" ;;
+    esac
+fi
+
+# M31c — the rule written as a HEADING over a bland body. Only bodies were
+# scanned once, and this was green (review of #315).
+M31C="$WORK/skill-teardown-heading-mutant.md"
+if apply_mutation "M31c a hold rule written as a heading under §4" \
+    '### 4. Teardown and reconcile' \
+    '### 4. Teardown and reconcile'$'\n\n''#### On a `degraded (attributed)` verdict, hold the PR'$'\n\n''Wait for the next tick before doing anything else.' \
+    "$SKILL" "$M31C"; then
+    oo_ran=$((oo_ran + 1))
+    m31c_hits="$(scan_skill_sections "$M31C")"
+    case "$m31c_hits" in
+        *"#### On a \`degraded (attributed)\` verdict, hold the PR: degraded (attributed)"*)
+            ok "M31c CAUGHT: heading text is scanned, so a rule cannot hide in a heading over a bland body" ;;
+        *) bad "M31c UNDETECTED: a hold rule as a heading and the section scan reported '$m31c_hits'" ;;
+    esac
+fi
+
+# M32 — a gating bullet APPENDED to Guardrails, beside the canon-pinned one.
+# Canon is on that one bullet so the rest of the list stays free to change, and
+# "free to change" is exactly where a gating exception gets written; the scan
+# strips the canon bullet and holds the remainder to the rule.
+M32="$WORK/skill-guardrails-mutant.md"
+if apply_mutation "M32 a gating bullet is appended to Guardrails" \
+    '- **Never force-push the default branch.**' \
+    '- **Never force-push the default branch.**'$'\n''- On a `degraded (attributed)` verdict, hold every PR this tick.' \
+    "$SKILL" "$M32"; then
+    oo_ran=$((oo_ran + 1))
+    m32_hits="$(scan_skill_sections "$M32")"
+    case "$m32_hits" in
+        *"## Guardrails: degraded (attributed)"*)
+            ok "M32 CAUGHT: a gating bullet beside the canon one is flagged, so the carve-out is one bullet, not the list" ;;
+        *) bad "M32 UNDETECTED: Guardrails grew a gating bullet and the section scan reported '$m32_hits'" ;;
+    esac
+fi
+
+# M33 — two BARE gh calls, in the two shapes the old source grep missed (an
+# `if gh …; then` and a `gh … | jq` pipeline), inserted after the repo lookup.
+# This is not a regression to refuse; it is the structural claim being
+# MEASURED: because the name `gh` is a function, both run under the bound
+# without their author knowing a wrapper exists. The shim's ledger must grow by
+# exactly the two calls, and parity must hold. Before the shadow, the same
+# insertion ran unbounded with the gate green.
+M33="$WORK/bare-gh-mutant.sh"
+if apply_mutation "M33 two bare gh calls in the if- and pipeline forms" \
+    'REPO_OK=1' \
+    'REPO_OK=1'$'\n''if gh api "repos/mock-org/mock-repo/commits/probe" >/dev/null 2>&1; then :; fi'$'\n''gh api "repos/mock-org/mock-repo/actions/runs?probe=1" 2>/dev/null | jq . >/dev/null 2>&1' \
+    "$PROBE" "$M33"; then
+    oo_ran=$((oo_ran + 1))
+    run_probe "$M33" "$WORK/sc-bounded" --pr 301
+    m33_bounds="$(grep -c . "$WORK/bounds")"
+    m33_calls="$(grep -c '^gh ' "$WORK/calls")"
+    if [ "$m33_bounds" -eq 5 ] && [ "$m33_calls" -eq 5 ] && [ "$VERDICT" = "healthy" ]; then
+        ok "M33 BOUNDED: both bare calls ran under the bound with parity intact ($m33_calls calls, $m33_bounds bounds)"
+    elif [ "$m33_bounds" -ne "$m33_calls" ]; then
+        # Parity broken: a call reached the binary without the shim seeing it.
+        bad "M33 ESCAPED: $m33_calls gh calls but $m33_bounds bounds — a bare gh call bypassed the shadow"
+        sed 's/^/          | B /' <"$WORK/bounds" >&2
     else
-        bad "M19 UNDETECTED: dispatch-ready was wired to the verdict and the vocabulary scan stayed clean"
+        # Parity holds, so the shadow did its job; the count or the verdict is
+        # what moved, which is a stale mutation or a changed baseline, not an
+        # escape — and saying "bypassed" here would blame the wrong thing.
+        bad "M33 MISCOUNTED: $m33_calls gh calls and $m33_bounds bounds (expected 5 and 5), verdict '$VERDICT' — parity holds, so the baseline call count or the mutation changed, not the shadow"
     fi
 fi
 
-# M27 — the scope filter that keeps a `probe`-scoped entry out of the
-# first-party count. It cannot run in the loop above, because no scenario on the
-# shimmed PATH produces such an entry at all: it needs the curated no-timeout
-# PATH, which is exactly why this mutant did not exist while the branch was
-# called impossible to exercise. Its harm is the widest in this file — every
-# host without coreutils reporting `not_measured` on every run, silently, with
-# a green gate.
-M27="$WORK/scope-mutant.sh"
-if apply_mutation "M27 the first-party scope filter is widened" \
-    "n_fp_errors=\"\$(jq -r '[.[] | select(.scope == \"first_party\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
-    "n_fp_errors=\"\$(jq -r '[.[] | select(.scope != \"attribution\")] | length' <<<\"\$PROBE_ERRORS\" 2>/dev/null)\"" \
-    "$PROBE" "$M27"; then
-    PATH_OVERRIDE="$BIN_NT" run_probe "$PROBE" "$WORK/sc-notimeout" --pr 301
-    m27_good="$VERDICT"
-    PATH_OVERRIDE="$BIN_NT" run_probe "$M27" "$WORK/sc-notimeout" --pr 301
-    if [ "$VERDICT" = "unknown" ] && [ "$m27_good" = "healthy" ]; then
-        ok "M27 CAUGHT: a widened scope filter would make every coreutils-less host not_measured"
+# M34 — a first-party site MIS-SCOPED (`firstparty`). Two halves in one
+# assertion, both of which must hold: the source census flags the typo, and the
+# run FAILS CLOSED — the entry still counts, so the badrollup scenario is still
+# `unknown` rather than the `healthy` the by-name filter gave (measured: green,
+# with a failed read sitting in the ledger).
+M34="$WORK/scope-typo-mutant.sh"
+if apply_mutation "M34 a first-party call site is mis-scoped" \
+    '      add_error first_party incomplete_payload "the empty-state read over the rollup failed (jq exited $empty_rc)"' \
+    '      add_error "firstparty" incomplete_payload "the empty-state read over the rollup failed (jq exited $empty_rc)"' \
+    "$PROBE" "$M34"; then
+    oo_ran=$((oo_ran + 1))
+    m34_scan="$(scope_violations "$M34")"
+    run_probe "$M34" "$WORK/sc-badrollup" --pr 301
+    if [ "$m34_scan" = "firstparty" ] && [ "$VERDICT" = "unknown" ]; then
+        ok "M34 CAUGHT: the census flags 'firstparty', and the run still fails closed to unknown"
     else
-        bad "M27 UNDETECTED: mutant '$VERDICT' (unmutated: '$m27_good'); expected unknown vs healthy"
+        bad "M34 UNDETECTED: census reported '$m34_scan', verdict '$VERDICT' (want firstparty / unknown)"
     fi
 fi
 
@@ -2068,13 +2782,20 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=198
-# Mutants that cannot ride the loop above. M16-M19 mutate ANOTHER file; M27
-# mutates the probe but needs a curated PATH the loop's runner does not set.
-OUT_OF_LOOP_MUTANTS=5         # M16, M17, M18, M19, M27
-EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + OUT_OF_LOOP_MUTANTS + 1 + EXPECTED_CASES ))  # +1: the all-mutants-ran check
+EXPECTED_CASES=247
+# Mutants that cannot ride the loop above, because each mutates ANOTHER file
+# (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
+# shim's ledgers (M33) or the source census (M34). The number is checked
+# against the ran-counter, so a deleted block is red on its own.
+OUT_OF_LOOP_MUTANTS=10        # M16, M17, M18, M19, M31, M31b, M31c, M32, M33, M34
+if [ "$oo_ran" -eq "$OUT_OF_LOOP_MUTANTS" ]; then
+    ok "every out-of-loop mutant ran ($oo_ran of $OUT_OF_LOOP_MUTANTS)"
+else
+    bad "only $oo_ran of $OUT_OF_LOOP_MUTANTS out-of-loop mutants ran — a block was deleted or its mutation went stale"
+fi
+EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + OUT_OF_LOOP_MUTANTS + 2 + EXPECTED_CASES ))  # +2: the two all-ran checks
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
-    bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} probe mutants + $OUT_OF_LOOP_MUTANTS out-of-loop + 1 + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
+    bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} probe mutants + $OUT_OF_LOOP_MUTANTS out-of-loop + 2 + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
 fi
 
 # ------------------------------------------------------------------------------

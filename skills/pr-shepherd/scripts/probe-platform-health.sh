@@ -155,9 +155,18 @@
 # an edition of this file left the three LOAD-BEARING calls (`gh pr view`, the
 # commit read, the `actions/runs` read) unbounded while bounding the OPTIONAL
 # attribution fetch — the one its own header calls never load-bearing. A hang
-# there costs the caller its whole tick, and the caller is a loop. So every
-# `gh` call goes through `gh_bounded`, which prefixes `timeout`/`gtimeout` when
-# either is on PATH. `timeout` reports a fired bound as exit 124 — or as 137
+# there costs the caller its whole tick, and the caller is a loop. So the NAME
+# `gh` is the bound: a shell function shadows the binary and prefixes
+# `timeout`/`gtimeout` when either is on PATH, and the only reach to the binary
+# is one `command gh`, inside that function. A wrapper under its own name
+# (`gh_bounded`) came first and is exactly the shape to refuse — a chokepoint
+# by CONVENTION, where the next reader written as `gh api … | jq` is unbounded
+# and looks entirely normal, and the gate's grep for it refused one spelling
+# out of ten. Shadowing the name makes it structural: a call written by an
+# author who never heard of a wrapper runs under the bound all the same. In the
+# bounded branch `timeout` resolves `gh` through execvp, which sees no shell
+# function, so the real binary and the gate's mock are reached the same way.
+# `timeout` reports a fired bound as exit 124 — or as 137
 # when the child ignored TERM and the 5s kill grace had to fire (128 + KILL,
 # preserved after escalation; measured on coreutils 9.11). BOTH are the bound
 # firing, and `bound_fired` is the ONE predicate that says so: an edition of
@@ -184,10 +193,29 @@
 # inputs nothing validates before use (the counts derived from them ARE
 # defended, so the file already treats them as possibly unusable). The status
 # is now captured and the output re-parsed before it is printed; on any failure
-# a minimal HAND-BUILT `unknown` object is emitted instead. It carries no
-# measured value at all — every field is a literal, because the measured values
-# are precisely what could not be serialised — and it reports
-# `verdict_emitter_failed` as both its reason and its `probe_errors` entry.
+# a minimal HAND-BUILT `unknown` object is emitted instead.
+# THAT OBJECT IS THREE KEYS — `verdict`, `self_measured_reason`
+# (`verdict_emitter_failed`) and `explains` — and deliberately NOT the
+# emitter's shape. The first edition was a 16-key literal mirroring the
+# emitter: a second copy of the output schema, held in step by nothing.
+# Measured, renaming a key in it left the gate green, and the next key added
+# to the emitter would have drifted out of it silently — #167's rule (never
+# transcribe the table), inside this file. It carries no measured value — not
+# even the digits-validated `pr` — because the measured values are precisely
+# what could not be serialised, and carrying one invites carrying the next —
+# and whatever killed the emitter (a ledger builder that died on the argv cap,
+# or jq itself) is exactly what would be re-run to produce a richer object.
+# Nothing here is reliable except the three literals, so nothing else is
+# offered.
+# THE TWO LEDGERS STAY `--argjson`, ON PURPOSE. `--arg` plus `try fromjson
+# catch []` would make the emitter unable to fail on inputs at all — and
+# measured, an empty `$ANOMALIES` already reads as ZERO anomalies at the
+# verdict (`length` over empty input is empty, and the guard turns that into
+# 0), so that edition emits `healthy` beside an empty anomalies list after a
+# jq failure inside `add_anomaly`. A ledger that cannot be parsed is a run
+# whose verdict cannot be trusted; the emitter dying is the fail-closed door
+# that lands it in `unknown`, and the gate mutation-proves the door by
+# corrupting the ledger.
 # It still exits 0: the no-verdict case is what a non-zero exit is reserved for,
 # and this path HAS a verdict. Turning it into a non-zero exit would put a
 # verdict in an exit code, which the paragraph above forbids.
@@ -350,7 +378,11 @@ GH_TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then GH_TIMEOUT_CMD="gtimeout"
 fi
-gh_bounded() { # <gh args...> — the ONE place `gh` is invoked
+gh() { # <gh args...> — shadows the binary, so EVERY `gh` in this file is bounded
+  # The name is the chokepoint. `command gh` below is the one reach to the
+  # binary, and the gate asserts it occurs exactly once, here; in the bounded
+  # branch the `gh` handed to `timeout` is resolved by execvp, which knows
+  # nothing of shell functions, so it is the binary too and not a recursion.
   # PURE, deliberately: every call site runs this inside `$( )`, so an
   # `add_error` here would mutate PROBE_ERRORS in a SUBSHELL and the entry
   # would be silently discarded. The ledger is written by the callers.
@@ -364,7 +396,7 @@ gh_bounded() { # <gh args...> — the ONE place `gh` is invoked
   if [ -n "$GH_TIMEOUT_CMD" ]; then
     "$GH_TIMEOUT_CMD" -k 5 "$GH_TIMEOUT" gh "$@"
   else
-    gh "$@"
+    command gh "$@"
   fi
 }
 bound_fired() { # <rc> — did OUR bound end this call?
@@ -403,18 +435,25 @@ add_error() { # <scope: first_party|attribution|probe> <kind> <detail>
   # every unreachable-endpoint run into `not_measured`, erasing the difference
   # between "I read your PR and it was clean" and "I read nothing".
   # `probe` is the third value and is neither. Its ONE invariant is that it
-  # never feeds the first-party count below — that is the whole definition,
-  # and it holds for two kinds with DIFFERENT effects on the verdict:
-  #   timeout_unavailable     the measurement is intact and the verdict is
-  #                           whatever it would have been; this only records
-  #                           that the bound never applied.
-  #   verdict_emitter_failed  the measurement is DISCARDED and the verdict is
-  #                           forced to `unknown` — but by the hand-built
-  #                           fallback, which bypasses the count entirely,
-  #                           never by this scope being counted.
-  # An earlier edition defined the scope as "where the measurement itself is
-  # unaffected" and then listed the emitter as an example, which was its own
-  # counter-example. Do not restate the definition in terms of the verdict.
+  # never feeds the first-party count below — that is the whole definition.
+  # Its one kind today is `timeout_unavailable`: the measurement is intact and
+  # the verdict is whatever it would have been; the entry only records that
+  # the bound never applied. An earlier edition defined the scope as "where
+  # the measurement itself is unaffected" and then listed the emitter fallback
+  # as a second example, which was its own counter-example (the fallback
+  # DISCARDS the measurement). That entry lived only inside the hand-built
+  # fallback object, which never passed through this count at all, and the
+  # fallback no longer carries a ledger — see the emitter. Do not restate the
+  # definition in terms of the verdict.
+  # THE SET IS CLOSED — first_party, attribution, probe — and the count below
+  # is taken by EXCLUSION rather than by naming `first_party`. Counting by name
+  # made the scope an open enum whose only reader failed OPEN: a fourth value,
+  # or a misspelling at a first-party site, dropped out of the count silently
+  # and the run reached `clean` -> `healthy` with a failed call sitting in the
+  # ledger — the decorative-ledger defect one more time. Unrecognised now
+  # COUNTS, so it fails closed to `not_measured`, and the gate scans every
+  # call site in this file against the set so a misspelling is a red build
+  # rather than a quietly-counted oddity.
   PROBE_ERRORS="$(jq -c --arg s "$1" --arg k "$2" --arg d "$3" \
     '. + [{scope:$s, kind:$k, detail:$d}]' <<<"$PROBE_ERRORS")"
 }
@@ -442,7 +481,7 @@ add_error() { # <scope: first_party|attribution|probe> <kind> <detail>
 REPO_OK=1
 if [ -z "$REPO" ]; then
   rc=0
-  REPO="$(gh_bounded repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || rc=$?
+  REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || rc=$?
   # THE BOUND IS CONSULTED FIRST, INDEPENDENT OF OUTPUT. A `gh` killed after it
   # has flushed stdout leaves a non-empty — and possibly TRUNCATED — slug behind
   # it. Testing emptiness first discarded the status in that case, so the run
@@ -509,7 +548,7 @@ RUNS_TRUNCATED="unknown"
 if [ -n "$PR" ] && [ "$REPO_OK" -eq 1 ]; then
   SELF_REASON=""
   rc=0
-  pr_raw="$(gh_bounded pr view "$PR" --repo "$REPO" \
+  pr_raw="$(gh pr view "$PR" --repo "$REPO" \
       --json number,headRefOid,headRefName,statusCheckRollup,mergeStateStatus 2>/dev/null)" || rc=$?
   if [ "$rc" -ne 0 ]; then
     add_error first_party gh_call_failed "gh pr view $PR exited $rc$(gh_rc_note "$rc")"
@@ -603,7 +642,7 @@ if [ -n "$HEAD" ]; then
   # Head age, computed in jq (fromdateiso8601/now) rather than with `date`,
   # which takes incompatible flags on BSD and GNU.
   rc=0
-  commit_raw="$(gh_bounded api "repos/$REPO/commits/$HEAD" 2>/dev/null)" || rc=$?
+  commit_raw="$(gh api "repos/$REPO/commits/$HEAD" 2>/dev/null)" || rc=$?
   if [ "$rc" -ne 0 ]; then
     add_error first_party gh_call_failed "gh api repos/$REPO/commits/$HEAD exited $rc$(gh_rc_note "$rc")"
   else
@@ -626,7 +665,7 @@ if [ -n "$HEAD" ]; then
   # truncate the query string, dropping per_page; `+` would decode as a space.
   BRANCH_ENC="$(jq -rn --arg b "$BRANCH" '$b|@uri')"
   rc=0
-  runs_raw="$(gh_bounded api "repos/$REPO/actions/runs?branch=$BRANCH_ENC&per_page=100" 2>/dev/null)" || rc=$?
+  runs_raw="$(gh api "repos/$REPO/actions/runs?branch=$BRANCH_ENC&per_page=100" 2>/dev/null)" || rc=$?
   if [ "$rc" -ne 0 ]; then
     add_error first_party gh_call_failed "gh api actions/runs for $BRANCH_SAFE exited $rc$(gh_rc_note "$rc")"
   elif [ -z "$runs_raw" ] || ! jq -e 'has("workflow_runs")' >/dev/null 2>&1 <<<"$runs_raw"; then
@@ -772,7 +811,10 @@ if [ -n "$HEAD" ]; then
 fi
 
 n_anomalies="$(jq -r 'length' <<<"$ANOMALIES" 2>/dev/null)"
-n_fp_errors="$(jq -r '[.[] | select(.scope == "first_party")] | length' <<<"$PROBE_ERRORS" 2>/dev/null)"
+# By EXCLUSION: everything that is not the attribution scope and not the probe
+# scope is first-party, INCLUDING a scope this file has never heard of. See
+# add_error for why naming `first_party` here was the open door.
+n_fp_errors="$(jq -r '[.[] | select(.scope != "attribution" and .scope != "probe")] | length' <<<"$PROBE_ERRORS" 2>/dev/null)"
 case "$n_anomalies" in ""|*[!0-9]*) n_anomalies=0 ;; esac
 case "$n_fp_errors" in ""|*[!0-9]*) n_fp_errors=0 ;; esac
 if [ "$n_anomalies" -gt 0 ]; then
@@ -994,27 +1036,14 @@ emitted="$(jq -n \
     explains:$explains}')" || emit_rc=$?
 
 if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$emitted"; then
-  # EVERY FIELD IS A LITERAL. The measured values are exactly what could not be
-  # serialised, so re-interpolating them here would re-run the failure inside
-  # the handler for it; a placeholder that cannot itself fail is worth more than
-  # a richer one that can. `verdict` is `unknown` because that is the verdict
-  # for "nothing could be measured", and `explains` says so in the same words
-  # every other unknown does — a caller reporting this object must not read it
-  # as anything softer.
-  emitted='{"repo":null, "pr":null, "verdict":"unknown",
-    "self_measured":"not_measured",
-    "self_measured_reason":"verdict_emitter_failed",
-    "checks_run":{"run_comparison":"not_run", "rollup_empty_state":"not_run",
-                  "runs_page_truncated":"unknown"},
-    "anomalies":[],
-    "probe_errors":[{"scope":"probe", "kind":"verdict_emitter_failed",
-      "detail":"the verdict emitter failed, so every measured field was discarded and this object is a hand-built placeholder"}],
-    "status_page":"unknown",
-    "status_page_detail":"not reported: the verdict emitter failed",
-    "status_page_url":null,
-    "head_sha":null, "head_ref":null, "head_age_seconds":null,
-    "merge_state_status":null,
-    "explains":"nothing — the verdict emitter failed, so nothing that was measured survived; unknown is not health, and this verdict never licenses escalating a stall as a real defect"}'
+  # THREE KEYS, EVERY ONE A LITERAL — see the header for why it is not the
+  # emitter's shape and why `pr` is not carried either. Re-interpolating a
+  # measured value here would re-run the failure inside the handler for it; a
+  # placeholder that cannot itself fail is worth more than a richer one that
+  # can. `verdict` is `unknown` because that is the verdict for "nothing could
+  # be measured", and `explains` says so in the same words every other unknown
+  # does — a caller reporting this object must not read it as anything softer.
+  emitted='{"verdict":"unknown","self_measured_reason":"verdict_emitter_failed","explains":"nothing — the verdict emitter failed, so nothing that was measured survived; unknown is not health, and this verdict never licenses escalating a stall as a real defect"}'
   # The two failures are reported apart. Folding them together printed
   # `the verdict emitter failed (jq exited 0)` on the empty-stdout branch — a
   # diagnostic contradicting itself on the exact door this whole change closes.
