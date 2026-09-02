@@ -78,7 +78,11 @@ carries the surface the config says is absent — an iOS target under a `mobile:
 under a `posthog: none` — report both sides and let the user decide, exactly as a `merge_queue`
 disagreement is handled. Never silently rewrite a `none` into a block, and never silently keep one
 the tree contradicts. Note `posthog`'s derivation is a bare substring grep, so a repo that merely
-*documents* PostHog trips it; say which file matched, so the user can dismiss it.
+*documents* PostHog trips it; say which file matched, so the user can dismiss it. The grep excludes
+`.claude/**`, so a hit is always somewhere else in the tree and the repo's own recorded answer is
+never the evidence against itself — before
+[#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317) it was, and this stop fired on every
+refresh in every repo that had answered.
 
 **An ABSENT one of these keys is the rollout path, and it is the half a refresh must not skip.**
 Every consumer repo was configured before this form existed, so on the first refresh after it lands

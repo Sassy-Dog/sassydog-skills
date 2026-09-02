@@ -102,10 +102,21 @@ for d in ./dev ./run.sh; do [[ -x "$d" ]] && { dev_script="$d"; break; }; done
 [[ -z "$dev_script" && -f package.json ]] && jq -e '.scripts.dev' package.json >/dev/null 2>&1 && dev_script="$runner run dev"
 
 # --- observability + product surfaces --------------------------------------------------
+# `.claude/**` is excluded from BOTH greps, and the exclusion is the point rather
+# than tidiness: agent configuration is never the product, and this probe answers
+# a question about the product. `.claude/sassy-dog/survey-work.md` is where #267
+# has the consumer record `posthog: none`, so without the exclusion the bare-word
+# grep's only hit in a quiet tree is the config key ITSELF — every later
+# `setup-config` refresh then reports positive evidence against the answer while
+# citing the file that records it, forever, in every repo that answered §2c
+# (issue #317). The sentry pathspec is symmetric on purpose even though its SDK
+# patterns never match the literal `sentry: none`: a hook or settings file that
+# mentions `sentry.init` in prose is documentation too. Pinned by
+# scripts/test-detect-capabilities.sh.
 sentry="false"
-git grep -lqiE '@sentry/|sentry_flutter|sentry\.init|Sentry\.Init' -- ':(exclude)*.lock*' >/dev/null 2>&1 && sentry="true"
+git grep -lqiE '@sentry/|sentry_flutter|sentry\.init|Sentry\.Init' -- ':(exclude)*.lock*' ':(exclude).claude/**' >/dev/null 2>&1 && sentry="true"
 posthog="false"
-git grep -lqi 'posthog' -- ':(exclude)*.lock*' >/dev/null 2>&1 && posthog="true"
+git grep -lqi 'posthog' -- ':(exclude)*.lock*' ':(exclude).claude/**' >/dev/null 2>&1 && posthog="true"
 bundle_id=""
 if grep -qE '(^|/)(ios/|app\.json)' <<<"$TRACKED"; then
   bundle_id=$(git grep -hoE '"bundleIdentifier"\s*:\s*"[^"]+"|PRODUCT_BUNDLE_IDENTIFIER = [A-Za-z0-9.$()-]+' 2>/dev/null \

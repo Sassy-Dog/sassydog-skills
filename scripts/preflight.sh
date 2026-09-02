@@ -971,6 +971,35 @@
 #      ran-counter like the loop's. Mock `gh` AND mock `curl`, both recording
 #      every call so the read-only claim is measured by METHOD — per token, by
 #      prefix — not by path prefix: no repo, no network.
+#  35. stale-cache diagnostic tests (scripts/test-stale-cache-diagnostic.sh) —
+#      the README's stale-plugin-cache diagnostic and the no-auto-stamp record
+#      (issues #296, #301). The idiom it replaced compared version STRINGS and
+#      answered "current" while 18 skill files and all ten agents differed, so
+#      the compare block's assertions are scoped to its CODE FENCE rather than
+#      the file: the paragraph underneath names every guard, and a whole-file
+#      presence check passed on a README whose fence had each one deleted. Two
+#      tracked files, no gh, no network.
+#  36. detect-capabilities tests (scripts/test-detect-capabilities.sh) —
+#      setup-config's capability probe reads the PRODUCT, never the answers
+#      previously recorded about it (issue #317). The `posthog` grep was a
+#      bare-word sweep of the tracked tree, and #267 put `posthog: none` into
+#      `.claude/sassy-dog/survey-work.md` — a tracked file — so in a quiet tree
+#      the probe's only hit was the config key ITSELF and every refresh reported
+#      positive evidence against the answer while citing the file recording it.
+#      Nothing crashed: update mode correctly stops and surfaces, so the harm is
+#      that it stops forever, in every repo that answered §2c, with a per-repo
+#      prose rationale — the #167 third-copy shape — as the only remedy. Both
+#      greps now exclude `.claude/**`; the `sentry` pathspec is symmetric even
+#      though its SDK patterns never matched the literal `sentry: none`, since
+#      an asymmetry between adjacent lines reads as an oversight to the next
+#      editor. Behavioural over four `mktemp -d` git fixtures, with the two grep
+#      lines EXTRACTED from the shipped script rather than transcribed: the
+#      config-only fixture must read false, source-only and mixed must read
+#      true, and the lock-only fixture proves the pre-existing `*.lock*`
+#      pathspec survived the edit. Fixture adequacy is its own property — the
+#      extracted lines with the exclusion STRIPPED must still match the config
+#      fixture, or the false-verdict property has gone vacuous and says so.
+#      Mock `gh`, no network, no real repo.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1671,6 +1700,23 @@ if bash scripts/test-stale-cache-diagnostic.sh; then
     pass "stale-cache diagnostic tests (scripts/test-stale-cache-diagnostic.sh)"
 else
     failed "stale-cache diagnostic tests (scripts/test-stale-cache-diagnostic.sh)"
+fi
+
+# --- 36. detect-capabilities tests ---------------------------------------------
+# Behavioural: the probe's verdict is what a `setup-config` refresh acts on, so
+# the shipped script is RUN inside four throwaway git fixtures rather than
+# grepped. `posthog` was a bare-word sweep of the tracked tree while #267 has
+# consumers record `posthog: none` in a tracked config file, so the detector's
+# only hit in a quiet tree was that answer and every refresh contradicted it
+# (issue #317). Both greps now exclude `.claude/**` — agent configuration is
+# never the product — and the sentry pathspec is symmetric on purpose. The grep
+# lines are extracted from the script, so a reverted pathspec cannot pass on a
+# transcribed copy, and fixture adequacy is asserted before the false verdict is
+# trusted. Mock `gh`, no network.
+if bash scripts/test-detect-capabilities.sh; then
+    pass "detect-capabilities tests (scripts/test-detect-capabilities.sh)"
+else
+    failed "detect-capabilities tests (scripts/test-detect-capabilities.sh)"
 fi
 
 # ------------------------------------------------------------------------------
