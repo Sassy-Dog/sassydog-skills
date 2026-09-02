@@ -29,9 +29,12 @@
 # A PROCESS NOTE, because it cost a CI cycle here. `preflight.sh` runs shellcheck
 # over a `git ls-files` corpus, so a NEW gate that has not been `git add`ed yet
 # is INVISIBLE to it: preflight passed locally on this very file while CI failed
-# on a real SC2034 in it. That is the same trap CLAUDE.md records for gate 34's
-# first edition, which shipped a `| grep -q` bug because both its files were
-# still untracked. `git add` a new script BEFORE trusting a green preflight.
+# on a real SC2034 in it. THE SAME BLIND SPOT HAS SHIPPED A REAL DEFECT, and the
+# second half of that is recorded HERE and nowhere else: an earlier edition of
+# `scripts/test-platform-health-probe.sh` went out carrying the fail-open
+# `| grep -q` its own header records, and it got that far because both of its
+# files were still untracked while preflight ran green over them — which that
+# header does not say. `git add` a new script BEFORE trusting a green preflight.
 #
 # It reads two tracked files. No gh, no network, no repo mutation.
 set -uo pipefail

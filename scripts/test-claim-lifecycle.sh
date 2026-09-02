@@ -83,8 +83,9 @@
 # guard's wording is satisfied by a guard that no longer runs, and the failure
 # this gate exists to catch is an assignee stripped from a human's issue —
 # which is a WRITE, so a write is what gets measured. It also means no mutation
-# here can be the tautological kind this repo's CLAUDE.md warns about: each is
-# caught by the edit it causes, never by a literal an assertion greps for.
+# here can be the tautological kind `scripts/test-sentry-verification.sh`'s
+# header warns about: each is caught by the edit it causes, never by a literal
+# an assertion greps for.
 # Section 10 is the ONE source-level check, and it reads `SKILL.md` rather than
 # the guard — it exists so the shipped documentation cannot drift away from a
 # subcommand that now performs an assignee write (the #220 class).

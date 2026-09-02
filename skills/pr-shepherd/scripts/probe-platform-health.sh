@@ -459,8 +459,10 @@ if [ -n "$HEAD" ]; then
     # element at MAX_ARG_STRLEN = 131,072 bytes, so `jq -n --argjson runs
     # "$runs_raw"` died at roughly the EIGHTH run on the branch — the run
     # comparison was dead on every real repo, and dead hardest where the
-    # intersection baseline is richest. CLAUDE.md records the same lesson from
-    # #263: the cap existed for argv, so the payload travels by file.
+    # intersection baseline is richest.
+    # `skills/github-issues/scripts/verify-issue-refs.sh` records the same
+    # lesson from #263: the cap existed for argv, so the payload travels by
+    # file.
     rc=0
     derived="$(jq --arg head "$HEAD" '
       # Only HEAD-TRIGGERED events are comparable: a workflow_dispatch or
@@ -604,8 +606,8 @@ elif [ "$n_fp_errors" -gt 0 ]; then
   # A call that failed is not degradation — but it is not a clean read either:
   # the probe cannot certify what it could not fetch. Without this the ledger
   # was decorative, and a run with BOTH gh api calls failing and a clean rollup
-  # reported `healthy`, which is what this file, SKILL.md and CLAUDE.md all
-  # already said it must not do.
+  # reported `healthy`, which is what this file and SKILL.md both already said
+  # it must not do.
   SELF="not_measured"
   [ -n "$SELF_REASON" ] || SELF_REASON="probe_errors_present"
 elif [ "$RUN_CHECK" = "ran" ]; then

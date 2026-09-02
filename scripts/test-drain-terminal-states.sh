@@ -144,9 +144,8 @@
 #   "BYTE-IDENTICAL" WOULD OVERSTATE IT. The comparison runs after `flat()`, so
 #   it is identity up to whitespace: a re-wrap passes, a reword does not. The
 #   inventory keeps each opener's first words only, so it is identity up to
-#   those. Both claims are stated that way here, in preflight's gate list and in
-#   CLAUDE.md, because the weaker true claim is worth more than the stronger
-#   false one.
+#   those. Both claims are stated that way here and in preflight's gate list,
+#   because the weaker true claim is worth more than the stronger false one.
 #
 #   KNOWN LIMITS, stated rather than patched, and each one measured.
 #   (1) §2's AND §4's REMAINING BULLETS, §6 AND GUARDRAILS ARE INVENTORIED,
@@ -192,8 +191,9 @@
 # This repo hard-wraps, so a forbidden phrase routinely straddles a line break
 # and a line-scoped grep reads it as absent — a FALSE PASS. Emphasis is the same
 # defect one layer in: `Ready **non-empty**` is the same instruction as `Ready
-# non-empty` and was measured passing the plain-flatten veto. CLAUDE.md records
-# this repo paying for exactly that once already, on `**`sentry:`**`.
+# non-empty` and was measured passing the plain-flatten veto.
+# `scripts/test-sentry-verification.sh`'s header records this repo paying for
+# exactly that once already, on `**`sentry:`**`.
 #   The stripping is applied to the HAYSTACK only, so the second arm is inert
 #   whenever the PATTERN itself contains `*`, `_` or a backtick — which is
 #   correct rather than a gap (a pattern that spells emphasis is asking about
@@ -1054,15 +1054,16 @@ assert_in "$sec2_flat" 'admits DRAIN COMPLETE, so the loop self-cancels with the
 # these catch a literal DELETION and an inversion that DELETES the pinned form
 # with it; each pins one surface form, so a contradiction added BESIDE the
 # pinned form walks past (`ONE redispatch` is also case-sensitive).
-# WIDENING THE GREPS IS THE FIX TO REFUSE — CLAUDE.md records this repo losing
-# that argument every review round, and a veto that works needs the forward
-# segmentation pass a different issue owns. The two must-not-exists are
-# LITERAL-DELETION checks against the pre-fix wording, not polarity judgements,
-# which is the posture test-audit-lost-reviewer.sh states. The `surface and
-# hold` veto does not collide with this bullet's own "A bare surface-and-hold
-# is what this replaces": that phrase is hyphenated, measured, and the hyphens
-# survive `emph_strip`. Rewording it to the spaced form is a loud false red,
-# which is the direction this repo prefers.
+# WIDENING THE GREPS IS THE FIX TO REFUSE — the header of
+# `scripts/test-sentry-verification.sh` records this repo losing that argument
+# every review round, three veto generations deep, and a veto that works needs
+# the forward segmentation pass a different issue owns. The two must-not-exists
+# are LITERAL-DELETION checks against the pre-fix wording, not polarity
+# judgements, which is the posture test-audit-lost-reviewer.sh states. The
+# `surface and hold` veto does not collide with this bullet's own "A bare
+# surface-and-hold is what this replaces": that phrase is hyphenated, measured,
+# and the hyphens survive `emph_strip`. Rewording it to the spaced form is a
+# loud false red, which is the direction this repo prefers.
 section conflicting "a CONFLICTING PR is demoted on sight, so it cannot hold in-flight open forever"
 
 # The stop literal is DUPLICATED from `conflicting_raw`'s declaration above, and
@@ -1392,8 +1393,9 @@ assert_in "$claim_require" 'requires --comment' \
 # Measured: deleting the exit alone — so `block` PRINTS the warning and then
 # strips `ready`+`in-progress` and adds `blocked` with no comment — left the run
 # at all green. An assertion written by grepping the literal a mutation deletes
-# is the tautology CLAUDE.md says this repo loses to every round, and it was
-# reintroduced here in the assertion added to close exactly that (#290).
+# is the tautology `scripts/test-sentry-verification.sh`'s header records this
+# repo losing to every round, and it was reintroduced here in the assertion
+# added to close exactly that (#290).
 assert_has "$claim_require" 'exit 64' \
     "the require-comment guard EXITS, rather than printing and continuing"
 # The third fact, and the only thing withholding a just-demoted PR from the

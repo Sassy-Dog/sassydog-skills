@@ -169,15 +169,16 @@
 #       acceptance item of #284 in its own right, and a gate that assumes
 #       another gate is still doing its job is how a two-orchestrator invariant
 #       goes dark in the first place. Drop it only together with that argument.
-#   (2) `references/github-issue-ops.md` and `assessment-rubric.md` are unread,
-#       and BOTH are currently known to disagree with what this gate pins:
-#       github-issue-ops.md's Epic template has no coverage slot and its "Order
-#       of operations" ends before Phase 5's coverage block, and
-#       assessment-rubric.md's 1-10 score table has no abstain value, so a dark
-#       `security` domain has no compliant score. That is issue #294, split out
-#       rather than folded in — #284's acceptance is preview-scoped and neither
-#       file is in its touch-set. Until #294 lands, this gate pins the PREVIEW
-#       half only, and SKILL.md Phase 5 says so in as many words.
+#   (2) `references/github-issue-ops.md` and `assessment-rubric.md` ARE read,
+#       and this limit is the record of why they were not at first. #284's
+#       acceptance was preview-scoped and neither file was in its touch-set, so
+#       its first edition pinned the PREVIEW half alone while both files still
+#       disagreed with it — the Epic template had no coverage slot and the 1-10
+#       score table had no abstain value, so a dark `security` domain had no
+#       compliant score. Issue #294 closed both and the `durable` section pins
+#       them here. WHAT IS STILL UNREAD IS THE REST OF EITHER FILE: this gate
+#       holds the coverage contract in them and nothing else, so an unrelated
+#       rewrite of either is invisible from here.
 #   (6) TWO COORDINATED EDITS RETIRE A WHOLE LAYER AT EXIT 0. Deleting an
 #       assertion section AND its `SECTIONS` entry together shrinks the floor by
 #       exactly what the deletion removed — measured on the `residue` section,
@@ -204,8 +205,10 @@
 #   (5) Markdownlint stays load-bearing for a malformed table (MD055/MD056),
 #       which this gate reads as content rather than as structure.
 #
-# Three tracked files read, one of them for a single fact, plus a listing of
-# `agents/`. No gh, no network, no repo mutation.
+# Five tracked files read — `skills/assess-it/SKILL.md`, its
+# `orchestration.md`, `references/github-issue-ops.md` and
+# `assessment-rubric.md`, plus `agents/pr-review-orchestrator.md` for its single
+# fact — and a listing of `agents/`. No gh, no network, no repo mutation.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-audit-lost-reviewer.sh

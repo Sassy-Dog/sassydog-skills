@@ -552,6 +552,13 @@ Two mechanics back the rule up, and neither replaces it:
   regenerates frontmatter, so an offending `gotcha_summary` is rewritten with the user, not
   silently preserved.
 
+**Both mechanics are a deliberate interim, not the intended end state.** The deeper fix is moving
+`gotcha_summary` out of frontmatter and into the `##` prose lane, where a human curator already
+maintains everything else that cannot be re-derived — and it is deliberately separate work, because
+it is a format migration reaching every consumer config, which this org rolls out by filing an issue
+per repo rather than as a direct cross-repo sweep. Read the verifier as the backstop it is: do not
+take it for the design, and do not "just move the field" as a tidy-up inside one repo.
+
 ### `take-it.md`
 
 ```yaml
