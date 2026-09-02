@@ -91,9 +91,9 @@ update` is not a plugin update", which is where the content check lives).
 committed value lags, by design and by a wide margin.** Content lands on
 `main` on every merge; the manifest moves only when someone runs the stamp
 script and commits the result. In practice that is not confined to release
-PRs: the most recent stamp rode a *feature* PR (`98d5d42`, `2026.8.96` →
-`2026.8.100`), so a reader hunting for the last `chore(release):` commit finds
-the wrong one and computes the wrong gap. To find the last stamp reproducibly, search the
+PRs: the `2026.8.96` → `2026.8.100` stamp rode a *feature* PR (`98d5d42`), so
+a reader hunting for the last `chore(release):` commit can land on the wrong
+one and compute the wrong gap. To find the last stamp reproducibly, search the
 version *line* rather than the file — `git log -1 -G'"version":' --
 .claude-plugin/plugin.json`. Plain `git log -1 -- <path>` returns the last
 commit that merely touched the manifest, which is not the same thing:
