@@ -158,8 +158,9 @@
 #       mutation ran the gate ALL GREEN, so the one deliberate carve-out in the
 #       pathspec was pinned by nothing while reading as measured.
 #
-# ADDING A FIXTURE INVALIDATES THIS RECORD. Every M-entry above is a red-set
-# COUNT over the whole fixture table, so a new fixture silently changes the
+# ADDING, CHANGING OR REMOVING A FIXTURE INVALIDATES THIS RECORD. Every
+# M-entry above is a red-set COUNT over the whole fixture table, so a new or
+# altered fixture silently changes the
 # arithmetic of every mutation it happens to be sensitive to — and nothing here
 # re-derives those counts, which is exactly why they are written down. It has
 # bitten once in this PR, and the one member is M8: CLAUDEMD was added to close
@@ -321,13 +322,22 @@ printf '# ADR 1\n\nposthog was considered. sentry.init was not wired.\n' > "$DOC
 commit_all "$DOCS" docs-only
 
 # The root CLAUDE.md ALONE — and literally alone: no `neutral_src` here, unlike
-# CONFIG, HOOK, LOCK and NESTED. There it stops a `false` verdict passing
-# because the tree had nothing to search; CLAUDEMD expects `true`, so that
-# justification does not carry over. It had one anyway, with a header claiming
-# it "must stay". Measured: deleting it leaves the baseline green, M8 at 4 red
-# with identical members, and M10 at 1 red on this fixture — nothing depended
-# on it. It is gone, and this sentence is true again. DOCS cannot pin the root-CLAUDE.md decision even
-# though it carries the file: its README.md and docs/adr-001.md keep it at
+# CONFIG, HOOK and LOCK. There it stops a `false` verdict passing because the
+# tree had nothing to search; CLAUDEMD expects `true`, so that justification
+# does not carry over. NESTED was in this list for one round and should never
+# have been: it expects `true|true` too (see its own `expect`), so the same
+# test that excluded CLAUDEMD excludes it. Its `neutral_src` went with this
+# edit — measured, baseline green and M8 still 4 red with DOCS, CLAUDEMD and
+# NESTED all present, because what those mutations reach in NESTED is its
+# `apps/web/.claude/sassy-dog/survey-work.md`, not a neutral source file.
+#
+# CLAUDEMD had a `neutral_src` anyway, with a header claiming it "must stay".
+# Measured: deleting it leaves the baseline green, M8 at 4 red with identical
+# members, and M10 at 1 red on this fixture — nothing depended on it. It is
+# gone, and this sentence is true again.
+#
+# DOCS cannot pin the root-CLAUDE.md decision even though it carries the file:
+# its README.md and docs/adr-001.md keep it at
 # `true|true` under an added `':(exclude)CLAUDE.md'`, so the claim would read as
 # measured while nothing measured it. This fixture is the only place it IS
 # measured — see M10.
@@ -350,7 +360,7 @@ NESTED="$WORK/nested"
 mkrepo "$NESTED"
 mkdir -p "$NESTED/apps/web"
 write_config "$NESTED/apps/web"
-neutral_src "$NESTED"; commit_all "$NESTED" nested
+commit_all "$NESTED" nested
 
 # --- mock gh -------------------------------------------------------------------
 # The probe refuses to start without gh on PATH, and treats every gh failure as a
