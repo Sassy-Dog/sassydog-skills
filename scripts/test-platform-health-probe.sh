@@ -207,10 +207,12 @@
 #   against the `for` statements rather than against this prose:
 #     REFUSAL grounds, in the failure-shape loop — `badurl`, `hostpath`,
 #       `threeseg`, `badchar`, `otherhost`, `emptyseg`, `oneseg`. Each must
-#       yield exit 0, a verdict, and `repo_lookup_failed`. `badurl` is the
-#       exception to the heading: rule (1) is MASKED, so reverting it reddens
-#       nothing (see below). It earns its place elsewhere — it is the only
-#       fixture reaching the credential-leak assertion.
+#       yield exit 0, a verdict, and `repo_lookup_failed` — `badurl` included;
+#       it satisfies THIS heading fully. What it excepts is the claim above
+#       that these fixtures PIN the parser's strictness: rule (1) is MASKED, so
+#       reverting it reddens nothing. It earns its place as the only fixture
+#       reaching the credential-leak assertion — which covers ONE refusal
+#       branch, not all of them.
 #     A TRANSFORMATION, in the SUCCESS loop — `trailing`. It belongs there and
 #       not here: the bug it pins is a WORKING remote being refused, so its
 #       assertion is a correct `.repo`, not a refusal. Do not "align" it into
@@ -231,8 +233,9 @@
 #     two verdict loops it belongs to.
 #   The built-message, the loops and the `url_pin_bad` read-back have never
 #   been the ones missed; the enumeration and the prose comment always are.)
-#   WHAT SHIPPED UNCASED. This sentence has now been wrong twice, each time by
-#   asserting a closed set nobody had enumerated against the code, so it is
+#   WHAT SHIPPED UNCASED. This sentence has now been wrong FOUR times (shas
+#   below), each time by asserting a closed set nobody had enumerated against
+#   the code, so it is
 #   written as a LIST rather than a count. Bullets (1)-(6) are DERIVED — they
 #   are the `return 0` statements in `repo_from_remote`, read off the source,
 #   not recalled from which ones have fixtures. Bullet (7) is NOT one of them
@@ -252,9 +255,9 @@
 #                                trailing-slash-before-`.git` order — two
 #                                rewrites, cased together as one bullet below.
 #                                Other rewrites exist and are NOT here — the
-#                                `git@github.com:` scp normalization
-#                                (probe:577), the `github.com/` prefix strip
-#                                (:580). The criterion is NOT "refusal
+#                                scheme strip `${u#*://}` (probe:567), the
+#                                `git@github.com:` scp normalization (:577),
+#                                the `github.com/` prefix strip (:580). The criterion is NOT "refusal
 #                                grounds": :577 and (7)'s userinfo strip are
 #                                SIBLING ARMS OF ONE `case`, so that would not
 #                                separate them. It is coverage. Measured:
@@ -270,10 +273,21 @@
 #   Every other rule shipped with no case at all, each found only by deleting
 #   it and watching this gate stay green: (4) and (6) at `2d40389`
 #   (`all pass`, 376); (2) and (3) at `ed66e95` (`all pass`, 390); (5) at
-#   `7ed60c6` (`all pass`, 404). Two prior editions of this sentence carried a
-#   count — `ed66e95`'s "four grounds" and `7ed60c6`'s "SIX rules" — and both
-#   were guesses that read as inventories, and both were short. Bullets (1)-(6)
-#   above are the first written by reading the `case` statements.
+#   `7ed60c6` (`all pass`, 404).
+#   FOUR prior editions of this sentence carried a count, derived by `git show`
+#   rather than recalled: `ed66e95` "refuses on four grounds", `66e0147`
+#   "carries four rules", `7ed60c6` "carries SIX rules", `17cb16b`/`7ed02bf`
+#   "carries SEVEN rules". The first three were SHORT. The last was LONG — and
+#   worse, claimed to be derived from the `return 0` sites when there are six. Bullets (1)-(6) above are the first actually written by reading
+#   the `case` statements.
+#   THE EDITION THAT WROTE "two prior editions" IS WHY THIS ONE CITES SHAS. It
+#   dropped `66e0147`, and dropped its own predecessor's "SEVEN" — the entry
+#   the round before had just disproved — because the qualifier "both were
+#   short" excluded the long one silently. It did that on a review nit that was
+#   itself wrong: the nit said an earlier tally had a false member, when that
+#   tally's membership was right and only its ORDER was wrong. A correction was
+#   applied without being re-derived, in the one paragraph of this file whose
+#   whole subject is claims nobody re-derived.
 #   AS OF `1e7b085` — the first edition carrying the userinfo strip and the
 #   slash order at all; NOT `f38f501`, which predates both — reverting any one
 #   of the four rules then cased ran this gate to `all pass (364 assertions)`,
@@ -818,9 +832,9 @@ make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_M
 # the file makes about itself with nothing behind it.
 make_cwd "$CWD_THREESEG"  "https://github.com/mock-org/mock-repo/extra"   || CWD_MISSING="$CWD_MISSING threeseg"
 make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD_MISSING="$CWD_MISSING badchar"
-# TWO MORE RULES, found by the round that checked whether "four rules" was a
-# closed set. It was not — the header lists more, and a later round found one
-# of those still uncased below. These
+# TWO MORE RULES, found by the round that checked whether `66e0147`'s "four
+# rules" was a closed set. It was not — the header lists more, and a later
+# round found one of those still uncased below. These
 # two were uncased with the gate at `all pass (390 assertions)`, exit 0, on
 # either revert:
 #   - the empty/leading segment arm. "The segment shape" is TWO rules, and
