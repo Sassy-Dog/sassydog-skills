@@ -247,7 +247,7 @@
 #   DO NOT SHORTEN THAT QUOTATION. All four editions DID name members —
 #   `ed66e95` in the red-set bullets under "refuses on four grounds",
 #   `66e0147` inline, `7ed60c6` and `17cb16b` as explicit lists — so a form of
-#   it ending at "enumerated" is false of three of the four it indicts. The
+#   it ending at "enumerated" is false of ALL FOUR it indicts. The
 #   three words "against the code" carry the whole claim: the split is WHERE
 #   the members came from. The first three read them off recall rather than
 #   off every `return 0`, so each came up short — the same defect the "first
@@ -906,12 +906,12 @@ make_cwd "$CWD_EMPTYSEG"  "https://github.com//mock-repo"                  || CW
 # `all pass (404 assertions)`, exit 0. Cased since `17cb16b`: deleting it now
 # goes 6 red on `oneseg`. The sha is not decoration — the unanchored form of
 # this sentence outlived the fix that falsified it. Its consequence is not a
-# wrong slug: it is the EXIT-1-WITH-NO-VERDICT path #314 exists to abolish. Measured on a checkout whose origin is
-# `https://github.com/mock-repo` — stock: exit 0, verdict `unknown`, detail
-# naming the input; arm deleted: exit 1, EMPTY stdout,
-# `error: repo must be owner/name, got: mock-repo`. The probe says as much
-# about itself at `:644-645` — "a derived slug already satisfies this BY
-# CONSTRUCTION" — and this arm IS that construction.
+# wrong slug: it is the EXIT-1-WITH-NO-VERDICT path #314 exists to abolish.
+# Measured on a checkout whose origin is `https://github.com/mock-repo` —
+# stock: exit 0, verdict `unknown`, detail naming the input; arm deleted:
+# exit 1, EMPTY stdout, `error: repo must be owner/name, got: mock-repo`.
+# The probe says as much about itself at `:644-645` — "a derived slug already
+# satisfies this BY CONSTRUCTION" — and this arm IS that construction.
 make_cwd "$CWD_ONESEG"    "https://github.com/mock-repo"                    || CWD_MISSING="$CWD_MISSING oneseg"
 # `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
 # pointing at a directory that is not there is what a moved worktree or a
