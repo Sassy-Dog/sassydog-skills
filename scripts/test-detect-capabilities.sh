@@ -150,15 +150,6 @@
 #       below, the first leaves the config fixture UNTRACKED — property 2 then
 #       passes because there is nothing to find — and the second fails the
 #       fixture build.
-#   M11 add `':(exclude)**/.claude/**'` BESIDE the root form -> 1 red: NESTED
-#       reads `false|false`. The ROOT-ANCHORING decision had a fixture and no
-#       mutation, which is the gap M10 closes for the other carve-out: NESTED
-#       asserts that `apps/web/.claude/**` still matches, and until this entry
-#       nothing here grew the pathspec to check that the assertion could fail.
-#       Note the ADDING form, not the replacing one — respelling the root form
-#       to `**/.claude/**` is 6 red, because it also trips property 5's
-#       literal-pathspec guard, and that would measure the spelling pin rather
-#       than the anchoring.
 #   M10 add `':(exclude)CLAUDE.md'` to both lines            -> 1 red: CLAUDEMD
 #       reads `false|false`. DOCS stays GREEN — it carries a root `CLAUDE.md`
 #       but also a `README.md` and a `docs/adr-001.md`, either of which holds
@@ -166,6 +157,21 @@
 #       before it, the header's root-`CLAUDE.md` claim cited DOCS and this
 #       mutation ran the gate ALL GREEN, so the one deliberate carve-out in the
 #       pathspec was pinned by nothing while reading as measured.
+#   M11 add `':(exclude)**/.claude/**'` BESIDE the root form -> 1 red: NESTED
+#       reads `false|false`. What this closes, stated narrowly because the
+#       loose version was wrong: NESTED was already in M5's and M8's red sets,
+#       so the anchoring assertion demonstrably COULD fail before this entry —
+#       but incidentally, M8 reaching it because its file is markdown. M11 is
+#       the first mutation aimed at the anchoring ITSELF, growing the pathspec
+#       toward nested `.claude/`.
+#       Use the ADDING form. REPLACING the root form with `**/.claude/**` is
+#       6 red — the strip guard, CONFIG `true|true`, HOOK `true|true`, NESTED
+#       `false|false`, and property 5 twice — and the reason is not the
+#       spelling pin: `**/.claude/**` does not match a ROOT-level `.claude/`
+#       under default pathspec globbing, so CONFIG and HOOK regress to
+#       `true|true`, which is issue #317 itself. It is the wrong probe for
+#       anchoring because it breaks the root case, not because it reddens a
+#       shape guard.
 #
 # ADDING, CHANGING OR REMOVING A FIXTURE INVALIDATES THIS RECORD. Every
 # M-entry above is a red-set COUNT over the whole fixture table, so a new or
@@ -330,14 +336,19 @@ commit_all "$DOCS" docs-only
 # needs.
 #
 # THERE IS NO `neutral_src` HELPER ANY MORE, and the reason is worth keeping,
-# because three successive rounds of review went into finding it. Four fixtures
-# carried a call writing `src/app.ts` (`export const noop = 1;`), justified in
-# this header as stopping a `false` verdict from passing on a tree with nothing
-# to search. It never did that. The file matches NEITHER grep pattern, so it
+# because three successive rounds of review went into finding it. Three
+# fixtures still carried a call when this commit ran — CONFIG, HOOK and LOCK —
+# each writing `src/app.ts` (`export const noop = 1;`), justified in this
+# header as stopping a `false` verdict from passing on a tree with nothing to
+# search. It never did that. The file matches NEITHER grep pattern, so it
 # cannot distinguish "searched and missed" from "searched nothing" at any
-# assertion in this gate. Measured, with all four calls deleted: baseline
-# green, and M1 4 / M2 4 / M3 5 / M4 3 / M5 2 / M6 1 / M7 3 / M8 4 / M9 0 /
-# M10 1 — every count and every red-set member byte-identical to the record.
+# assertion in this gate. (CLAUDEMD and NESTED carried one too and lost it in
+# the two commits before this, each for the same reason found one fixture at a
+# time — which is why the count here is three and not five.) Measured, with
+# all three calls and the definition deleted: baseline green, and M1 4 / M2 4 /
+# M3 5 / M4 3 / M5 2 / M6 1 / M7 3 / M8 4 / M9 0 / M10 1 — every count and
+# every red-set member byte-identical to the record. (M11 is absent from that
+# list because it did not exist before the deletion.)
 #
 # What actually supplies the non-vacuity the helper claimed: PROPERTY 1 for
 # CONFIG and HOOK (it reports a self-match fixture that stopped carrying the
