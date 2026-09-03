@@ -60,13 +60,13 @@
 #   2. CONFIG and HOOK each detect `posthog: false` and `sentry: false`. This is
 #      #317 itself; before the fix both were `true`.
 #   3. SOURCE (a real SDK in `src/`), DOCS (root `CLAUDE.md`, `README.md`,
-#      `docs/`) and CLAUDEMD (a root `CLAUDE.md` as the SOLE OCCURRENCE of
-#      either string — it carries a neutral `src/` too, which must stay) each
+#      `docs/`) and CLAUDEMD (a root `CLAUDE.md` and NOTHING else) each
 #      detect `true` for both. DOCS is not decoration: the caveat shipped in
 #      `interview.md` §2c and `update-mode.md` PROMISES that a repo which merely
 #      documents PostHog still trips detection, and DOCS is the fixture carrying
-#      the `README.md` path `interview.md` §2c actually names — `update-mode.md`
-#      names no path at all — plus a `docs/` file neither mentions. What it is
+#      the README that `interview.md` §2c actually names (bare, no extension;
+#      the fixture file is `README.md`) — `update-mode.md` names no path at
+#      all — plus a `docs/` file neither mentions. What it is
 #      NOT is the only thing standing between a `':(exclude)*.md'` and a green
 #      run — and that was never true,
 #      not merely "no longer" true. MEASURED against the pre-CLAUDEMD fixture
@@ -320,7 +320,13 @@ printf '# Product\n\nNo posthog, no sentry.init.\n' > "$DOCS/README.md"
 printf '# ADR 1\n\nposthog was considered. sentry.init was not wired.\n' > "$DOCS/docs/adr-001.md"
 commit_all "$DOCS" docs-only
 
-# The root CLAUDE.md ALONE. DOCS cannot pin the root-CLAUDE.md decision even
+# The root CLAUDE.md ALONE — and literally alone: no `neutral_src` here, unlike
+# CONFIG, HOOK, LOCK and NESTED. There it stops a `false` verdict passing
+# because the tree had nothing to search; CLAUDEMD expects `true`, so that
+# justification does not carry over. It had one anyway, with a header claiming
+# it "must stay". Measured: deleting it leaves the baseline green, M8 at 4 red
+# with identical members, and M10 at 1 red on this fixture — nothing depended
+# on it. It is gone, and this sentence is true again. DOCS cannot pin the root-CLAUDE.md decision even
 # though it carries the file: its README.md and docs/adr-001.md keep it at
 # `true|true` under an added `':(exclude)CLAUDE.md'`, so the claim would read as
 # measured while nothing measured it. This fixture is the only place it IS
@@ -328,7 +334,7 @@ commit_all "$DOCS" docs-only
 CLAUDEMD="$WORK/claude-md-only"
 mkrepo "$CLAUDEMD"
 printf '# Repo guide\n\nWe evaluated posthog and rejected it; sentry.init lives nowhere here.\n' > "$CLAUDEMD/CLAUDE.md"
-neutral_src "$CLAUDEMD"; commit_all "$CLAUDEMD" claude-md-only
+commit_all "$CLAUDEMD" claude-md-only
 
 BOTH="$WORK/both"
 mkrepo "$BOTH"; write_config "$BOTH"; write_source "$BOTH"; commit_all "$BOTH" both

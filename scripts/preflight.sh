@@ -999,9 +999,8 @@
 #      pre-existing `*.lock*` pathspec survived the edit; and nested-`.claude`
 #      pins the pathspec's ROOT-ANCHORING as a recorded decision rather than an
 #      accident. Two markdown fixtures, deliberately: docs-only carries the
-#      `README.md` path `interview.md` §2c names (`update-mode.md` names no
-#      path), plus a `docs/` file neither caveat mentions, and claude-md-only is
-#      the
+#      README that `interview.md` §2c names — bare, no extension — plus a
+#      `docs/` file neither caveat mentions, and claude-md-only is the
 #      only fixture whose sole occurrence is the root `CLAUDE.md`, which is the
 #      one carve-out in the pathspec and was pinned by nothing until it landed.
 #      Fixture adequacy is its own property and runs PER self-match fixture —
