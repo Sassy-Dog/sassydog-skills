@@ -230,25 +230,37 @@
 #     the `CWD_*` declaration · the `make_cwd` call · the header enumeration
 #     above · the per-loop list below · the prose comment beside the fixtures ·
 #     the built-message `ok` line · the `url_pin_bad` loop · whichever of the
-#     two verdict loops it belongs to.
+#     two verdict loops it belongs to · bullet (7)'s two SPANNING exclusion
+#     measurements, the scheme strip (probe:567) and the `github.com/` prefix
+#     strip (:580), whose red counts move when a fixture lands in a family
+#     they cross.
+#   Bullet (7)'s THIRD exclusion measurement is not on that list and must not
+#   be added to it: the scp normalization (:577) names `[ssh]` alone
+#   (measured: 3 red, all on `[ssh]`), so it moves only for another
+#   `git@github.com:` fixture.
 #   The built-message, the loops and the `url_pin_bad` read-back have never
-#   been the ones missed; the enumeration and the prose comment always are.
-#   One more co-moves: bullet (7)'s three exclusion measurements span fixtures
-#   rather than naming one each, so a fixture insertion changes those counts
-#   too.)
+#   been the ones missed; the enumeration and the prose comment always are.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong FOUR times, and NOT
 #   all the same way — the shas and per-edition causes are below, because the
 #   edition that wrote "each time by asserting a closed set nobody had
-#   enumerated" was itself wrong about its own fourth member. Three asserted an
-#   unenumerated closed set; the fourth derived its list correctly and
-#   miscounted it. It is written as a LIST rather than a count.
-#   Bullets (1)-(6) are DERIVED — they
-#   are the `return 0` statements in `repo_from_remote`, read off the source,
-#   not recalled from which ones have fixtures. Bullet (7) is NOT one of them
-#   and is listed anyway: it is where the rewrites go, and it is here because
-#   both of its members shipped uncased. Say that plainly rather than implying
-#   one criterion produced the whole list — an earlier edition did imply it,
-#   and used it to justify an exclusion it cannot actually justify.
+#   enumerated against the code" was itself wrong about its own fourth member.
+#   DO NOT SHORTEN THAT QUOTATION. All four editions DID name members —
+#   `ed66e95` in the red-set bullets under "refuses on four grounds",
+#   `66e0147` inline, `7ed60c6` and `17cb16b` as explicit lists — so a form of
+#   it ending at "enumerated" is false of three of the four it indicts. The
+#   three words "against the code" carry the whole claim: the split is WHERE
+#   the members came from. The first three read them off recall rather than
+#   off every `return 0`, so each came up short — the same defect the "first
+#   three were SHORT" sentence below records, not a second one. The fourth
+#   derived (1)-(6) off the source correctly and then mis-described the list
+#   it had derived; that failure is spelled out below too.
+#   It is written as a LIST rather than a count. Bullets (1)-(6) are DERIVED —
+#   they are the `return 0` statements in `repo_from_remote`, read off the
+#   source, not recalled from which ones have fixtures. Bullet (7) is NOT one
+#   of them and is listed anyway: it is where the rewrites go, and it is here
+#   because both of its members shipped uncased. Say that plainly rather than
+#   implying one criterion produced the whole list — an earlier edition did
+#   imply it, and used it to justify an exclusion it cannot actually justify.
 #   The rules its own comments call load-bearing:
 #     REFUSAL grounds        (1) an unrecognised URL form (the scheme `*)` arm)
 #                            (2) a host that is not exactly `github.com`
@@ -273,9 +285,13 @@
 #                                OTHER way — deriving the wrong slug
 #                                `github.com/mock-repo` and reporting verdict
 #                                `healthy`, the outcome this header exists to
-#                                refuse. Unlike every count below, these three
-#                                span fixtures rather than naming one each, so
-#                                a fixture insertion moves them.
+#                                refuse. TWO of these three span fixtures
+#                                rather than naming one each — the scheme
+#                                strip and the prefix strip — so a fixture
+#                                landing in a family they cross moves them.
+#                                The scp figure does NOT: it names `[ssh]`
+#                                alone, like every count below, and moves only
+#                                for another `git@github.com:` fixture.
 #                                The criterion is NOT "refusal grounds":
 #                                :577 and (7)'s userinfo strip are
 #                                SIBLING ARMS OF ONE `case`, so that would not
@@ -283,9 +299,12 @@
 #                                rewrites are covered too. It is HISTORY: all
 #                                three excluded rewrites were already cased at
 #                                `f38f501` by the `[ssh]`/`[https]`/
-#                                `[sshproto]` fixtures, while (7)'s two were
-#                                uncased until `2d40389`, which is why only
-#                                those two are recorded here.
+#                                `[sshproto]` fixtures — the scheme strip in
+#                                its two-arm predecessor form, `${u#https://}`
+#                                / `${u#ssh://}` (`f38f501:553-554`), not the
+#                                `${u#*://}` it is today — while (7)'s two
+#                                were uncased until `2d40389`, which is why
+#                                only those two are recorded here.
 #   (1) is present as a fixture (`CWD_BADURL`, from the parser's first commit
 #   `f38f501`) but is NOT independently mutation-detectable: deleting the
 #   scheme `*)` arm also runs this gate to `all pass`, because `p` stays empty
@@ -304,10 +323,10 @@
 #   sites, read off the source, and this file's (1)-(6) are still that
 #   derivation. Its defect was a COUNT-VS-DERIVATION MISMATCH: it wrote
 #   "DERIVED by enumerating every `return 0`" of a list it then called
-#   "carries SEVEN rules" — quoted as two clauses because they sit three lines
-#   apart, and every other quotation here is verbatim — when bullet (7) is a
-#   transformations entry and not a `return 0` at all. So
-#   do not read (1)-(6) as first written here — they were already right.
+#   "carries SEVEN rules" — quoted as two clauses because intervening prose
+#   separates them, and both are verbatim — when bullet (7) is a
+#   transformations entry and not a `return 0` at all. So do not read (1)-(6)
+#   as first written here — they were already right.
 #   THE EDITION THAT WROTE "two prior editions" IS WHY THIS ONE CITES SHAS. It
 #   dropped `66e0147`, and dropped its own predecessor's "SEVEN" — the entry
 #   the round before had just disproved — because the qualifier "both were
@@ -883,9 +902,11 @@ make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD
 make_cwd "$CWD_OTHERHOST" "https://gitlab.com/mock-org/mock-repo"          || CWD_MISSING="$CWD_MISSING otherhost"
 make_cwd "$CWD_EMPTYSEG"  "https://github.com//mock-repo"                  || CWD_MISSING="$CWD_MISSING emptyseg"
 # RULE (5) — the `*)` fallback of the segment case, and the one whose
-# absence is worst. Deleting it ran the gate to `all pass (404 assertions)`,
-# exit 0, and its consequence is not a wrong slug: it is the EXIT-1-WITH-NO-
-# VERDICT path #314 exists to abolish. Measured on a checkout whose origin is
+# absence is worst. Uncased at `7ed60c6`: deleting it ran THAT gate to
+# `all pass (404 assertions)`, exit 0. Cased since `17cb16b`: deleting it now
+# goes 6 red on `oneseg`. The sha is not decoration — the unanchored form of
+# this sentence outlived the fix that falsified it. Its consequence is not a
+# wrong slug: it is the EXIT-1-WITH-NO-VERDICT path #314 exists to abolish. Measured on a checkout whose origin is
 # `https://github.com/mock-repo` — stock: exit 0, verdict `unknown`, detail
 # naming the input; arm deleted: exit 1, EMPTY stdout,
 # `error: repo must be owner/name, got: mock-repo`. The probe says as much
