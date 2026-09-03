@@ -60,16 +60,22 @@
 #   2. CONFIG and HOOK each detect `posthog: false` and `sentry: false`. This is
 #      #317 itself; before the fix both were `true`.
 #   3. SOURCE (a real SDK in `src/`), DOCS (root `CLAUDE.md`, `README.md`,
-#      `docs/`) and CLAUDEMD (a root `CLAUDE.md` and NOTHING else) each detect
-#      `true` for both. DOCS is not decoration: the caveat shipped in
+#      `docs/`) and CLAUDEMD (a root `CLAUDE.md` as the SOLE OCCURRENCE of
+#      either string — it carries a neutral `src/` too, which must stay) each
+#      detect `true` for both. DOCS is not decoration: the caveat shipped in
 #      `interview.md` §2c and `update-mode.md` PROMISES that a repo which merely
 #      documents PostHog still trips detection, and DOCS is the fixture carrying
-#      the `README.md` path that caveat actually names, plus a `docs/` file
-#      neither caveat mentions. What it is NOT is the only thing standing
-#      between a `':(exclude)*.md'` and a green run — and that was never true,
-#      not merely "no longer" true. MEASURED at 162381c, before CLAUDEMD
-#      existed: M8 read 3 red and NESTED was already one of them, so deleting
-#      the DOCS assertion from that tree still left 2 red. DOCS was not even
+#      the `README.md` path `interview.md` §2c actually names — `update-mode.md`
+#      names no path at all — plus a `docs/` file neither mentions. What it is
+#      NOT is the only thing standing between a `':(exclude)*.md'` and a green
+#      run — and that was never true,
+#      not merely "no longer" true. MEASURED against the pre-CLAUDEMD fixture
+#      table (CONFIG, HOOK, SOURCE, DOCS, BOTH, LOCK, NESTED — `162381c` on the
+#      branch, which squash-merges away): M8 read 3 red and NESTED was already
+#      one of them, so deleting the DOCS assertion from that tree still left
+#      2 red. Note that tree's OWN M8 entry claimed a DOCS-less run would leave
+#      only the adequacy probe; that was wrong too, and this is the measurement,
+#      not that record. DOCS was not even
 #      the sole markdown-bearing fixture there — `write_config()` writes a
 #      `survey-work.md` into CONFIG, BOTH and NESTED. Keep DOCS for the path it
 #      pins, not for a uniqueness it never had. CLAUDEMD is the narrower
@@ -127,7 +133,8 @@
 #       fixtures are the whole of this mutation's behavioural catch; without
 #       them the only red would be the adequacy probe, which reports the
 #       mutation as its own inadequacy and points the next reader at the wrong
-#       thing entirely. ("Three" counts what this mutation reddens, not what
+#       thing entirely. ("Three" counts this mutation's VERDICT reds — the fourth
+#       red is CONFIG's adequacy probe, not a verdict — and not what
 #       the fixture table calls a markdown fixture: NESTED's own file is a
 #       `survey-work.md`, so it is markdown incidentally. preflight.sh's index
 #       says "two markdown fixtures" and means the two written AS markdown
@@ -154,9 +161,14 @@
 # ADDING A FIXTURE INVALIDATES THIS RECORD. Every M-entry above is a red-set
 # COUNT over the whole fixture table, so a new fixture silently changes the
 # arithmetic of every mutation it happens to be sensitive to — and nothing here
-# re-derives those counts, which is exactly why they are written down. This has
-# now bitten twice in the same PR: CLAUDEMD was added to close a finding about
-# an unbacked claim and, in the same commit, made M8's recorded `3 red` wrong.
+# re-derives those counts, which is exactly why they are written down. It has
+# bitten once in this PR, and the one member is M8: CLAUDEMD was added to close
+# a finding about an unbacked claim and, in the same commit, made M8's recorded
+# `3 red` wrong. (This note said "twice" and named only M8. The second was to
+# have been DOCS's justification going stale — but that justification was never
+# true in the first place, so adding CLAUDEMD did not invalidate it. A count of
+# two with one member enumerated is the shape this repo forbids, and it lasted
+# exactly one round.)
 # So: add a fixture, re-run EVERY mutation above and re-record what you observe.
 # Do not reason about which entries "should" be affected.
 #
