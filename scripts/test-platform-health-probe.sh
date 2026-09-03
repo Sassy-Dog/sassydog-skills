@@ -194,22 +194,34 @@
 #   o/n`), one with THREE path segments, one carrying a character outside the
 #   allowed set, one on ANOTHER FORGE (`https://gitlab.com/o/n`), one with an
 #   EMPTY OWNER (`https://github.com//n`), one with a SINGLE segment
-#   (`https://github.com/n`), a `.git` FILE pointing nowhere, and a bare
+#   (`https://github.com/n`), a `.git` FILE pointing nowhere, a BARE REPOSITORY
+#   (the one branch `rev-parse` separates by printing `false`), and a plain
 #   directory outside any work tree (asserted to BE outside one, since a
 #   `$TMPDIR` inside a checkout would make that case measure the opposite
 #   branch).
-#   SEVEN OF THEM PIN THE PARSER'S OWN STRICTNESS — `badurl`, `hostpath`,
-#   `trailing`, `threeseg`, `badchar`, `otherhost`, `emptyseg` and `oneseg`,
-#   named rather than counted, because a positional reference into this list is
-#   exactly what a later fixture insertion breaks.
-#   (That is not a hypothetical, and it has now happened TWICE, both times in
-#   the commit that added the fixtures: `ed66e95` added `threeseg` and
-#   `badchar` without adding them to the enumeration above, and `7ed60c6` did
-#   the same with `otherhost` and `emptyseg` — in the very paragraph that
-#   records the first occurrence. Adding a fixture means editing the
-#   enumeration, this sentence, and the sibling built-message near the fixtures
-#   themselves; the built-message copy was updated both times and this one was
-#   not.)
+#   SOME OF THEM PIN THE PARSER'S OWN STRICTNESS. NO COUNT HERE, DELIBERATELY:
+#   four successive editions of this sentence carried one and every one was
+#   wrong, most recently "SEVEN" over a list of eight. A count is a second
+#   thing to keep in sync with the list beside it, and it is the half that rots
+#   silently. Each name below says which loop it lives in, which is checkable
+#   against the `for` statements rather than against this prose:
+#     REFUSAL grounds, in the failure-shape loop — `badurl`, `hostpath`,
+#       `threeseg`, `badchar`, `otherhost`, `emptyseg`, `oneseg`. Each must
+#       yield exit 0, a verdict, and `repo_lookup_failed`.
+#     A TRANSFORMATION, in the SUCCESS loop — `trailing`. It belongs there and
+#       not here: the bug it pins is a WORKING remote being refused, so its
+#       assertion is a correct `.repo`, not a refusal. Do not "align" it into
+#       the failure list.
+#   (Fixture insertion breaking this paragraph is not hypothetical; it has
+#   happened THREE times, each time in the commit that added the fixtures:
+#   `ed66e95` added `threeseg` and `badchar` without adding them to the
+#   enumeration above; `7ed60c6` did the same with `otherhost` and `emptyseg`,
+#   in the very paragraph recording the first occurrence; and `17cb16b` fixed
+#   the enumeration while leaving the prose comment at the fixtures themselves
+#   claiming "there are SIX". Adding a fixture means editing FIVE sites: the
+#   enumeration above, this sentence, the prose comment beside the fixtures,
+#   the `url_pin_bad` loop, and whichever of the two verdict loops it belongs
+#   to. The built-message and the two loops have never been the ones missed.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong twice, each time by
 #   asserting a closed set nobody had enumerated against the code, so it is
 #   written as a LIST rather than a count, DERIVED by enumerating every
@@ -225,7 +237,13 @@
 #                            (6) the character set `*[!A-Za-z0-9._/-]*`
 #     TRANSFORMATIONS        (7) the authority-only userinfo strip, and the
 #                                trailing-slash-before-`.git` order — two
-#                                rewrites, cased together as one bullet below
+#                                rewrites, cased together as one bullet below.
+#                                A third rewrite, the `git@github.com:` scp
+#                                normalization at probe:577, is NOT in this
+#                                list: the derivation above enumerates refusal
+#                                grounds, and that one is already cased by
+#                                `CWD_SSH`'s success assertion. Deleting it
+#                                does redden the gate.
 #   (1) is present as a fixture (`CWD_BADURL`, from the parser's first commit
 #   `f38f501`) but is NOT independently mutation-detectable: deleting the
 #   scheme `*)` arm also runs this gate to `all pass`, because `p` stays empty
@@ -275,15 +293,14 @@
 #       the first of them is the one that matters: `a failed derivation exits
 #       0` reads `exit 1, expected 0`, with `«no output»` for the verdict.
 #       Not a wrong slug — no JSON at all.
-#   THE STANDING RULE THIS COST US THREE TIMES: a fixture family and a rule
-#   set are
-#   not the same thing, and casing "the fix" means casing every rule the fix
-#   introduced. `2d40389` cased two of the seven and read as complete; the
-#   round after it found two more, the round after that found two more still,
-#   and only the fourth found
-#   the other two by deleting them one at a time and watching the gate stay
-#   green. Do that — delete each rule and observe — rather than reading the
-#   diff and judging which look covered.
+#   THE STANDING RULE THIS COST US FOUR TIMES: a fixture family and a rule set
+#   are not the same thing, and casing "the fix" means casing every rule the
+#   fix introduced. Four rounds, each of which read as complete: `2d40389`
+#   cased the two TRANSFORMATIONS — bullet (7), one entry, two rewrites;
+#   `ed66e95` cased (4) and (6); `7ed60c6` cased (2) and (3); `17cb16b` cased
+#   (5), alone. Every one was found by deleting a rule and watching the gate
+#   stay green. Do that — delete each rule and observe — rather than reading
+#   the diff and judging which look covered.
 #
 #   Running from `$REPO_ROOT` instead would derive whatever `origin` this
 #   checkout has — a fork's slug on a fork PR, and this repo is PUBLIC — so an
@@ -783,9 +800,11 @@ make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_M
 # the file makes about itself with nothing behind it.
 make_cwd "$CWD_THREESEG"  "https://github.com/mock-org/mock-repo/extra"   || CWD_MISSING="$CWD_MISSING threeseg"
 make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD_MISSING="$CWD_MISSING badchar"
-# THE LAST TWO RULES, found by the round that checked whether "four rules" was a
-# closed set. It was not — there are SIX, and these two were uncased with the
-# gate at `all pass (390 assertions)`, exit 0, on either revert:
+# TWO MORE RULES, found by the round that checked whether "four rules" was a
+# closed set. It was not — the header's derivation from the `return 0` sites
+# lists SEVEN, and a later round found one of those still uncased below. These
+# two were uncased with the gate at `all pass (390 assertions)`, exit 0, on
+# either revert:
 #   - the empty/leading segment arm. "The segment shape" is TWO rules, and
 #     `threeseg` pins only `*/*/*`; dropping `""|/*|*/` derives the slug
 #     `/mock-repo` — an empty owner — which `gh` then queries.
