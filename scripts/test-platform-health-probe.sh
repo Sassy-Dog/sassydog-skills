@@ -194,11 +194,13 @@
 #   o/n`), a `.git` FILE pointing nowhere, and a bare directory outside any work
 #   tree (asserted to BE outside one, since a `$TMPDIR` inside a checkout would
 #   make that case measure the opposite branch).
-#   THE LAST TWO PIN THE PARSER'S OWN STRICTNESS, and they exist because the
-#   first edition of that parser shipped both fixes with NEITHER cased —
-#   reverting both ran this gate to `all pass`, so two claims its comments call
-#   load-bearing were held up by nothing (review of #321). Both red sets were
-#   OBSERVED, not predicted:
+#   FOUR OF THEM PIN THE PARSER'S OWN STRICTNESS — `trailing`, `hostpath`,
+#   `threeseg` and `badchar`, named rather than counted, because a positional
+#   reference into this list is exactly what a later fixture insertion breaks.
+#   `repo_from_remote` refuses on four grounds and every one of them shipped
+#   uncased: reverting any single rule ran this gate to `all pass`, so four
+#   claims its comments call load-bearing were held up by nothing (review of
+#   #321). Every red set below was OBSERVED, not predicted:
 #     - userinfo stripped from the AUTHORITY alone, not `${p#*@}` over the whole
 #       string -> reverting it goes 5 red on `hostpath`, and the one that
 #       matters reads `.repo = mock-org/mock-repo`: a remote pointing at
@@ -208,10 +210,25 @@
 #       measurement corrected: the parser comment used to say the other order
 #       "fails the character check", and it does not — `.` is in the allowed set
 #       and `o/n.git` is two clean segments, so the failure is a wrong slug that
-#       404s every call under it, never a refusal. Running from `$REPO_ROOT` instead
-#   would derive whatever `origin` this checkout has — a fork's slug on a fork
-#   PR, and this repo is PUBLIC — so an equality there is vacuous or
-#   host-dependent. Each failure shape yields exit 0, a verdict, and
+#       404s every call under it, never a refusal.
+#     - EXACTLY two segments (`*/*/*) return 0`) -> reverting it goes 5 red on
+#       `threeseg`, reading `.repo = mock-org/mock-repo/extra`.
+#     - the character set (`*[!A-Za-z0-9._/-]*`) -> reverting it goes 5 red on
+#       `badchar`, reading `.repo = mock-org/mock~repo`. This is the one whose
+#       absence was worst: its comment calls it "the sanitiser at this site",
+#       and `.repo` is the single reported string that never passes through
+#       `clean`, so the file made a SECURITY claim about itself that no
+#       assertion touched.
+#   THE STANDING RULE THIS COST US TWICE: a fixture family and a rule set are
+#   not the same thing, and casing "the fix" means casing every rule the fix
+#   introduced. Round 2 cased two of four and read as complete; round 3 found
+#   the other two by deleting them one at a time and watching the gate stay
+#   green. Do that — delete each rule and observe — rather than reading the
+#   diff and judging which look covered.
+#
+#   Running from `$REPO_ROOT` instead would derive whatever `origin` this
+#   checkout has — a fork's slug on a fork PR, and this repo is PUBLIC — so an
+#   equality there is vacuous or host-dependent. Each failure shape yields exit 0, a verdict, and
 #   `first_party repo_lookup_failed` naming which input broke; M9g is the
 #   mutation, turning that entry into an ANOMALY, which would report a local
 #   fact about the operator's machine as evidence that GitHub is degraded.
@@ -654,6 +671,8 @@ CWD_NOORIGIN="$WORK/cwd-noorigin"
 CWD_BADURL="$WORK/cwd-badurl"
 CWD_HOSTPATH="$WORK/cwd-hostpath"
 CWD_TRAILING="$WORK/cwd-trailing"
+CWD_THREESEG="$WORK/cwd-threeseg"
+CWD_BADCHAR="$WORK/cwd-badchar"
 CWD_BROKEN="$WORK/cwd-broken-gitdir"
 CWD_BARE="$WORK/cwd-bare"
 CWD_NOREPO="$WORK/cwd-not-a-repo"
@@ -690,6 +709,16 @@ make_cwd "$CWD_HOSTPATH"  "https://evil.example/path@github.com/mock-org/mock-re
 # `o/n.git` — which passes the two-segment and character checks intact, since
 # `.` is in the allowed set — and the probe reports a slug with `.git` glued on.
 make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_MISSING="$CWD_MISSING trailing"
+# THE OTHER TWO STRICTNESS RULES. `repo_from_remote` refuses on four grounds and
+# the first fix round cased two, so these exist for the same reason `hostpath`
+# and `trailing` do: measured on 2d40389, deleting EITHER the `*/*/*` arm or the
+# character-set check ran this gate to `all pass (376 assertions)`, exit 0. The
+# character-set check is the one that matters most — its own comment calls it
+# "the sanitiser at this site", and `.repo` is the single reported string that
+# never passes through `clean`, so that was a SECURITY claim the file makes
+# about itself with nothing behind it.
+make_cwd "$CWD_THREESEG"  "https://github.com/mock-org/mock-repo/extra"   || CWD_MISSING="$CWD_MISSING threeseg"
+make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD_MISSING="$CWD_MISSING badchar"
 # `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
 # pointing at a directory that is not there is what a moved worktree or a
 # half-deleted submodule leaves behind, and `safe.directory` produces the same
@@ -1644,7 +1673,7 @@ echo "17d. the repo is derived LOCALLY, and a failed derivation still reaches a 
 # slug on a fork PR, and this repo is PUBLIC so fork PRs are ordinary — and an
 # equality against that is either vacuous or host-dependent.
 if [ -z "$CWD_MISSING" ]; then
-    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, broken-gitdir, bare)"
+    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, three-segment, bad-character, broken-gitdir, bare)"
 else
     bad "the cwd fixtures could not be built; missing:$CWD_MISSING"
 fi
@@ -1655,7 +1684,7 @@ fi
 # literal back under the same pins `run_probe` uses turns that into a named
 # failure (review of #321).
 url_pin_bad=""
-for pin_form in ssh https sshproto hostpath trailing; do
+for pin_form in ssh https sshproto hostpath trailing threeseg badchar; do
     case "$pin_form" in
         ssh)      pin_dir="$CWD_SSH";      pin_want="git@github.com:mock-org/mock-repo.git" ;;
         https)    pin_dir="$CWD_HTTPS";    pin_want="https://github.com/mock-org/mock-repo.git" ;;
@@ -1664,6 +1693,8 @@ for pin_form in ssh https sshproto hostpath trailing; do
         # exercise the wrong form — it would delete the case.
         hostpath) pin_dir="$CWD_HOSTPATH"; pin_want="https://evil.example/path@github.com/mock-org/mock-repo" ;;
         trailing) pin_dir="$CWD_TRAILING"; pin_want="https://github.com/mock-org/mock-repo.git/" ;;
+        threeseg) pin_dir="$CWD_THREESEG"; pin_want="https://github.com/mock-org/mock-repo/extra" ;;
+        badchar)  pin_dir="$CWD_BADCHAR";  pin_want="https://github.com/mock-org/mock~repo" ;;
     esac
     pin_got="$( cd "$pin_dir" && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
         GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" git remote get-url origin 2>/dev/null )"
@@ -1735,7 +1766,7 @@ done
 # plainly is one; and `nogit` is the branch that exists so a host with no git
 # does not get that same false cause, which is untestable only on a host that
 # happens to have no git, i.e. exactly what a curated PATH is for.
-for shape in noorigin badurl hostpath notree broken bare nogit; do
+for shape in noorigin badurl hostpath threeseg badchar notree broken bare nogit; do
     fail_path=""
     case "$shape" in
         noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
@@ -1746,6 +1777,10 @@ for shape in noorigin badurl hostpath notree broken bare nogit; do
         # remote is unusable, never its value — but the case must exist, or the
         # authority-only strip is unpinned.
         hostpath) fail_cwd="$CWD_HOSTPATH"; fail_why="not a github.com owner/name URL" ;;
+        # EXACTLY two segments, and from a character set that cannot inject.
+        # Same shared detail again, two more distinct branches reaching it.
+        threeseg) fail_cwd="$CWD_THREESEG"; fail_why="not a github.com owner/name URL" ;;
+        badchar)  fail_cwd="$CWD_BADCHAR";  fail_why="not a github.com owner/name URL" ;;
         # `notree` and `broken` share a detail ON PURPOSE: both are rc 128 with
         # empty stdout, and `git rev-parse` separates them only in
         # locale-dependent stderr, so the probe names both possibilities rather
@@ -3358,7 +3393,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=323
+EXPECTED_CASES=337
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked
