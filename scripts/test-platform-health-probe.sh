@@ -188,10 +188,27 @@
 #   17d is what that costs and what it buys. The cwd became an INPUT — the
 #   derivation reads the working directory, not an argument — so the runner
 #   grew `CWD_OVERRIDE` and this file builds real one-commit-less git repos
-#   under `$WORK`: three URL forms git actually writes, one with no `origin`,
-#   one with an unparsable remote, and a bare directory outside any work tree
-#   (asserted to BE outside one, since a `$TMPDIR` inside a checkout would make
-#   that case measure the opposite branch). Running from `$REPO_ROOT` instead
+#   under `$WORK`: three URL forms git actually writes, a fourth carrying a
+#   trailing slash, one with no `origin`, one with an unparsable remote, one
+#   naming a DIFFERENT host in the path (`https://evil.example/path@github.com/
+#   o/n`), a `.git` FILE pointing nowhere, and a bare directory outside any work
+#   tree (asserted to BE outside one, since a `$TMPDIR` inside a checkout would
+#   make that case measure the opposite branch).
+#   THE LAST TWO PIN THE PARSER'S OWN STRICTNESS, and they exist because the
+#   first edition of that parser shipped both fixes with NEITHER cased —
+#   reverting both ran this gate to `all pass`, so two claims its comments call
+#   load-bearing were held up by nothing (review of #321). Both red sets were
+#   OBSERVED, not predicted:
+#     - userinfo stripped from the AUTHORITY alone, not `${p#*@}` over the whole
+#       string -> reverting it goes 5 red on `hostpath`, and the one that
+#       matters reads `.repo = mock-org/mock-repo`: a remote pointing at
+#       `evil.example` resolving to a repo on THIS host, verdict `healthy`.
+#     - the trailing slash stripped BEFORE `.git` -> reverting it goes 1 red on
+#       `trailing`, reading `.repo = mock-org/mock-repo.git`. Note what that
+#       measurement corrected: the parser comment used to say the other order
+#       "fails the character check", and it does not — `.` is in the allowed set
+#       and `o/n.git` is two clean segments, so the failure is a wrong slug that
+#       404s every call under it, never a refusal. Running from `$REPO_ROOT` instead
 #   would derive whatever `origin` this checkout has — a fork's slug on a fork
 #   PR, and this repo is PUBLIC — so an equality there is vacuous or
 #   host-dependent. Each failure shape yields exit 0, a verdict, and
@@ -635,6 +652,8 @@ CWD_HTTPS="$WORK/cwd-https"
 CWD_SSHPROTO="$WORK/cwd-sshproto"
 CWD_NOORIGIN="$WORK/cwd-noorigin"
 CWD_BADURL="$WORK/cwd-badurl"
+CWD_HOSTPATH="$WORK/cwd-hostpath"
+CWD_TRAILING="$WORK/cwd-trailing"
 CWD_BROKEN="$WORK/cwd-broken-gitdir"
 CWD_BARE="$WORK/cwd-bare"
 CWD_NOREPO="$WORK/cwd-not-a-repo"
@@ -654,6 +673,23 @@ make_cwd "$CWD_NOORIGIN"                                                || CWD_M
 # A local-path remote is what a clone of a sibling checkout carries, so the
 # unparsable case is a real shape rather than a contrived string.
 make_cwd "$CWD_BADURL"    "/some/local/path/mock-repo.git"              || CWD_MISSING="$CWD_MISSING badurl"
+# THE TWO PARSER FIXES, EACH WITH A FIXTURE THAT DIES WITHOUT IT. Both landed in
+# #321's fix round and neither was cased: reverting BOTH ran this gate to `all
+# pass`, so the strictness the parser's own comments call load-bearing was
+# pinned by nothing (review of #321).
+#
+# `hostpath` is the wrong-slug shape. Userinfo must be stripped from the
+# AUTHORITY alone — `${p#*@}` over the whole string strips to the first `@`
+# ANYWHERE, so this URL, which points at `evil.example`, derived `mock-org/
+# mock-repo` on THIS host. A remote naming another host must be refused, not
+# resolved.
+make_cwd "$CWD_HOSTPATH"  "https://evil.example/path@github.com/mock-org/mock-repo" \
+                                                                   || CWD_MISSING="$CWD_MISSING hostpath"
+# `trailing` is the opposite error: an ORDINARY remote sent down the failure
+# path. The trailing slash must come off before `.git`, or `o/n.git/` strips to
+# `o/n.git` — which passes the two-segment and character checks intact, since
+# `.` is in the allowed set — and the probe reports a slug with `.git` glued on.
+make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_MISSING="$CWD_MISSING trailing"
 # `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
 # pointing at a directory that is not there is what a moved worktree or a
 # half-deleted submodule leaves behind, and `safe.directory` produces the same
@@ -1608,7 +1644,7 @@ echo "17d. the repo is derived LOCALLY, and a failed derivation still reaches a 
 # slug on a fork PR, and this repo is PUBLIC so fork PRs are ordinary — and an
 # equality against that is either vacuous or host-dependent.
 if [ -z "$CWD_MISSING" ]; then
-    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, broken-gitdir, bare)"
+    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, broken-gitdir, bare)"
 else
     bad "the cwd fixtures could not be built; missing:$CWD_MISSING"
 fi
@@ -1619,11 +1655,15 @@ fi
 # literal back under the same pins `run_probe` uses turns that into a named
 # failure (review of #321).
 url_pin_bad=""
-for pin_form in ssh https sshproto; do
+for pin_form in ssh https sshproto hostpath trailing; do
     case "$pin_form" in
         ssh)      pin_dir="$CWD_SSH";      pin_want="git@github.com:mock-org/mock-repo.git" ;;
         https)    pin_dir="$CWD_HTTPS";    pin_want="https://github.com/mock-org/mock-repo.git" ;;
         sshproto) pin_dir="$CWD_SSHPROTO"; pin_want="ssh://git@github.com/mock-org/mock-repo" ;;
+        # These two ARE the input under test, so a rewrite would not merely
+        # exercise the wrong form — it would delete the case.
+        hostpath) pin_dir="$CWD_HOSTPATH"; pin_want="https://evil.example/path@github.com/mock-org/mock-repo" ;;
+        trailing) pin_dir="$CWD_TRAILING"; pin_want="https://github.com/mock-org/mock-repo.git/" ;;
     esac
     pin_got="$( cd "$pin_dir" && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
         GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" git remote get-url origin 2>/dev/null )"
@@ -1643,11 +1683,16 @@ else
 fi
 
 D_LOOKUP="$(scenario lookup "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
-for form in ssh https sshproto; do
+for form in ssh https sshproto trailing; do
     case "$form" in
         ssh)      lookup_cwd="$CWD_SSH" ;;
         https)    lookup_cwd="$CWD_HTTPS" ;;
         sshproto) lookup_cwd="$CWD_SSHPROTO" ;;
+        # `https://github.com/o/n.git/` — a form git writes and humans paste. It
+        # belongs in the SUCCESS loop, not the failure one: the bug it pins is a
+        # working remote being refused, so `.repo` must be the clean slug with no
+        # `.git` glued on.
+        trailing) lookup_cwd="$CWD_TRAILING" ;;
     esac
     REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$lookup_cwd" run_probe "$PROBE" "$D_LOOKUP" --pr 301
     expect_field "[$form] the slug is derived from the origin remote" .repo "mock-org/mock-repo"
@@ -1690,11 +1735,17 @@ done
 # plainly is one; and `nogit` is the branch that exists so a host with no git
 # does not get that same false cause, which is untestable only on a host that
 # happens to have no git, i.e. exactly what a curated PATH is for.
-for shape in noorigin badurl notree broken bare nogit; do
+for shape in noorigin badurl hostpath notree broken bare nogit; do
     fail_path=""
     case "$shape" in
         noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
         badurl)   fail_cwd="$CWD_BADURL";   fail_why="not a github.com owner/name URL" ;;
+        # Same detail as `badurl` and a DIFFERENT branch reaching it: this URL
+        # parses as far as an authority and is refused because the authority is
+        # not github.com. Sharing the detail is correct — the caller is told the
+        # remote is unusable, never its value — but the case must exist, or the
+        # authority-only strip is unpinned.
+        hostpath) fail_cwd="$CWD_HOSTPATH"; fail_why="not a github.com owner/name URL" ;;
         # `notree` and `broken` share a detail ON PURPOSE: both are rc 128 with
         # empty stdout, and `git rev-parse` separates them only in
         # locale-dependent stderr, so the probe names both possibilities rather
@@ -3307,7 +3358,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=311
+EXPECTED_CASES=323
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked

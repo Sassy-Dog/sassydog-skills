@@ -579,8 +579,11 @@ repo_from_remote() { # <remote url> — owner/name, or nothing
   esac
   case "$p" in github.com/*) p="${p#github.com/}" ;; *) return 0 ;; esac
   # TRAILING SLASH FIRST, THEN `.git`: the other order leaves `o/n.git` for
-  # `https://github.com/o/n.git/`, which then fails the character check and
-  # sends a perfectly ordinary remote down the unparsable path.
+  # `https://github.com/o/n.git/`, and that string is NOT refused — `.` is in the
+  # allowed set and `o/n.git` is two clean segments — so the probe reports a slug
+  # with `.git` glued on and every `gh` call under it 404s against a repo that
+  # does not exist. Measured, not predicted: reverting this order runs the
+  # trailing-slash fixture to `.repo = mock-org/mock-repo.git`.
   p="${p%/}"
   p="${p%.git}"
   # EXACTLY two non-empty segments, from a character set that cannot inject. The
