@@ -191,16 +191,29 @@
 #   under `$WORK`: three URL forms git actually writes, a fourth carrying a
 #   trailing slash, one with no `origin`, one with an unparsable remote, one
 #   naming a DIFFERENT host in the path (`https://evil.example/path@github.com/
-#   o/n`), a `.git` FILE pointing nowhere, and a bare directory outside any work
-#   tree (asserted to BE outside one, since a `$TMPDIR` inside a checkout would
-#   make that case measure the opposite branch).
+#   o/n`), one with THREE path segments, one carrying a character outside the
+#   allowed set, a `.git` FILE pointing nowhere, and a bare directory outside
+#   any work tree (asserted to BE outside one, since a `$TMPDIR` inside a
+#   checkout would make that case measure the opposite branch).
 #   FOUR OF THEM PIN THE PARSER'S OWN STRICTNESS — `trailing`, `hostpath`,
 #   `threeseg` and `badchar`, named rather than counted, because a positional
 #   reference into this list is exactly what a later fixture insertion breaks.
-#   `repo_from_remote` refuses on four grounds and every one of them shipped
-#   uncased: reverting any single rule ran this gate to `all pass`, so four
-#   claims its comments call load-bearing were held up by nothing (review of
-#   #321). Every red set below was OBSERVED, not predicted:
+#   (That is not a hypothetical: the edition that first wrote this sentence
+#   added `threeseg` and `badchar` without adding them to the enumeration
+#   above, so two of the four it names were unfindable in the list it points
+#   into — review of #321, again.)
+#   WHAT SHIPPED UNCASED, stated precisely, because the loose version of this
+#   sentence was itself a finding. `repo_from_remote` carries four rules its
+#   own comments call load-bearing: two are grounds of REFUSAL (the segment
+#   shape and the character set) and two are TRANSFORMATIONS feeding them (the
+#   authority-only userinfo strip and the trailing-slash-before-`.git` order).
+#   A fifth ground — an unrecognised URL form — was cased by `CWD_BADURL` from
+#   the parser's first commit and is not part of this. AS THE PARSER FIRST
+#   SHIPPED (`1e7b085`), reverting any one of the four ran this gate to
+#   `all pass (364 assertions)`, exit 0. That is the edition the claim is true
+#   of, and the anchor is load-bearing: by `2d40389` the first two were cased,
+#   so reverting the userinfo strip THERE is 5 red, not a pass. Every red set
+#   below was OBSERVED on the head that records it, not predicted:
 #     - userinfo stripped from the AUTHORITY alone, not `${p#*@}` over the whole
 #       string -> reverting it goes 5 red on `hostpath`, and the one that
 #       matters reads `.repo = mock-org/mock-repo`: a remote pointing at
@@ -215,23 +228,26 @@
 #       `threeseg`, reading `.repo = mock-org/mock-repo/extra`.
 #     - the character set (`*[!A-Za-z0-9._/-]*`) -> reverting it goes 5 red on
 #       `badchar`, reading `.repo = mock-org/mock~repo`. This is the one whose
-#       absence was worst: its comment calls it "the sanitiser at this site",
-#       and `.repo` is the single reported string that never passes through
-#       `clean`, so the file made a SECURITY claim about itself that no
-#       assertion touched.
+#       absence was worst: the probe's comment calls the shape check spanning
+#       BOTH it and the segment case "the sanitiser at this site", and `.repo`
+#       is the one reported string whose ONLY guard is that check (`.head` and
+#       `.merge_state` skip `clean` too, but each carries its own `gsub`). So
+#       the file made a SECURITY claim about itself that no assertion touched.
 #   THE STANDING RULE THIS COST US TWICE: a fixture family and a rule set are
 #   not the same thing, and casing "the fix" means casing every rule the fix
-#   introduced. Round 2 cased two of four and read as complete; round 3 found
+#   introduced. `2d40389` cased two of four and read as complete; the round
+#   after it found
 #   the other two by deleting them one at a time and watching the gate stay
 #   green. Do that — delete each rule and observe — rather than reading the
 #   diff and judging which look covered.
 #
 #   Running from `$REPO_ROOT` instead would derive whatever `origin` this
 #   checkout has — a fork's slug on a fork PR, and this repo is PUBLIC — so an
-#   equality there is vacuous or host-dependent. Each failure shape yields exit 0, a verdict, and
-#   `first_party repo_lookup_failed` naming which input broke; M9g is the
-#   mutation, turning that entry into an ANOMALY, which would report a local
-#   fact about the operator's machine as evidence that GitHub is degraded.
+#   equality there is vacuous or host-dependent. Each failure shape yields
+#   exit 0, a verdict, and `first_party repo_lookup_failed` naming which
+#   input broke; M9g is the mutation, turning that entry into an ANOMALY, which
+#   would report a local fact about the operator's machine as evidence that
+#   GitHub is degraded.
 #   TWO MUST-NOT-EXIST HALVES, because either alone is weak. The mock `gh`'s
 #   `repo` arm now FAILS LOUDLY rather than answering, so the call reddens
 #   wherever it reappears; and 17d greps the call log for it by name, so the
@@ -709,14 +725,15 @@ make_cwd "$CWD_HOSTPATH"  "https://evil.example/path@github.com/mock-org/mock-re
 # `o/n.git` — which passes the two-segment and character checks intact, since
 # `.` is in the allowed set — and the probe reports a slug with `.git` glued on.
 make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_MISSING="$CWD_MISSING trailing"
-# THE OTHER TWO STRICTNESS RULES. `repo_from_remote` refuses on four grounds and
-# the first fix round cased two, so these exist for the same reason `hostpath`
-# and `trailing` do: measured on 2d40389, deleting EITHER the `*/*/*` arm or the
-# character-set check ran this gate to `all pass (376 assertions)`, exit 0. The
-# character-set check is the one that matters most — its own comment calls it
-# "the sanitiser at this site", and `.repo` is the single reported string that
-# never passes through `clean`, so that was a SECURITY claim the file makes
-# about itself with nothing behind it.
+# THE OTHER TWO STRICTNESS RULES — the two grounds of REFUSAL. `2d40389` cased
+# the two transformations (`hostpath`, `trailing`) and left these, so these
+# exist for the same reason those do: measured on `2d40389`, deleting EITHER
+# the `*/*/*` arm or the character-set check ran this gate to
+# `all pass (376 assertions)`, exit 0. The character-set check is the one that
+# matters most — the probe's comment calls the shape check spanning both it and
+# the segment case "the sanitiser at this site", and `.repo` is the one
+# reported string whose ONLY guard is that check, so that was a SECURITY claim
+# the file makes about itself with nothing behind it.
 make_cwd "$CWD_THREESEG"  "https://github.com/mock-org/mock-repo/extra"   || CWD_MISSING="$CWD_MISSING threeseg"
 make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD_MISSING="$CWD_MISSING badchar"
 # `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
