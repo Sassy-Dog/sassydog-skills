@@ -235,8 +235,8 @@
 #   been the ones missed; the enumeration and the prose comment always are.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong FOUR times (shas
 #   below), each time by asserting a closed set nobody had enumerated against
-#   the code, so it is
-#   written as a LIST rather than a count. Bullets (1)-(6) are DERIVED — they
+#   the code, so it is written as a LIST rather than a count.
+#   Bullets (1)-(6) are DERIVED — they
 #   are the `return 0` statements in `repo_from_remote`, read off the source,
 #   not recalled from which ones have fixtures. Bullet (7) is NOT one of them
 #   and is listed anyway: it is where the rewrites go, and it is here because
@@ -254,11 +254,16 @@
 #     TRANSFORMATIONS        (7) the authority-only userinfo strip, and the
 #                                trailing-slash-before-`.git` order — two
 #                                rewrites, cased together as one bullet below.
-#                                Other rewrites exist and are NOT here — the
-#                                scheme strip `${u#*://}` (probe:567), the
-#                                `git@github.com:` scp normalization (:577),
-#                                the `github.com/` prefix strip (:580). The criterion is NOT "refusal
-#                                grounds": :577 and (7)'s userinfo strip are
+#                                Other rewrites exist and are NOT here, each
+#                                with its own measurement rather than an
+#                                assertion — the scheme strip `${u#*://}`
+#                                (probe:567) -> 9 red on `[https]`,
+#                                `[sshproto]` and `[trailing]`; the
+#                                `git@github.com:` scp normalization (:577) ->
+#                                3 red on `[ssh]`; the `github.com/` prefix
+#                                strip (:580) -> 17 red.
+#                                The criterion is NOT "refusal grounds":
+#                                :577 and (7)'s userinfo strip are
 #                                SIBLING ARMS OF ONE `case`, so that would not
 #                                separate them. It is coverage. Measured:
 #                                deleting :577 goes 3 red on `[ssh]`, so it was
@@ -277,9 +282,14 @@
 #   FOUR prior editions of this sentence carried a count, derived by `git show`
 #   rather than recalled: `ed66e95` "refuses on four grounds", `66e0147`
 #   "carries four rules", `7ed60c6` "carries SIX rules", `17cb16b`/`7ed02bf`
-#   "carries SEVEN rules". The first three were SHORT. The last was LONG — and
-#   worse, claimed to be derived from the `return 0` sites when there are six. Bullets (1)-(6) above are the first actually written by reading
-#   the `case` statements.
+#   "carries SEVEN rules". The first three were SHORT. The fourth was neither
+#   short nor long in the same way, and saying "LONG" mischaracterised it:
+#   `17cb16b` derived bullets (1)-(6) CORRECTLY — they are the six `return 0`
+#   sites, read off the source, and this file's (1)-(6) are still that
+#   derivation. Its defect was a COUNT-VS-DERIVATION MISMATCH: it called the
+#   seven-bullet list "SEVEN rules DERIVED by enumerating every `return 0`",
+#   when bullet (7) is a transformations entry and not a `return 0` at all. So
+#   do not read (1)-(6) as first written here — they were already right.
 #   THE EDITION THAT WROTE "two prior editions" IS WHY THIS ONE CITES SHAS. It
 #   dropped `66e0147`, and dropped its own predecessor's "SEVEN" — the entry
 #   the round before had just disproved — because the qualifier "both were
