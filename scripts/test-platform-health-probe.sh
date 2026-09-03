@@ -192,34 +192,52 @@
 #   trailing slash, one with no `origin`, one with an unparsable remote, one
 #   naming a DIFFERENT host in the path (`https://evil.example/path@github.com/
 #   o/n`), one with THREE path segments, one carrying a character outside the
-#   allowed set, a `.git` FILE pointing nowhere, and a bare directory outside
-#   any work tree (asserted to BE outside one, since a `$TMPDIR` inside a
-#   checkout would make that case measure the opposite branch).
-#   FOUR OF THEM PIN THE PARSER'S OWN STRICTNESS — `trailing`, `hostpath`,
-#   `threeseg` and `badchar`, named rather than counted, because a positional
-#   reference into this list is exactly what a later fixture insertion breaks.
-#   (That is not a hypothetical: the edition that first wrote this sentence
-#   added `threeseg` and `badchar` without adding them to the enumeration
-#   above, so two of the four it names were unfindable in the list it points
-#   into — review of #321, again.)
+#   allowed set, one on ANOTHER FORGE (`https://gitlab.com/o/n`), one with an
+#   EMPTY OWNER (`https://github.com//n`), one with a SINGLE segment
+#   (`https://github.com/n`), a `.git` FILE pointing nowhere, and a bare
+#   directory outside any work tree (asserted to BE outside one, since a
+#   `$TMPDIR` inside a checkout would make that case measure the opposite
+#   branch).
+#   SEVEN OF THEM PIN THE PARSER'S OWN STRICTNESS — `badurl`, `hostpath`,
+#   `trailing`, `threeseg`, `badchar`, `otherhost`, `emptyseg` and `oneseg`,
+#   named rather than counted, because a positional reference into this list is
+#   exactly what a later fixture insertion breaks.
+#   (That is not a hypothetical, and it has now happened TWICE, both times in
+#   the commit that added the fixtures: `ed66e95` added `threeseg` and
+#   `badchar` without adding them to the enumeration above, and `7ed60c6` did
+#   the same with `otherhost` and `emptyseg` — in the very paragraph that
+#   records the first occurrence. Adding a fixture means editing the
+#   enumeration, this sentence, and the sibling built-message near the fixtures
+#   themselves; the built-message copy was updated both times and this one was
+#   not.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong twice, each time by
 #   asserting a closed set nobody had enumerated against the code, so it is
-#   written as a LIST rather than a count. `repo_from_remote` carries SIX rules
-#   its own comments call load-bearing:
-#     REFUSAL grounds        (1) an unrecognised URL form
+#   written as a LIST rather than a count, DERIVED by enumerating every
+#   `return 0` in `repo_from_remote` — not by recalling which ones have
+#   fixtures. `repo_from_remote` carries SEVEN rules its own comments call
+#   load-bearing:
+#     REFUSAL grounds        (1) an unrecognised URL form (the scheme `*)` arm)
 #                            (2) a host that is not exactly `github.com`
 #                            (3) the empty/leading segment arm `""|/*|*/`
-#                            (4) EXACTLY two segments, `*/*/*`
-#                            (5) the character set `*[!A-Za-z0-9._/-]*`
-#     TRANSFORMATIONS        (6) the authority-only userinfo strip, and the
+#                            (4) NOT three-or-more segments, `*/*/*`
+#                            (5) the segment-case `*)` fallback — anything that
+#                                is not `owner/name` at all, e.g. ONE segment
+#                            (6) the character set `*[!A-Za-z0-9._/-]*`
+#     TRANSFORMATIONS        (7) the authority-only userinfo strip, and the
 #                                trailing-slash-before-`.git` order — two
 #                                rewrites, cased together as one bullet below
-#   (1) was cased by `CWD_BADURL` from the parser's first commit, `f38f501`.
-#   Every other one shipped with no case at all, and each was found only by
-#   deleting it and watching this gate stay green: (4) and (5) at `2d40389`
-#   (`all pass`, 376), (2) and (3) at `ed66e95` (`all pass`, 390). The earlier
-#   editions of this sentence said "four rules" and then "four grounds", and
-#   both were guesses that read as inventories.
+#   (1) is present as a fixture (`CWD_BADURL`, from the parser's first commit
+#   `f38f501`) but is NOT independently mutation-detectable: deleting the
+#   scheme `*)` arm also runs this gate to `all pass`, because `p` stays empty
+#   and (2) refuses instead. It is masked, not uncased — say so rather than
+#   letting the next round read it as a fourth wrong claim.
+#   Every other rule shipped with no case at all, each found only by deleting
+#   it and watching this gate stay green: (4) and (6) at `2d40389`
+#   (`all pass`, 376); (2) and (3) at `ed66e95` (`all pass`, 390); (5) at
+#   `7ed60c6` (`all pass`, 404). Three successive editions of this sentence
+#   said "four rules", then "four grounds", then "SIX rules" — every one a
+#   guess that read as an inventory, and every one short. The list above is the
+#   first written by reading the `case` statements.
 #   AS OF `1e7b085` — the first edition carrying the userinfo strip and the
 #   slash order at all; NOT `f38f501`, which predates both — reverting any one
 #   of the four rules then cased ran this gate to `all pass (364 assertions)`,
@@ -247,12 +265,22 @@
 #       skip `clean`: `.head` and `.merge_state`, each carrying its own `gsub`;
 #       and `status_page_url`, which carries no sanitiser at all and is safe
 #       for a different reason — it is operator-supplied, never fork-controlled.
-#       So
-#       the file made a SECURITY claim about itself that no assertion touched.
-#   THE STANDING RULE THIS COST US TWICE: a fixture family and a rule set are
+#       So the file made a SECURITY claim about itself that no assertion
+#       touched.
+#     - the `github.com` host restriction (2) -> made permissive, 5 red on
+#       `otherhost`, `.repo = mock-org/mock-repo` derived from a GITLAB remote.
+#     - the empty/leading segment arm (3) -> deleted, 5 red on `emptyseg`,
+#       `.repo = /mock-repo`.
+#     - the segment-case `*)` fallback (5) -> deleted, 6 red on `oneseg`, and
+#       the first of them is the one that matters: `a failed derivation exits
+#       0` reads `exit 1, expected 0`, with `«no output»` for the verdict.
+#       Not a wrong slug — no JSON at all.
+#   THE STANDING RULE THIS COST US THREE TIMES: a fixture family and a rule
+#   set are
 #   not the same thing, and casing "the fix" means casing every rule the fix
-#   introduced. `2d40389` cased two of the six and read as complete; the round
-#   after it found
+#   introduced. `2d40389` cased two of the seven and read as complete; the
+#   round after it found two more, the round after that found two more still,
+#   and only the fourth found
 #   the other two by deleting them one at a time and watching the gate stay
 #   green. Do that — delete each rule and observe — rather than reading the
 #   diff and judging which look covered.
@@ -707,6 +735,7 @@ CWD_THREESEG="$WORK/cwd-threeseg"
 CWD_BADCHAR="$WORK/cwd-badchar"
 CWD_OTHERHOST="$WORK/cwd-otherhost"
 CWD_EMPTYSEG="$WORK/cwd-emptyseg"
+CWD_ONESEG="$WORK/cwd-oneseg"
 CWD_BROKEN="$WORK/cwd-broken-gitdir"
 CWD_BARE="$WORK/cwd-bare"
 CWD_NOREPO="$WORK/cwd-not-a-repo"
@@ -774,6 +803,16 @@ make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD
 #     `https://github.com//mock-repo`, which reaches the check as `/mock-repo`.
 make_cwd "$CWD_OTHERHOST" "https://gitlab.com/mock-org/mock-repo"          || CWD_MISSING="$CWD_MISSING otherhost"
 make_cwd "$CWD_EMPTYSEG"  "https://github.com//mock-repo"                  || CWD_MISSING="$CWD_MISSING emptyseg"
+# THE SEVENTH RULE — the `*)` fallback of the segment case, and the one whose
+# absence is worst. Deleting it ran the gate to `all pass (404 assertions)`,
+# exit 0, and its consequence is not a wrong slug: it is the EXIT-1-WITH-NO-
+# VERDICT path #314 exists to abolish. Measured on a checkout whose origin is
+# `https://github.com/mock-repo` — stock: exit 0, verdict `unknown`, detail
+# naming the input; arm deleted: exit 1, EMPTY stdout,
+# `error: repo must be owner/name, got: mock-repo`. The probe says as much
+# about itself at `:644-645` — "a derived slug already satisfies this BY
+# CONSTRUCTION" — and this arm IS that construction.
+make_cwd "$CWD_ONESEG"    "https://github.com/mock-repo"                    || CWD_MISSING="$CWD_MISSING oneseg"
 # `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
 # pointing at a directory that is not there is what a moved worktree or a
 # half-deleted submodule leaves behind, and `safe.directory` produces the same
@@ -1728,7 +1767,7 @@ echo "17d. the repo is derived LOCALLY, and a failed derivation still reaches a 
 # slug on a fork PR, and this repo is PUBLIC so fork PRs are ordinary — and an
 # equality against that is either vacuous or host-dependent.
 if [ -z "$CWD_MISSING" ]; then
-    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, three-segment, bad-character, other-host, empty-segment, broken-gitdir, bare)"
+    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, three-segment, bad-character, other-host, empty-segment, one-segment, broken-gitdir, bare)"
 else
     bad "the cwd fixtures could not be built; missing:$CWD_MISSING"
 fi
@@ -1739,7 +1778,7 @@ fi
 # literal back under the same pins `run_probe` uses turns that into a named
 # failure (review of #321).
 url_pin_bad=""
-for pin_form in ssh https sshproto hostpath trailing threeseg badchar otherhost emptyseg; do
+for pin_form in ssh https sshproto hostpath trailing threeseg badchar otherhost emptyseg oneseg; do
     case "$pin_form" in
         ssh)      pin_dir="$CWD_SSH";      pin_want="git@github.com:mock-org/mock-repo.git" ;;
         https)    pin_dir="$CWD_HTTPS";    pin_want="https://github.com/mock-org/mock-repo.git" ;;
@@ -1752,6 +1791,7 @@ for pin_form in ssh https sshproto hostpath trailing threeseg badchar otherhost 
         badchar)  pin_dir="$CWD_BADCHAR";  pin_want="https://github.com/mock-org/mock~repo" ;;
         otherhost) pin_dir="$CWD_OTHERHOST"; pin_want="https://gitlab.com/mock-org/mock-repo" ;;
         emptyseg)  pin_dir="$CWD_EMPTYSEG";  pin_want="https://github.com//mock-repo" ;;
+        oneseg)    pin_dir="$CWD_ONESEG";    pin_want="https://github.com/mock-repo" ;;
     esac
     pin_got="$( cd "$pin_dir" && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
         GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" git remote get-url origin 2>/dev/null )"
@@ -1823,7 +1863,7 @@ done
 # plainly is one; and `nogit` is the branch that exists so a host with no git
 # does not get that same false cause, which is untestable only on a host that
 # happens to have no git, i.e. exactly what a curated PATH is for.
-for shape in noorigin badurl hostpath threeseg badchar otherhost emptyseg notree broken bare nogit; do
+for shape in noorigin badurl hostpath threeseg badchar otherhost emptyseg oneseg notree broken bare nogit; do
     fail_path=""
     case "$shape" in
         noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
@@ -1842,6 +1882,9 @@ for shape in noorigin badurl hostpath threeseg badchar otherhost emptyseg notree
         # Same shared detail, two more distinct branches reaching it.
         otherhost) fail_cwd="$CWD_OTHERHOST"; fail_why="not a github.com owner/name URL" ;;
         emptyseg)  fail_cwd="$CWD_EMPTYSEG";  fail_why="not a github.com owner/name URL" ;;
+        # ONE segment. Without the `*)` arm this is not a wrong slug — it is
+        # exit 1 with no verdict at all, from `:648`.
+        oneseg)   fail_cwd="$CWD_ONESEG";   fail_why="not a github.com owner/name URL" ;;
         # `notree` and `broken` share a detail ON PURPOSE: both are rc 128 with
         # empty stdout, and `git rev-parse` separates them only in
         # locale-dependent stderr, so the probe names both possibilities rather
@@ -3454,7 +3497,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=351
+EXPECTED_CASES=358
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked
