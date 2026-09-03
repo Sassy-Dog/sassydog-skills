@@ -67,18 +67,25 @@ carve-out just excluded. So re-run it, exactly as step 3 says, and treat a newly
 the ordinary old → new fact it is.
 
 **Do not read that as "detection says nothing about these keys" — it says plenty, and the tree is
-what you check against.** `scripts/detect-capabilities.sh` derives `posthog` outright (a tracked-tree
-grep) and `testflight_bundle_id` when an `ios/` path or an `app.json` is tracked. There is no
+what you check against.** `scripts/detect-capabilities.sh` derives `posthog` outright and
+`testflight_bundle_id` when an `ios/` path or an `app.json` is tracked. There is no
 "has a mobile target" field at all, so a `mobile: none` is checked against the tree directly — the
-same `ios/` / `app.json` test, plus `pubspec.yaml` and `android/`. Do the grep; do not infer from a
-missing field that there was nothing to look for.
+same `ios/` / `app.json` test, plus `pubspec.yaml` and `android/`. **Run the script; do not hand-roll
+the grep**, and do not infer from a missing field that there was nothing to look for. A bare
+`git grep -i posthog` is not the same query — it lacks the pathspec described below, so in any repo
+that has answered §2c it matches that repo's own recorded answer and manufactures the exact
+contradiction [#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317) removed.
 
 **Positive evidence against a `none` is a stop and surface, never a rewrite.** If the tree now
 carries the surface the config says is absent — an iOS target under a `mobile: none`, a PostHog SDK
 under a `posthog: none` — report both sides and let the user decide, exactly as a `merge_queue`
 disagreement is handled. Never silently rewrite a `none` into a block, and never silently keep one
 the tree contradicts. Note `posthog`'s derivation is a bare substring grep, so a repo that merely
-*documents* PostHog trips it; say which file matched, so the user can dismiss it.
+*documents* PostHog trips it; say which file matched, so the user can dismiss it. The grep excludes
+`.claude/**`, so a hit is always somewhere else in the tree and the repo's own recorded answer is
+never the evidence against itself — before
+[#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317) it was, and this stop fired on every
+refresh in every repo that had answered.
 
 **An ABSENT one of these keys is the rollout path, and it is the half a refresh must not skip.**
 Every consumer repo was configured before this form existed, so on the first refresh after it lands
