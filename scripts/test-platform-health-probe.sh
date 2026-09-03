@@ -202,18 +202,31 @@
 #   added `threeseg` and `badchar` without adding them to the enumeration
 #   above, so two of the four it names were unfindable in the list it points
 #   into — review of #321, again.)
-#   WHAT SHIPPED UNCASED, stated precisely, because the loose version of this
-#   sentence was itself a finding. `repo_from_remote` carries four rules its
-#   own comments call load-bearing: two are grounds of REFUSAL (the segment
-#   shape and the character set) and two are TRANSFORMATIONS feeding them (the
-#   authority-only userinfo strip and the trailing-slash-before-`.git` order).
-#   A fifth ground — an unrecognised URL form — was cased by `CWD_BADURL` from
-#   the parser's first commit and is not part of this. AS THE PARSER FIRST
-#   SHIPPED (`1e7b085`), reverting any one of the four ran this gate to
-#   `all pass (364 assertions)`, exit 0. That is the edition the claim is true
-#   of, and the anchor is load-bearing: by `2d40389` the first two were cased,
-#   so reverting the userinfo strip THERE is 5 red, not a pass. Every red set
-#   below was OBSERVED on the head that records it, not predicted:
+#   WHAT SHIPPED UNCASED. This sentence has now been wrong twice, each time by
+#   asserting a closed set nobody had enumerated against the code, so it is
+#   written as a LIST rather than a count. `repo_from_remote` carries SIX rules
+#   its own comments call load-bearing:
+#     REFUSAL grounds        (1) an unrecognised URL form
+#                            (2) a host that is not exactly `github.com`
+#                            (3) the empty/leading segment arm `""|/*|*/`
+#                            (4) EXACTLY two segments, `*/*/*`
+#                            (5) the character set `*[!A-Za-z0-9._/-]*`
+#     TRANSFORMATIONS        (6) the authority-only userinfo strip, and the
+#                                trailing-slash-before-`.git` order — two
+#                                rewrites, cased together as one bullet below
+#   (1) was cased by `CWD_BADURL` from the parser's first commit, `f38f501`.
+#   Every other one shipped with no case at all, and each was found only by
+#   deleting it and watching this gate stay green: (4) and (5) at `2d40389`
+#   (`all pass`, 376), (2) and (3) at `ed66e95` (`all pass`, 390). The earlier
+#   editions of this sentence said "four rules" and then "four grounds", and
+#   both were guesses that read as inventories.
+#   AS OF `1e7b085` — the first edition carrying the userinfo strip and the
+#   slash order at all; NOT `f38f501`, which predates both — reverting any one
+#   of the four rules then cased ran this gate to `all pass (364 assertions)`,
+#   exit 0. The anchor is load-bearing: by `2d40389` the two TRANSFORMATIONS
+#   were cased, so reverting the userinfo strip THERE is 5 red, not a pass.
+#   Every red set below was OBSERVED on the head that records it, not
+#   predicted:
 #     - userinfo stripped from the AUTHORITY alone, not `${p#*@}` over the whole
 #       string -> reverting it goes 5 red on `hostpath`, and the one that
 #       matters reads `.repo = mock-org/mock-repo`: a remote pointing at
@@ -230,12 +243,15 @@
 #       `badchar`, reading `.repo = mock-org/mock~repo`. This is the one whose
 #       absence was worst: the probe's comment calls the shape check spanning
 #       BOTH it and the segment case "the sanitiser at this site", and `.repo`
-#       is the one reported string whose ONLY guard is that check (`.head` and
-#       `.merge_state` skip `clean` too, but each carries its own `gsub`). So
+#       is the one reported string whose ONLY guard is that check. Two others
+#       skip `clean`: `.head` and `.merge_state`, each carrying its own `gsub`;
+#       and `status_page_url`, which carries no sanitiser at all and is safe
+#       for a different reason — it is operator-supplied, never fork-controlled.
+#       So
 #       the file made a SECURITY claim about itself that no assertion touched.
 #   THE STANDING RULE THIS COST US TWICE: a fixture family and a rule set are
 #   not the same thing, and casing "the fix" means casing every rule the fix
-#   introduced. `2d40389` cased two of four and read as complete; the round
+#   introduced. `2d40389` cased two of the six and read as complete; the round
 #   after it found
 #   the other two by deleting them one at a time and watching the gate stay
 #   green. Do that — delete each rule and observe — rather than reading the
@@ -689,6 +705,8 @@ CWD_HOSTPATH="$WORK/cwd-hostpath"
 CWD_TRAILING="$WORK/cwd-trailing"
 CWD_THREESEG="$WORK/cwd-threeseg"
 CWD_BADCHAR="$WORK/cwd-badchar"
+CWD_OTHERHOST="$WORK/cwd-otherhost"
+CWD_EMPTYSEG="$WORK/cwd-emptyseg"
 CWD_BROKEN="$WORK/cwd-broken-gitdir"
 CWD_BARE="$WORK/cwd-bare"
 CWD_NOREPO="$WORK/cwd-not-a-repo"
@@ -725,9 +743,9 @@ make_cwd "$CWD_HOSTPATH"  "https://evil.example/path@github.com/mock-org/mock-re
 # `o/n.git` — which passes the two-segment and character checks intact, since
 # `.` is in the allowed set — and the probe reports a slug with `.git` glued on.
 make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_MISSING="$CWD_MISSING trailing"
-# THE OTHER TWO STRICTNESS RULES — the two grounds of REFUSAL. `2d40389` cased
-# the two transformations (`hostpath`, `trailing`) and left these, so these
-# exist for the same reason those do: measured on `2d40389`, deleting EITHER
+# TWO MORE GROUNDS OF REFUSAL. `2d40389` cased the two transformations
+# (`hostpath`, `trailing`) and left these, so these exist for the same reason
+# those do: measured on `2d40389`, deleting EITHER
 # the `*/*/*` arm or the character-set check ran this gate to
 # `all pass (376 assertions)`, exit 0. The character-set check is the one that
 # matters most — the probe's comment calls the shape check spanning both it and
@@ -736,6 +754,26 @@ make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_M
 # the file makes about itself with nothing behind it.
 make_cwd "$CWD_THREESEG"  "https://github.com/mock-org/mock-repo/extra"   || CWD_MISSING="$CWD_MISSING threeseg"
 make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD_MISSING="$CWD_MISSING badchar"
+# THE LAST TWO RULES, found by the round that checked whether "four rules" was a
+# closed set. It was not — there are SIX, and these two were uncased with the
+# gate at `all pass (390 assertions)`, exit 0, on either revert:
+#   - the empty/leading segment arm. "The segment shape" is TWO rules, and
+#     `threeseg` pins only `*/*/*`; dropping `""|/*|*/` derives the slug
+#     `/mock-repo` — an empty owner — which `gh` then queries.
+#   - the `github.com` host restriction. Making it permissive derives `o/n` from
+#     `https://gitlab.com/o/n`, and `gh` then queries github.com regardless of
+#     what the remote said — the same wrong-slug hazard `hostpath` exists for,
+#     reached through a plainer input. `hostpath` does NOT cover it: with the
+#     host check gone, its URL still refuses on the three-segment arm.
+#     MEASURED CORRECTION: this hazard is real but NOT reachable via
+#     `https://github.com/o/`, the input first proposed for it. `p="${p%/}"`
+#     runs BEFORE the shape check, so that collapses to the single segment `o`
+#     and the `*)` fallback refuses it with or without the arm — a fixture
+#     built on it measures nothing and passes. The reachable form needs a slash
+#     the trailing-strip does not consume: an EMPTY OWNER,
+#     `https://github.com//mock-repo`, which reaches the check as `/mock-repo`.
+make_cwd "$CWD_OTHERHOST" "https://gitlab.com/mock-org/mock-repo"          || CWD_MISSING="$CWD_MISSING otherhost"
+make_cwd "$CWD_EMPTYSEG"  "https://github.com//mock-repo"                  || CWD_MISSING="$CWD_MISSING emptyseg"
 # `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
 # pointing at a directory that is not there is what a moved worktree or a
 # half-deleted submodule leaves behind, and `safe.directory` produces the same
@@ -1690,7 +1728,7 @@ echo "17d. the repo is derived LOCALLY, and a failed derivation still reaches a 
 # slug on a fork PR, and this repo is PUBLIC so fork PRs are ordinary — and an
 # equality against that is either vacuous or host-dependent.
 if [ -z "$CWD_MISSING" ]; then
-    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, three-segment, bad-character, broken-gitdir, bare)"
+    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, host-in-path, trailing-slash, three-segment, bad-character, other-host, empty-segment, broken-gitdir, bare)"
 else
     bad "the cwd fixtures could not be built; missing:$CWD_MISSING"
 fi
@@ -1701,7 +1739,7 @@ fi
 # literal back under the same pins `run_probe` uses turns that into a named
 # failure (review of #321).
 url_pin_bad=""
-for pin_form in ssh https sshproto hostpath trailing threeseg badchar; do
+for pin_form in ssh https sshproto hostpath trailing threeseg badchar otherhost emptyseg; do
     case "$pin_form" in
         ssh)      pin_dir="$CWD_SSH";      pin_want="git@github.com:mock-org/mock-repo.git" ;;
         https)    pin_dir="$CWD_HTTPS";    pin_want="https://github.com/mock-org/mock-repo.git" ;;
@@ -1712,6 +1750,8 @@ for pin_form in ssh https sshproto hostpath trailing threeseg badchar; do
         trailing) pin_dir="$CWD_TRAILING"; pin_want="https://github.com/mock-org/mock-repo.git/" ;;
         threeseg) pin_dir="$CWD_THREESEG"; pin_want="https://github.com/mock-org/mock-repo/extra" ;;
         badchar)  pin_dir="$CWD_BADCHAR";  pin_want="https://github.com/mock-org/mock~repo" ;;
+        otherhost) pin_dir="$CWD_OTHERHOST"; pin_want="https://gitlab.com/mock-org/mock-repo" ;;
+        emptyseg)  pin_dir="$CWD_EMPTYSEG";  pin_want="https://github.com//mock-repo" ;;
     esac
     pin_got="$( cd "$pin_dir" && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
         GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" git remote get-url origin 2>/dev/null )"
@@ -1783,7 +1823,7 @@ done
 # plainly is one; and `nogit` is the branch that exists so a host with no git
 # does not get that same false cause, which is untestable only on a host that
 # happens to have no git, i.e. exactly what a curated PATH is for.
-for shape in noorigin badurl hostpath threeseg badchar notree broken bare nogit; do
+for shape in noorigin badurl hostpath threeseg badchar otherhost emptyseg notree broken bare nogit; do
     fail_path=""
     case "$shape" in
         noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
@@ -1798,6 +1838,10 @@ for shape in noorigin badurl hostpath threeseg badchar notree broken bare nogit;
         # Same shared detail again, two more distinct branches reaching it.
         threeseg) fail_cwd="$CWD_THREESEG"; fail_why="not a github.com owner/name URL" ;;
         badchar)  fail_cwd="$CWD_BADCHAR";  fail_why="not a github.com owner/name URL" ;;
+        # A well-formed remote on ANOTHER FORGE, and an empty second segment.
+        # Same shared detail, two more distinct branches reaching it.
+        otherhost) fail_cwd="$CWD_OTHERHOST"; fail_why="not a github.com owner/name URL" ;;
+        emptyseg)  fail_cwd="$CWD_EMPTYSEG";  fail_why="not a github.com owner/name URL" ;;
         # `notree` and `broken` share a detail ON PURPOSE: both are rc 128 with
         # empty stdout, and `git rev-parse` separates them only in
         # locale-dependent stderr, so the probe names both possibilities rather
@@ -3410,7 +3454,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=337
+EXPECTED_CASES=351
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked
