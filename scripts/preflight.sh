@@ -992,16 +992,17 @@
 #      greps now exclude `.claude/**`; the `sentry` pathspec is symmetric even
 #      though its SDK patterns never matched the literal `sentry: none`, since
 #      an asymmetry between adjacent lines reads as an oversight to the next
-#      editor. Behavioural over seven `mktemp -d` git fixtures, with the two
-#      grep lines EXTRACTED from the shipped script rather than transcribed:
-#      config-only and hook-only must read false, source-only, docs-only and
-#      mixed must read true, lock-only proves the pre-existing `*.lock*`
-#      pathspec survived the edit, and nested-`.claude` pins the pathspec's
-#      ROOT-ANCHORING as a recorded decision rather than an accident. The
-#      docs-only fixture is not decoration: `interview.md` §2c and
-#      `update-mode.md` both PROMISE that a repo which merely documents PostHog
-#      still trips detection, and without it a broader exclusion would keep
-#      every other assertion green while breaking that promise. Fixture
+#      editor. Behavioural over eight git fixtures built under one `mktemp -d`,
+#      with the two grep lines EXTRACTED from the shipped script rather than
+#      transcribed: config-only and hook-only must read false; source-only,
+#      docs-only, claude-md-only and both must read true; lock-only proves the
+#      pre-existing `*.lock*` pathspec survived the edit; and nested-`.claude`
+#      pins the pathspec's ROOT-ANCHORING as a recorded decision rather than an
+#      accident. Two markdown fixtures, deliberately: docs-only carries the
+#      `README.md` and `docs/` paths that `interview.md` §2c and
+#      `update-mode.md` PROMISE still trip detection, and claude-md-only is the
+#      only fixture whose sole occurrence is the root `CLAUDE.md`, which is the
+#      one carve-out in the pathspec and was pinned by nothing until it landed. Fixture
 #      adequacy is its own property and runs PER self-match fixture — the
 #      extracted lines with the exclusion STRIPPED must still match each of
 #      config-only and hook-only on its own, or that fixture's half of the
@@ -1714,7 +1715,7 @@ fi
 
 # --- 36. detect-capabilities tests ---------------------------------------------
 # Behavioural: the probe's verdict is what a `setup-config` refresh acts on, so
-# the shipped script is RUN inside seven throwaway git fixtures rather than
+# the shipped script is RUN inside eight throwaway git fixtures rather than
 # grepped. `posthog` was a bare-word sweep of the tracked tree while #267 has
 # consumers record `posthog: none` in a tracked config file, so the detector's
 # only hit in a quiet tree was that answer and every refresh contradicted it

@@ -63,11 +63,15 @@
 #      `docs/`) and CLAUDEMD (a root `CLAUDE.md` and NOTHING else) each detect
 #      `true` for both. DOCS is not decoration: the caveat shipped in
 #      `interview.md` §2c and `update-mode.md` PROMISES that a repo which merely
-#      documents PostHog still trips detection, and without this fixture a
-#      broader exclusion — `':(exclude)*.md'`, say — would keep every other
-#      assertion green while breaking that promise. CLAUDEMD is the narrower
-#      sibling and is not redundant with it: it is the ONLY fixture whose sole
-#      occurrence is the root `CLAUDE.md`, so it is the only one that can go red
+#      documents PostHog still trips detection, and DOCS is the fixture carrying
+#      the `README.md` and `docs/` paths that caveat actually names. What it is
+#      NOT is the only thing standing between a `':(exclude)*.md'` and a green
+#      run — that was true when DOCS was the sole markdown fixture and M8 read
+#      3 red, and CLAUDEMD and NESTED now go red on that mutation independently
+#      (M8, 4 red). Keep DOCS for the paths it pins, not for a uniqueness it no
+#      longer has. CLAUDEMD is the narrower sibling and is not redundant with
+#      it: it is the ONLY fixture whose sole occurrence is the root
+#      `CLAUDE.md`, so it is the only one that can go red
 #      on an exclusion aimed at that file alone (M10).
 #   4. BOTH (config mention AND real source) detects `true`; LOCK (the strings
 #      only in `bun.lock`) detects `false` — the pre-existing `*.lock*` pathspec
@@ -113,13 +117,18 @@
 #   M7  respell to `':!.claude/**'`, exactly equivalent      -> 3 red: the strip
 #       guard once and property 5 twice. Every VERDICT stays correct, which is
 #       the trade the spelling paragraph above records rather than a bug.
-#   M8  BROADEN the exclusion with `':(exclude)*.md'`        -> 3 red, and DOCS
-#       is the one that matters: it reads `false|false` against the caveat both
-#       reference docs ship. Property 5 stays green throughout — a shape guard
-#       cannot see an over-reach, only a missing pathspec — so without the DOCS
-#       fixture the only red would have been the config fixture's own adequacy
-#       probe, which reports the mutation as its own inadequacy and points the
-#       next reader at the wrong thing entirely.
+#   M8  BROADEN the exclusion with `':(exclude)*.md'`        -> 4 red: the
+#       config fixture's adequacy probe, and `false|false` on DOCS, on CLAUDEMD
+#       and on NESTED. Property 5 stays green throughout — a shape guard cannot
+#       see an over-reach, only a missing pathspec — so the three markdown
+#       fixtures are the whole of this mutation's behavioural catch; without
+#       them the only red would be the adequacy probe, which reports the
+#       mutation as its own inadequacy and points the next reader at the wrong
+#       thing entirely.
+#       RE-MEASURED, and it moved: this entry read `3 red` until CLAUDEMD was
+#       added, which is correct for the tree it was written against and became
+#       wrong the moment a fourth markdown-bearing fixture existed. See the
+#       standing note at the end of this record.
 #   M9  run the whole gate under a hostile global git config -> 0 red, i.e.
 #       green, which is the assertion: `core.excludesFile` ignoring `.claude/`
 #       plus `commit.gpgsign=true` with an unusable key. Without the isolation
@@ -133,6 +142,15 @@
 #       before it, the header's root-`CLAUDE.md` claim cited DOCS and this
 #       mutation ran the gate ALL GREEN, so the one deliberate carve-out in the
 #       pathspec was pinned by nothing while reading as measured.
+#
+# ADDING A FIXTURE INVALIDATES THIS RECORD. Every M-entry above is a red-set
+# COUNT over the whole fixture table, so a new fixture silently changes the
+# arithmetic of every mutation it happens to be sensitive to — and nothing here
+# re-derives those counts, which is exactly why they are written down. This has
+# now bitten twice in the same PR: CLAUDEMD was added to close a finding about
+# an unbacked claim and, in the same commit, made M8's recorded `3 red` wrong.
+# So: add a fixture, re-run EVERY mutation above and re-record what you observe.
+# Do not reason about which entries "should" be affected.
 #
 # `gh` is MOCKED and every call fails: the probe requires it on PATH but
 # degrades every gh-backed field to null/[] with a note, and none of those

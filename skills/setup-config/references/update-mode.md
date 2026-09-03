@@ -67,11 +67,14 @@ carve-out just excluded. So re-run it, exactly as step 3 says, and treat a newly
 the ordinary old → new fact it is.
 
 **Do not read that as "detection says nothing about these keys" — it says plenty, and the tree is
-what you check against.** `scripts/detect-capabilities.sh` derives `posthog` outright (a tracked-tree
-grep) and `testflight_bundle_id` when an `ios/` path or an `app.json` is tracked. There is no
+what you check against.** `scripts/detect-capabilities.sh` derives `posthog` outright and
+`testflight_bundle_id` when an `ios/` path or an `app.json` is tracked. There is no
 "has a mobile target" field at all, so a `mobile: none` is checked against the tree directly — the
-same `ios/` / `app.json` test, plus `pubspec.yaml` and `android/`. Do the grep; do not infer from a
-missing field that there was nothing to look for.
+same `ios/` / `app.json` test, plus `pubspec.yaml` and `android/`. **Run the script; do not hand-roll
+the grep**, and do not infer from a missing field that there was nothing to look for. A bare
+`git grep -i posthog` is not the same query — it lacks the pathspec described below, so in any repo
+that has answered §2c it matches that repo's own recorded answer and manufactures the exact
+contradiction [#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317) removed.
 
 **Positive evidence against a `none` is a stop and surface, never a rewrite.** If the tree now
 carries the surface the config says is absent — an iOS target under a `mobile: none`, a PostHog SDK
