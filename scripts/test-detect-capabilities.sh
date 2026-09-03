@@ -64,14 +64,17 @@
 #      `true` for both. DOCS is not decoration: the caveat shipped in
 #      `interview.md` §2c and `update-mode.md` PROMISES that a repo which merely
 #      documents PostHog still trips detection, and DOCS is the fixture carrying
-#      the `README.md` and `docs/` paths that caveat actually names. What it is
-#      NOT is the only thing standing between a `':(exclude)*.md'` and a green
-#      run — that was true when DOCS was the sole markdown fixture and M8 read
-#      3 red, and CLAUDEMD and NESTED now go red on that mutation independently
-#      (M8, 4 red). Keep DOCS for the paths it pins, not for a uniqueness it no
-#      longer has. CLAUDEMD is the narrower sibling and is not redundant with
-#      it: it is the ONLY fixture whose sole occurrence is the root
-#      `CLAUDE.md`, so it is the only one that can go red
+#      the `README.md` path that caveat actually names, plus a `docs/` file
+#      neither caveat mentions. What it is NOT is the only thing standing
+#      between a `':(exclude)*.md'` and a green run — and that was never true,
+#      not merely "no longer" true. MEASURED at 162381c, before CLAUDEMD
+#      existed: M8 read 3 red and NESTED was already one of them, so deleting
+#      the DOCS assertion from that tree still left 2 red. DOCS was not even
+#      the sole markdown-bearing fixture there — `write_config()` writes a
+#      `survey-work.md` into CONFIG, BOTH and NESTED. Keep DOCS for the path it
+#      pins, not for a uniqueness it never had. CLAUDEMD is the narrower
+#      sibling and is not redundant with it: it is the ONLY fixture whose sole
+#      occurrence is the root `CLAUDE.md`, so it is the only one that can go red
 #      on an exclusion aimed at that file alone (M10).
 #   4. BOTH (config mention AND real source) detects `true`; LOCK (the strings
 #      only in `bun.lock`) detects `false` — the pre-existing `*.lock*` pathspec
@@ -124,11 +127,16 @@
 #       fixtures are the whole of this mutation's behavioural catch; without
 #       them the only red would be the adequacy probe, which reports the
 #       mutation as its own inadequacy and points the next reader at the wrong
-#       thing entirely.
+#       thing entirely. ("Three" counts what this mutation reddens, not what
+#       the fixture table calls a markdown fixture: NESTED's own file is a
+#       `survey-work.md`, so it is markdown incidentally. preflight.sh's index
+#       says "two markdown fixtures" and means the two written AS markdown
+#       cases, DOCS and CLAUDEMD. Both are accurate; they count different
+#       things.)
 #       RE-MEASURED, and it moved: this entry read `3 red` until CLAUDEMD was
 #       added, which is correct for the tree it was written against and became
-#       wrong the moment a fourth markdown-bearing fixture existed. See the
-#       standing note at the end of this record.
+#       wrong the moment a fourth RED joined the set. See the standing note at
+#       the end of this record.
 #   M9  run the whole gate under a hostile global git config -> 0 red, i.e.
 #       green, which is the assertion: `core.excludesFile` ignoring `.claude/`
 #       plus `commit.gpgsign=true` with an unusable key. Without the isolation

@@ -1002,9 +1002,9 @@
 #      `README.md` and `docs/` paths that `interview.md` §2c and
 #      `update-mode.md` PROMISE still trip detection, and claude-md-only is the
 #      only fixture whose sole occurrence is the root `CLAUDE.md`, which is the
-#      one carve-out in the pathspec and was pinned by nothing until it landed. Fixture
-#      adequacy is its own property and runs PER self-match fixture — the
-#      extracted lines with the exclusion STRIPPED must still match each of
+#      one carve-out in the pathspec and was pinned by nothing until it landed.
+#      Fixture adequacy is its own property and runs PER self-match fixture —
+#      the extracted lines with the exclusion STRIPPED must still match each of
 #      config-only and hook-only on its own, or that fixture's half of the
 #      false-verdict property has gone vacuous and says so. Its spelling is
 #      pinned in two coupled places (the stripper and the shape guard) and the
