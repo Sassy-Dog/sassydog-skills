@@ -207,7 +207,10 @@
 #   against the `for` statements rather than against this prose:
 #     REFUSAL grounds, in the failure-shape loop — `badurl`, `hostpath`,
 #       `threeseg`, `badchar`, `otherhost`, `emptyseg`, `oneseg`. Each must
-#       yield exit 0, a verdict, and `repo_lookup_failed`.
+#       yield exit 0, a verdict, and `repo_lookup_failed`. `badurl` is the
+#       exception to the heading: rule (1) is MASKED, so reverting it reddens
+#       nothing (see below). It earns its place elsewhere — it is the only
+#       fixture reaching the credential-leak assertion.
 #     A TRANSFORMATION, in the SUCCESS loop — `trailing`. It belongs there and
 #       not here: the bug it pins is a WORKING remote being refused, so its
 #       assertion is a correct `.repo`, not a refusal. Do not "align" it into
@@ -218,16 +221,26 @@
 #   enumeration above; `7ed60c6` did the same with `otherhost` and `emptyseg`,
 #   in the very paragraph recording the first occurrence; and `17cb16b` fixed
 #   the enumeration while leaving the prose comment at the fixtures themselves
-#   claiming "there are SIX". Adding a fixture means editing FIVE sites: the
-#   enumeration above, this sentence, the prose comment beside the fixtures,
-#   the `url_pin_bad` loop, and whichever of the two verdict loops it belongs
-#   to. The built-message and the two loops have never been the ones missed.)
+#   claiming "there are SIX". Adding a fixture means editing every site below —
+#   no count, for the same reason the rule list carries none, and because the
+#   edition that first wrote this list said FIVE while naming a sixth in its
+#   own next sentence:
+#     the `CWD_*` declaration · the `make_cwd` call · the header enumeration
+#     above · the per-loop list below · the prose comment beside the fixtures ·
+#     the built-message `ok` line · the `url_pin_bad` loop · whichever of the
+#     two verdict loops it belongs to.
+#   The built-message, the loops and the `url_pin_bad` read-back have never
+#   been the ones missed; the enumeration and the prose comment always are.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong twice, each time by
 #   asserting a closed set nobody had enumerated against the code, so it is
-#   written as a LIST rather than a count, DERIVED by enumerating every
-#   `return 0` in `repo_from_remote` — not by recalling which ones have
-#   fixtures. `repo_from_remote` carries SEVEN rules its own comments call
-#   load-bearing:
+#   written as a LIST rather than a count. Bullets (1)-(6) are DERIVED — they
+#   are the `return 0` statements in `repo_from_remote`, read off the source,
+#   not recalled from which ones have fixtures. Bullet (7) is NOT one of them
+#   and is listed anyway: it is where the rewrites go, and it is here because
+#   both of its members shipped uncased. Say that plainly rather than implying
+#   one criterion produced the whole list — an earlier edition did imply it,
+#   and used it to justify an exclusion it cannot actually justify.
+#   The rules its own comments call load-bearing:
 #     REFUSAL grounds        (1) an unrecognised URL form (the scheme `*)` arm)
 #                            (2) a host that is not exactly `github.com`
 #                            (3) the empty/leading segment arm `""|/*|*/`
@@ -238,12 +251,17 @@
 #     TRANSFORMATIONS        (7) the authority-only userinfo strip, and the
 #                                trailing-slash-before-`.git` order — two
 #                                rewrites, cased together as one bullet below.
-#                                A third rewrite, the `git@github.com:` scp
-#                                normalization at probe:577, is NOT in this
-#                                list: the derivation above enumerates refusal
-#                                grounds, and that one is already cased by
-#                                `CWD_SSH`'s success assertion. Deleting it
-#                                does redden the gate.
+#                                Other rewrites exist and are NOT here — the
+#                                `git@github.com:` scp normalization
+#                                (probe:577), the `github.com/` prefix strip
+#                                (:580). The criterion is NOT "refusal
+#                                grounds": :577 and (7)'s userinfo strip are
+#                                SIBLING ARMS OF ONE `case`, so that would not
+#                                separate them. It is coverage. Measured:
+#                                deleting :577 goes 3 red on `[ssh]`, so it was
+#                                always cased; (7)'s two rewrites were uncased
+#                                until `2d40389`, which is why they are
+#                                recorded here.
 #   (1) is present as a fixture (`CWD_BADURL`, from the parser's first commit
 #   `f38f501`) but is NOT independently mutation-detectable: deleting the
 #   scheme `*)` arm also runs this gate to `all pass`, because `p` stays empty
@@ -252,10 +270,10 @@
 #   Every other rule shipped with no case at all, each found only by deleting
 #   it and watching this gate stay green: (4) and (6) at `2d40389`
 #   (`all pass`, 376); (2) and (3) at `ed66e95` (`all pass`, 390); (5) at
-#   `7ed60c6` (`all pass`, 404). Three successive editions of this sentence
-#   said "four rules", then "four grounds", then "SIX rules" — every one a
-#   guess that read as an inventory, and every one short. The list above is the
-#   first written by reading the `case` statements.
+#   `7ed60c6` (`all pass`, 404). Two prior editions of this sentence carried a
+#   count — `ed66e95`'s "four grounds" and `7ed60c6`'s "SIX rules" — and both
+#   were guesses that read as inventories, and both were short. Bullets (1)-(6)
+#   above are the first written by reading the `case` statements.
 #   AS OF `1e7b085` — the first edition carrying the userinfo strip and the
 #   slash order at all; NOT `f38f501`, which predates both — reverting any one
 #   of the four rules then cased ran this gate to `all pass (364 assertions)`,
@@ -801,8 +819,8 @@ make_cwd "$CWD_TRAILING"  "https://github.com/mock-org/mock-repo.git/"  || CWD_M
 make_cwd "$CWD_THREESEG"  "https://github.com/mock-org/mock-repo/extra"   || CWD_MISSING="$CWD_MISSING threeseg"
 make_cwd "$CWD_BADCHAR"   "https://github.com/mock-org/mock~repo"         || CWD_MISSING="$CWD_MISSING badchar"
 # TWO MORE RULES, found by the round that checked whether "four rules" was a
-# closed set. It was not — the header's derivation from the `return 0` sites
-# lists SEVEN, and a later round found one of those still uncased below. These
+# closed set. It was not — the header lists more, and a later round found one
+# of those still uncased below. These
 # two were uncased with the gate at `all pass (390 assertions)`, exit 0, on
 # either revert:
 #   - the empty/leading segment arm. "The segment shape" is TWO rules, and
