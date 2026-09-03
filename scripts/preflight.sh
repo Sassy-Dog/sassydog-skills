@@ -929,12 +929,16 @@
 #      evidence of degradation is the confident wrong answer reached through the
 #      mitigation for a different one. The exit code is asserted on EVERY
 #      verdict-form mutant, so no path can grow one that carries a verdict.
-#      BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER: the cwd repo lookup's
-#      `|| true` discarded the status, so a fired bound was reported as `not in
-#      a GitHub repo` — exit 1, empty stdout, inside a VALID checkout — and
-#      covering it meant the runner had to stop passing `--repo`, the flag that
-#      suppresses that call and structurally excluded the site from the
-#      three-call assertion. The bound has THREE branches and only one is
+#      BOUNDING A CALL CAN CREATE A NEW WRONG ANSWER, AND THE ANSWER WAS TO STOP
+#      MAKING THE CALL (#314). The cwd repo lookup WAS a bounded `gh repo view`
+#      whose `|| true` discarded the status, so a fired bound was reported as
+#      `not in a GitHub repo` — exit 1, empty stdout, inside a VALID checkout —
+#      and every OTHER non-zero exit said the same, which is the whole class
+#      rather than two codes of it. The slug is now DERIVED LOCALLY from the
+#      `origin` remote, so the bounded sites are three and 17d measures the
+#      derivation instead, from real cwd fixtures: the `gh` call is gone (a
+#      must-not-exist mock arm and a call-log check), the URL forms parse, and
+#      each failure shape still reaches a verdict. The bound has THREE branches and only one is
 #      reachable through a prepended shim, so the other two run under CURATED
 #      PATHs; an earlier edition called them impossible to exercise, which was
 #      false and cost the file its only coverage of the `probe` scope — the
@@ -946,8 +950,10 @@
 #      A fired bound is 124 OR 137 — the latter when the child ignored TERM and
 #      the kill grace fired — and ONE predicate says so, since testing 124 at
 #      two sites independently left the path `-k` exists for as the one path
-#      neither site could name. On the repo lookup that status is read BEFORE
-#      the value, because a call killed after flushing leaves a fragment behind.
+#      neither site could name. The repo lookup's own late-flush hazard — a call
+#      killed after flushing left a usable-looking fragment — went with the `gh`
+#      call it belonged to, and its shim arm was deleted rather than left
+#      unreachable.
 #      THE GATE'S OWN REACH WAS THE NEXT DEFECT (#302): a review ran 31
 #      mutations against the probe and 19 passed — three real wrong verdicts,
 #      the rest holes in this gate. Every "explains nothing" string is now
@@ -962,8 +968,10 @@
 #      missing-run read, which no payload can — after three source pins were
 #      each defeated; a bound that fires is cased and mutated at EVERY gh site
 #      through a selector on the shim, not only at the first call, which
-#      absorbed it; the emitter fallback is three keys rather than a 16-key
-#      copy of the schema, and the fallback mutants assert its exact key set;
+#      absorbed it; the emitter fallback is four keys (`pr` admitted under
+#      #314's narrower rule — carry nothing that could be what broke it) rather
+#      than a 16-key copy of the schema, and the fallback mutants assert its
+#      exact key set plus the stderr line naming which ledger failed;
 #      the name `gh` is a shell function in the probe, so the chokepoint is
 #      structural rather than a one-spelling grep, with calls-vs-bounds parity
 #      as the behaviour; the first-party count is by EXCLUSION so an

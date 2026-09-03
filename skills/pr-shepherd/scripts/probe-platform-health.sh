@@ -62,19 +62,8 @@
 #                              (default 20), applied with `timeout`/`gtimeout`
 #                              when either is on PATH. The true per-call ceiling
 #                              is this PLUS a fixed 5s kill grace — 25s at the
-#                              default — see the bound's own paragraph below.
-#
-# THE WORST CASE IS 80 SECONDS, AND THAT NUMBER IS A CONSTRAINT RATHER THAN A
-# STATISTIC (issue #314). Three bounded `gh` sites at 25s each plus the 5s
-# `curl` is 3 x (20 + 5) + 5 = 80s, against the 120s default tool timeout of the
-# harness the shipped callers run under. That harness kills a run past its
-# timeout, and a killed run yields NO JSON AND NO STDERR — #303's shape one
-# layer up, which the emitter fallback cannot answer because the script never
-# reaches it. So the arithmetic has to fit with room, and the gate re-derives it
-# from these defaults rather than trusting this sentence. Raising
-# PLATFORM_GH_TIMEOUT past ~33 spends that room: the caller raising it owns the
-# tool timeout too. The earlier default was 30, which put the no---repo path at
-# 145s — over the limit, in the header's own documented invocation.
+#                              default, and 80s worst case for the whole run;
+#                              see THE WORST CASE below the env list.
 #   PLATFORM_PROBE_MIN_AGE     head-age floor in seconds (default 300) — below it
 #                              the run-COMPARISON signals are SUPPRESSED, because
 #                              a workflow that has not started yet is not
@@ -90,6 +79,18 @@
 #                              excuse for a genuine failure — the same
 #                              confident-wrong-answer this file exists to refuse,
 #                              pointed the other way.
+#
+# THE WORST CASE IS 80 SECONDS, AND THAT NUMBER IS A CONSTRAINT RATHER THAN A
+# STATISTIC (issue #314). Three bounded `gh` sites at 25s each plus the 5s
+# `curl` is 3 x (20 + 5) + 5 = 80s, against the 120s default tool timeout of the
+# harness the shipped callers run under. That harness kills a run past its
+# timeout, and a killed run yields NO JSON AND NO STDERR — #303's shape one
+# layer up, which the emitter fallback cannot answer because the script never
+# reaches it. So the arithmetic has to fit with room, and the gate re-derives it
+# from these defaults rather than trusting this sentence. Raising
+# PLATFORM_GH_TIMEOUT past ~33 spends that room: the caller raising it owns the
+# tool timeout too. The earlier default was 30, which put the no-`--repo` path at
+# 145s — over the limit, in the header's own documented invocation.
 #
 # THE FOUR VERDICTS. They are four distinct answers and collapsing any pair
 # re-creates the bug:
@@ -534,13 +535,17 @@ fp_details() { # — the first-party details, joined, prefixed `; `; nothing whe
 # shape the emitter fallback's stderr line uses, and the reason no sanitiser is
 # needed at this site at all.
 #
-# THREE FAILURE SHAPES, ONE OUTCOME, AND NO USAGE ERROR AMONG THEM. Not inside a
-# work tree, no `origin`, or a URL this parser does not accept: each records its
-# own detail under one `first_party repo_lookup_failed`, sets REPO_OK=0, and the
-# run CARRIES ON to a real verdict — `not_measured`, which the status page can
-# still attribute. A caller standing outside a checkout now gets `unknown` with a
-# reason instead of exit 1 and no verdict at all; exit 1 stays what it always
-# was, a malformed argument, where no verdict exists.
+# THE FAILURE SHAPES ARE ENUMERATED RATHER THAN COUNTED, which is CLAUDE.md's
+# own rule about a number in prose: (a) no `git` on PATH, (b) `git rev-parse`
+# exiting non-zero — no repository here, OR one git refused to read, which that
+# command does not separate except in locale-dependent stderr — (c) a bare
+# repository, which has no work tree, (d) no `origin` remote, and (e) an
+# `origin` URL this parser does not accept. Each records its OWN detail
+# under one `first_party repo_lookup_failed`, sets REPO_OK=0, and the run CARRIES
+# ON to a real verdict — `not_measured`, which the status page can still
+# attribute. NO USAGE ERROR AMONG THEM: a caller standing outside a checkout now
+# gets `unknown` with a reason instead of exit 1 and no verdict at all, and exit
+# 1 stays what it always was, a malformed argument, where no verdict exists.
 repo_from_remote() { # <remote url> — owner/name, or nothing
   # DELIBERATELY STRICT, over exactly the three forms git writes for a github.com
   # remote. A permissive parser's failure mode is a WRONG slug, which the probe
@@ -548,16 +553,36 @@ repo_from_remote() { # <remote url> — owner/name, or nothing
   # parser's failure mode is `--repo`, which every shipped caller already passes.
   # A host that is not exactly `github.com` is refused for the same reason: `gh`
   # would query github.com regardless of what the remote said.
-  local u="$1" p=""
+  #
+  # `origin` AND ONLY `origin`, which is deliberately NARROWER than the `gh`
+  # call this replaced: `gh` resolves `upstream` ahead of `origin`, so on a fork
+  # checkout configured that way the two answer different repos. Narrower is the
+  # safe direction here — the probe measures the repo whose PRs the caller is
+  # watching, `--repo` is how a caller says otherwise, and every shipped caller
+  # passes it — but it is a difference rather than an oversight, so it is
+  # recorded beside the forms refused by design.
+  local u="$1" p="" auth="" rest=""
   case "$u" in
-    https://*)        p="${u#https://}"; p="${p#*@}" ;;
-    ssh://*)          p="${u#ssh://}";   p="${p#*@}" ;;
+    https://*|ssh://*)
+      p="${u#*://}"
+      # USERINFO IS STRIPPED FROM THE AUTHORITY ALONE. `${p#*@}` over the whole
+      # string strips to the first `@` ANYWHERE, so
+      # `https://evil.example/path@github.com/o/n` derived `o/n` — a remote
+      # pointing at another host resolving to a repo on this one, which is the
+      # WRONG-slug failure this parser's strictness exists to refuse.
+      auth="${p%%/*}"
+      rest="${p#"$auth"}"
+      p="${auth##*@}$rest"
+      ;;
     git@github.com:*) p="github.com/${u#git@github.com:}" ;;
     *) return 0 ;;
   esac
   case "$p" in github.com/*) p="${p#github.com/}" ;; *) return 0 ;; esac
-  p="${p%.git}"
+  # TRAILING SLASH FIRST, THEN `.git`: the other order leaves `o/n.git` for
+  # `https://github.com/o/n.git/`, which then fails the character check and
+  # sends a perfectly ordinary remote down the unparsable path.
   p="${p%/}"
+  p="${p%.git}"
   # EXACTLY two non-empty segments, from a character set that cannot inject. The
   # value is interpolated into `gh` arguments and into reported details, so this
   # shape check IS the sanitiser at this site — which is what lets the derived
@@ -574,17 +599,37 @@ if [ -z "$REPO" ]; then
     # "not inside a git work tree" on a host that simply has no git — the second
     # false cause in a row, which is what this whole block was rewritten to stop.
     repo_why="git is not installed, so the repo could not be derived from the checkout"
-  elif [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" != "true" ]; then
-    # The OUTPUT, not the exit status: inside a bare repo `git rev-parse` prints
-    # `false` and exits 0, and there is no worktree remote to read there either.
-    repo_why="the working directory is not inside a git work tree"
   else
-    origin_url="$(git remote get-url origin 2>/dev/null)" || origin_url=""
-    if [ -z "$origin_url" ]; then
-      repo_why="the checkout has no 'origin' remote"
+    # THE STATUS AND THE OUTPUT ARE DIFFERENT QUESTIONS, and reading only the
+    # second answered the wrong one: `git rev-parse` ERRORING — a
+    # `safe.directory` refusal, a `.git` file pointing at a directory that is
+    # gone, an unreadable object store — prints nothing, which looked exactly
+    # like `false` and was reported as "not inside a git work tree" from inside
+    # a checkout that plainly is one. That is this block's own dominant bug
+    # class, the second false cause in a row.
+    #
+    # AND THE FIX IS NOT TO SWAP ONE CERTAINTY FOR ANOTHER. Exit 128 is BOTH
+    # "there is no repository here" and "there is one and git refused to read
+    # it"; `git rev-parse` distinguishes them only in its English stderr, which
+    # is locale-dependent, so this detail names BOTH and carries the code. An
+    # unknown stated as a certainty is exactly what reading the output alone was
+    # already doing, pointed the other way.
+    tree_rc=0
+    in_tree="$(git rev-parse --is-inside-work-tree 2>/dev/null)" || tree_rc=$?
+    if [ "$tree_rc" -ne 0 ]; then
+      repo_why="not inside a readable git work tree — git rev-parse exited $tree_rc (no repository here, or git refused to read this one)"
+    elif [ "$in_tree" != "true" ]; then
+      # Exit 0 with `false` IS distinguishable, and it is the bare-repo case:
+      # there is no work tree, so there is no worktree remote to read either.
+      repo_why="the working directory is inside a bare git repository, which has no work tree"
     else
-      REPO="$(repo_from_remote "$origin_url")"
-      [ -n "$REPO" ] || repo_why="the 'origin' remote is not a github.com owner/name URL this probe parses"
+      origin_url="$(git remote get-url origin 2>/dev/null)" || origin_url=""
+      if [ -z "$origin_url" ]; then
+        repo_why="the checkout has no 'origin' remote"
+      else
+        REPO="$(repo_from_remote "$origin_url")"
+        [ -n "$REPO" ] || repo_why="the 'origin' remote is not a github.com owner/name URL this probe parses"
+      fi
     fi
   fi
   if [ -n "$repo_why" ]; then
@@ -1178,6 +1223,11 @@ if [ "$emit_rc" -ne 0 ] || [ -z "$emitted" ] || ! jq -e . >/dev/null 2>&1 <<<"$e
   # stories, and "both parsed" is itself the answer that the emitter, not its
   # inputs, is what died.
   ledger_note() { # <name> <value>
+    # `LC_ALL=C` so `${#2}` really is BYTES. Under a UTF-8 locale it counts
+    # CHARACTERS, and a ledger full of multibyte branch names would be reported
+    # smaller than the argv cap it just exceeded — a forensic line that reads
+    # precise and is wrong about the one number it exists to give.
+    local LC_ALL=C
     if jq -e . >/dev/null 2>&1 <<<"$2"; then
       printf '$%s parsed (%s bytes)' "$1" "${#2}"
     else

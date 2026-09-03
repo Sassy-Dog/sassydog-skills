@@ -508,17 +508,20 @@ Three conjuncts, and each excludes a normal state the loop already handles:
    the platform is fine and work is stuck, that is STALLED's question or a real defect, and
    stopping the loop would hide it.
 
-**Report WHY an `unknown` could not measure, and treat a probe that says nothing as one.** The
-probe's `explains` field carries the reason behind an `unknown` and the first-party detail behind
-that — including its own `PLATFORM_GH_TIMEOUT` bound firing, which is the single most useful fact
-this loop can print during the outage the state exists for, and which the bare verdict flattens
-into the same sentence as "no `--pr` was given". So render the reason, not the word:
-`probe: unknown — not measured: pr_read_failed; gh pr view exited 124 — the 20s PLATFORM_GH_TIMEOUT
-bound fired`. A run that returns **no stdout at all** — killed by a tool timeout before it could
-emit, the one failure its own emitter fallback cannot answer because the script never reaches it —
-is `unknown` by the same rule and is reported as `probe: no verdict`. Neither form is `degraded`,
-neither stops the loop, and neither is `healthy`: a probe that did not speak is not a platform that
-is fine.
+**Report WHY an `unknown` could not measure, and treat a probe that says nothing as one.** On an
+`unknown` whose `self_measured` is `not_measured`, the probe's `explains` field carries the reason
+and the first-party detail behind it — including its own `PLATFORM_GH_TIMEOUT` bound firing, which
+is the single most useful fact this loop can print during the outage this state exists for, and
+which the bare verdict flattens into the same sentence as "no `--pr` was given". So render the
+reason, not the word: `probe: unknown — not measured: pr_read_failed; gh pr view 305 exited 124 —
+the PLATFORM_GH_TIMEOUT bound fired`. The OTHER `unknown` — a clean first-party read beside a
+status page that could not be read — carries no such tail, and its cause is in `status_page_detail`
+instead; report that field there rather than an empty reason. A run that returns **no stdout at
+all** — killed by a tool timeout before it could emit, or exiting non-zero on a usage error such as
+a missing `jq` — is `unknown` by the same rule and is reported as `probe: no verdict — exit <rc>:
+<first stderr line>`, because "the harness killed it" and "this VM has no `jq`" are different
+problems and the exit code is what separates them. None of these forms is `degraded`, none stops
+the loop, and none is `healthy`: a probe that did not speak is not a platform that is fine.
 
 **Two-tick confirmation, the same shape as STALLED and for the same reason**: a flaky call is not
 an outage. The record is `.git/dispatch-ready-degraded.json` — its **own** file, not the stall
@@ -781,7 +784,8 @@ prompt is this dispatch-ready invocation.
   worse than a few extra no-op ticks.
 
 Safety rails: self-cancel ONLY on a terminal state confirmed above. For DEGRADED, a single
-degraded tick, a `healthy` verdict, an `unknown` verdict, a red check, a genuinely pending check
+degraded tick, a `healthy` verdict, an `unknown` verdict, a `no verdict` run, a red check, a
+genuinely pending check
 or an active foreign claim all mean the loop may still make progress — stay alive. For COMPLETE, anything still
 claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until
 actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over

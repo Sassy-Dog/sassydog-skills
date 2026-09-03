@@ -538,11 +538,19 @@ shift
 # A `gh.timeout.late` arm lived here until #314: the bound firing AFTER the child
 # had flushed stdout, so a real-looking fragment survived a call we cut off. It
 # existed for ONE site, the `gh repo view` repo lookup, which is now a local git
-# read and can neither be bounded nor half-flush a slug. The arm is removed
-# rather than kept "in case": an unreachable branch in a gate is the false
-# impossibility this file's own header calls worse than a missing case, and the
-# three surviving `gh` sites all parse their output through jq, which rejects a
-# truncated payload on its own.
+# read and can neither be bounded nor half-flush a slug, so the arm went with it
+# rather than being kept unreachable.
+#   STATE THE TRUE MECHANISM, because the first version of this note gave the
+#   wrong one (review of #321). It said the three surviving `gh` sites are safe
+#   because "jq rejects a truncated payload" — a COMPLETE late flush parses
+#   perfectly well, so that is not what protects them. What does is that each
+#   site tests `rc` BEFORE it looks at the output and takes the
+#   `gh_call_failed` path on a fired bound whatever was flushed. That is a
+#   structural property of three call sites, not a payload property, and it is
+#   NOT cased here: no scenario drives "output present AND rc 124", and a
+#   mutant that trusts the payload when one arrived passes this file. Recorded
+#   as a known hole rather than implied away — the shape this file's own header
+#   calls worse than a missing case is a claim that it cannot happen.
 exec "$@"
 MOCK
 chmod +x "$BIN/timeout"
@@ -558,11 +566,20 @@ chmod +x "$BIN/timeout"
 # BIN_NT: neither binary — the absent-bound branch.
 # BIN_GT: `gtimeout` only — the macOS spelling, and the `elif` no host with a
 #         plain `timeout` first on PATH can ever reach.
+#
+# BIN_NG: a THIRD curated PATH, carrying `timeout` and NOT `git`, for the
+# derivation's `command -v git` branch (#314's own list, cased in 17d). It is
+# the same answer the two above give — hide a binary by REPLACING the PATH, not
+# by prepending to it — and it exists because that branch was reachable only on
+# a host with no git at all, which is precisely the shape a gate must not leave
+# to the host.
 BIN_NT="$WORK/bin-no-timeout"
 BIN_GT="$WORK/bin-gtimeout"
-mkdir -p "$BIN_NT" "$BIN_GT"
+BIN_NG="$WORK/bin-no-git"
+mkdir -p "$BIN_NT" "$BIN_GT" "$BIN_NG"
 cp "$BIN/gh" "$BIN/curl" "$BIN/git" "$BIN_NT/"
 cp "$BIN/gh" "$BIN/curl" "$BIN/git" "$BIN_GT/"
+cp "$BIN/gh" "$BIN/curl" "$BIN/timeout" "$BIN_NG/"
 cp "$BIN/timeout" "$BIN_GT/gtimeout"
 # Everything else the probe and the mocks reach for, resolved ONCE from the real
 # PATH and symlinked in. `bash` and `env` are here because the mocks carry a
@@ -573,6 +590,7 @@ for t in bash env jq tr cat sed; do
     if [ -n "$t_path" ]; then
         ln -sf "$t_path" "$BIN_NT/$t"
         ln -sf "$t_path" "$BIN_GT/$t"
+        ln -sf "$t_path" "$BIN_NG/$t"
     else
         NT_MISSING="$NT_MISSING $t"
     fi
@@ -588,21 +606,44 @@ BASH_BIN="$(command -v bash)"
 # vacuous or host-dependent. A fixture repo with a remote this file chose makes
 # `.repo` an equality.
 #
-# FIVE OF THEM, one per branch of the derivation plus the URL forms git actually
-# writes. `not-a-repo` is a bare directory under `$WORK`, which `mktemp -d` puts
+# ONE PER BRANCH OF THE DERIVATION, enumerated rather than counted: the three
+# URL forms git writes, a checkout with no `origin`, one whose `origin` this
+# parser refuses, one whose `.git` file points nowhere so `rev-parse` ERRORS,
+# one that is a BARE repository (`false`, exit 0 — the only shape `rev-parse`
+# separates by itself), and a bare directory that is no checkout at all. The
+# remaining branch, `command -v git` failing, has no cwd of its own — it is
+# `BIN_NG`, a curated PATH with no git on it.
+# `not-a-repo` is a bare directory under `$WORK`, which `mktemp -d` puts
 # outside any checkout — assert that, rather than assuming it, because a `$TMPDIR`
 # inside a repo would make the "not in a work tree" case silently measure the
 # opposite branch.
+#
+# HERMETIC AGAINST THE DEVELOPER'S OWN GIT CONFIG, which is the same rule the
+# PLATFORM_* pins follow one layer up (review of #321). `git remote get-url`
+# applies `url.<base>.insteadOf`, and chezmoi-synced dotfiles in this org set
+# exactly that: a laptop with an ssh rewrite would never exercise the `https://`
+# arm, and one with a mirror rewrite would redden 17d for a reason that has
+# nothing to do with the probe. `GIT_CONFIG_GLOBAL=/dev/null` plus
+# `GIT_CONFIG_NOSYSTEM=1` are exported around every git call this file makes —
+# fixture construction AND `run_probe`'s subshell — and 17d asserts that what
+# `get-url` hands back is the literal the fixture wrote, so a rewrite that
+# escapes the pins is a named failure rather than a silent change of subject.
+GIT_HERMETIC_GLOBAL=/dev/null
+GIT_HERMETIC_NOSYSTEM=1
 CWD_SSH="$WORK/cwd-ssh"
 CWD_HTTPS="$WORK/cwd-https"
 CWD_SSHPROTO="$WORK/cwd-sshproto"
 CWD_NOORIGIN="$WORK/cwd-noorigin"
 CWD_BADURL="$WORK/cwd-badurl"
+CWD_BROKEN="$WORK/cwd-broken-gitdir"
+CWD_BARE="$WORK/cwd-bare"
 CWD_NOREPO="$WORK/cwd-not-a-repo"
 mkdir -p "$CWD_NOREPO"
 make_cwd() { # <dir> [origin url]
     mkdir -p "$1"
-    ( cd "$1" && git init -q . >/dev/null 2>&1 && \
+    ( cd "$1" || exit 1
+      export GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"
+      git init -q . >/dev/null 2>&1 && \
       { [ -z "${2:-}" ] || git remote add origin "$2"; } ) || return 1
 }
 CWD_MISSING=""
@@ -613,6 +654,22 @@ make_cwd "$CWD_NOORIGIN"                                                || CWD_M
 # A local-path remote is what a clone of a sibling checkout carries, so the
 # unparsable case is a real shape rather than a contrived string.
 make_cwd "$CWD_BADURL"    "/some/local/path/mock-repo.git"              || CWD_MISSING="$CWD_MISSING badurl"
+# `git rev-parse` ERRORING inside a directory that IS a checkout: a `.git` FILE
+# pointing at a directory that is not there is what a moved worktree or a
+# half-deleted submodule leaves behind, and `safe.directory` produces the same
+# shape. Without it the probe reported "not inside a git work tree" from inside
+# a checkout that plainly is one. Measured: rc 128 with empty stdout — the SAME
+# pair a bare directory gives, which is why the probe's detail names both
+# possibilities instead of choosing (review of #321).
+mkdir -p "$CWD_BROKEN" && printf 'gitdir: %s\n' "$WORK/no-such-gitdir" >"$CWD_BROKEN/.git" \
+    || CWD_MISSING="$CWD_MISSING broken"
+# The one branch `rev-parse` DOES separate: a bare repository prints `false` and
+# exits 0. It has no work tree and so no worktree remote, and it is the reason
+# the output is still read after the status.
+mkdir -p "$CWD_BARE" && \
+    ( cd "$CWD_BARE" || exit 1
+      export GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"
+      git init -q --bare . >/dev/null 2>&1 ) || CWD_MISSING="$CWD_MISSING bare"
 
 # A THIRD PATH, carrying a `jq` that can be told to DIE on one program. The
 # missing-run generator cannot be killed by any payload: its input is the
@@ -887,6 +944,10 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     #                       cwd measures whatever `origin` this checkout has,
     #                       which on a fork PR is not this repo at all (#314).
     #   GH_TIMEOUT_OVERRIDE a bad bound value, for the validation cases.
+    # `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_NOSYSTEM` are pinned below for the reason
+    # every PLATFORM_* knob is: `url.<base>.insteadOf` in a developer's own
+    # config rewrites what `git remote get-url` returns, so an ssh rewrite would
+    # skip the `https://` arm entirely and a mirror rewrite would redden 17d.
     local run_path="${PATH_OVERRIDE:-$BIN:$PATH}"
     local run_cwd="${CWD_OVERRIDE:-$REPO_ROOT}"
     local repo_arg="--repo mock-org/mock-repo"
@@ -902,6 +963,7 @@ run_probe() { # <script> <scenario_dir> [extra probe args...]
     (
         cd "$run_cwd" || exit 99
         PATH="$run_path" SCENARIO_DIR="$dir" MOCK_CALLS="$WORK/calls" \
+        GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" \
         MOCK_BOUNDS="$WORK/bounds" MOCK_JQFAULTS="$WORK/jqfaults" \
         PLATFORM_STATUS_URL="https://status.example.invalid/api/v2/summary.json" \
         PLATFORM_STATUS_TIMEOUT=5 \
@@ -1546,9 +1608,31 @@ echo "17d. the repo is derived LOCALLY, and a failed derivation still reaches a 
 # slug on a fork PR, and this repo is PUBLIC so fork PRs are ordinary — and an
 # equality against that is either vacuous or host-dependent.
 if [ -z "$CWD_MISSING" ]; then
-    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable)"
+    ok "the cwd fixtures were built (ssh, https, ssh://, no-origin, unparsable, broken-gitdir, bare)"
 else
     bad "the cwd fixtures could not be built; missing:$CWD_MISSING"
+fi
+# THE PINS ARE PROVED TO BIND, not assumed to. `url.<base>.insteadOf` in the
+# developer's own config rewrites what `get-url` returns, and this org's dotfiles
+# set exactly that — so a laptop with an ssh rewrite would run the `https://` arm
+# against an ssh URL and report a pass for a form it never exercised. Reading the
+# literal back under the same pins `run_probe` uses turns that into a named
+# failure (review of #321).
+url_pin_bad=""
+for pin_form in ssh https sshproto; do
+    case "$pin_form" in
+        ssh)      pin_dir="$CWD_SSH";      pin_want="git@github.com:mock-org/mock-repo.git" ;;
+        https)    pin_dir="$CWD_HTTPS";    pin_want="https://github.com/mock-org/mock-repo.git" ;;
+        sshproto) pin_dir="$CWD_SSHPROTO"; pin_want="ssh://git@github.com/mock-org/mock-repo" ;;
+    esac
+    pin_got="$( cd "$pin_dir" && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
+        GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" git remote get-url origin 2>/dev/null )"
+    [ "$pin_got" = "$pin_want" ] || url_pin_bad="$url_pin_bad [$pin_form: got '$pin_got' want '$pin_want']"
+done
+if [ -z "$url_pin_bad" ]; then
+    ok "  and each fixture's origin reads back as the literal written, so no insteadOf rewrite is in play"
+else
+    bad "  a fixture's origin URL was rewritten before the probe saw it:$url_pin_bad"
 fi
 # The bare-directory fixture must really be outside a checkout, or the
 # "not in a work tree" case below silently measures the opposite branch.
@@ -1596,16 +1680,34 @@ for form in ssh https sshproto; do
     fi
 done
 
-# THE THREE FAILURE SHAPES. Each one used to be, or would have been, exit 1 with
-# no verdict at all; each is now `first_party repo_lookup_failed`, a real
-# verdict, and a reason that names which input broke.
-for shape in noorigin badurl notree; do
+# EVERY FAILURE SHAPE, ENUMERATED. Each one used to be, or would have been,
+# exit 1 with no verdict at all; each is now `first_party repo_lookup_failed`, a
+# real verdict, and a reason that names which input broke. Two of them are here
+# because the first edition left them uncased while the probe's header counted
+# them (review of #321): `rev-parse` ERRORING is a different branch from it
+# printing `false`, and it is the ordinary `safe.directory` shape — reading the
+# output alone reported "not inside a git work tree" from inside a checkout that
+# plainly is one; and `nogit` is the branch that exists so a host with no git
+# does not get that same false cause, which is untestable only on a host that
+# happens to have no git, i.e. exactly what a curated PATH is for.
+for shape in noorigin badurl notree broken bare nogit; do
+    fail_path=""
     case "$shape" in
         noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
         badurl)   fail_cwd="$CWD_BADURL";   fail_why="not a github.com owner/name URL" ;;
-        notree)   fail_cwd="$CWD_NOREPO";   fail_why="not inside a git work tree" ;;
+        # `notree` and `broken` share a detail ON PURPOSE: both are rc 128 with
+        # empty stdout, and `git rev-parse` separates them only in
+        # locale-dependent stderr, so the probe names both possibilities rather
+        # than picking one. Two fixtures for one detail is the point — the
+        # earlier edition answered `broken` with "not inside a git work tree",
+        # which is false of it.
+        notree)   fail_cwd="$CWD_NOREPO";   fail_why="not inside a readable git work tree — git rev-parse exited" ;;
+        broken)   fail_cwd="$CWD_BROKEN";   fail_why="not inside a readable git work tree — git rev-parse exited" ;;
+        bare)     fail_cwd="$CWD_BARE";     fail_why="inside a bare git repository" ;;
+        nogit)    fail_cwd="$CWD_SSH";      fail_why="git is not installed"; fail_path="$BIN_NG" ;;
     esac
-    REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$fail_cwd" run_probe "$PROBE" "$D_LOOKUP" --pr 301
+    REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$fail_cwd" PATH_OVERRIDE="$fail_path" \
+        run_probe "$PROBE" "$D_LOOKUP" --pr 301
     expect_status "[$shape] a failed derivation exits 0 — it is a symptom, not a usage error" 0
     expect_verdict "  and emits a VERDICT rather than dying with no output" "unknown"
     expect_field "  naming the derivation, not the PR it never got to read" \
@@ -1675,6 +1777,27 @@ if grep -qF -- "neither timeout nor gtimeout on PATH" <<<"$STDERR"; then
     ok "  and it warns once on stderr, the channel a hand invocation actually reads"
 else
     bad "  nothing on stderr says the bound never applied: '$(printf '%.200s' "$STDERR")'"; dump
+fi
+# THE `explains` TAIL EXCLUDES THE `probe` SCOPE, and until now nothing observed
+# that (review of #321): `fp_details` filters by exclusion exactly as the
+# first-party COUNT does, and widening it to include `probe` was a green
+# mutation. It has to stay excluded for the same reason the count does — a
+# coreutils-less host would otherwise read "not measured: … neither timeout nor
+# gtimeout is on PATH" on every run, offering the operator a cause that had no
+# bearing on the measurement. This run carries BOTH kinds at once, which is the
+# only arrangement that can tell inclusion from exclusion apart.
+D_NT_FP="$(scenario notimeout-fp "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
+: >"$D_NT_FP/pr.fail"
+PATH_OVERRIDE="$BIN_NT" run_probe "$PROBE" "$D_NT_FP" --pr 301
+expect_verdict "with a failed read beside it the run is unknown" "unknown"
+expect_errkind "  and both ledger kinds are present" "timeout_unavailable"
+expect_explains_names "  the tail names the FIRST-PARTY failure" "gh pr view 301 exited 4"
+nt_tail="$(field .explains)"
+if grep -qF -- "neither timeout nor gtimeout is on PATH" <<<"${nt_tail#*"$EXPLAINS_TAIL_MARK"}"; then
+    bad "  the probe-scoped entry leaked into explains — a coreutils-less host would read it as the cause"
+    dump
+else
+    ok "  and omits the probe-scoped one, which had no bearing on the measurement"
 fi
 
 echo "17f. gtimeout — the macOS spelling, and the elif no shimmed PATH reaches" >&2
@@ -2130,6 +2253,11 @@ ceiling_ok=1
 for v in "$gh_default" "$status_default" "$kill_grace" "$BOUNDED_SITES"; do
     case "$v" in ""|*[!0-9]*) ceiling_ok=0 ;; esac
 done
+# `-gt 0` on the site count, not merely "all digits": a `BOUNDED_SITES` that
+# came back 0 — 17b's count broken, or the variable never set — passes the digit
+# test and makes the arithmetic 5s, which clears any ceiling vacuously (review
+# of #321).
+[ "${BOUNDED_SITES:-0}" -gt 0 ] 2>/dev/null || ceiling_ok=0
 if [ "$ceiling_ok" -ne 1 ]; then
     bad "the worst-case terms could not be read from the source (bound '$gh_default', grace '$kill_grace', status '$status_default', sites '$BOUNDED_SITES')"
 else
@@ -2142,10 +2270,19 @@ else
 fi
 # And the two documents that state that number must state the SAME one. A
 # ceiling nobody can read is a ceiling an operator raises by accident.
-if grep -qF -- "${worst:-«unreadable»}s" "$PROBE" && grep -qF -- "${worst:-«unreadable»}s" "$SKILL"; then
-    ok "  and both the probe header and §2b state it, so an operator sees it before raising the knob"
+#
+# SCOPED, AND ANCHORED ON THE `=` (review of #321). The first edition grepped
+# each file whole for a bare `80s`, which the bundled-script table satisfies on
+# its own — so §2b, the section where an operator actually decides tick
+# placement, could lose the sentence entirely with this green. The probe side is
+# anchored on the arithmetic that produces the number rather than on the number,
+# so a header stating a total it does not derive is red too.
+worst_2b="$(section_of "$SKILL" "### 2b. Platform degradation probe")"
+worst_sum="= ${worst:-«unreadable»}s"
+if grep -qF -- "$worst_sum" "$PROBE" && grep -qF -- "${worst:-«unreadable»}s" <<<"$worst_2b"; then
+    ok "  and the probe header derives it ('$worst_sum') while §2b itself states it"
 else
-    bad "  the ${worst:-«unreadable»}s worst case is not stated in both the probe header and SKILL.md §2b"
+    bad "  the ${worst:-«unreadable»}s worst case is not derived in the probe header AND stated inside §2b"
 fi
 # Both anomaly generators must CAPTURE their exit status. A process
 # substitution's failure is invisible to pipefail, and RUN_CHECK is already
@@ -2212,7 +2349,8 @@ expect_default "the unmeasured unknown carries its reason into explains" \
 # the false-impossibility shape this file's own header calls worse than a
 # missing case. The handler is pinned at source level here as well, and
 # mutation-proved by M25 and M29 below, which also hold the fallback to its
-# three keys.
+# four keys (`pr` admitted under #314's narrower rule) and to the stderr line
+# naming which ledger failed.
 expect_default "the verdict emitter captures its exit status" \
     'emitted="$(jq -n'
 expect_default "  and re-parses the output before printing it" \
@@ -3169,7 +3307,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=285
+EXPECTED_CASES=311
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked
