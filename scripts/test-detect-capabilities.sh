@@ -150,6 +150,15 @@
 #       below, the first leaves the config fixture UNTRACKED — property 2 then
 #       passes because there is nothing to find — and the second fails the
 #       fixture build.
+#   M11 add `':(exclude)**/.claude/**'` BESIDE the root form -> 1 red: NESTED
+#       reads `false|false`. The ROOT-ANCHORING decision had a fixture and no
+#       mutation, which is the gap M10 closes for the other carve-out: NESTED
+#       asserts that `apps/web/.claude/**` still matches, and until this entry
+#       nothing here grew the pathspec to check that the assertion could fail.
+#       Note the ADDING form, not the replacing one — respelling the root form
+#       to `**/.claude/**` is 6 red, because it also trips property 5's
+#       literal-pathspec guard, and that would measure the spelling pin rather
+#       than the anchoring.
 #   M10 add `':(exclude)CLAUDE.md'` to both lines            -> 1 red: CLAUDEMD
 #       reads `false|false`. DOCS stays GREEN — it carries a root `CLAUDE.md`
 #       but also a `README.md` and a `docs/adr-001.md`, either of which holds
@@ -170,7 +179,8 @@
 # true in the first place, so adding CLAUDEMD did not invalidate it. A count of
 # two with one member enumerated is the shape this repo forbids, and it lasted
 # exactly one round.)
-# So: add a fixture, re-run EVERY mutation above and re-record what you observe.
+# So: add, change or remove a fixture — any of the three — and re-run EVERY
+# mutation above, re-recording what you observe.
 # Do not reason about which entries "should" be affected.
 #
 # `gh` is MOCKED and every call fails: the probe requires it on PATH but
@@ -296,16 +306,11 @@ Sentry.init({ dsn: process.env.DSN });
 SRC
 }
 
-neutral_src() { # <root-dir>
-    mkdir -p "$1/src"
-    printf 'export const noop = 1;\n' > "$1/src/app.ts"
-}
-
 CONFIG="$WORK/config-only"
-mkrepo "$CONFIG"; write_config "$CONFIG"; neutral_src "$CONFIG"; commit_all "$CONFIG" config-only
+mkrepo "$CONFIG"; write_config "$CONFIG"; commit_all "$CONFIG" config-only
 
 HOOK="$WORK/hook-only"
-mkrepo "$HOOK"; write_hook "$HOOK"; neutral_src "$HOOK"; commit_all "$HOOK" hook-only
+mkrepo "$HOOK"; write_hook "$HOOK"; commit_all "$HOOK" hook-only
 
 SOURCE="$WORK/source-only"
 mkrepo "$SOURCE"; write_source "$SOURCE"; commit_all "$SOURCE" source-only
@@ -321,20 +326,29 @@ printf '# Product\n\nNo posthog, no sentry.init.\n' > "$DOCS/README.md"
 printf '# ADR 1\n\nposthog was considered. sentry.init was not wired.\n' > "$DOCS/docs/adr-001.md"
 commit_all "$DOCS" docs-only
 
-# The root CLAUDE.md ALONE — and literally alone: no `neutral_src` here, unlike
-# CONFIG, HOOK and LOCK. There it stops a `false` verdict passing because the
-# tree had nothing to search; CLAUDEMD expects `true`, so that justification
-# does not carry over. NESTED was in this list for one round and should never
-# have been: it expects `true|true` too (see its own `expect`), so the same
-# test that excluded CLAUDEMD excludes it. Its `neutral_src` went with this
-# edit — measured, baseline green and M8 still 4 red with DOCS, CLAUDEMD and
-# NESTED all present, because what those mutations reach in NESTED is its
-# `apps/web/.claude/sassy-dog/survey-work.md`, not a neutral source file.
+# The root CLAUDE.md ALONE — every fixture here holds only what its assertion
+# needs.
 #
-# CLAUDEMD had a `neutral_src` anyway, with a header claiming it "must stay".
-# Measured: deleting it leaves the baseline green, M8 at 4 red with identical
-# members, and M10 at 1 red on this fixture — nothing depended on it. It is
-# gone, and this sentence is true again.
+# THERE IS NO `neutral_src` HELPER ANY MORE, and the reason is worth keeping,
+# because three successive rounds of review went into finding it. Four fixtures
+# carried a call writing `src/app.ts` (`export const noop = 1;`), justified in
+# this header as stopping a `false` verdict from passing on a tree with nothing
+# to search. It never did that. The file matches NEITHER grep pattern, so it
+# cannot distinguish "searched and missed" from "searched nothing" at any
+# assertion in this gate. Measured, with all four calls deleted: baseline
+# green, and M1 4 / M2 4 / M3 5 / M4 3 / M5 2 / M6 1 / M7 3 / M8 4 / M9 0 /
+# M10 1 — every count and every red-set member byte-identical to the record.
+#
+# What actually supplies the non-vacuity the helper claimed: PROPERTY 1 for
+# CONFIG and HOOK (it reports a self-match fixture that stopped carrying the
+# self-match, which is how M5 and M6 fire at all), and M4 for LOCK (dropping
+# `*.lock*` reddens `lock-only` on its own). Neither needs a neutral file.
+#
+# Three rounds of review landed on the sentence that justified this helper, and
+# each fix reworded it: "must stay" (false), then a four-fixture set whose
+# property was false for NESTED, then a three-fixture set whose property was
+# false for all three. The wording was never the defect. Do not reintroduce
+# `neutral_src` for a new fixture without a mutation that goes red without it.
 #
 # DOCS cannot pin the root-CLAUDE.md decision even though it carries the file:
 # its README.md and docs/adr-001.md keep it at
@@ -352,7 +366,7 @@ mkrepo "$BOTH"; write_config "$BOTH"; write_source "$BOTH"; commit_all "$BOTH" b
 LOCK="$WORK/lock-only"
 mkrepo "$LOCK"
 printf '"posthog-js@1.0.0": {}\n"@sentry/browser@8.0.0": {}\nsentry.init\n' > "$LOCK/bun.lock"
-neutral_src "$LOCK"; commit_all "$LOCK" lock-only
+commit_all "$LOCK" lock-only
 
 # Root-anchored: this one is EXPECTED to still be detected. See the anchoring
 # decision in the header.
