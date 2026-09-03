@@ -26,7 +26,11 @@
 # integration, and an asymmetry between two adjacent lines reads as an oversight
 # to the next editor, who fixes it in whichever direction they guess. (A ROOT
 # `CLAUDE.md` is not covered by any of this: it sits outside `.claude/` and
-# still matches, deliberately — see the DOCS fixture, which pins that.)
+# still matches, deliberately — see the CLAUDEMD fixture, which pins that. It is
+# NOT the DOCS fixture: DOCS carries a root `CLAUDE.md` too, but its `README.md`
+# and `docs/adr-001.md` hold both verdicts true on their own, so DOCS stays green
+# under an added `':(exclude)CLAUDE.md'` and measures nothing about this claim.
+# That is what M10 records, and it is why the two fixtures are separate.)
 #
 # WHAT IS BEHAVIOUR HERE AND WHAT IS SPELLING. Properties 2-4 run the SHIPPED
 # script inside real git fixtures and read its JSON, so they measure the
@@ -55,12 +59,16 @@
 #      or respelled, and adequacy cannot be measured through it.
 #   2. CONFIG and HOOK each detect `posthog: false` and `sentry: false`. This is
 #      #317 itself; before the fix both were `true`.
-#   3. SOURCE (a real SDK in `src/`) and DOCS (root `CLAUDE.md`, `README.md`,
-#      `docs/`) each detect `true` for both. DOCS is not decoration: the caveat
-#      shipped in `interview.md` §2c and `update-mode.md` PROMISES that a repo
-#      which merely documents PostHog still trips detection, and without this
-#      fixture a broader exclusion — `':(exclude)*.md'`, say — would keep every
-#      other assertion green while breaking that promise.
+#   3. SOURCE (a real SDK in `src/`), DOCS (root `CLAUDE.md`, `README.md`,
+#      `docs/`) and CLAUDEMD (a root `CLAUDE.md` and NOTHING else) each detect
+#      `true` for both. DOCS is not decoration: the caveat shipped in
+#      `interview.md` §2c and `update-mode.md` PROMISES that a repo which merely
+#      documents PostHog still trips detection, and without this fixture a
+#      broader exclusion — `':(exclude)*.md'`, say — would keep every other
+#      assertion green while breaking that promise. CLAUDEMD is the narrower
+#      sibling and is not redundant with it: it is the ONLY fixture whose sole
+#      occurrence is the root `CLAUDE.md`, so it is the only one that can go red
+#      on an exclusion aimed at that file alone (M10).
 #   4. BOTH (config mention AND real source) detects `true`; LOCK (the strings
 #      only in `bun.lock`) detects `false` — the pre-existing `*.lock*` pathspec
 #      still does its own job on the line this change edited; and NESTED
@@ -118,6 +126,13 @@
 #       below, the first leaves the config fixture UNTRACKED — property 2 then
 #       passes because there is nothing to find — and the second fails the
 #       fixture build.
+#   M10 add `':(exclude)CLAUDE.md'` to both lines            -> 1 red: CLAUDEMD
+#       reads `false|false`. DOCS stays GREEN — it carries a root `CLAUDE.md`
+#       but also a `README.md` and a `docs/adr-001.md`, either of which holds
+#       both verdicts true on its own. That is the whole reason CLAUDEMD exists:
+#       before it, the header's root-`CLAUDE.md` claim cited DOCS and this
+#       mutation ran the gate ALL GREEN, so the one deliberate carve-out in the
+#       pathspec was pinned by nothing while reading as measured.
 #
 # `gh` is MOCKED and every call fails: the probe requires it on PATH but
 # degrades every gh-backed field to null/[] with a note, and none of those
@@ -267,6 +282,16 @@ printf '# Product\n\nNo posthog, no sentry.init.\n' > "$DOCS/README.md"
 printf '# ADR 1\n\nposthog was considered. sentry.init was not wired.\n' > "$DOCS/docs/adr-001.md"
 commit_all "$DOCS" docs-only
 
+# The root CLAUDE.md ALONE. DOCS cannot pin the root-CLAUDE.md decision even
+# though it carries the file: its README.md and docs/adr-001.md keep it at
+# `true|true` under an added `':(exclude)CLAUDE.md'`, so the claim would read as
+# measured while nothing measured it. This fixture is the only place it IS
+# measured — see M10.
+CLAUDEMD="$WORK/claude-md-only"
+mkrepo "$CLAUDEMD"
+printf '# Repo guide\n\nWe evaluated posthog and rejected it; sentry.init lives nowhere here.\n' > "$CLAUDEMD/CLAUDE.md"
+neutral_src "$CLAUDEMD"; commit_all "$CLAUDEMD" claude-md-only
+
 BOTH="$WORK/both"
 mkrepo "$BOTH"; write_config "$BOTH"; write_source "$BOTH"; commit_all "$BOTH" both
 
@@ -370,6 +395,8 @@ expect "source-only fixture" "$SOURCE" "true|true" \
     "the exclusion has over-reached: a real SDK in tracked source outside .claude/ is exactly what this probe exists to find"
 expect "docs-only fixture" "$DOCS" "true|true" \
     "a repo that merely DOCUMENTS the surface must still trip detection — interview.md §2c and update-mode.md both promise that, and say to name the file that matched"
+expect "claude-md-only fixture" "$CLAUDEMD" "true|true" \
+    "a ROOT CLAUDE.md sits outside .claude/ and still matches, by decision. This fixture is the ONLY one that measures it: DOCS stays green under an added ':(exclude)CLAUDE.md' because its README.md and docs/adr-001.md keep both verdicts true"
 expect "both fixture" "$BOTH" "true|true" \
     "a real integration must still be detected when the config also mentions the word"
 expect "lock-only fixture" "$LOCK" "false|false" \

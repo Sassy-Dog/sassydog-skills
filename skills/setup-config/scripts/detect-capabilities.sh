@@ -116,7 +116,9 @@ for d in ./dev ./run.sh; do [[ -x "$d" ]] && { dev_script="$d"; break; }; done
 # setup-config writes its config at the repo root and nowhere else, so the shape
 # #317 measured cannot arise nested from the generator; a root `CLAUDE.md` is
 # outside `.claude/` and still matches too, deliberately. All of it, the
-# anchoring included, is pinned by scripts/test-detect-capabilities.sh.
+# anchoring included, is pinned by scripts/test-detect-capabilities.sh — the
+# root-`CLAUDE.md` carve-out specifically by its CLAUDEMD fixture (M10), never
+# by DOCS, which stays green under an exclusion aimed at that file alone.
 sentry="false"
 git grep -lqiE '@sentry/|sentry_flutter|sentry\.init|Sentry\.Init' -- ':(exclude)*.lock*' ':(exclude).claude/**' >/dev/null 2>&1 && sentry="true"
 posthog="false"
