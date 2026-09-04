@@ -1041,6 +1041,27 @@
 #      verdict stays correct. Mock `gh`, git run with the contributor's global
 #      and system config out of the way, no network, no real repo.
 #
+#  37. plugin-root-in-references tests
+#      (scripts/test-plugin-root-in-references.sh) — `${CLAUDE_PLUGIN_ROOT}` is
+#      substituted into `SKILL.md` at load time and nowhere else, so a
+#      reference doc that writes it in a command resolves the path against `/`
+#      and exits 127. Thirteen such lines accumulated across six docs (issue
+#      #329) while CLAUDE.md documented the rule in prose the whole time —
+#      this repo's own "a rule stated in prose with no gate rots silently"
+#      convention, applied to itself. The guard bans the token in COMMAND
+#      usage, keyed on fenced code blocks, and must NOT touch
+#      `skills/assess-it/references/github-issue-ops.md`, whose prose names the
+#      token to document this exact trap; that line is the discrimination
+#      fixture, so a scanner degraded into matching everything fails property
+#      2 rather than deleting the one doc that explains the bug. Property 3 is
+#      the one with teeth: a doc using `$PLUGIN_ROOT` must carry the
+#      path-resolution preamble defining it, because an unset variable
+#      resolves against `/` exactly like the token it replaced — the same
+#      defect wearing a different name, and the shape a later cleanup reaches
+#      for. Mutation-proved both directions, plus a blockquoted fence, against
+#      scratch fixtures scanned by the SAME function that scans the tree. No
+#      gh, no network, no mutation.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -1760,6 +1781,12 @@ if bash scripts/test-detect-capabilities.sh; then
     pass "detect-capabilities tests (scripts/test-detect-capabilities.sh)"
 else
     failed "detect-capabilities tests (scripts/test-detect-capabilities.sh)"
+fi
+
+if bash scripts/test-plugin-root-in-references.sh; then
+    pass "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
+else
+    failed "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
 fi
 
 # ------------------------------------------------------------------------------

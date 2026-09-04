@@ -1,5 +1,7 @@
 # ProjectV2 board operations
 
+> **Path resolution.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` at load time only — **not** into this file (reference docs are read raw), and it is **not** an environment variable in the shell. Before running anything below, set `PLUGIN_ROOT` to the plugin root's absolute path: the invoking `SKILL.md` already carries it resolved in its own command lines, and it is this skill's announced base directory minus `/skills/<skill-name>`. Every command below quotes `"$PLUGIN_ROOT/..."`, so an unset value fails loudly with a 127 rather than resolving against `/`.
+
 ## Discovering board IDs
 
 Callers of `file-or-link-issue.sh --project-id ...` and `gh project item-edit` need three IDs. Discover them once per board (they're stable — project skills pin them as facts):
@@ -21,7 +23,7 @@ A PAT needs the `project` scope for these; without it, reads fail and the right 
 Use the bundled script — it guards the truncation trap:
 
 ```bash
-PROJECT_NUMBER=4 OWNER=Sassy-Dog bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/board-snapshot.sh
+PROJECT_NUMBER=4 OWNER=Sassy-Dog bash "$PLUGIN_ROOT/skills/github-issues/scripts/board-snapshot.sh"
 ```
 
 **The `--limit` trap:** `gh project item-list` returns items in numeric order, so a too-small limit silently drops the *newest* issues off the end (bitten in production at exactly 200). The script defaults to 2000 and reports `truncated: true` when the ceiling was hit — if you see it, raise `PROJECT_LIMIT`, don't ignore it.
@@ -42,7 +44,7 @@ gh project item-edit \
 **Wrap mutating board calls in pr-shepherd's `gh-retry.sh`** — the Projects GraphQL endpoint flakes intermittently:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- project item-edit ...
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/gh-retry.sh" -- project item-edit ...
 ```
 
 Board claims are **best-effort**: if the retry exhausts (exit 124) or the item isn't on the board, log it and proceed. A PR with `Closes #N` lands the card on Done automatically when it merges — don't fail a dispatch over a missing card.

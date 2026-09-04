@@ -4,6 +4,8 @@ GitHub shipped stacked PRs to public preview on 2026-07-30. A stack is a chain o
 
 Everything here is **read-and-gate only**. This skill never creates, extends, or dissolves a stack — the dispatchers (`take-it`, `dispatch-ready`) own creation, gated behind their `stacked_prs:` config.
 
+> **Path resolution.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` at load time only — **not** into this file (reference docs are read raw), and it is **not** an environment variable in the shell. Before running anything below, set `PLUGIN_ROOT` to the plugin root's absolute path: the invoking `SKILL.md` already carries it resolved in its own command lines, and it is this skill's announced base directory minus `/skills/<skill-name>`. Every command below quotes `"$PLUGIN_ROOT/..."`, so an unset value fails loudly with a 127 rather than resolving against `/`.
+
 ## Why a stack is dangerous to this skill specifically
 
 `merge-shepherd.sh` is the single writer, and it merges any PR that is green **AND** `mergeable=MERGEABLE` **AND** `mergeStateStatus=CLEAN`.
@@ -37,7 +39,7 @@ Membership is GraphQL-only. `gh pr view --json stack` fails with `Unknown JSON f
 ### The probe
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/stack-probe.sh" <pr> --repo owner/name
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/stack-probe.sh" <pr> --repo owner/name
 ```
 
 Exit `0` in a stack · `10` available but not stacked · `11` stacks unavailable here · `1` usage/API error. Omit the PR number to probe the repo and list its open stacks.

@@ -2,8 +2,10 @@
 
 Run the bundled probe from the target repo's root:
 
+> **Path resolution.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` at load time only — **not** into this file (reference docs are read raw), and it is **not** an environment variable in the shell. Before running anything below, set `PLUGIN_ROOT` to the plugin root's absolute path: the invoking `SKILL.md` already carries it resolved in its own command lines, and it is this skill's announced base directory minus `/skills/<skill-name>`. Every command below quotes `"$PLUGIN_ROOT/..."`, so an unset value fails loudly with a 127 rather than resolving against `/`.
+
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/setup-config/scripts/detect-capabilities.sh
+bash "$PLUGIN_ROOT/skills/setup-config/scripts/detect-capabilities.sh"
 ```
 
 It emits one JSON object; every probe degrades to `null`/`[]` plus an entry in `detect_failures` rather than aborting. Treat the output as *evidence to confirm*, not truth — the interview validates anything consequential.

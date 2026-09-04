@@ -2,6 +2,8 @@
 
 After a batch of parallel sub-agents merges (or fails), the coordinating session must clean its own trace inline — not defer to a future cleanup pass. End state to assert: `git worktree list` shows only the main checkout (plus any genuinely-open PR's worktree), local default branch == origin, no leftover feature branches, no leftover `worktree-agent-*` isolation branches.
 
+> **Path resolution.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` at load time only — **not** into this file (reference docs are read raw), and it is **not** an environment variable in the shell. Before running anything below, set `PLUGIN_ROOT` to the plugin root's absolute path: the invoking `SKILL.md` already carries it resolved in its own command lines, and it is this skill's announced base directory minus `/skills/<skill-name>`. Every command below quotes `"$PLUGIN_ROOT/..."`, so an unset value fails loudly with a 127 rather than resolving against `/`.
+
 ## The squash-ancestry trap
 
 **`git branch --merged` is useless when the repo squash-merges.** A squash-merged branch's tip is NOT an ancestor of the default branch, so `--merged` reports it UNMERGED — a false negative that makes naive cleanup keep everything forever.
@@ -22,11 +24,11 @@ Prefix override: `ISOLATION_BRANCH_PREFIX` env (default `worktree-agent-`), hono
 As each sub-agent returns, record `{issue, pr, worktreePath, worktreeBranch}`. Teardown consumes the `worktreePath`s to clean up *exactly* this batch instead of guessing. Write it somewhere durable (e.g. `.git/<batch-name>.json`) so a crashed coordinator's worktrees stay reclaimable via `--sweep` later.
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh <wt_path_1> <wt_path_2> ...
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/teardown.sh" <wt_path_1> <wt_path_2> ...
 # with no manifest (crashed coordinator, older sessions):
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh --sweep
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/teardown.sh" --sweep
 # this batch AND everything else stale, in one call — flags parse anywhere:
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh <wt_path_1> <wt_path_2> --sweep
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/teardown.sh" <wt_path_1> <wt_path_2> --sweep
 ```
 
 The manifest form and `--sweep` are **not** alternatives: pass both and the named paths are torn down first, then the sweep runs, then the shared prune/reconcile/residual tail — which is what "tear these down, then sweep" should mean in a single invocation. An argument starting with `-` that is neither flag is rejected with a usage error and exit 2 *before* any teardown, never taken for a path (issue #200). `--reconcile-only` is the exception: it skips every worktree/branch phase, so combining it with anything is rejected.
@@ -45,7 +47,7 @@ Single ordered recovery that handles both — `cd` back to the main repo root fi
 
 ```bash
 cd <main-repo-root>                         # snap cwd back (Drift B)
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/teardown.sh --reconcile-only
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/teardown.sh" --reconcile-only
 git branch -D "<feature-branch>" 2>/dev/null || true
 ```
 
