@@ -33,9 +33,39 @@
 #      leave them in, so an unstripped body flags the template's numbers on every
 #      single PR — the same "fires on everything" collapse as (b).
 #
-# The mock also serves ONLY the fields `--json` asks for, because the fixture is
-# otherwise dishonest: drop `body` from the script's pull and a mock that always
-# hands back bodies keeps this gate green while production loses the arm.
+# (b) AND (c) ARE THE TRUST BOUNDARY, and each is a route back to `[]`. They are
+# the only code here that reads untrusted PR text and decides to say nothing, so
+# every way they can OVER-suppress gets its own fixture and its own mutant. A
+# combined row would go green again the moment one form regressed:
+#
+#   - `Closes #N` inside a fenced code block, inside an inline code span, or
+#     inside a quotation is an illustration, not GitHub closing anything. The
+#     backticked form is what this repo's own docs and PR template model, so
+#     without it a PR that merely DOCUMENTS the convention silences the issue.
+#   - `\s` between keyword and ref spans NEWLINES, so `## Resolved` two lines
+#     above a bare `#451` would read as a close. The separator is same-line.
+#   - Suppression is POSITIONAL. A body-global number set let one `Closes #N`
+#     silence every later mention of N in the same body.
+#   - A single stray `<!--` plus the template's trailing `-->` used to delete
+#     everything between them — silencing every issue a PR named AT ONCE, with
+#     no visible trace, since HTML comments render as nothing. The pattern now
+#     refuses to span a nested `<!--`, oversized spans are left in place, and
+#     the refusal reaches the reader as both a finding field and a stderr line.
+#   - A ref needs BOUNDARIES: `owner/repo#123` is not this repo's #123 and the
+#     hex colour `#7A3FE4` is not issue #7.
+#
+# Every one of those trades the same way: an over-broad suppression is a SILENT
+# FALSE NEGATIVE, while a missed one is a false positive a human dismisses.
+#
+# The mock serves ONLY the fields `--json` asks for, on BOTH list branches,
+# because the fixture is otherwise dishonest: `body` is the sole input to
+# detectors 2 and 3 as well as to the new arm, and a mock that always hands it
+# back keeps every row green while production reads "" — which for detector 3
+# means `parent_to_children` stays {} and #198's bug returns in silence.
+#
+# A FAILED pull exits 10 rather than degrading to `[]`. Three empty sections and
+# exit 0 is byte-identical to a healthy repo, so an expired token would
+# otherwise render as "we checked, nothing found".
 #
 # One property here is asserted against the SOURCE rather than the fixture, and
 # has to be: adding `body` pushed the three pulls past ARG_MAX on a real repo
@@ -82,11 +112,24 @@
 #     body regex must drop #316 while leaving the title arm's #400 alone,
 #     neutering the closing-keyword regex must make #500 appear, and neutering
 #     the comment strip must make #700 appear
-#   - dropping `body` from the merged-PR `--json` pull drops #316 — the mock
-#     projects the requested fields, so the field list cannot rot unnoticed
+#   - the suppression does NOT reach past GitHub's own closing semantics: a
+#     keyword in a fence (#801), a code span (#803), a quotation (#805), one
+#     separated by blank lines (#807), and a second mention after a real close
+#     (#809) all still flag — each with a mutant that makes exactly that one
+#     vanish, so the three underlying defects stay told apart
+#   - a stray `<!--` cannot swallow the body: #811 and #813 survive it, and the
+#     naive `<!--.*?-->` mutant must swallow them both
+#   - an oversized comment is REFUSED rather than stripped, #815 stays visible,
+#     and the refusal is on the finding AND on stderr
+#   - a body ref carries boundaries: `owner/repo#123` and `#7A3FE4` claim
+#     neither #123 nor #7, and the unbounded mutant must claim both
+#   - dropping `body` from EITHER `--json` pull reddens — the merged-PR one
+#     drops #316, the all-state one drops detector 3's #283
+#   - a FAILED pull exits 10 with gh's own reason, printing no sections at all
 #   - every finding names the arm that matched (`matched_via`)
-#   - the pulls reach python as file paths, never as argv payloads (source-level
-#     — see the ARG_MAX note above; the fixture is far too small to show it)
+#   - the pulls reach python as file paths, never as argv payloads, and the
+#     all-state pull passes its own `--limit` (both source-level — see the
+#     ARG_MAX note above; the fixture is far too small to show either)
 #   - detector 2 still works
 #   - the whole run is READ-ONLY: the mock records any non-read call, and the
 #     record must be empty
@@ -130,41 +173,58 @@ set -uo pipefail
 cmd="${1:-}"; sub="${2:-}"
 shift 2 2>/dev/null || true
 
+# MOCK_FAIL="<cmd> <sub>" makes that one pull fail the way an expired token or
+# a rate limit does: non-zero, with a reason on stderr.
+if [ -n "${MOCK_FAIL:-}" ] && [ "$cmd $sub" = "$MOCK_FAIL" ]; then
+    echo "simulated failure: HTTP 401 Bad credentials" >&2
+    exit 1
+fi
+
+# serve <fixture-file> <fields-csv> <limit>
+#
+# Projects to the requested --json fields and truncates to --limit, exactly as
+# gh does. BOTH list branches go through this, and that is the point: a mock
+# that hands back a field the caller never asked for keeps a gate green while
+# production reads nothing. `body` is the sole input to detectors 2 AND 3, so
+# an unprojected `issue list` leaves the #198 tracking-parent detector — the
+# whole reason this gate exists — completely unpinned.
+serve() {
+    python3 - "$1" "$2" "$3" <<'PYPROJECT'
+import json, sys
+rows = json.load(open(sys.argv[1]))
+want = [f for f in sys.argv[2].split(",") if f]
+limit = int(sys.argv[3])
+rows = [{k: v for k, v in r.items() if k in want} for r in rows]
+print(json.dumps(rows[:limit]))
+PYPROJECT
+}
+
 case "$cmd $sub" in
     "issue list")
-        state=""
+        state=""; fields=""; limit=30      # gh's own default page size
         while [ $# -gt 0 ]; do
             case "$1" in
                 --state) state="${2:-}"; shift 2 ;;
+                --json)  fields="${2:-}"; shift 2 ;;
+                --limit) limit="${2:-}"; shift 2 ;;
                 *)       shift ;;
             esac
         done
         case "$state" in
-            open) cat "$MOCK_OPEN_ISSUES" ;;
-            all)  cat "$MOCK_ALL_ISSUES" ;;
+            open) serve "$MOCK_OPEN_ISSUES" "$fields" "$limit" ;;
+            all)  serve "$MOCK_ALL_ISSUES" "$fields" "$limit" ;;
             *)    echo "mock gh: unhandled issue list --state '$state'" >&2; exit 1 ;;
         esac ;;
     "pr list")
-        # Serve ONLY the fields --json asked for, exactly as gh does. This is
-        # what keeps the fixture honest about detector 1's body arm: a mock that
-        # always hands back `body` would keep the body rows green even after the
-        # script stopped asking for it, and the real pull would return nothing
-        # for the arm to read. The issue-list branch has no such field to lose,
-        # so it does not need the same treatment.
-        fields=""
+        fields=""; limit=30
         while [ $# -gt 0 ]; do
             case "$1" in
-                --json) fields="${2:-}"; shift 2 ;;
-                *)      shift ;;
+                --json)  fields="${2:-}"; shift 2 ;;
+                --limit) limit="${2:-}"; shift 2 ;;
+                *)       shift ;;
             esac
         done
-        python3 - "$MOCK_PRS" "$fields" <<'PYPROJECT'
-import json, sys
-prs = json.load(open(sys.argv[1]))
-want = [f for f in sys.argv[2].split(",") if f]
-print(json.dumps([{k: v for k, v in pr.items() if k in want} for pr in prs]))
-PYPROJECT
-        ;;
+        serve "$MOCK_PRS" "$fields" "$limit" ;;
     "repo view")
         printf '%s\n' "$MOCK_REPO" ;;
     *)
@@ -250,7 +310,27 @@ cat >"$MOCK_ALL_ISSUES" <<'JSON'
   {"number": 600, "state": "OPEN",   "title": "Named by both arms of detector 1",
    "body": "Named in a merged PR title parenthetical and again in that same PR body, so both arms of detector one see it."},
   {"number": 700, "state": "OPEN",   "title": "Named only inside template boilerplate",
-   "body": "Named only inside an HTML comment carried over from the PR template, which is boilerplate rather than any author reference."}
+   "body": "Named only inside an HTML comment carried over from the PR template, which is boilerplate rather than any author reference."},
+  {"number": 801, "state": "OPEN",   "title": "Keyword inside a fenced code block",
+   "body": "A merged PR shows a Closes line for this issue inside a fenced code block, which is an illustration and not GitHub closing anything."},
+  {"number": 803, "state": "OPEN",   "title": "Keyword inside an inline code span",
+   "body": "A merged PR writes the convention for this issue in backticks, which is the form this repo's own docs and PR template both model."},
+  {"number": 805, "state": "OPEN",   "title": "Keyword inside a quotation",
+   "body": "A merged PR quotes somebody else's old body carrying a Fixes line for this issue, which is reporting text rather than closing it."},
+  {"number": 807, "state": "OPEN",   "title": "Keyword separated from the ref by blank lines",
+   "body": "A merged PR carries a Resolved heading two lines above this bare reference, which GitHub does not read as a closing keyword at all."},
+  {"number": 809, "state": "OPEN",   "title": "Named again after a genuine closing keyword",
+   "body": "A merged PR closes this issue on one line and then mentions the same number again later, which a body-global number set would swallow."},
+  {"number": 811, "state": "OPEN",   "title": "First of two swallowed by a stray comment opener",
+   "body": "A merged PR names this issue after a stray HTML comment opener whose closer is the PR template's, which used to delete the text between."},
+  {"number": 813, "state": "OPEN",   "title": "Second of two swallowed by a stray comment opener",
+   "body": "Named in the same swallowed span as its sibling, so the failure silences every issue a PR named at once rather than only one of them."},
+  {"number": 815, "state": "OPEN",   "title": "Named inside an oversized HTML comment",
+   "body": "Named inside an HTML comment past the strip's span cap, so the strip is refused and the reference stays visible with the refusal marked."},
+  {"number": 7,   "state": "OPEN",   "title": "The hex-colour decoy",
+   "body": "A merged PR body contains the hex colour 7A3FE4, which an unbounded ref regex reads as a reference to this issue number seven."},
+  {"number": 123, "state": "OPEN",   "title": "The cross-repo decoy",
+   "body": "A merged PR body names another repository's issue with an owner/repo prefix, which an unbounded ref regex attributes to this repo."}
 ]
 JSON
 
@@ -285,6 +365,36 @@ cat >"$MOCK_OPEN_ISSUES" <<'JSON'
    "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
   {"number": 700, "title": "Named only inside template boilerplate",
    "body": "Named only inside an HTML comment carried over from the PR template, which is boilerplate rather than any author reference.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 801, "title": "Keyword inside a fenced code block",
+   "body": "A merged PR shows a Closes line for this issue inside a fenced code block, which is an illustration and not GitHub closing anything.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 803, "title": "Keyword inside an inline code span",
+   "body": "A merged PR writes the convention for this issue in backticks, which is the form this repo's own docs and PR template both model.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 805, "title": "Keyword inside a quotation",
+   "body": "A merged PR quotes somebody else's old body carrying a Fixes line for this issue, which is reporting text rather than closing it.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 807, "title": "Keyword separated from the ref by blank lines",
+   "body": "A merged PR carries a Resolved heading two lines above this bare reference, which GitHub does not read as a closing keyword at all.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 809, "title": "Named again after a genuine closing keyword",
+   "body": "A merged PR closes this issue on one line and then mentions the same number again later, which a body-global number set would swallow.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 811, "title": "First of two swallowed by a stray comment opener",
+   "body": "A merged PR names this issue after a stray HTML comment opener whose closer is the PR template's, which used to delete the text between.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 813, "title": "Second of two swallowed by a stray comment opener",
+   "body": "Named in the same swallowed span as its sibling, so the failure silences every issue a PR named at once rather than only one of them.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 815, "title": "Named inside an oversized HTML comment",
+   "body": "Named inside an HTML comment past the strip's span cap, so the strip is refused and the reference stays visible with the refusal marked.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 7,   "title": "The hex-colour decoy",
+   "body": "A merged PR body contains the hex colour 7A3FE4, which an unbounded ref regex reads as a reference to this issue number seven.",
+   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 123, "title": "The cross-repo decoy",
+   "body": "A merged PR body names another repository's issue with an owner/repo prefix, which an unbounded ref regex attributes to this repo.",
    "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"}
 ]
 JSON
@@ -311,9 +421,35 @@ cat >"$MOCK_PRS" <<'JSON'
    "mergedAt": "2026-08-16T00:00:00Z"},
   {"number": 701, "title": "chore: template boilerplate left in the body",
    "body": "Real work; this body names no issue of its own.\n\n<!--\nClosing an issue needs a literal `Closes #123` on its own line, one per issue.\nSee #700 for the convention.\n-->\n",
-   "mergedAt": "2026-08-18T00:00:00Z"}
+   "mergedAt": "2026-08-18T00:00:00Z"},
+  {"number": 900, "title": "docs: every keyword form that must NOT suppress",
+   "body": "Roll-up of the shapes GitHub does not honour as closing refs.\n\n```text\nCloses #801\n```\n\nOur docs write the convention as `Closes #803`, in backticks.\n\n> The old body said: Fixes #805\n\n## Resolved\n\n#807\n\nCloses #809 — and #809 turns up again later in this very sentence.\n",
+   "mergedAt": "2026-08-22T00:00:00Z"},
+  {"number": 910, "title": "fix: a stray comment opener above the template block",
+   "body": "Real work.\n\n<!-- stray opener, left behind by an edit and never closed\n\nThis lands the behaviour for #811 and #813.\n\n<!--\nClosing an issue needs a literal `Closes #123` on its own line, one per issue.\n-->\n",
+   "mergedAt": "2026-08-24T00:00:00Z"},
+  {"number": 930, "title": "chore: strings that only LOOK like refs to this repo",
+   "body": "Ports the change that landed as Sassy-Dog/velovate#123 over there.\n\nThe badge colour is #7A3FE4, which is deliberately NOT a canonical taxonomy colour — test-label-taxonomy.sh fails on any of those found outside their home (issue #167).\n",
+   "mergedAt": "2026-08-28T00:00:00Z"}
 ]
 JSON
+
+# The oversized-comment PR is GENERATED rather than typed: its whole point is a
+# comment past COMMENT_MAX_SPAN (2000 chars), which does not belong inline in a
+# fixture a human has to read.
+python3 - "$MOCK_PRS" <<'PYFIXTURE'
+import json, sys
+path = sys.argv[1]
+prs = json.load(open(path))
+filler = "padding that pushes this comment past the strip's span cap. " * 40
+prs.append({
+    "number": 920,
+    "title": "chore: one enormous HTML comment in the body",
+    "body": "Real work.\n\n<!--\n" + filler + "\nSee #815 for the convention.\n-->\n",
+    "mergedAt": "2026-08-26T00:00:00Z",
+})
+json.dump(prs, open(path, "w"), indent=2)
+PYFIXTURE
 
 # Derived rather than hard-coded: the truncation rows below need a limit that
 # lands exactly ON the fixture's size, and a hard-coded one silently stops
@@ -374,6 +510,7 @@ mutate_run() {
     env PATH="$WORK/bin:$PATH" REPO="$MOCK_REPO" bash "$WORK/$label.sh" \
         >"$WORK/$label.out" 2>/dev/null
     section shipped-but-still-open "$WORK/$label.out" >"$WORK/$label.json"
+    section tracking-parent-complete "$WORK/$label.out" >"$WORK/$label.tpc.json"
 }
 
 # --- 1. the happy path -------------------------------------------------------
@@ -474,8 +611,9 @@ section shipped-but-still-open "$WORK/run1.out" >"$WORK/shipped.json"
 
 # The whole set at once, so an arm that starts over-firing shows up here rather
 # than passing every single-issue check below.
-if [ "$(q '[i["issue"] for i in d]' <"$WORK/shipped.json")" = "[400, 189, 190, 316, 600]" ]; then
-    ok "detector 1 reports exactly the five expected issues, and nothing else"
+expected_hits="[400, 189, 190, 316, 600, 801, 803, 805, 807, 809, 811, 813, 815]"
+if [ "$(q '[i["issue"] for i in d]' <"$WORK/shipped.json")" = "$expected_hits" ]; then
+    ok "detector 1 reports exactly the expected hit set, and nothing else"
 else
     bad "detector 1's hit set is wrong: $(q '[i["issue"] for i in d]' <"$WORK/shipped.json")"
 fi
@@ -519,10 +657,64 @@ fi
 
 # --- 4d. findings name the arm that matched ----------------------------------
 via=$(q '" ".join("%d:%s" % (i["issue"], "/".join(p["matched_via"] for p in i["merged_prs"])) for i in d)' <"$WORK/shipped.json")
-if [ "$via" = "400:title 189:title 190:title 316:body 600:title+body" ]; then
+expected_via="400:title 189:title 190:title 316:body 600:title+body"
+expected_via="$expected_via 801:body 803:body 805:body 807:body 809:body"
+expected_via="$expected_via 811:body 813:body 815:body"
+if [ "$via" = "$expected_via" ]; then
     ok "every finding names its arm, and a both-arms hit merges to one 'title+body' entry"
 else
     bad "matched_via is wrong: got '$via'"
+fi
+
+# --- 4g. the suppression is NARROW: only GitHub's own closing semantics -------
+# The keyword exclusion is the one thing that can turn a finding back into
+# silence, so every form GitHub does NOT honour as a close must still flag.
+# Each is a distinct over-suppression bug, so each gets its own row: a single
+# combined check would go green again the moment one form regressed.
+for probe in \
+    "801|a Closes line inside a FENCED CODE BLOCK" \
+    "803|a backticked \`Closes #N\` in prose — the form this repo's own docs model" \
+    "805|a Fixes line inside a QUOTATION of somebody else's text" \
+    "807|a keyword separated from the ref by BLANK LINES (\\s must not span newlines)" \
+    "809|a SECOND mention after a genuine close — suppression is positional, not body-global"
+do
+    n="${probe%%|*}"; what="${probe#*|}"
+    if has_issue "$n" "$WORK/shipped.json"; then
+        ok "still flags #$n: $what does not suppress"
+    else
+        bad "#$n was SUPPRESSED by $what — that is a silent false negative"
+    fi
+done
+
+# --- 4h. a stray comment opener cannot swallow the body ----------------------
+# `<!--` anywhere plus the template's trailing `-->` used to delete everything
+# between them, silencing every issue the PR named at once and leaving no trace,
+# since an HTML comment renders as nothing.
+if has_issue 811 "$WORK/shipped.json" && has_issue 813 "$WORK/shipped.json"; then
+    ok "a stray '<!--' above the template block does NOT swallow #811 and #813"
+else
+    bad "the stray comment opener swallowed the body — #811/#813 lost: $(cat "$WORK/shipped.json")"
+fi
+
+# --- 4i. an oversized comment is REFUSED, and the refusal is visible ---------
+# Refusing silently would be the same false clean by a longer route, so the
+# finding carries the marker and stderr carries the warning.
+if has_issue 815 "$WORK/shipped.json"; then
+    ok "a comment past the span cap is left in place, so #815 stays visible"
+else
+    bad "#815 was stripped away by an over-long comment: $(cat "$WORK/shipped.json")"
+fi
+
+if [ "$(q '[i["issue"] for i in d if any(p.get("comment_strip_refused") for p in i["merged_prs"])]' <"$WORK/shipped.json")" = "[815]" ]; then
+    ok "the finding carries 'comment_strip_refused' — the refusal is on the record"
+else
+    bad "no finding marks the refused comment strip: $(cat "$WORK/shipped.json")"
+fi
+
+if grep -q 'refused to strip an HTML comment' "$WORK/run1.err"; then
+    ok "the refusal is also announced on stderr, naming the PR"
+else
+    bad "no stderr warning for the refused comment strip: $(cat "$WORK/run1.err")"
 fi
 
 # --- 4e. all three body-arm properties are mutation-proved -------------------
@@ -570,6 +762,116 @@ if mutate_run '/^HTML_COMMENT_RE = /s/<!--/<!--NEVERMATCHES/' comment-strip-off;
     fi
 fi
 
+# (v) drop the nested-opener guard, restoring the naive `<!--.*?-->`: the stray
+#     opener must once again swallow #811 and #813. Without this the fixture in
+#     4h proves nothing — a body with no stray opener passes it just as well.
+if mutate_run '/^HTML_COMMENT_RE = /s/(?:(?!<!--)\.)/./' swallow-guard-off; then
+    if ! has_issue 811 "$WORK/swallow-guard-off.json" \
+       && ! has_issue 813 "$WORK/swallow-guard-off.json"; then
+        ok "the naive '<!--.*?-->' DOES swallow #811 and #813 — 4h's fixture is live"
+    else
+        bad "the naive comment regex did not swallow the body — 4h has stopped exercising the stray opener"
+    fi
+fi
+
+# (vi) make the keyword scan read the RAW body again — no code/quote masking.
+#      Every form in 4g that lives in code or a quotation must vanish. #807 and
+#      #809 survive it, because those two are the separator and positional bugs
+#      rather than the masking one, and a mutation that killed all five at once
+#      would not tell the three defects apart.
+if mutate_run 's/^    keyword_text = mask(body.*/    keyword_text = body/' mask-off; then
+    if ! has_issue 801 "$WORK/mask-off.json" \
+       && ! has_issue 803 "$WORK/mask-off.json" \
+       && ! has_issue 805 "$WORK/mask-off.json" \
+       && has_issue 807 "$WORK/mask-off.json" \
+       && has_issue 809 "$WORK/mask-off.json"; then
+        ok "unmasked prose DOES suppress #801/#803/#805 and leaves #807/#809 — the masking is live and targeted"
+    else
+        bad "the unmasked keyword scan reported $(q '[i["issue"] for i in d]' <"$WORK/mask-off.json") — 4g's code/quote rows prove nothing"
+    fi
+fi
+
+# (vii) restore the `\s` separator, which spans newlines: #807 must vanish while
+#       the code/quote form stays, isolating the separator from the masking.
+#       The separator is replaced by whole line, never by matching `[ \t]` —
+#       GNU sed reads `\t` in a BRE as a tab and BSD sed as a literal `t`, so a
+#       pattern containing it would mutate on one runner and no-op on the other.
+if mutate_run '/^KEYWORD_SEP = /s/.*/KEYWORD_SEP = r"[:\\s]*"/' separator-off; then
+    if ! has_issue 807 "$WORK/separator-off.json" && has_issue 801 "$WORK/separator-off.json"; then
+        ok "a newline-spanning separator DOES suppress #807 — the same-line rule is live"
+    else
+        bad "the newline-spanning separator reported $(q '[i["issue"] for i in d]' <"$WORK/separator-off.json") — 4g's blank-line row proves nothing"
+    fi
+fi
+
+# (viii) go back to a body-global number SET rather than the governed offsets:
+#        #809's second mention must vanish while the masked forms stay put.
+if mutate_run 's/{m\.start(1) for m in CLOSING_KEYWORD_RE/{m.group(1) for m in CLOSING_KEYWORD_RE/; s/if m\.start(1) in governed:/if m.group(1) in governed:/' positional-off; then
+    if ! has_issue 809 "$WORK/positional-off.json" && has_issue 801 "$WORK/positional-off.json"; then
+        ok "a body-global number set DOES swallow #809's second mention — positional suppression is live"
+    else
+        bad "the body-global mutant reported $(q '[i["issue"] for i in d]' <"$WORK/positional-off.json") — 4g's #809 row proves nothing"
+    fi
+fi
+
+# --- 4l. a body ref needs boundaries -----------------------------------------
+# `#(\d+)` with nothing either side reads `owner/repo#123` as THIS repo's #123
+# and the hex colour `#7A3FE4` as issue #7. Both decoys sit in PR #930's body.
+if has_issue 123 "$WORK/shipped.json" || has_issue 7 "$WORK/shipped.json"; then
+    bad "a cross-repo ref or a hex colour was read as this repo's issue: $(q '[i["issue"] for i in d]' <"$WORK/shipped.json")"
+else
+    ok "'Sassy-Dog/velovate#123' and '#7A3FE4' are NOT read as refs to #123 and #7"
+fi
+
+if mutate_run '/^BODY_REF_RE = /s/.*/BODY_REF_RE = re.compile(r"#(\\d+)")/' unbounded-refs; then
+    if has_issue 123 "$WORK/unbounded-refs.json" && has_issue 7 "$WORK/unbounded-refs.json"; then
+        ok "the unbounded regex DOES claim #123 and #7 — the boundaries are live"
+    else
+        bad "the unbounded regex claimed neither decoy — 4l's fixture exercises nothing"
+    fi
+fi
+
+# --- 4j. detector 3's `body` dependency is pinned too -------------------------
+# `body` is the sole input to detectors 2 AND 3, not just to the new body arm.
+# Now that the mock projects `issue list` as well, losing it from the all-state
+# pull reddens here — before that projection existed this mutation left every
+# row green while `PART_OF_RE` scanned "" in production, `parent_to_children`
+# stayed {} and tracking-parent-complete returned [] forever: exactly the #198
+# bug this whole gate was written to prevent.
+if mutate_run 's/--json number,title,state,body/--json number,title,state/' no-all-body; then
+    if [ "$(q '[p["issue"] for p in d["parents"]]' <"$WORK/no-all-body.tpc.json")" = "[]" ]; then
+        ok "dropping 'body' from the all-state pull DROPS #283 — detector 3's input is pinned"
+    else
+        bad "detector 3 still reported $(q '[p["issue"] for p in d["parents"]]' <"$WORK/no-all-body.tpc.json") without 'body' — the mock is serving a field gh would not have returned"
+    fi
+fi
+
+# The open pull's `body` needs no separate mutation: strip it and every issue
+# reads as a zero-length body, so 4f's stub-body row fails on its own.
+
+# --- 4k. a FAILED pull is never a clean answer -------------------------------
+# Three empty sections and exit 0 is byte-identical to a healthy repo, so an
+# expired token or a rate limit must not be able to render as "nothing found".
+rc=0
+run_stale "$WORK/run3.out" "$WORK/run3.err" MOCK_FAIL="pr list" || rc=$?
+if [ "$rc" -eq 10 ]; then
+    ok "a failed pull exits 10 (UNKNOWN), not 0"
+else
+    bad "a failed pull exited $rc — a degraded run is reading as clean"
+fi
+
+if [ ! -s "$WORK/run3.out" ] && grep -q 'UNKNOWN, not clean' "$WORK/run3.err"; then
+    ok "it prints no sections at all, and says on stderr that the run is UNKNOWN"
+else
+    bad "a failed pull still printed sections or gave no reason: $(cat "$WORK/run3.err")"
+fi
+
+if grep -q 'Bad credentials' "$WORK/run3.err"; then
+    ok "gh's own reason is relayed, so the reader is not sent back to guessing"
+else
+    bad "gh's stderr was swallowed: $(cat "$WORK/run3.err")"
+fi
+
 # --- 4f. detector 2 still works ----------------------------------------------
 section stub-body "$WORK/run1.out" >"$WORK/stub.json"
 if [ "$(q '[i["issue"] for i in d]' <"$WORK/stub.json")" = "[28, 341]" ]; then
@@ -593,7 +895,12 @@ fi
 # ALL_LIMIT=500. THIS FIXTURE CANNOT REPRODUCE IT: its payload is a few kB, so
 # every row above stays green on a script that is broken on every repo it is
 # actually pointed at. Hence a source-level assertion.
-if grep -q 'json.loads(sys.argv\[' "$SCRIPT"; then
+# ONE pattern, used by both the check and its own liveness proof. Re-typing it
+# as a second literal would let a neutered pattern here keep every row green,
+# INCLUDING the row claiming the guard is live.
+ARGV_SHAPE_RE='json.loads(sys.argv\['
+
+if grep -q "$ARGV_SHAPE_RE" "$SCRIPT"; then
     bad "a pull is parsed straight off argv — that is the ARG_MAX regression of #337"
 else
     ok "no pull is parsed from argv"
@@ -607,10 +914,22 @@ fi
 
 # The guard's own liveness: a grep that can never match is not a guard.
 printf 'issues = json.loads(sys.argv[1])\n' >"$WORK/argv-shape.txt"
-if grep -q 'json.loads(sys.argv\[' "$WORK/argv-shape.txt"; then
+if grep -q "$ARGV_SHAPE_RE" "$WORK/argv-shape.txt"; then
     ok "the argv-shape guard DOES recognise the banned form"
 else
     bad "the argv-shape guard cannot match the form it bans — the row above is decoration"
+fi
+
+# --- 7. the all-state pull passes its own --limit ----------------------------
+# Also source-level, and for the same reason as section 6: this fixture holds
+# fewer issues than gh's default page of 30, so dropping `--limit "$ALL_LIMIT"`
+# changes nothing here while production silently pages at 30 against an
+# ALL_LIMIT of 500 — `truncated` then computes false forever and detector 3's
+# "unknown is not clean" guarantee is gone with it.
+if grep -q -- '--limit "\$ALL_LIMIT"' "$SCRIPT"; then
+    ok "the all-state pull passes --limit \"\$ALL_LIMIT\", so truncated= means something"
+else
+    bad "the all-state pull no longer passes --limit \"\$ALL_LIMIT\" — truncated= is now unfalsifiable"
 fi
 
 # ------------------------------------------------------------------------------

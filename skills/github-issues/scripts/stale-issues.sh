@@ -33,7 +33,15 @@
 #        pull that comes back AT the ceiling is reported `truncated: true`;
 #        that result is UNKNOWN, not clean. Re-run with a higher ALL_LIMIT.
 #
-# Read-only.
+# Exit: 0 the three sections were computed over complete pulls
+#       10 SKIPPED or UNKNOWN — gh missing, no repo, or a pull that failed.
+#          Never confuse it with 0: every detector here answers a healthy repo
+#          with an empty list, so a degraded run that exits 0 is indistinguishable
+#          from a clean one. That is the whole failure class this script exists
+#          to close, so it must not reproduce it on its own inputs.
+#
+# Read-only with respect to the repo, GitHub and the network; it stages its
+# three pulls in a temp dir it removes on exit.
 set -euo pipefail
 
 REPO="${REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)}"
@@ -54,15 +62,28 @@ fi
 PULL_DIR="$(mktemp -d)"
 trap 'rm -rf "$PULL_DIR"' EXIT
 
-# pull <destination-file> <gh args...> — a failed or empty pull degrades to the
-# empty array the callers below already expect, never to malformed JSON.
+# pull <label> <destination-file> <gh args...>
+#
+# A FAILED pull exits 10, loudly. It must never degrade to `[]`: an expired
+# token, a rate limit or a network blip would otherwise print three empty
+# sections and exit 0, which is byte-identical to a clean repo — the same
+# "unknown rendered as clean" this script already refuses for detector 3's
+# truncated pull. gh's own stderr is relayed, because "it failed" without the
+# reason sends the reader back to guessing.
 pull() {
-  local dest="$1"; shift
-  gh "$@" >"$dest" 2>/dev/null || :
-  [ -s "$dest" ] || printf '[]' >"$dest"
+  local label="$1" dest="$2"; shift 2
+  if ! gh "$@" >"$dest" 2>"$PULL_DIR/$label.err"; then
+    echo "FAILED: the $label pull did not complete — this run is UNKNOWN, not clean." >&2
+    sed 's/^/  gh: /' "$PULL_DIR/$label.err" >&2
+    exit 10
+  fi
+  if [ ! -s "$dest" ]; then
+    echo "FAILED: the $label pull returned no output at all — UNKNOWN, not clean." >&2
+    exit 10
+  fi
 }
 
-pull "$PULL_DIR/open-issues.json" \
+pull open-issues "$PULL_DIR/open-issues.json" \
   issue list --repo "$REPO" --state open --limit 100 \
   --json number,title,body,createdAt,updatedAt
 
@@ -70,7 +91,7 @@ pull "$PULL_DIR/open-issues.json" \
 # `body` is load-bearing rather than convenience: it is where the issue
 # reference actually lives (detector 1, arm 2). Drop it from this field list and
 # detector 1 silently collapses back to its near-vacuous title arm.
-pull "$PULL_DIR/merged-prs.json" \
+pull merged-prs "$PULL_DIR/merged-prs.json" \
   pr list --repo "$REPO" --state merged --limit 100 \
   --search "merged:>=$(date -v-60d +%Y-%m-%d 2>/dev/null || date -d '60 days ago' +%Y-%m-%d)" \
   --json number,title,body,mergedAt
@@ -78,7 +99,7 @@ pull "$PULL_DIR/merged-prs.json" \
 # Detector 3 needs the CLOSED issues too — a completed epic's children are
 # closed by definition — so it takes its own all-state pull rather than reusing
 # the open-only one above.
-pull "$PULL_DIR/all-issues.json" \
+pull all-issues "$PULL_DIR/all-issues.json" \
   issue list --repo "$REPO" --state all --limit "$ALL_LIMIT" \
   --json number,title,state,body
 
@@ -136,28 +157,102 @@ all_limit = int(sys.argv[4])
 #     the comment in the body, and it is boilerplate rather than anyone's
 #     reference — unstripped, the same template numbers would flag on EVERY PR.
 #
-# The two arms keep SEPARATE ref regexes although the patterns are currently
-# identical. Do not fold them into one: each arm has to be neuterable on its own
-# for `scripts/test-stale-issues.sh` to mutation-prove it independently, and the
-# arms are free to diverge (a title ref is already narrowed by `group_re`; a
-# body ref is not).
+# THOSE TWO EXCLUSIONS ARE THE ONLY THING BETWEEN UNTRUSTED PR TEXT AND A
+# DETECTOR WHOSE ENTIRE PURPOSE IS TO STOP REPORTING A FALSE CLEAN, and each is
+# a way to make it print `[]` again. Both are therefore built to fail toward
+# REPORTING, never toward silence:
+#
+#   1. Suppression is POSITIONAL, never a body-global number set. The keyword
+#      suppresses the one ref it governs, at that offset — not every later
+#      mention of the same number. A set let one `Closes #316` anywhere in the
+#      body silence every occurrence of 316 in it.
+#   2. A keyword is read only from PROSE. Code fences, code spans and
+#      quotations are blanked first, because none of them is GitHub asking to
+#      close anything — and the backticked `Closes #N` is the form this repo's
+#      own docs and PR template model, so without this a PR that merely
+#      DOCUMENTS the convention silences the issue it names.
+#   3. The keyword must sit on the SAME LINE as its ref. The separator is
+#      `[ \t]*:?[ \t]*`, never `\s`, which spans newlines: `## Resolved` two
+#      lines above a bare `#451` is not a close and must not read as one.
+#   4. A comment strip that would swallow the body is REFUSED AND ANNOUNCED. A
+#      stray `<!--` plus the template's trailing `-->` used to delete everything
+#      between them, silencing every issue a PR named at once and leaving no
+#      trace, since HTML comments render as nothing. Now the pattern refuses to
+#      span a nested `<!--`, spans over COMMENT_MAX_SPAN are left in place, and
+#      the finding carries `comment_strip_refused` with a stderr warning beside
+#      it — a refusal a reader cannot see is the same false clean by a longer
+#      route.
+#
+# Every one of those trades the same way on purpose: an over-broad suppression
+# is a SILENT FALSE NEGATIVE — the exact failure this detector exists to end —
+# while a missed suppression is a false positive a human dismisses in a second.
+#
+# The two arms keep SEPARATE ref regexes. Do not fold them into one: each arm
+# has to be neuterable on its own for `scripts/test-stale-issues.sh` to
+# mutation-prove it independently, and they are genuinely different questions —
+# a title ref is already narrowed by `group_re`, while a body ref needs its own
+# boundaries so `owner/repo#123` is not read as this repo's #123 and the hex
+# colour `#7A3FE4` is not read as issue #7.
 group_re = re.compile(r'\(([^)]*)\)')
 issue_in_group_re = re.compile(r'#(\d+)')
-BODY_REF_RE = re.compile(r'#(\d+)')
-HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
-# GitHub's documented closing keywords, anchored adjacent to the ref.
-# Recognising one SUPPRESSES a finding, so this set stays tight: a keyword form
-# it misses costs a false positive a human dismisses in a second, while one it
-# invents costs the silent false negative this detector exists to end.
+BODY_REF_RE = re.compile(r'(?<![\w/])#(\d+)(?![0-9A-Za-z])')
+# GitHub's documented closing keywords, same-line-adjacent to the ref.
+# The separator is its own constant so the gate can swap it for the
+# newline-spanning `\s` form and prove the same-line rule is load-bearing.
+KEYWORD_SEP = r'[ \t]*:?[ \t]*'
 CLOSING_KEYWORD_RE = re.compile(
-    r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b[:\s]*#(\d+)',
+    r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)' + KEYWORD_SEP + r'#(\d+)(?![0-9A-Za-z])',
     re.IGNORECASE,
 )
+# Non-prose spans, blanked before the keyword scan only. Refs stay readable
+# everywhere, because reporting one too many is the harmless direction.
+CODE_FENCE_RE = re.compile(r'(?P<fence>```+|~~~+).*?(?P=fence)', re.DOTALL)
+CODE_SPAN_RE = re.compile(r'`[^`\n]*`')
+BLOCKQUOTE_RE = re.compile(r'^[ \t]{0,3}>[^\n]*$', re.MULTILINE)
+# `(?:(?!<!--).)*?` is what stops a stray opener from pairing with a distant
+# `-->`: a span containing another `<!--` is not a comment, so the engine falls
+# through to the real block instead of eating everything in between.
+HTML_COMMENT_RE = re.compile(r'<!--(?:(?!<!--).)*?-->', re.DOTALL)
+COMMENT_MAX_SPAN = 2000
+
+
+def blank(text):
+    """Replace every non-newline character with a space.
+
+    Masking rather than deleting is load-bearing: length and line structure are
+    preserved, so an offset computed on a masked copy still indexes the
+    original. That is what lets suppression be positional across two scans.
+    """
+    return re.sub(r'[^\n]', ' ', text)
+
+
+def strip_html_comments(text):
+    """Blank bounded HTML comments. Returns (masked_text, refused_count)."""
+    out, pos, refused = [], 0, 0
+    for m in HTML_COMMENT_RE.finditer(text):
+        if m.end() - m.start() > COMMENT_MAX_SPAN:
+            refused += 1          # left in place: refs inside stay visible
+            continue
+        out.append(text[pos:m.start()])
+        out.append(blank(m.group(0)))
+        pos = m.end()
+    out.append(text[pos:])
+    return "".join(out), refused
+
+
+def mask(text, *patterns):
+    for pattern in patterns:
+        text = pattern.sub(lambda m: blank(m.group(0)), text)
+    return text
+
 
 issue_to_prs = {}
+comment_refusal_prs = []
 for pr in prs:
     title = pr.get("title", "")
-    body = HTML_COMMENT_RE.sub(" ", pr.get("body") or "")
+    body, comment_refusals = strip_html_comments(pr.get("body") or "")
+    if comment_refusals:
+        comment_refusal_prs.append(pr["number"])
 
     # issue number -> the arms that fired, recorded in title-then-body order.
     arms = {}
@@ -165,22 +260,28 @@ for pr in prs:
         for m in issue_in_group_re.finditer(group):
             arms.setdefault(int(m.group(1)), ["title"])
 
-    closed_by_keyword = {int(m.group(1)) for m in CLOSING_KEYWORD_RE.finditer(body)}
+    # Keywords come from prose only; refs come from everywhere. Same length,
+    # so the offsets below index both strings interchangeably.
+    keyword_text = mask(body, CODE_FENCE_RE, CODE_SPAN_RE, BLOCKQUOTE_RE)
+    governed = {m.start(1) for m in CLOSING_KEYWORD_RE.finditer(keyword_text)}
+
     for m in BODY_REF_RE.finditer(body):
-        n = int(m.group(1))
-        if n in closed_by_keyword:
+        if m.start(1) in governed:
             continue
-        fired = arms.setdefault(n, [])
+        fired = arms.setdefault(int(m.group(1)), [])
         if "body" not in fired:
             fired.append("body")
 
     for n, fired in arms.items():
-        issue_to_prs.setdefault(n, []).append({
+        finding = {
             "pr_number": pr["number"],
             "pr_title": pr["title"],
             "mergedAt": pr.get("mergedAt"),
             "matched_via": "+".join(fired),
-        })
+        }
+        if comment_refusals:
+            finding["comment_strip_refused"] = comment_refusals
+        issue_to_prs.setdefault(n, []).append(finding)
 
 shipped_but_open = []
 stub_body = []
@@ -270,6 +371,19 @@ if truncated:
         "parent->child map is TRUNCATED. Treat tracking-parent-complete as "
         "UNKNOWN, not clean, and re-run with a higher ALL_LIMIT."
         % (len(all_issues), all_limit),
+        file=sys.stderr,
+    )
+
+if comment_refusal_prs:
+    # Same rule as truncation: the refusal has to reach a reader. An HTML
+    # comment renders as nothing, so a body the strip declined to touch looks
+    # identical to one that had no comment at all.
+    print(
+        "WARNING: refused to strip an HTML comment longer than %d chars in PR(s) "
+        "%s — a stray `<!--` can otherwise swallow the whole body. Refs inside "
+        "those comments are INCLUDED below and may be template boilerplate; the "
+        "findings carry `comment_strip_refused`."
+        % (COMMENT_MAX_SPAN, ", ".join("#%d" % n for n in comment_refusal_prs)),
         file=sys.stderr,
     )
 PY
