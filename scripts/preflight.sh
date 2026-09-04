@@ -1062,6 +1062,42 @@
 #      scratch fixtures scanned by the SAME function that scans the tree. No
 #      gh, no network, no mutation.
 #
+#  38. file-or-link-issue tests (scripts/test-file-or-link-issue.sh) — the ONE
+#      write-capable issue path is idempotent ACROSS the search index's lag
+#      (issue #339). Marker-keyed idempotency was a read-after-write against an
+#      ASYNCHRONOUS index: #337 filed at 21:05:37Z, the same marker re-run at
+#      21:05:44Z searched, got `[]`, and filed the duplicate #338 — seven
+#      seconds — while the identical search four minutes later returned both.
+#      Nothing covered this script before: `grep -l file-or-link-issue
+#      scripts/test-*.sh` returned nothing, so the property CLAUDE.md calls the
+#      script's defining one was enforced by prose alone. The fix is TWO stages
+#      and the gate refuses to let either be simplified away: the search is
+#      unbounded in AGE but not fresh (M6 deletes it and loses every marker
+#      older than the window), the `--search`-less listing is a direct object
+#      read and read-after-write consistent but bounded in COUNT (M1/M2 delete
+#      or re-index it and #339 returns verbatim). The DISCRIMINATION half is
+#      load-bearing — a dedupe answering already-linked to everything satisfies
+#      the reproduction and is useless — and its sharp case is the PREFIX
+#      COLLISION: the scan matches the delimited footer `<!-- <marker> -->`,
+#      never the bare marker, or `epic-split: #207/alpha` reports as
+#      already-linked against an existing `#207/alpha-two` and a real child
+#      issue is silently never filed (M3). A scan that could not be PERFORMED
+#      exits 2 rather than filing blind, the align-labels delete-gate shape
+#      applied to this write (M4); stage 1 KEEPS its `|| echo "[]"`
+#      degradation, and that asymmetry is deliberate — the refusal belongs to
+#      the stage that is load-bearing for freshness. The FIXTURE PROVES ITSELF
+#      first, because #339 is about an unverified freshness assumption and
+#      replacing it with a second one would be the same bug: the mock's search
+#      must NOT see a just-created issue, its direct listing MUST, and the PATH
+#      shim must actually shadow the real `gh`. Every verdict is measured as a
+#      WRITE — `gh issue create` calls in the mock's log — never as a literal.
+#      The out-of-window-AND-unindexed miss is asserted as a documented
+#      limitation, PAIRED with the same input at a raised `--recent-scan`,
+#      which is what proves it is the bound rather than a scan matching
+#      nothing. Mock `gh` under one `mktemp -d`: no repo, no network, and no
+#      real issue is ever filed — the reproduction in #339 cost a live
+#      duplicate and is deliberately not repeated as a test.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -1787,6 +1823,20 @@ if bash scripts/test-plugin-root-in-references.sh; then
     pass "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
 else
     failed "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
+fi
+
+# The only write-capable issue path, which had no gate at all until #339: its
+# marker-keyed idempotency was a read-after-write against GitHub's ASYNCHRONOUS
+# search index, and a re-run seven seconds later filed a duplicate. Both stages
+# are pinned — the search covers age, the `--search`-less direct listing covers
+# recency — along with the discrimination half (a new marker still files, and a
+# marker that is a PREFIX of an existing one is not swallowed) and the refusal
+# to file when the scan could not be performed. Mock `gh`, no network, and no
+# real issue is ever filed.
+if bash scripts/test-file-or-link-issue.sh; then
+    pass "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
+else
+    failed "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
 fi
 
 # ------------------------------------------------------------------------------

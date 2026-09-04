@@ -19,8 +19,12 @@ Examples: `sentry-source: QRNINJA-WEB-3`, `feedback-source: fb_01HX...`, `assess
 ## The flow
 
 1. **Caller applies its qualifying gate first** (e.g. sentry-triage's thresholds). The script does not judge severity; it deduplicates and files.
-2. **Idempotency search**: `gh issue list --state all --search '"<marker>" in:body'`. Hit → return `already-linked` with the existing number. GitHub's search indexes body text including HTML comments.
-3. **Dry-run** (`--dry-run` or `DRY_RUN=1`) returns `would-file` without writing — use this for previews.
+2. **Idempotency — two stages, and neither one alone is enough.** GitHub's issue search index is **asynchronous**, so a marker written seconds ago is not in it yet and an empty result is indistinguishable from "never filed". Measured 2026-09-04: #337 was filed at `21:05:37Z`; the same marker re-run at `21:05:44Z` searched, got `[]`, and filed the duplicate #338 — seven seconds — while the identical search four minutes later returned both. The marker footer and the query were correct the whole time; only the freshness assumption was wrong. So the script asks twice:
+   - **Search** — `gh issue list --state all --search '"<marker>" in:body'`. It indexes body text including HTML comments and reaches back to the repo's oldest issue, so it is unbounded in *age*. It is eventually consistent, not fresh.
+   - **Recent-listing scan** — `gh issue list --state all --json number,url,body --limit N`, with **no** `--search`. That is a direct object read rather than an index query, so it is **read-after-write consistent**: an issue is visible the instant it exists. It is bounded in *count* — the newest N issues (`--recent-scan`, default 100), which is exactly the window the index has not caught up to. It matches the delimited footer `<!-- <marker> -->` rather than the bare marker, so `epic-split: #207/alpha` is never reported as already-linked against an existing `epic-split: #207/alpha-two`.
+
+   Hit → `already-linked` with the existing number, plus a `via` field naming which stage answered. The two are complementary — search covers depth, the scan covers recency — so removing either restores a real defect. A retry/backoff loop was rejected: slow on every duplicate-free call, and still racy. A scan that could not be **performed** exits `2` rather than filing, because an unverified idempotency read never licenses a write; retrying is always safe.
+3. **Dry-run** (`--dry-run` or `DRY_RUN=1`) returns `would-file` without writing — use this for previews. It runs *after* both idempotency stages, so a preview never says `would-file` for a marker that is already filed.
 4. **Create**: title, body file, labels (use `--ensure-label name:COLOR:description` for labels that may not exist yet — idempotent).
 5. **Optional board add**: pass `--project-id/--status-field-id/--status-option-id` to land the issue in a column. Board failure degrades to `filed-no-board`, never a hard error.
 
@@ -38,7 +42,7 @@ If a single run would file **more than 5 new issues**, STOP and show the full li
 
 ## Match found but signal changed?
 
-When the idempotency search returns `already-linked` but the signal has materially escalated (event count doubled, new release affected), **comment on the existing issue** rather than filing a new one — keep one thread per fingerprint:
+When idempotency returns `already-linked` but the signal has materially escalated (event count doubled, new release affected), **comment on the existing issue** rather than filing a new one — keep one thread per fingerprint:
 
 ```bash
 gh issue comment <N> --repo <REPO> --body "Signal update: <what changed, with numbers and a link>"
