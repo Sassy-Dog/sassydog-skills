@@ -2,11 +2,17 @@
 # Detect issues whose state is stale relative to recent ship history.
 #
 # Three detectors:
-#   1. shipped-but-still-open — open issue has a merged PR whose title contains
-#      "(#<N>)" matching it. The classic failure mode: a conventional-commit
-#      title parenthetical is a hyperlink, NOT a Closes-keyword, so the issue
-#      never auto-closed — needs manual review-and-close, or a status comment
-#      if only half-shipped.
+#   1. shipped-but-still-open — an open issue named by a merged PR that never
+#      closed it. TWO arms, and every finding records which one fired
+#      (`matched_via`: "title", "body", or "title+body"):
+#        - title — a "(#N)" parenthetical in the PR title. A conventional-commit
+#          title parenthetical is a hyperlink, NOT a Closes-keyword.
+#        - body  — an "#N" in the PR body carrying NO closing keyword. This is
+#          where the reference nearly always lives: GitHub appends "(#N)" to the
+#          SQUASH-MERGE COMMIT title, not to the PR title, and the number it
+#          appends is the PR's OWN (issue #337).
+#      Either way the issue never auto-closed — needs manual review-and-close,
+#      or a status comment if only half-shipped.
 #   2. stub-body — open issue with a body shorter than 80 chars or that's just
 #      a one-line placeholder. Almost certainly needs scoping before tackle.
 #      IMPORTANT for consumers: before declaring a stub, check the issue's
@@ -39,56 +45,142 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 [[ -z "$REPO" ]] && { echo "skipped: not in a GitHub repo and REPO not set" >&2; exit 10; }
 
-OPEN_ISSUES_JSON=$(gh issue list --repo "$REPO" --state open --limit 100 \
-  --json number,title,body,createdAt,updatedAt 2>/dev/null || echo "[]")
+# Each pull lands in a FILE and python is handed the path, never the payload.
+# These three documents carry every issue body, plus (since #337) every recent
+# PR body, and passing that on argv blows ARG_MAX on any real repo — measured
+# here as `python3: Argument list too long`, exit 126, with the detector's whole
+# output gone. The all-state pull was already near the limit at ALL_LIMIT=500;
+# adding PR bodies pushed it over. Keep the payload off the command line.
+PULL_DIR="$(mktemp -d)"
+trap 'rm -rf "$PULL_DIR"' EXIT
+
+# pull <destination-file> <gh args...> — a failed or empty pull degrades to the
+# empty array the callers below already expect, never to malformed JSON.
+pull() {
+  local dest="$1"; shift
+  gh "$@" >"$dest" 2>/dev/null || :
+  [ -s "$dest" ] || printf '[]' >"$dest"
+}
+
+pull "$PULL_DIR/open-issues.json" \
+  issue list --repo "$REPO" --state open --limit 100 \
+  --json number,title,body,createdAt,updatedAt
 
 # Pull recent merged PRs (last 60 days is plenty — older sheds happen rarely).
-RECENT_MERGED_PRS_JSON=$(gh pr list --repo "$REPO" --state merged --limit 100 \
+# `body` is load-bearing rather than convenience: it is where the issue
+# reference actually lives (detector 1, arm 2). Drop it from this field list and
+# detector 1 silently collapses back to its near-vacuous title arm.
+pull "$PULL_DIR/merged-prs.json" \
+  pr list --repo "$REPO" --state merged --limit 100 \
   --search "merged:>=$(date -v-60d +%Y-%m-%d 2>/dev/null || date -d '60 days ago' +%Y-%m-%d)" \
-  --json number,title,mergedAt 2>/dev/null || echo "[]")
+  --json number,title,body,mergedAt
 
 # Detector 3 needs the CLOSED issues too — a completed epic's children are
 # closed by definition — so it takes its own all-state pull rather than reusing
 # the open-only one above.
-ALL_ISSUES_JSON=$(gh issue list --repo "$REPO" --state all --limit "$ALL_LIMIT" \
-  --json number,title,state,body 2>/dev/null || echo "[]")
+pull "$PULL_DIR/all-issues.json" \
+  issue list --repo "$REPO" --state all --limit "$ALL_LIMIT" \
+  --json number,title,state,body
 
-python3 - "$OPEN_ISSUES_JSON" "$RECENT_MERGED_PRS_JSON" "$ALL_ISSUES_JSON" "$ALL_LIMIT" <<'PY'
+python3 - "$PULL_DIR/open-issues.json" "$PULL_DIR/merged-prs.json" \
+  "$PULL_DIR/all-issues.json" "$ALL_LIMIT" <<'PY'
 import json, re, sys
 
-issues = json.loads(sys.argv[1])
-prs = json.loads(sys.argv[2])
-all_issues = json.loads(sys.argv[3])
+# Paths, not payloads — see the ARG_MAX note beside the pulls.
+with open(sys.argv[1]) as fh:
+    issues = json.load(fh)
+with open(sys.argv[2]) as fh:
+    prs = json.load(fh)
+with open(sys.argv[3]) as fh:
+    all_issues = json.load(fh)
 all_limit = int(sys.argv[4])
 
-# Build map: issue_number -> [matching merged PRs]
+# --- detector 1: shipped-but-still-open --------------------------------------
+# Build map: issue_number -> [matching merged PRs]. TWO arms, and each finding
+# records which one fired, because the arms carry very different weight and a
+# reader has to be able to tell a title hit from a body hit.
 #
-# Scan EVERY parenthetical group in each title and pull all `#N` refs
-# from inside. This catches:
-#   - simple   "(#419)"           → 419
-#   - compound "(#419 + #421)"    → 419, 421         (missed by the naive regex)
-#   - csv      "(#419, #421)"     → 419, 421
-#   - trailing "(#458)" PR self-ref → 458 (harmless: not in open-issues list)
-#
+# ARM 1 — the TITLE parenthetical. Scan EVERY parenthetical group in each title
+# and pull all `#N` refs from inside. This catches:
+#   - simple   "(#419)"           -> 419
+#   - compound "(#419 + #421)"    -> 419, 421         (missed by the naive regex)
+#   - csv      "(#419, #421)"     -> 419, 421
+#   - trailing "(#458)" PR self-ref -> 458 (harmless: GitHub numbers issues and
+#                                     PRs from ONE sequence, so a PR's own
+#                                     number can never also be an open issue)
 # The naive `\(#(\d+)\)` regex only matches the simple form — compound refs
 # slipped through it in production and left shipped issues flagged-but-open.
+#
+# ARM 2 — the PR BODY. The title arm ALONE is near-vacuous wherever GitHub's
+# squash-merge autotitle is the convention, because GitHub appends "(#N)" to the
+# MERGE COMMIT title rather than the PR title, and the number it appends is the
+# PR's OWN. Measured for issue #337: of the last 100 merged PRs in this repo
+# only 3 titles carried any parenthetical, while 35 of the last 40 PR BODIES
+# named an issue — the detector's sole input was present in 3% of PRs. A live
+# miss followed: #316 was fixed by #328, which named it in the body with no
+# closing keyword; #316 stayed open AND labelled `ready`, and this detector
+# reported `[]`, which reads as a verified answer rather than as a blind spot.
+#
+# Arm 2 is deliberately BROAD — any `#N` in the body counts, not only refs under
+# a fix-shaped phrase — because the miss it exists to catch is exactly the author
+# who described the work without wording it as a close. That makes a body hit a
+# REVIEW PROMPT rather than a verdict: a PR citing an issue for background is
+# reported too, and `matched_via` is what lets the reader weigh it. Two
+# exclusions keep that breadth from collapsing into "fires on everything":
+#
+#   - A ref governed by a CLOSING KEYWORD is not a finding. GitHub auto-closes
+#     on those, so an open issue named that way is a cross-repo ref or a genuine
+#     anomaly, not the omission this detector reports.
+#   - HTML COMMENTS are stripped first. PR templates carry example refs inside
+#     `<!-- -->` (this repo's own template carries `Closes #123`), authors leave
+#     the comment in the body, and it is boilerplate rather than anyone's
+#     reference — unstripped, the same template numbers would flag on EVERY PR.
+#
+# The two arms keep SEPARATE ref regexes although the patterns are currently
+# identical. Do not fold them into one: each arm has to be neuterable on its own
+# for `scripts/test-stale-issues.sh` to mutation-prove it independently, and the
+# arms are free to diverge (a title ref is already narrowed by `group_re`; a
+# body ref is not).
 group_re = re.compile(r'\(([^)]*)\)')
 issue_in_group_re = re.compile(r'#(\d+)')
+BODY_REF_RE = re.compile(r'#(\d+)')
+HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
+# GitHub's documented closing keywords, anchored adjacent to the ref.
+# Recognising one SUPPRESSES a finding, so this set stays tight: a keyword form
+# it misses costs a false positive a human dismisses in a second, while one it
+# invents costs the silent false negative this detector exists to end.
+CLOSING_KEYWORD_RE = re.compile(
+    r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b[:\s]*#(\d+)',
+    re.IGNORECASE,
+)
+
 issue_to_prs = {}
 for pr in prs:
     title = pr.get("title", "")
-    seen_in_this_pr = set()
+    body = HTML_COMMENT_RE.sub(" ", pr.get("body") or "")
+
+    # issue number -> the arms that fired, recorded in title-then-body order.
+    arms = {}
     for group in group_re.findall(title):
         for m in issue_in_group_re.finditer(group):
-            n = int(m.group(1))
-            if n in seen_in_this_pr:
-                continue
-            seen_in_this_pr.add(n)
-            issue_to_prs.setdefault(n, []).append({
-                "pr_number": pr["number"],
-                "pr_title": pr["title"],
-                "mergedAt": pr.get("mergedAt"),
-            })
+            arms.setdefault(int(m.group(1)), ["title"])
+
+    closed_by_keyword = {int(m.group(1)) for m in CLOSING_KEYWORD_RE.finditer(body)}
+    for m in BODY_REF_RE.finditer(body):
+        n = int(m.group(1))
+        if n in closed_by_keyword:
+            continue
+        fired = arms.setdefault(n, [])
+        if "body" not in fired:
+            fired.append("body")
+
+    for n, fired in arms.items():
+        issue_to_prs.setdefault(n, []).append({
+            "pr_number": pr["number"],
+            "pr_title": pr["title"],
+            "mergedAt": pr.get("mergedAt"),
+            "matched_via": "+".join(fired),
+        })
 
 shipped_but_open = []
 stub_body = []

@@ -286,8 +286,9 @@ matching `pr_template_path`. Never pass a one-liner `--body "fix bug"` that bypa
 
 - Closing an issue requires a literal `Closes #<N>` (or `Fixes`/`Resolves`) **on its own line** —
   one line per issue. Comma lists don't reliably parse.
-- **A title parenthetical like `fix(web): foo (#240)` is a hyperlink, NOT a close trigger.** This
-  is the classic shipped-but-still-open cause.
+- **A title parenthetical like `fix(web): foo (#240)` is a hyperlink, NOT a close trigger** — and
+  neither is a bare `#240` in the body. Naming the issue without the keyword is the commonest
+  shipped-but-still-open cause; `stale-issues.sh` reports it after the fact as a body hit.
 - If `sentry:` is configured and this fixes a Sentry issue, add `Fixes <SENTRY-SHORT-ID>` on its
   own line — the Sentry↔GitHub integration only parses the literal keyword form.
 - Partial or follow-up work → omit the keyword, leave the issue open.
