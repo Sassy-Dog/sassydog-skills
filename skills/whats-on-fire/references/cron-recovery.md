@@ -3,6 +3,8 @@
 Whether a red cron monitor is a live P0 or a fix already verified and merely waiting for the
 schedule to confirm it.
 
+> **Path resolution.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` at load time only — **not** into this file (reference docs are read raw), and it is **not** an environment variable in the shell. Before running anything below, set `PLUGIN_ROOT` to the plugin root's absolute path: the invoking `SKILL.md` already carries it resolved in its own command lines, and it is this skill's announced base directory minus `/skills/<skill-name>`. Every command below quotes `"$PLUGIN_ROOT/..."`, so an unset value fails loudly with a 127 rather than resolving against `/`.
+
 ## Why the monitor lies for up to a week
 
 Sentry recovers a monitor environment **only on a real check-in**, and the detective controls gate
@@ -160,7 +162,7 @@ One lookup per (repo, workflow) pair — reuse the result across environments th
 ```bash
 ORG=Sassy-Dog REPO=platform WORKFLOW_FILE=relay-drift-check.yml \
   SINCE=2026-08-03T16:47:35Z \
-  bash ${CLAUDE_PLUGIN_ROOT}/skills/whats-on-fire/scripts/check-dispatch-recovery.sh
+  bash "$PLUGIN_ROOT/skills/whats-on-fire/scripts/check-dispatch-recovery.sh"
 ```
 
 **A truncated page is a third state, and it renders exactly like an empty one.** The script's

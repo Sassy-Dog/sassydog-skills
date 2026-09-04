@@ -2,6 +2,8 @@
 
 Two merge regimes exist across Sassy Dog repos. Detect which one applies before merging anything — a wrong guess either bypasses required serialization or silently never merges.
 
+> **Path resolution.** `${CLAUDE_PLUGIN_ROOT}` is substituted into `SKILL.md` at load time only — **not** into this file (reference docs are read raw), and it is **not** an environment variable in the shell. Before running anything below, set `PLUGIN_ROOT` to the plugin root's absolute path: the invoking `SKILL.md` already carries it resolved in its own command lines, and it is this skill's announced base directory minus `/skills/<skill-name>`. Every command below quotes `"$PLUGIN_ROOT/..."`, so an unset value fails loudly with a 127 rather than resolving against `/`.
+
 ## Detecting the regime
 
 Ask the repo, don't assume:
@@ -29,7 +31,7 @@ The repo's default branch is gated by a GitHub merge queue. **You never merge; y
 PRID=$(gh api graphql \
   -f query='query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){id}}}' \
   -f o="${REPO%%/*}" -f n="${REPO##*/}" -F p="$PR" --jq '.data.repository.pullRequest.id')
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- api graphql \
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/gh-retry.sh" -- api graphql \
   -f query='mutation($prid:ID!){enqueuePullRequest(input:{pullRequestId:$prid}){mergeQueueEntry{position state}}}' \
   -f prid="$PRID"
 ```
@@ -65,7 +67,7 @@ Terminal states: `MERGED` (success), or the entry leaves the queue with the PR s
 Once the enqueue is confirmed, **the canonical queue watch is `scripts/poll-queue.sh`** — it loops the query above every `POLL_INTERVAL` (default 60s; queue cycles are slow) and covers the full terminal matrix per PR: `MERGED` (success), `OPEN` + `isInMergeQueue:false` (disambiguated — see below), `CLOSED` without merge. GitHub removes the queue entry a beat before flipping the PR to `MERGED`, so a tick can catch a just-merged PR at `OPEN` + `isInMergeQueue:false`; the poller reads the last `RemovedFromMergeQueueEvent` in the same query and allowlists the benign: reason `merged` reports **merged**, while any other reason reports **ejected**, loudly. **An absent removal event is not evidence of an eject** — that event lags too, and an empty timeline cannot tell "never enqueued" from "not visible yet". The poller settles it with the queue-entry state it has already seen: never seen in the queue means it never enqueued and reports **ejected**; seen in the queue means the event is merely late, so the tick stays non-terminal and re-reads (issue #234). That wait is bounded by `POLL_MAX_TICKS` alone — exit 124, i.e. *undetermined*, which is the honest answer where `ejected` would be a claim the poller cannot support. Transient GraphQL failures log and retry; they never kill the watch. Exits 124 on `POLL_MAX_TICKS` timeout and emits final JSON (`{pr, result, queueEntryState}` per PR) for the caller's decision:
 
 ```bash
-REPO="$REPO" bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/poll-queue.sh "$PR1" "$PR2"
+REPO="$REPO" bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/poll-queue.sh" "$PR1" "$PR2"
 ```
 
 Don't hand-roll the loop — improvised versions tend to poll only for `MERGED` and sit silent through an eject. Keep the raw query above for one-off checks (e.g. the ~30s enqueue confirmation). The script is read-only: it never merges, re-enqueues, or recovers — that stays with the coordinating session (single-writer guardrail). On `ejected`, go to Eject recovery below.
@@ -81,7 +83,7 @@ A `gh pr merge` that hits a 502 can leave the PR locked with `Merge already in p
 ## Regime B — direct merge (no queue)
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/gh-retry.sh -- \
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/gh-retry.sh" -- \
   pr merge "$PR" --repo "$REPO" --squash --delete-branch
 ```
 
@@ -103,7 +105,7 @@ Merge/enqueue only when: all checks green AND `mergeable=MERGEABLE` AND `mergeSt
 For any PR with a failing check, pull the log so the final report names the failure instead of saying "CI red":
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/pr-failure-log.sh "$PR" --repo "$REPO"
+bash "$PLUGIN_ROOT/skills/pr-shepherd/scripts/pr-failure-log.sh" "$PR" --repo "$REPO"
 ```
 
 The script selects every FAILURE/ERROR check, extracts each Actions run id from the check's link, and prints a labeled `--log-failed` tail per failure. Checks that are not Actions runs (Vercel-style StatusContexts) have no fetchable log — it prints their link as "external check" instead of erroring, which is exactly where the old hand-rolled `grep`-the-run-id-out-of-the-link pipeline broke. Exit `10` = nothing failing.
