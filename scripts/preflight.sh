@@ -1078,14 +1078,27 @@
 #      or re-index it and #339 returns verbatim). The DISCRIMINATION half is
 #      load-bearing — a dedupe answering already-linked to everything satisfies
 #      the reproduction and is useless — and its sharp case is the PREFIX
-#      COLLISION: the scan matches the delimited footer `<!-- <marker> -->`,
-#      never the bare marker, or `epic-split: #207/alpha` reports as
-#      already-linked against an existing `#207/alpha-two` and a real child
-#      issue is silently never filed (M3). A scan that could not be PERFORMED
-#      exits 2 rather than filing blind, the align-labels delete-gate shape
-#      applied to this write (M4); stage 1 KEEPS its `|| echo "[]"`
-#      degradation, and that asymmetry is deliberate — the refusal belongs to
-#      the stage that is load-bearing for freshness. The FIXTURE PROVES ITSELF
+#      COLLISION, which arrives by TWO routes and needs the delimited footer
+#      `<!-- <marker> -->` on BOTH. Stage 2's `contains()` is a substring test;
+#      stage 1's GitHub phrase search matches a token SUBSEQUENCE (verified
+#      read-only: `"stale-issues-title-only" in:body` returns #339/#337/#338,
+#      whose marker is `stale-issues-title-only-shipped-detector`). The first
+#      shipped version applied the predicate to stage 2 alone while stage 1
+#      answered first on the bare marker, which is the LIKELIER route — it
+#      fires on a sibling that is already indexed, i.e. any sibling more than a
+#      few minutes old — and whose harm is quieter than #339's own: an epic
+#      child never filed, reported as already-linked with a sibling's number.
+#      One predicate, two call sites, and M3/M7/M8 prove both sites depend on
+#      it. A scan that could not be PERFORMED exits 2 rather than filing blind,
+#      the align-labels delete-gate shape applied to this write (M4) — as does
+#      a scan that SUCCEEDED with a non-array payload, including the empty
+#      stdout that `jq` reads as no output and exit 0. The `gh issue create`'s
+#      own status is captured explicitly rather than left to `set -e`, which
+#      used to abort the assignment before the script's `exit 2` could run and
+#      report a transient 5xx as exit 1 with empty stdout and stderr. Stage 1
+#      KEEPS its `|| echo "[]"` degradation, and that asymmetry is deliberate —
+#      the refusal belongs to the stage that is load-bearing for freshness — so
+#      a fixture EXECUTES that branch rather than leaving it written and unrun. The FIXTURE PROVES ITSELF
 #      first, because #339 is about an unverified freshness assumption and
 #      replacing it with a second one would be the same bug: the mock's search
 #      must NOT see a just-created issue, its direct listing MUST, and the PATH
@@ -1099,9 +1112,10 @@
 #      duplicate and is deliberately not repeated as a test. One harness trap
 #      worth knowing before editing a target line here: the mutation cells
 #      reach awk through `$ENVIRON`, never `-v`, because `-v` performs escape
-#      processing and three targets end in a shell line-continuation backslash
-#      — with `-v` this gate was green on macOS's BWK awk and red on CI's gawk
-#      claiming three STALE MUTATIONS, a diagnostic naming the wrong file. The
+#      processing and several targets carry a backslash — a shell
+#      line-continuation for M2 and M5, an escaped quote for M2. With `-v` this
+#      gate was green on macOS's BWK awk and red on CI's gawk claiming M2, M3
+#      and M5 were STALE MUTATIONS, a diagnostic naming the wrong file. The
 #      transport is round-tripped and asserted, with an adequacy conjunct, so
 #      the next such awk reports the transport rather than the targets.
 #
@@ -1832,14 +1846,15 @@ else
     failed "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
 fi
 
+# --- 38. file-or-link-issue tests -------------------------------------------
 # The only write-capable issue path, which had no gate at all until #339: its
 # marker-keyed idempotency was a read-after-write against GitHub's ASYNCHRONOUS
 # search index, and a re-run seven seconds later filed a duplicate. Both stages
 # are pinned — the search covers age, the `--search`-less direct listing covers
 # recency — along with the discrimination half (a new marker still files, and a
-# marker that is a PREFIX of an existing one is not swallowed) and the refusal
-# to file when the scan could not be performed. Mock `gh`, no network, and no
-# real issue is ever filed.
+# marker that is a PREFIX of an existing one is not swallowed on EITHER route)
+# and the refusal to file when the scan could not be performed. Mock `gh`, no
+# network, and no real issue is ever filed.
 if bash scripts/test-file-or-link-issue.sh; then
     pass "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
 else

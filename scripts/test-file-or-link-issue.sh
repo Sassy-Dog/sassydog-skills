@@ -44,22 +44,48 @@
 #
 # THE DISCRIMINATION HALF IS LOAD-BEARING (section 3). A dedupe that answers
 # `already-linked` to everything satisfies the reproduction and is useless, so a
-# genuinely new marker must still file. Its sharp case is the PREFIX COLLISION:
-# stage 2 matches the script-owned DELIMITED footer `<!-- <marker> -->` and not
-# the bare marker, because `contains()` is a plain substring test and a bare
-# match reports `epic-split: #207/alpha` as already-linked against an existing
-# `epic-split: #207/alpha-two` — a real marker shape `groom-backlog` emits.
-# M3 is that mutation, and it is the reason the two stages ask deliberately
-# DIFFERENT questions; do not "align" the scan back onto the bare marker.
+# genuinely new marker must still file. Its sharp case is the PREFIX COLLISION,
+# and the collision arrives by TWO ROUTES that need the same delimited footer
+# `<!-- <marker> -->` for DIFFERENT reasons — which is exactly why applying it to
+# one stage is not enough:
+#   - stage 2's `contains()` is a plain substring test, so a bare match reports
+#     `epic-split: #207/alpha` as already-linked against `#207/alpha-two`;
+#   - stage 1's GitHub phrase search matches a token SUBSEQUENCE, verified
+#     read-only on 2026-09-04 (`"stale-issues-title-only" in:body` returns
+#     #339/#337/#338, whose marker is `stale-issues-title-only-shipped-detector`;
+#     a superstring control returns `[]`).
+# The first version of this gate seeded the collision sibling as `unindexed`, and
+# that ONE WORD was the only reason the case reached stage 2 — with the sibling
+# `indexed`, which is the state of any sibling more than a few minutes old, the
+# shipped script answered `already-linked` from stage 1 on the bare marker. So
+# the stage-1 route is the LIKELIER one, and its harm is quieter than #339's own:
+# #339 filed a visible duplicate, this swallows a real `groom-backlog` epic child
+# that is never filed. Both routes now have a fixture; M3, M7 and M8 are the
+# mutations. Do not "align" either stage back onto the bare marker, and do not
+# let the one predicate become two copies again.
 #
 # UNKNOWN IS NOT VERIFIED (section 6). A scan that could not be PERFORMED is not
 # a scan that found nothing, so the script exits 2 rather than filing blind —
 # the same shape `align-labels.sh`'s delete gate takes, applied to the write
-# that #339 is about. The tolerant `|| echo "[]"` form is what M4 restores, and
-# it files a duplicate on exactly the input the guard exists for. Note the
-# asymmetry, which is deliberate and not an oversight: stage 1 KEEPS its
-# `|| echo "[]"` degradation, because stage 2 below it is the authority; the
-# refusal belongs to the stage that is load-bearing for freshness.
+# that #339 is about. Three fixtures, because the failure gets quieter each
+# time: a non-zero exit, a zero exit with a non-JSON payload, and a zero exit
+# with NO payload — the last of which no exit code reports and `jq` reads as no
+# output and status 0, so a scan validated by jq's status alone files blind. The
+# tolerant `|| echo "[]"` form is what M4 restores. Note the asymmetry, which is
+# deliberate and not an oversight: stage 1 KEEPS its `|| echo "[]"` degradation,
+# because stage 2 below it is the authority; the refusal belongs to the stage
+# that is load-bearing for freshness. Section 6b EXECUTES that tolerant branch,
+# since a degradation nothing runs is a decision a symmetry sweep deletes while
+# staying green.
+#
+# THE WRITE'S OWN EXIT CODE IS PART OF THE CONTRACT (section 8b). Exit 1 means
+# "you called me wrong" and a caller may treat it as permanent; exit 2 means
+# retry. Measured: with the create failing under `set -euo pipefail`, errexit
+# aborted the `created_url=$(gh issue create … | tail -n1)` assignment on gh's
+# status, so the script's own `exit 2` and diagnostic never ran and a transient
+# 5xx surfaced as exit 1 with empty stdout AND empty stderr. Both halves are
+# asserted, because a bare exit-code check also passes on a run that said
+# nothing.
 #
 # NOT COVERED, and deliberately so. A marker whose issue is BOTH older than the
 # `--recent-scan` window AND not yet indexed is invisible to both stages —
@@ -70,13 +96,22 @@
 # uncovered: GitHub's real index TTL, which is GitHub's and not worth pinning —
 # the fixture models lag as visibility, not as time.
 #
-# NO REAL ISSUE IS EVER FILED. The reproduction in #339 was obtained against the
-# live repo and cost a real duplicate; repeating it as a test would be the same
-# mistake with a scripted trigger. Everything here runs against a PATH-shimmed
-# mock `gh` under one `mktemp -d`: no repo, no network, no live issue read or
-# written. Section 1 asserts the shim actually shadows the real `gh`, because a
-# mock that failed to take effect is how a test suite reaches the network
-# without saying so.
+# NO REAL ISSUE IS EVER FILED, AND THAT IS GATED STRUCTURALLY. The reproduction
+# in #339 was obtained against the live repo and cost a real duplicate;
+# repeating it as a test would be the same mistake with a scripted trigger.
+# Everything here runs against a PATH-shimmed mock `gh` under one `mktemp -d`:
+# no repo, no network, no live issue read or written.
+#
+# The shim check therefore lives immediately after `chmod +x` and EXITS, rather
+# than being section 1's counted assertion alone. Ordering was not a guarantee:
+# section 1 makes five live `gh` calls — one of them `gh issue create` — before
+# it asserts anything, this file runs `set -uo pipefail` with no `-e`, and
+# `bad()` records without exiting, so a failed `chmod` or a noexec $TMPDIR would
+# send a WRITE at api.github.com with the operator's credentials. CLAUDE.md is
+# verbatim on the shape: irreversible actions are gated structurally, not by
+# ordering. For the same reason `$MOCK_REPO` sits in `.invalid` (RFC 2606,
+# unregistrable) — the earlier `mock-org` is a REAL GitHub Organization, one
+# repo creation away from being a live target.
 #
 # Mutants are applied by EXACT WHOLE-LINE match through awk, which exits
 # non-zero unless the target matched exactly ONCE — a mutation that drifted onto
@@ -85,11 +120,12 @@
 # member ran, so no count here can go stale (#276).
 #
 # The cells reach awk through $ENVIRON rather than `-v`, and the transport is
-# ROUND-TRIPPED and asserted before the battery runs. `-v` performs escape
-# processing, three targets here end in a shell line-continuation backslash, and
-# with `-v` this file passed on macOS's BWK awk and failed on CI's gawk claiming
-# three stale mutations — a diagnostic that sends the reader to edit target lines
-# that were correct. See apply_mutation.
+# ROUND-TRIPPED and asserted before the battery runs, with an adequacy conjunct
+# so a table that lost its last backslash-bearing target cannot make the check
+# vacuous. `-v` performs escape processing; with it, this file passed on macOS's
+# BWK awk and failed on CI's gawk claiming M2, M3 and M5 were stale mutations —
+# a diagnostic that sends the reader to edit target lines that were correct. See
+# apply_mutation.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-file-or-link-issue.sh
@@ -178,13 +214,29 @@ case "$cmd" in
                     esac
                     prev="$a"
                 done
+                if [ -n "$search" ] && [ "${MOCK_FAIL_SEARCH:-0}" = "1" ]; then
+                    # Stage 1's `|| echo "[]"` degradation, which nothing else
+                    # executes — so without this knob a later symmetry sweep
+                    # could delete the tolerance and stay green.
+                    echo "gh: HTTP 503 Service Unavailable (search)" >&2
+                    exit 1
+                fi
                 if [ -n "$search" ]; then
                     # THE INDEX. Only issues listed in $MOCK_INDEXED are visible,
                     # which is the lag. The phrase is unwrapped from
                     # `"<marker>" in:body` and matched as a bare substring —
                     # deliberately LOOSER than the delimited footer the script's
-                    # scan uses, because this arm models GitHub's search, not the
-                    # script's own matching.
+                    # own stages use, because this arm models GitHub's search,
+                    # not the script's matching.
+                    #
+                    # Real GitHub is looser still: phrase search matches a token
+                    # SUBSEQUENCE, verified read-only on 2026-09-04 —
+                    # `"stale-issues-title-only" in:body` returns #339/#337/#338
+                    # whose marker is `stale-issues-title-only-shipped-detector`,
+                    # while a superstring control returns `[]`. Substring is the
+                    # CONSERVATIVE model: it reproduces the prefix collision this
+                    # fixture is about without inventing hits elsewhere, so a row
+                    # that passes here would also pass against the real index.
                     phrase="${search#\"}"; phrase="${phrase%%\"*}"
                     awk -F'\t' -v phrase="$phrase" -v idx="$MOCK_INDEXED" '
                         BEGIN { while ((getline n < idx) > 0) seen[n] = 1 }
@@ -202,6 +254,14 @@ case "$cmd" in
                     echo "<!DOCTYPE html><html>rate limited</html>"
                     exit 0
                 fi
+                if [ "${MOCK_EMPTY_LIST:-0}" = "1" ]; then
+                    # A SUCCESSFUL call that printed NOTHING — the quietest of
+                    # the three, and the one an exit code and a JSON parse both
+                    # miss: `jq` reads empty input as no output and exits 0, so
+                    # a scan validated only by jq's status falls through and
+                    # files blind.
+                    exit 0
+                fi
                 # The DIRECT read: newest-first by number, state-filtered, then
                 # bounded by --limit. Fresh by construction — $MOCK_INDEXED is
                 # not consulted at all on this path.
@@ -212,6 +272,20 @@ case "$cmd" in
                 printf '%s\n' "$rows" | head -n "$limit" | emit_rows "$fields"
                 exit 0 ;;
             create)
+                if [ "${MOCK_FAIL_CREATE:-0}" = "1" ]; then
+                    # The most likely write failure — a transient 5xx. gh writes
+                    # its own diagnostic to stderr; the point of the row that
+                    # uses this knob is which EXIT CODE the caller sees.
+                    echo "gh: HTTP 502 Bad Gateway (api.github.com)" >&2
+                    exit 1
+                fi
+                if [ "${MOCK_BAD_CREATE_URL:-0}" = "1" ]; then
+                    # gh exits 0 having printed something that is not an issue
+                    # URL on its last line. Nothing was necessarily created, so
+                    # the number cannot be parsed and the run must not claim one.
+                    echo "Creating issue in $MOCK_REPO"
+                    exit 0
+                fi
                 title=""; body_file=""
                 prev=""
                 for a in "$@"; do
@@ -237,7 +311,27 @@ esac
 MOCK
 chmod +x "$WORK/bin/gh"
 
-export MOCK_REPO="mock-org/mock-repo"
+# THE SHIM IS GATED STRUCTURALLY, NOT BY ORDERING, AND THIS IS THE GATE. Below,
+# section 1 makes five live `gh` calls — one of them `gh issue create` — before
+# it asserts anything, and this file runs `set -uo pipefail` with NO `-e` while
+# `bad()` records without exiting. So an ordering-based guarantee is no
+# guarantee: a failed `chmod`, a noexec or unwritable $TMPDIR, and the probe
+# reaches api.github.com with the operator's credentials and attempts a WRITE.
+# CLAUDE.md is verbatim on the shape — "irreversible actions are gated
+# structurally, not by ordering… one call site, its own fresh verification in
+# the same body" — so the check lives HERE, immediately after chmod, and it
+# EXITS rather than recording. The counted assertion in section 1 stays where it
+# is; it reports the property, this refuses to proceed without it.
+if [ "$(PATH="$WORK/bin:$PATH" command -v gh)" != "$WORK/bin/gh" ]; then
+    echo "test-file-or-link-issue: the mock gh shim did not install at $WORK/bin/gh — refusing to run, because every probe below would reach the real GitHub API with write intent" >&2
+    exit 1
+fi
+
+# `.invalid` is reserved by RFC 2606 and can never be registered, so no owner
+# segment here can resolve to a real account. The previous value was
+# `mock-org/mock-repo`, and `mock-org` is a REAL GitHub Organization — only the
+# repo 404s, which is one repo creation away from being a live write target.
+export MOCK_REPO="mock-org.invalid/mock-repo"
 export MOCK_ISSUES="$WORK/issues.tsv"
 export MOCK_INDEXED="$WORK/indexed.txt"
 export MOCK_WRITES="$WORK/writes.log"
@@ -260,6 +354,13 @@ seed_store() {
     add_issue 3 CLOSED "Closed, never indexed <!-- closed-marker -->"               unindexed
     add_issue 4 OPEN   "Collision sibling <!-- epic-split: #207/alpha-two -->"      unindexed
     add_issue 5 OPEN   "Recent and indexed <!-- warm-marker -->"                    indexed
+    # THE SAME COLLISION ON THE OTHER ROUTE, and the more likely one. #4 is
+    # unindexed, so `epic-split: #207/alpha` reaches stage 2 — which is the only
+    # reason the first version of this fixture exercised the footer predicate at
+    # all. A sibling more than a few minutes old IS indexed, so it is answered by
+    # stage 1, and the review that found this flipped exactly this word to prove
+    # it. Distinct parent so the two rows cannot mask each other.
+    add_issue 6 OPEN   "Collision sibling, INDEXED <!-- epic-split: #311/beta-two -->" indexed
 }
 
 run_file() {  # <script> [args...]
@@ -371,6 +472,23 @@ else
     bad "the prefix-collision case returned the sibling issue #4 itself"
 fi
 
+# THE SAME COLLISION VIA STAGE 1, which is the likelier route and was the one
+# left open when the footer predicate shipped on stage 2 alone. #6 is INDEXED,
+# so the search answers first; the predicate must reject it and let the run fall
+# through to the scan rather than short-circuiting on a sibling.
+seed_store
+file_it --marker "epic-split: #311/beta" --title "Beta" --body-file "$BODY"
+if [ "$(action_of)" = "filed" ]; then
+    ok "a prefix collision on an INDEXED sibling also files — stage 1 filters its rows rather than trusting the search"
+else
+    bad "'epic-split: #311/beta' returned '$(action_of)' #$(number_of) via='$(via_of)' against the indexed sibling #6 — a real epic child is being swallowed on the likelier of the two routes"
+fi
+if [ "$(number_of)" != "6" ]; then
+    ok "…and it is a new issue (#$(number_of)), not the indexed sibling #6"
+else
+    bad "the stage-1 collision case returned the sibling issue #6 itself"
+fi
+
 # --- 4. the search stage still carries its own weight ------------------------
 # #1 is INDEXED and OLD. With a window of 2 it is outside the scan entirely, so
 # only the search can find it. This is the half M6 deletes.
@@ -430,6 +548,49 @@ if [ "$(creates)" = "0" ]; then
 else
     bad "$(creates) issues created after an unparseable idempotency scan"
 fi
+# The quietest of the three: gh exits 0 having printed nothing. No exit code
+# reports it, and `jq` reads empty input as no output and exits 0 — so a scan
+# validated by jq's status alone falls through and files blind.
+seed_store
+MOCK_EMPTY_LIST=1 file_it --marker "scan-empty" --title "Empty" --body-file "$BODY"
+if [ "$RC" = "2" ] && [ "$(creates)" = "0" ]; then
+    ok "a scan that exits 0 printing NOTHING is refused too — jq's exit status alone cannot tell that apart from a clean empty repo"
+else
+    bad "an empty scan payload exited $RC with $(creates) creates — the last blind-file path is open"
+fi
+
+# --- 6b. the search stage's degradation is executed, not merely written -------
+# Stage 1 keeps `|| echo "[]"` while stage 2 refuses; that asymmetry is a
+# decision, and nothing else in this file runs the tolerant branch. Without this
+# row a symmetry sweep could delete it and stay green.
+seed_store
+file_it --marker "degrade-me" --title "Real" --body-file "$BODY"
+: >"$MOCK_WRITES"
+MOCK_FAIL_SEARCH=1 file_it --marker "degrade-me" --title "Again" --body-file "$BODY"
+if [ "$(action_of)" = "already-linked" ] && [ "$(via_of)" = "recent-scan" ] && [ "$(creates)" = "0" ]; then
+    ok "a FAILED search degrades to no-hit and stage 2 still answers — the asymmetry with stage 2's refusal is exercised, not just asserted"
+else
+    bad "with the search failing, the run reported '$(action_of)' via='$(via_of)' rc=$RC with $(creates) creates — stage 1's degradation or stage 2's authority is broken"
+fi
+
+# --- 6c. a full window is never a silent clean read --------------------------
+# `--recent-scan 2` against a 6-issue store comes back full, so a marker one row
+# past the edge is invisible. Paired with a window that has headroom, or the
+# field would be indistinguishable from a constant.
+seed_store
+file_it --marker "truncation-probe" --title "Full" --body-file "$BODY" --recent-scan 2
+# Read with a bare `.scan_truncated`, never `// empty`: jq's alternative
+# operator treats `false` as absent, so the false half of this pair would read
+# as a missing field and the row would fail for the wrong reason.
+full_flag=$(jq -r '.scan_truncated' <<<"$OUT" 2>/dev/null)
+seed_store
+file_it --marker "truncation-probe" --title "Roomy" --body-file "$BODY" --recent-scan 50
+roomy_flag=$(jq -r '.scan_truncated' <<<"$OUT" 2>/dev/null)
+if [ "$full_flag" = "true" ] && [ "$roomy_flag" = "false" ]; then
+    ok "a filing run reports scan_truncated=true on a full window and false on one with headroom — the blind spot is surfaced, not assumed away"
+else
+    bad "scan_truncated was '$full_flag' on a full window and '$roomy_flag' on a roomy one — a constant, or absent, either way measuring nothing"
+fi
 
 # --- 7. --dry-run is unaffected, in both directions --------------------------
 seed_store
@@ -466,6 +627,37 @@ if [ "$(action_of)" = "already-linked" ] && [ "$(via_of)" = "recent-scan" ]; the
     ok "a marker on a CLOSED, unindexed issue is found by the scan — dropping --state all would re-file every closed signal"
 else
     bad "the closed-issue marker returned '$(action_of)' via='$(via_of)' (rc=$RC): $ERR"
+fi
+
+# --- 8b. the WRITE's own failure is exit 2, not exit 1 -----------------------
+# Exit 1 is this script's "you called me wrong" code and a caller may treat it as
+# permanent. Measured before the fix: with the create failing, `set -euo
+# pipefail` aborted the `created_url=$(gh issue create … | tail -n1)` assignment
+# on gh's status, so the script's own `exit 2` and its diagnostic never ran and a
+# transient 5xx surfaced as exit 1 with EMPTY stdout and EMPTY stderr — the most
+# likely failure this path sees, reported as the one code that must not be
+# retried, silently. Both halves are asserted, because a bare exit-code check
+# would also pass on a run that said nothing.
+seed_store
+MOCK_FAIL_CREATE=1 file_it --marker "create-fails" --title "Doomed" --body-file "$BODY"
+if [ "$RC" = "2" ] && [ -n "$ERR" ]; then
+    ok "a failed \`gh issue create\` exits 2 WITH a diagnostic — a retryable transport failure is never reported as a usage error"
+else
+    bad "a failed create exited $RC with stderr '$ERR' — exit 1 tells a caller the filing is permanently rejected, and an empty stderr tells it nothing at all"
+fi
+if [ "$(action_of)" = "" ]; then
+    ok "…and it claims no issue number, since none was created"
+else
+    bad "a failed create still reported '$(action_of)' #$(number_of)"
+fi
+# gh exits 0 having printed something that is not a URL: nothing was necessarily
+# created, so the number cannot be parsed and the run must not invent one.
+seed_store
+MOCK_BAD_CREATE_URL=1 file_it --marker "create-garbage" --title "Odd" --body-file "$BODY"
+if [ "$RC" = "2" ] && [ "$(action_of)" = "" ]; then
+    ok "a create that exits 0 without printing an issue URL is exit 2 too — a successful call is not a parsed result"
+else
+    bad "a non-URL create result exited $RC reporting '$(action_of)'"
 fi
 
 # --- 9. the window is an argument, and a bad one is refused ------------------
@@ -518,9 +710,10 @@ MUTANT="$WORK/mutant.sh"
 
 # THE MUTATION VALUES REACH awk THROUGH $ENVIRON, NOT THROUGH `-v`, AND THAT IS
 # NOT A STYLE CHOICE. `awk -v var=value` performs ESCAPE-SEQUENCE PROCESSING on
-# the value, and three of the target lines below end in a shell line-continuation
-# backslash while one also carries `\"`. Measured 2026-09-04: with `-v`, all six
-# mutants applied cleanly on macOS's BWK awk and M2, M3 and M5 reported "the
+# the value, and several cells below carry a backslash — a shell
+# line-continuation for M2 and M5, an escaped quote for M2. Measured 2026-09-04:
+# with `-v`, every mutant applied cleanly on macOS's BWK awk while M2, M3 and M5
+# (M3's target then ended in a continuation too) reported "the
 # mutation is stale, repoint it" on CI's gawk — a green local run, a red CI, and
 # a diagnostic pointing at the wrong file. $ENVIRON is defined to carry the
 # environment byte-for-byte, so it is the transport with no escape layer at all.
@@ -557,6 +750,8 @@ run_scenario() {  # <script> <scenario>
             run_file "$script" --marker "mut-repro" --title "Second" --body-file "$BODY" ;;
         collision)
             run_file "$script" --marker "epic-split: #207/alpha" --title "Alpha" --body-file "$BODY" ;;
+        collision-indexed)
+            run_file "$script" --marker "epic-split: #311/beta" --title "Beta" --body-file "$BODY" ;;
         scanfail)
             MOCK_FAIL_LIST=1 run_file "$script" --marker "mut-scanfail" --title "Unknown" --body-file "$BODY" ;;
         closed)
@@ -572,12 +767,14 @@ run_scenario() {  # <script> <scenario>
 #   expect=duplicate  — the mutation must cause a `gh issue create`
 #   expect=false-link — the mutation must cause a WRONG already-linked
 MUTANTS=(
-"M1 the recent-scan's hit is ignored	if [[ -n \"\$hit\" ]]; then	if false; then	repro	duplicate	without stage 2 acting on its hit, re-filing a marker seconds later files the duplicate — #339 verbatim"
+"M1 the recent-scan's hit is ignored	if [[ -n \"\$recent_hit\" ]]; then	if false; then	repro	duplicate	without stage 2 acting on its hit, re-filing a marker seconds later files the duplicate — #339 verbatim"
 "M2 stage 2 asks the search index instead of reading directly	recent=\$(gh issue list --repo \"\$REPO\" --state all \\	recent=\$(gh issue list --repo \"\$REPO\" --state all --search \"\\\"\$marker\\\" in:body\" \\	repro	duplicate	a scan routed through the index inherits the lag it exists to defeat, and looks correct in review"
-"M3 the delimited footer relaxed to a bare substring	    'map(select((.body // \"\") | contains(\"<!-- \" + \$m + \" -->\"))) | sort_by(.number) | first // empty' \\	    'map(select((.body // \"\") | contains(\$m))) | sort_by(.number) | first // empty' \\	collision	false-link	a bare match reports epic-split: #207/alpha as already-linked against #207/alpha-two, so a real child issue is silently never filed"
+"M3 the shared footer predicate relaxed to a bare substring, seen from STAGE 2	footer_pick='map(select((.body // \"\") | contains(\"<!-- \" + \$m + \" -->\"))) | sort_by(.number) | first // empty'	footer_pick='map(select((.body // \"\") | contains(\$m))) | sort_by(.number) | first // empty'	collision	false-link	a bare match reports epic-split: #207/alpha as already-linked against the UNINDEXED sibling #207/alpha-two, so a real child issue is silently never filed"
 "M4 a failed scan is tolerated as no-hit	if [[ \"\$scan_rc\" -ne 0 ]]; then	if [[ \"\$scan_rc\" -ne 0 ]]; then recent=\"[]\"; fi; if false; then	scanfail	duplicate	the pre-#339 tolerance files blind on exactly the input the guard exists for — unknown treated as verified"
 "M5 --state all dropped from the scan	recent=\$(gh issue list --repo \"\$REPO\" --state all \\	recent=\$(gh issue list --repo \"\$REPO\" \\	closed	duplicate	an open-only scan re-files every marker whose issue was closed, which is most of a mature backlog"
-"M6 the search stage stops short-circuiting	if [[ \"\$existing_count\" -gt 0 ]]; then	if false; then	deep	duplicate	deleting stage 1 as redundant loses every marker older than the scan window — the mirror-image defect"
+"M6 the search stage stops short-circuiting	if [[ -n \"\$search_hit\" ]]; then	if false; then	deep	duplicate	deleting stage 1 as redundant loses every marker older than the scan window — the mirror-image defect"
+"M7 the shared footer predicate relaxed, seen from STAGE 1	footer_pick='map(select((.body // \"\") | contains(\"<!-- \" + \$m + \" -->\"))) | sort_by(.number) | first // empty'	footer_pick='map(select((.body // \"\") | contains(\$m))) | sort_by(.number) | first // empty'	collision-indexed	false-link	the SAME widening reaches stage 1 too; this row is what proves both call sites depend on the one predicate rather than stage 2 alone carrying it"
+"M8 stage 1 trusts the search result instead of filtering it	search_hit=\$(jq -c --arg m \"\$marker\" \"\$footer_pick\" <<<\"\$existing\" 2>/dev/null || true)	search_hit=\$(jq -c '.[0] // empty' <<<\"\$existing\" 2>/dev/null || true)	collision-indexed	false-link	the exact shape this PR shipped for review: the footer predicate applied to stage 2 while stage 1 short-circuits on a token-subsequence match, swallowing an epic child on the likelier route"
 )
 
 # THE TRANSPORT IS MEASURED, NOT TRUSTED. Every cell is round-tripped through
@@ -657,7 +854,7 @@ fi
 # exactly one assertion on every path, and each mutant contributes exactly one
 # whether it is applied, run, or refused. A floor cannot catch a deleted case;
 # an equality forces a deliberate bump here instead of a quiet drift.
-EXPECTED_CASES=33
+EXPECTED_CASES=41
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
