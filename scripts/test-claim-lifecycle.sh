@@ -224,12 +224,21 @@ case "$cmd" in
                 line=$(row "$MOCK_TIMELINE" "$gnum")
                 g_as=$(printf '%s' "$line" | cut -f2)
                 g_lb=$(printf '%s' "$line" | cut -f3)
-                jq -n --arg me "${MOCK_LOGIN:-tester}" --arg a "$g_as" --arg l "$g_lb" '
+                # FOURTH field: the label name as the REPO spells it. gh
+                # resolves label names case-insensitively, so a repo whose label
+                # is `In-Progress` returns THAT from the timeline while the
+                # script passes its own `in-progress` constant. Hardcoding the
+                # constant here made the mock share the code's exact-match
+                # model, so no fixture could express that repo and #334 stayed
+                # invisible through six review passes. Empty = ordinary repo.
+                g_sp=$(printf '%s' "$line" | cut -f4)
+                [ -z "$g_sp" ] && g_sp="in-progress"
+                jq -n --arg me "${MOCK_LOGIN:-tester}" --arg a "$g_as" --arg l "$g_lb" --arg lab "$g_sp" '
                     { data: { repository: { issue: { timelineItems: { nodes:
                         ( (if $a == "" then [] else
                             [{__typename:"AssignedEvent", createdAt:$a, assignee:{login:$me}}] end)
                         + (if $l == "" then [] else
-                            [{__typename:"LabeledEvent", createdAt:$l, label:{name:"in-progress"}}] end)
+                            [{__typename:"LabeledEvent", createdAt:$l, label:{name:$lab}}] end)
                         ) } } } } }' ;;
             *) echo "mock gh: unhandled api path: $path" >&2; exit 1 ;;
         esac ;;
@@ -398,6 +407,11 @@ fi
 #   21  unassigned, carries `not-ready` ONLY    -> the substring trap for 7e:
 #                                                 a label CONTAINING the token
 #                                                 is not the token
+#   23  @me + `In-Progress` (capitalised)     -> a LIVE claim on a repo that
+#                                                 spells the label its own way
+#                                                 (#334, site 1)
+#   24  @me + `ready`, timeline labelled         -> genuine residue on that same
+#       `In-Progress`                              repo (#334, site 2)
 INPROG="in-progress"
 READY="ready"
 BLOCKED="blocked"
@@ -414,6 +428,8 @@ BLOCKED="blocked"
     printf '20\t\t%s,bug\tOPEN\n' "$READY"
     printf '21\t\tnot-%s\tOPEN\n' "$READY"
     printf '22\t\tReady,bug\tOPEN\n'
+    printf '23\ttester\tIn-Progress\tOPEN\n'
+    printf '24\ttester\t%s\tOPEN\n' "$READY"
 } >"$MOCK_ISSUES"
 
 # The claim-cycle timeline (#287). Every shape above that is assigned to @me
@@ -441,6 +457,11 @@ export MOCK_TIMELINE="$WORK/timeline.tsv"
     printf '16\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\n'
     printf '17\t2026-08-30T18:00:00Z\t2026-08-30T14:38:41Z\n'
     printf '18\t2026-08-30T18:00:00Z\t\n'
+    # Fourth field: this repo spells the label `In-Progress`. Both rows carry a
+    # COMPLETE claim cycle, so what is under test is purely whether the two
+    # comparisons fold case (#334).
+    printf '23\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\tIn-Progress\n'
+    printf '24\t2026-08-30T14:38:42Z\t2026-08-30T14:38:41Z\tIn-Progress\n'
 } >"$MOCK_TIMELINE"
 
 # --- helpers -----------------------------------------------------------------
@@ -629,6 +650,32 @@ if cleared; then
     ok "(r4) claim -> block -> promote residue clears: no close, no reopen, but the claim cycle is in the timeline"
 else
     bad "(r4) the block path's residue was not cleared, and #287 requires that path to be decided: $EDITS"
+fi
+
+# (c1)/(c2) THE CASE-VARIANT REPO (#334). gh resolves label names with
+# `strings.EqualFold`, so `claim` writes the constant `in-progress` and a repo
+# spelling its label `In-Progress` stores THAT spelling. Both comparisons in the
+# gate therefore see a name they never wrote. These two rows are the external
+# oracle the mock could not previously express: until the timeline arm took its
+# spelling from the fixture, code and mock shared one exact-match model and
+# agreed with each other through six review passes.
+run_claim promote 23
+if cleared; then
+    bad "(c1) promote stripped a LIVE claim on a repo spelling the label In-Progress: $EDITS"
+elif ! has "$ERR" "in-flight"; then
+    bad "(c1) the live claim was not reported as in-flight — the label-presence test did not fold case: $ERR"
+else
+    ok "(c1) a live claim labelled In-Progress reads as live, not as a self-assignment"
+fi
+
+# The counterpart: on that SAME repo, genuine residue must still clear. Without
+# it (c1) would pass on a gate that refuses everything, and this row is also what
+# keeps M18's not-cleared verdict honest — the unmutated path clears here.
+run_claim promote 24
+if cleared; then
+    ok "(c2) genuine residue whose timeline label is In-Progress still clears, so the timeline lookup folds too"
+else
+    bad "(c2) residue was left in place on a repo spelling the label In-Progress — the claim-cycle jq did not fold case: $EDITS"
 fi
 
 # --- 4. the probe's transport ------------------------------------------------
@@ -1431,7 +1478,7 @@ mutant_ran() {  # $1=label
 MUTANTS=(
 "M1 different-assignee arm	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if false; then	-	promote 11	cleared	without the different-assignee arm, promote strips a HUMAN's assignee"
 "M2 equality relaxed to claim's substring idiom	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if [[ \",\$assignees,\" != *\",\$ME,\"* ]]; then	-	promote 14	cleared	the substring idiom clears on an issue a human ALSO holds"
-"M3 in-progress arm	    if [[ \",\$labels,\" == *\",\$INPROG_LABEL,\"* ]]; then	    if false; then	-	promote 12	cleared	without the in-progress arm, promote strips a LIVE in-flight claim"
+"M3 in-progress arm	    if [[ \",\$labels_lc,\" == *\",\$inprog_lc,\"* ]]; then	    if false; then	-	promote 12	cleared	without the in-progress arm, promote strips a LIVE in-flight claim"
 "M4 closed-state arm	    if [[ \"\$state\" != \"OPEN\" ]]; then	    if false; then	-	promote 16	cleared	without the state arm, promote strips the who-shipped-it record off a CLOSED issue"
 "M5 unreadable probe clears anyway	        RESIDUE_NOTE=\"assignee unchecked: could not read #\$n\"	        RESIDUE_ARGS=(--remove-assignee \"@me\")	MOCK_FAIL_VIEW=1	promote 11	cleared	treating an unreadable probe as residue strips a HUMAN's assignee, never read"
 "M6 --force widens the gate	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if [[ \"\$assignees\" != \"\$ME\" && \"\$FORCE\" == \"0\" ]]; then	-	promote 11 --force	cleared	--force widened to promote strips a HUMAN's assignee"
@@ -1444,6 +1491,8 @@ MUTANTS=(
 "M13 removed: reports the issue's whole label set	    echo \"removed: \$removed\"	    echo \"removed: \$carried\"	MOCK_MISSING_LABEL=$INPROG	block 20 --comment why	false-removal	the detail names a label this edit never removed, so a reader cannot tell a removal from a coincidence"
 "M14 the repair walk drops --add-assignee	            retry_args+=(\"\$ea\")	            [[ \"\$ea\" != \"--add-assignee\" ]] && retry_args+=(\"\$ea\")	MOCK_MISSING_LABEL=$READY	claim 13	lost-assignee	a repaired claim assigns nobody and still reports ok, which is #288's double-pick reached through #323's code"
 "M15 the repair bound drops to a single pass	    while [[ \"\$tolerated\" == \"1\" && \"\$rc\" -ne 0 && \$attempt -lt \${#REMOVALS[@]} ]]; do	    while [[ \"\$tolerated\" == \"1\" && \"\$rc\" -ne 0 && \$attempt -lt 1 ]]; do	MOCK_MISSING_LABEL=$READY,$INPROG	block 13 --comment why	repair-fail	block on a repo carrying NEITHER removal hard-fails and never posts its mandatory --comment"
+"M17 the label-presence test stops folding case	    if [[ \",\$labels_lc,\" == *\",\$inprog_lc,\"* ]]; then	    if [[ \",\$labels,\" == *\",\$INPROG_LABEL,\"* ]]; then	-	promote 23	cleared	a byte-equal label test misses a LIVE claim on a repo spelling the label In-Progress, so the gate strips the assignee off in-flight work"
+"M18 the claim-cycle lookup stops folding case	        | ([ \$ns[] | select(.__typename == \"LabeledEvent\"  and (((.label.name // \"\") | ascii_downcase) == (\$lab | ascii_downcase))) | .createdAt ] | last) as \$l	        | ([ \$ns[] | select(.__typename == \"LabeledEvent\"  and ((.label.name // \"\") == \$lab)) | .createdAt ] | last) as \$l	-	promote 24	not-cleared	a byte-equal timeline lookup calls real residue never_claimed on that repo, so the assignee stays and dispatch-ready skips the issue as another session's claim — #281's silent skip, returning"
 "M16 the DROPPED reset is deleted	    DROPPED=()	    :	MOCK_MISSING_LABEL=$INPROG	block 20 13 --comment why	batch-leak	one issue's learned-absent set leaks into the next, so the second hard-fails and never posts its demotion reason"
 )
 
@@ -1484,6 +1533,17 @@ for row in "${MUTANTS[@]}"; do
                 ok "$m_label CAUGHT: $m_why"
             else
                 bad "$m_label UNDETECTED: the decision was neutered and nothing cleared — its case proves nothing"
+            fi ;;
+        not-cleared)
+            # The INVERSE harm, and the only mutant whose damage is a failure to
+            # act: #334's defect is a silent SKIP, not a bad write. It cannot
+            # pass on the ordinary path because (c2) above asserts this exact
+            # fixture DOES clear unmutated — the two rows are a pair, and
+            # deleting either makes the other vacuous.
+            if cleared; then
+                bad "$m_label UNDETECTED: the fold was reverted and residue still cleared — its case proves nothing"
+            else
+                ok "$m_label CAUGHT: $m_why"
             fi ;;
         cleared-13)
             if has "$(edit_for 13)" "--remove-assignee"; then
@@ -1611,7 +1671,7 @@ fi
 # twice, and a live edition during review carried 24 against 22 actual cases —
 # adding one case while removing another nets zero and passes silently either
 # way, so the number that cannot be re-derived is at least only written once.
-EXPECTED_CASES=54
+EXPECTED_CASES=56
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
