@@ -959,7 +959,21 @@
 #      `origin` remote, so the bounded sites are three and 17d measures the
 #      derivation instead, from real cwd fixtures: the `gh` call is gone (a
 #      must-not-exist mock arm and a call-log check), the URL forms parse, and
-#      each failure shape still reaches a verdict. The bound has THREE branches and only one is
+#      each failure shape still reaches a verdict. THAT FIXTURE INVENTORY IS
+#      CHECKED MECHANICALLY (#324), because nine review rounds of prose did not
+#      hold it — three consecutive commits each added a fixture and missed at
+#      least one site, and the paragraph recording those misses was itself a
+#      site missed twice, a miss being SILENT since the fixture is built and
+#      simply never asserted. The set is DERIVED from the `CWD_*` declarations
+#      and required at three hand-maintained sites: the built message, exactly
+#      one of the two verdict loops, and — for each fixture given an origin URL
+#      — the read-back loop that proves no `insteadOf` rewrite is in play. The
+#      accumulator and the bare-`mkdir` fixture are exempt BY NAME, each
+#      asserted to still be declared, and the extractions are asserted
+#      non-empty first: an empty list satisfies every membership test, which is
+#      what a first attempt reading `$0` after the `cd` produced, and a guard
+#      that reports `all pass` having measured nothing is the defect in a new
+#      medium. The bound has THREE branches and only one is
 #      reachable through a prepended shim, so the other two run under CURATED
 #      PATHs; an earlier edition called them impossible to exercise, which was
 #      false and cost the file its only coverage of the `probe` scope — the
