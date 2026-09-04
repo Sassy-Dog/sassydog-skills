@@ -397,7 +397,8 @@
 #   declarations — the one site a new fixture cannot skip — and requires each
 #   member at the built-message `ok` line, at EXACTLY ONE of the two verdict
 #   loops, and, for each fixture `make_cwd` hands an origin URL, in the
-#   `url_pin_bad` read-back. Five assertions. What they cost and what they buy:
+#   `url_pin_bad` read-back. What that cost, and the four things it must not
+#   go back to being:
 #     THE BUILT MESSAGE LOST ITS SECOND VOCABULARY. It named the same fourteen
 #       fixtures in prose (`ssh://`, `no-origin`, `unparsable`,
 #       `host-in-path`), and no mechanical rule maps `CWD_BADURL` to
@@ -405,46 +406,106 @@
 #       not be checked against any other. It names them by the tokens every
 #       other site already uses. The prose is not lost; it is the comment
 #       beside each fixture, which is where it belongs.
-#     `badurl` JOINED THE READ-BACK LOOP, and not for uniformity: it is the
-#       fixture the credential-leak assertion reads, and that assertion is a
-#       MUST-NOT-APPEAR over `/some/local/path`. An `insteadOf` rewrite of that
-#       remote does not redden it — it makes it pass having measured nothing.
-#     THE EXEMPTIONS ARE BY NAME, NOT BY SILENCE. `CWD_MISSING` is the
-#       accumulator and `CWD_NOREPO` is the bare `mkdir`, outside the ledger
-#       and outside the built message, with its own work-tree assertion and
-#       reached in the failure loop under the token `notree`. Each is asserted
-#       to still be DECLARED under the name the guard exempts, so a rename is
-#       red twice: the exemption stops resolving, and the new name arrives as a
-#       fixture placed nowhere.
-#     THE EXTRACTIONS ARE ASSERTED NON-EMPTY, because an empty list satisfies
-#       every membership test in the block. That is not hypothetical either: a
-#       first attempt read `$0` AFTER the `cd "$REPO_ROOT"`, every extraction
-#       came back empty, and it was reverted rather than shipped as a guard
-#       that reports `all pass` while measuring nothing. `SELF_ABS` is resolved
-#       BEFORE that `cd`, and its existence is a precondition rather than an
-#       assertion — a path that will not resolve must not reach the tests at
-#       all. A non-emptiness floor and never a count: each read is one anchored
-#       expression matching its whole site or none of it.
-#   Every red set below was OBSERVED on the head that records it:
+#     `badurl` JOINED THE READ-BACK LOOP, and the reason is narrower than the
+#       one first written here. IT IS NOT that the credential-leak assertion
+#       was vacuous: the hermetic pins — `GIT_CONFIG_GLOBAL=/dev/null` plus
+#       `GIT_CONFIG_NOSYSTEM=1` — already sit at every site that reads a
+#       fixture and cover every config layer an `insteadOf` can inhabit, and
+#       this change touched none of them. Say that plainly, because the wrong
+#       version of this sentence credits the READ-BACK with protection the PINS
+#       provide, and the next editor then reads `run_probe`'s pin as redundant
+#       — the one deletion that would make the leak assertion genuinely
+#       vacuous, and the one the read-back cannot see, since it measures its
+#       own subshell. The read-back is what PROVES the pins bind; `badurl` was
+#       the one fixture with an origin URL outside it, and its literal is the
+#       one the leak assertion depends on. Defence in depth, and the pins are
+#       now a checked site of their own.
+#     THE EXEMPTIONS ARE BY NAME, NOT BY SILENCE. `CWD_MISSING` must exist as
+#       its own declaration and must NOT be a `"$WORK/` fixture; `CWD_NOREPO`
+#       must be declared and must still be reached by the failure loop as
+#       `notree`, which is the token its exemption is FROM — so exempting it
+#       from the naming rule cannot quietly become exempting it from coverage.
+#       Renaming either is red twice: the exemption stops resolving, and the
+#       new name arrives as a fixture placed nowhere.
+#     THE EXTRACTION LAYER IS THE PART THAT CAN UNDER-MEASURE, and every way it
+#       does is this file's own defect one level up — a reassuring `ok` for a
+#       fixture nobody checked. The first review of this block found six such
+#       escapes, enumerated with their measurements below: five that were
+#       SILENT GREENS and one that misdiagnosed instead. The answers are in the
+#       block itself and are structural
+#       rather than careful: continuations are joined before anything is read
+#       (the wrapped `make_cwd` shape already exists in this file); the
+#       declaration read allows leading whitespace and requires a `"$WORK/`
+#       value; the set is cross-checked BOTH WAYS against the `CWD_MISSING`
+#       ledger, which is a second derivation and not a second copy; the four
+#       single-line sites are asserted to have matched EXACTLY ONE line and
+#       are newline-normalised; and `SELF_ABS`'s placement before the
+#       `cd "$REPO_ROOT"` is asserted at source, because preflight runs this
+#       gate FROM the repo root, where the broken placement resolves fine — so
+#       CI cannot see that regression at all, and it is the exact one #324
+#       records as the reason a first attempt was reverted.
+#   EVERY RED SET BELOW WAS OBSERVED, AND SO WAS EVERY "(was green)" — the
+#   prior state is not recalled from a review comment, it is the same mutant
+#   re-run against `1461b73`, the edition this one replaces, which reports
+#   `all pass (416 assertions)` where it says so. Do the same rather than
+#   reasoning about which reads look robust; four of these were argued safe and
+#   were not.
 #     - `badchar` dropped from the built message -> 1 red, site 1 of 3, naming
 #       the fixture.
 #     - `oneseg` dropped from the failure verdict loop -> 2 red: site 2 of 3
 #       reading `[oneseg: in 0 of the 2 verdict loops]`, plus the assertion
-#       equality at the bottom (409 against 416).
+#       equality at the bottom (413 against 420).
 #     - `emptyseg` dropped from the `url_pin_bad` loop -> 1 red, site 3 of 3.
 #     - a fixture DECLARED and placed nowhere (`CWD_NEWFORM` plus its
 #       `make_cwd` call, which is the historical shape) -> 3 red, one per
 #       site, each naming `newform`.
-#     - `CWD_NOREPO` renamed to `CWD_NOTREE` -> 2 red: the exemption no longer
-#       declared, and `notree` missing from the built message. Site 2 stays
-#       green and correctly so — `notree` is already in the failure loop.
-#     - `SELF_ABS` pointed at a tracked file carrying none of the sites -> 2
-#       red: all six extractions named as empty, and both exemptions
-#       undeclared. The three site checks PASS, which is exactly what the floor
-#       is for.
-#     - `SELF_ABS` resolved after the `cd` and run as
-#       `cd scripts && bash ../tmp/<copy>.sh` -> exit 1 from the precondition,
-#       naming the path it could not resolve, before any assertion ran.
+#     - `CWD_NOREPO` renamed to `CWD_NOTREE` -> 3 red: the ledger disagreement,
+#       the exemption no longer resolving, and `notree` missing from the built
+#       message.
+#     - `CWD_ONESEG` INDENTED by four spaces — still valid bash — with `oneseg`
+#       dropped from the built message -> 1 red, site 1 of 3.
+#       WAS GREEN: `all pass (416)`. The column-anchored read lost the fixture
+#       entirely, so it was required at ZERO sites and four `ok` lines printed.
+#     - `hostpath`'s `make_cwd` URL WRAPPED onto a continuation line, with
+#       `hostpath` dropped from the read-back -> 1 red, site 3 of 3.
+#       WAS GREEN: `all pass (416)`, printing `and every fixture given an
+#       origin URL is read back in the url_pin_bad loop`.
+#     - `run_probe`'s hermetic pins deleted -> 1 red, `run_probe: no
+#       GIT_CONFIG_GLOBAL pin`.
+#       WAS GREEN: `all pass (416)`. Nothing read those pins at all.
+#     - `SELF_ABS` moved BELOW the `cd`, run FROM THE REPO ROOT — which is
+#       preflight's own invocation -> 1 red naming both line numbers. From
+#       `scripts/` the same mutant exits 1 at the precondition instead.
+#       WAS GREEN: `all pass (416)` from the root, which is why CI could not
+#       have caught it; it breaks only for a contributor running the gate from
+#       `scripts/`, and it is the exact regression #324 records as the reason a
+#       first attempt was reverted.
+#     - a read-back token with NO case arm, placed MID-LIST (`zombie` after
+#       `badurl`) -> named by the `*)` arm.
+#       WAS GREEN: `all pass (416)` — the previous iteration's `pin_dir` and
+#       `pin_want` were still set, so the token re-measured the PREVIOUS
+#       fixture and `set -u` never saw it. First in the list it aborted on an
+#       unbound variable instead, which is why the position is recorded.
+#     - a SECOND column-0 `for form in …; do` -> 1 red, the success verdict
+#       loop reading 2 lines, in both placements (before and after the real
+#       loop).
+#       WAS NOT GREEN, AND SAY SO: on `1461b73` the same mutant reported
+#       `[ssh: in 0 of the 2 verdict loops]` — a FALSE RED against a fixture
+#       plainly present, because the unnormalised capture left the token
+#       newline-terminated. It is listed here with the escapes because it is
+#       the same defect, but it misdiagnosed rather than passed, and calling it
+#       an escape would be the fourth wrong claim in this header's history.
+#       The false-GREEN direction is the same mechanism pointed the other way —
+#       a token newline-terminated in ONE loop while genuinely in both reads as
+#       "exactly one" — and it was not reproduced on that edition, because the
+#       failure loop had no `*)` arm and aborted on an unbound variable first.
+#       Recorded as unreproduced rather than asserted.
+#   TWO MUTATIONS THAT MUST STAY GREEN, recorded because each looks like a
+#   defect and is not: reordering the env prefixes so a `CWD_OVERRIDE=`
+#   assignment lands at column 0 (the `"$WORK/` requirement is what stops a
+#   phantom `override` fixture), and moving `BADURL_REMOTE`'s value (the
+#   read-back's `pin_want` and the leak needle both derive from it, so the
+#   coupling is real rather than three literals that happen to agree).
 #
 #   Running from `$REPO_ROOT` instead would derive whatever `origin` this
 #   checkout has — a fork's slug on a fork PR, and this repo is PUBLIC — so an
@@ -927,7 +988,16 @@ make_cwd "$CWD_SSHPROTO"  "ssh://git@github.com/mock-org/mock-repo"     || CWD_M
 make_cwd "$CWD_NOORIGIN"                                                || CWD_MISSING="$CWD_MISSING noorigin"
 # A local-path remote is what a clone of a sibling checkout carries, so the
 # unparsable case is a real shape rather than a contrived string.
-make_cwd "$CWD_BADURL"    "/some/local/path/mock-repo.git"              || CWD_MISSING="$CWD_MISSING badurl"
+#
+# ONE LITERAL, THREE READERS (review of #324). This value was four uncoupled
+# copies — here, the read-back's `pin_want`, the credential-leak needle at the
+# end of 17d, and the header's prose — of which the read-back coupled two. The
+# leak assertion is a MUST-NOT-APPEAR, so a copy that drifts does not redden it:
+# it passes, having looked for a string this fixture never carried. The needle
+# is now `${BADURL_REMOTE%/*}`, derived rather than retyped. The prose stays a
+# copy on purpose — a header quoting a variable name explains nothing.
+BADURL_REMOTE="/some/local/path/mock-repo.git"
+make_cwd "$CWD_BADURL"    "$BADURL_REMOTE"                             || CWD_MISSING="$CWD_MISSING badurl"
 # THE TWO PARSER FIXES, EACH WITH A FIXTURE THAT DIES WITHOUT IT. Both landed in
 # #321's fix round and neither was cased: reverting BOTH ran this gate to `all
 # pass`, so the strictness the parser's own comments call load-bearing was
@@ -1964,21 +2034,37 @@ fi
 # literal back under the same pins `run_probe` uses turns that into a named
 # failure (review of #321).
 #
-# `badurl` JOINED THIS LOOP WITH THE INVENTORY GUARD (issue #324), and not merely
-# for uniformity: its fixture is the one the credential-leak assertion at the end
-# of 17d reads, and that assertion is a MUST-NOT-APPEAR over `/some/local/path`.
-# A rewrite of that remote does not redden it — it makes it pass while measuring
-# nothing, which is this file's dominant failure shape wearing the guard's own
-# clothes. Every fixture `make_cwd` hands an origin URL is read back here now,
-# and the guard below derives that set from the `make_cwd` calls rather than
-# from this list.
+# `badurl` JOINED THIS LOOP WITH THE INVENTORY GUARD (issue #324). Be exact
+# about why, because the first version of this comment was not. This loop is NOT
+# what stops an `insteadOf` rewrite — the hermetic pins are, at all four sites
+# that read a fixture, and they were all in place before this change and are
+# untouched by it. The loop PROVES the pins bind, over the literal each fixture
+# stored. `badurl` was the one fixture given an origin URL and left out of that
+# proof, and its literal is the one the credential-leak assertion at the end of
+# 17d depends on — a MUST-NOT-APPEAR, so a fixture whose remote had changed
+# under it would pass having looked for a string nothing carried. Defence in
+# depth over the pins, never a replacement for them: if you are about to read
+# `run_probe`'s pin as redundant with this loop, that is the deletion this
+# comment exists to refuse, and the census in the guard below now refuses it too.
+#
+# The set is derived from the `make_cwd` calls rather than from this list, so a
+# twelfth URL-carrying fixture cannot be added without landing here.
 url_pin_bad=""
 for pin_form in ssh https sshproto badurl hostpath trailing threeseg badchar otherhost emptyseg oneseg; do
+    # RESET PER ITERATION, AND A `*)` ARM BELOW. Without both, a token with no
+    # arm behind it silently re-measures the PREVIOUS fixture and reports a pass
+    # for a form nothing exercised — the vacuity this loop exists to refuse,
+    # reached through the loop's own control flow (review of #324).
+    pin_dir=""
+    pin_want=""
     case "$pin_form" in
         ssh)      pin_dir="$CWD_SSH";      pin_want="git@github.com:mock-org/mock-repo.git" ;;
         https)    pin_dir="$CWD_HTTPS";    pin_want="https://github.com/mock-org/mock-repo.git" ;;
         sshproto) pin_dir="$CWD_SSHPROTO"; pin_want="ssh://git@github.com/mock-org/mock-repo" ;;
-        badurl)   pin_dir="$CWD_BADURL";   pin_want="/some/local/path/mock-repo.git" ;;
+        # ONE literal for this remote, shared with the credential-leak assertion
+        # at the end of 17d, whose needle is DERIVED from it. Four uncoupled
+        # copies used to exist and this loop coupled only two of them.
+        badurl)   pin_dir="$CWD_BADURL";   pin_want="$BADURL_REMOTE" ;;
         # These two ARE the input under test, so a rewrite would not merely
         # exercise the wrong form — it would delete the case.
         hostpath) pin_dir="$CWD_HOSTPATH"; pin_want="https://evil.example/path@github.com/mock-org/mock-repo" ;;
@@ -1988,6 +2074,7 @@ for pin_form in ssh https sshproto badurl hostpath trailing threeseg badchar oth
         otherhost) pin_dir="$CWD_OTHERHOST"; pin_want="https://gitlab.com/mock-org/mock-repo" ;;
         emptyseg)  pin_dir="$CWD_EMPTYSEG";  pin_want="https://github.com//mock-repo" ;;
         oneseg)    pin_dir="$CWD_ONESEG";    pin_want="https://github.com/mock-repo" ;;
+        *) url_pin_bad="$url_pin_bad [$pin_form: no arm in this case — the loop list and the arms disagree]"; continue ;;
     esac
     pin_got="$( cd "$pin_dir" && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
         GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" git remote get-url origin 2>/dev/null )"
@@ -2012,56 +2099,145 @@ fi
 # misses was itself one of the sites missed, twice. A missing entry is SILENT —
 # the fixture is built and simply never asserted.
 #
-# The set is DERIVED from the `CWD_*` declarations, which is the one site a new
-# fixture cannot skip, and each member is required at three sites this file
+# The set is DERIVED, and each member is required at three sites this file
 # hand-maintains. Only those three: the header enumeration and the prose comment
 # beside the fixtures — the two ALWAYS missed — stay unchecked, so closing #324
 # did not make them checked, and the co-move list in the header still names all
 # of them.
 #
-# TWO EXEMPTIONS, BY NAME RATHER THAN BY SILENCE, each asserted to still be
-# declared under the name the guard exempts: `CWD_MISSING` is the accumulator,
-# not a fixture at all, and `CWD_NOREPO` is the bare `mkdir` — outside the
-# `CWD_MISSING` ledger and outside the built message, with its own work-tree
-# assertion above and reached in the failure loop under the token `notree`.
-# Renaming either is red twice over: the exemption stops resolving, and the new
-# name arrives as a fixture required at all three sites.
+# THE EXTRACTION LAYER IS THE PART TO GET RIGHT, because every way it can
+# under-read is the defect this block exists to stop, one level up: a guard that
+# silently measures one fixture fewer prints a reassuring `ok` for a fixture
+# nobody checked. The first review of this block found six such escapes — five
+# silent greens and one that misdiagnosed rather than passed, each re-measured
+# against the edition it escaped and recorded in this file's header (#324). The
+# answers to them are structural rather than careful:
 #
-# THE EXTRACTIONS ARE ASSERTED NON-EMPTY BEFORE ANYTHING IS DERIVED FROM THEM.
-# An empty list satisfies every membership test in this block, so a guard whose
-# reads have gone stale — a renamed loop variable, a reworded message, a `$0`
-# resolved after the `cd` — reports `all pass` while measuring nothing. That is
-# not hypothetical: it is what the first attempt at this guard did, and why it
-# was reverted rather than shipped (#324). It is a NON-EMPTINESS floor and not a
-# count: every read here is one anchored expression that matches its whole site
-# or none of it, and a spelled count is the half that rots silently.
-fixt_exempt="missing norepo"
-fixt_all="$(sed -n 's/^CWD_\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$SELF_ABS" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
-fixt_url="$(sed -n 's/^make_cwd  *"\$CWD_\([A-Z][A-Z0-9_]*\)" *"[^"]*".*/\1/p' "$SELF_ABS" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
-fixt_built="$(sed -n 's/^ *ok "the cwd fixtures were built (\([^)]*\))".*/\1/p' "$SELF_ABS" | tr ',' ' ')"
-fixt_pin="$(sed -n 's/^for pin_form in \(.*\); do$/\1/p' "$SELF_ABS")"
-fixt_succ="$(sed -n 's/^for form in \(.*\); do$/\1/p' "$SELF_ABS")"
-fixt_fail="$(sed -n 's/^for shape in \(.*\); do$/\1/p' "$SELF_ABS")"
-fixt_empty=""
-[ -n "$fixt_all" ]   || fixt_empty="$fixt_empty the-CWD_*-declarations"
-[ -n "$fixt_url" ]   || fixt_empty="$fixt_empty the-make_cwd-URL-arguments"
-[ -n "$fixt_built" ] || fixt_empty="$fixt_empty the-built-message"
-[ -n "$fixt_pin" ]   || fixt_empty="$fixt_empty the-url_pin_bad-loop"
-[ -n "$fixt_succ" ]  || fixt_empty="$fixt_empty the-success-verdict-loop"
-[ -n "$fixt_fail" ]  || fixt_empty="$fixt_empty the-failure-verdict-loop"
-if [ -z "$fixt_empty" ]; then
-    ok "  and the inventory guard read every site out of this file's own source"
+#   * CONTINUATIONS ARE JOINED FIRST. A `make_cwd` whose URL wraps onto the next
+#     physical line left the URL-carrying set — and that wrapped shape ALREADY
+#     EXISTS in this file, at `hostpath`'s `||`. Every read below runs against a
+#     copy with backslash-continuations joined, so a rewrap cannot change what is
+#     measured. Joining merges lines and never reorders them, which is what makes
+#     the line-number comparison at the end of this block valid on the copy.
+#   * THE DECLARATION READ IS NOT COLUMN-ANCHORED, AND IS CROSS-CHECKED BY A
+#     SECOND DERIVATION. Indenting a `CWD_*=` line by four spaces is still valid
+#     bash and used to drop the fixture out of the set entirely — required at
+#     zero sites, four `ok` lines, nothing red. Leading whitespace is now
+#     allowed, and the value must be a `"$WORK/` path, which also stops
+#     `CWD_OVERRIDE` from injecting a phantom `override` fixture the day its env
+#     prefixes are reordered. Independently, the set is compared BOTH WAYS
+#     against the `CWD_MISSING` ledger — unanchored, and the one site that
+#     already names every non-exempt fixture including `broken` and `bare`, which
+#     have no `make_cwd` call at all. Two derivations that must agree; no count.
+#   * THE FOUR SINGLE-LINE SITES ARE ASSERTED TO HAVE MATCHED EXACTLY ONE LINE,
+#     and their reads are newline-normalised. Three of them were neither, and
+#     both directions were measured green: a second column-0 `for form in …`
+#     (this file already carries two identical `for site in …` headers, so the
+#     shape is established practice) made `trailing` present in BOTH verdict
+#     loops read as a pass, while `sshproto` — plainly present — read as "in 0 of
+#     the 2 verdict loops". An unnormalised multi-line capture breaks membership
+#     in whichever direction the newline lands. Exactly-once is the idiom the
+#     rest of this file already uses where it reads its own or the probe's
+#     source — the `command gh` chokepoint, the unsafe-class definition, the jq
+#     fault injection, the carve-out headings and `apply_mutation`'s own
+#     stale-target check all assert it; this block settled for a floor and was
+#     the odd one out.
+#   * THE `SELF_ABS` PLACEMENT IS PINNED, NOT MERELY DOCUMENTED. It must be
+#     assigned BEFORE the `cd "$REPO_ROOT"`, and CI cannot see it if it moves:
+#     preflight runs this gate FROM the repo root, where post-`cd` resolution
+#     happens to succeed. The failure only reaches a contributor running
+#     `cd scripts && bash test-platform-health-probe.sh` — and it is the exact
+#     regression #324 records as the reason a first attempt was reverted, so it
+#     would have shipped green. Both anchors are asserted unique and then
+#     ordered.
+#
+# TWO EXEMPTIONS, BY NAME RATHER THAN BY SILENCE. `CWD_MISSING` is the
+# accumulator, not a fixture: it is required to exist as its own declaration and
+# required NOT to be a `"$WORK/` fixture. `CWD_NOREPO` is the bare `mkdir` —
+# outside the ledger and outside the built message, with its own work-tree
+# assertion above — and it is exempt from the TOKEN rule alone, because the
+# failure loop reaches it as `notree`; that token is asserted present, so its
+# exemption cannot quietly become an exemption from coverage. Renaming either is
+# red twice over: the exemption stops resolving, and the new name arrives as a
+# fixture required at all three sites.
+#
+# THE HERMETIC PINS ARE PART OF THE SAME CENSUS, and they are what actually
+# suppresses an `insteadOf` rewrite — the read-back loop only PROVES they bind.
+# They live at four sites and none was pinned by anything, so deleting the
+# `run_probe` one reddened nothing while being the deletion the read-back cannot
+# see: the read-back measures its own subshell, not the probe's.
+FIXT_SRC="$WORK/self-joined.sh"
+awk '{
+    line = $0
+    while (line ~ /\\$/) {
+        sub(/\\$/, "", line)
+        if ((getline nxt) <= 0) break
+        sub(/^[[:space:]]+/, " ", nxt)
+        line = line nxt
+    }
+    print line
+}' "$SELF_ABS" >"$FIXT_SRC"
+fixt_exempt="norepo"
+fixt_all="$(sed -n 's/^[[:space:]]*CWD_\([A-Z][A-Z0-9_]*\)="\$WORK\/.*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
+fixt_acc="$(sed -n 's/.*CWD_MISSING="\$CWD_MISSING \([a-z][a-z0-9]*\)".*/\1/p' "$FIXT_SRC" | tr '\n' ' ')"
+fixt_url="$(sed -n 's/^[[:space:]]*make_cwd  *"\$CWD_\([A-Z][A-Z0-9_]*\)" *"[^"]*".*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
+fixt_built_raw="$(sed -n 's/^[[:space:]]*ok "the cwd fixtures were built (\([^)]*\))".*/\1/p' "$FIXT_SRC")"
+fixt_pin_raw="$(sed -n 's/^for pin_form in \(.*\); do$/\1/p' "$FIXT_SRC")"
+fixt_succ_raw="$(sed -n 's/^for form in \(.*\); do$/\1/p' "$FIXT_SRC")"
+fixt_fail_raw="$(sed -n 's/^for shape in \(.*\); do$/\1/p' "$FIXT_SRC")"
+fixt_n_built="$(grep -c . <<<"$fixt_built_raw")"
+fixt_n_pin="$(grep -c . <<<"$fixt_pin_raw")"
+fixt_n_succ="$(grep -c . <<<"$fixt_succ_raw")"
+fixt_n_fail="$(grep -c . <<<"$fixt_fail_raw")"
+fixt_site_bad=""
+[ "$fixt_n_built" -eq 1 ] || fixt_site_bad="$fixt_site_bad [the built message: $fixt_n_built lines]"
+[ "$fixt_n_pin"   -eq 1 ] || fixt_site_bad="$fixt_site_bad [the url_pin_bad loop: $fixt_n_pin lines]"
+[ "$fixt_n_succ"  -eq 1 ] || fixt_site_bad="$fixt_site_bad [the success verdict loop: $fixt_n_succ lines]"
+[ "$fixt_n_fail"  -eq 1 ] || fixt_site_bad="$fixt_site_bad [the failure verdict loop: $fixt_n_fail lines]"
+if [ -z "$fixt_site_bad" ]; then
+    ok "  and each of the four single-line sites was read from EXACTLY one line, so no read is empty or doubled"
 else
-    bad "  an inventory extraction came back EMPTY, so the parity checks are vacuous:$fixt_empty"
+    bad "  a single-line site did not match exactly one line, so its membership tests are wrong in one direction or the other:$fixt_site_bad"
+fi
+fixt_built="$(tr ',\n' '  ' <<<"$fixt_built_raw")"
+fixt_pin="$(tr '\n' ' ' <<<"$fixt_pin_raw")"
+fixt_succ="$(tr '\n' ' ' <<<"$fixt_succ_raw")"
+fixt_fail="$(tr '\n' ' ' <<<"$fixt_fail_raw")"
+fixt_derived_bad=""
+[ -n "$fixt_all" ] || fixt_derived_bad="$fixt_derived_bad [the CWD_* declarations: empty]"
+[ -n "$fixt_acc" ] || fixt_derived_bad="$fixt_derived_bad [the CWD_MISSING ledger: empty]"
+[ -n "$fixt_url" ] || fixt_derived_bad="$fixt_derived_bad [the make_cwd URL arguments: empty]"
+for fx in $fixt_url; do
+    case " $fixt_all " in *" $fx "*) ;; *) fixt_derived_bad="$fixt_derived_bad [$fx: given an origin URL but not declared]" ;; esac
+done
+if [ -z "$fixt_derived_bad" ]; then
+    ok "  and the three derived sets are non-empty, with every URL-carrying fixture among the declared ones"
+else
+    bad "  a derivation came back empty or disagreed with the declarations, so the parity checks are vacuous:$fixt_derived_bad"
+fi
+fixt_ledger_bad=""
+for fx in $fixt_all; do
+    case " $fixt_exempt " in *" $fx "*) continue ;; esac
+    case " $fixt_acc " in *" $fx "*) ;; *) fixt_ledger_bad="$fixt_ledger_bad [$fx: declared, absent from the CWD_MISSING ledger]" ;; esac
+done
+for fx in $fixt_acc; do
+    case " $fixt_all " in *" $fx "*) ;; *) fixt_ledger_bad="$fixt_ledger_bad [$fx: in the CWD_MISSING ledger, not declared]" ;; esac
+done
+if [ -z "$fixt_ledger_bad" ]; then
+    ok "  and the declarations and the CWD_MISSING ledger name the same fixtures, both directions"
+else
+    bad "  the two derivations disagree, so one of them is reading past a fixture:$fixt_ledger_bad"
 fi
 fixt_exempt_bad=""
-for fx in $fixt_exempt; do
-    case " $fixt_all " in *" $fx "*) ;; *) fixt_exempt_bad="$fixt_exempt_bad $fx" ;; esac
-done
+fixt_n_acc_decl="$(grep -c '^CWD_MISSING=""$' "$FIXT_SRC")"
+[ "$fixt_n_acc_decl" -eq 1 ] || fixt_exempt_bad="$fixt_exempt_bad [CWD_MISSING: $fixt_n_acc_decl accumulator declarations, want 1]"
+case " $fixt_all " in *" missing "*) fixt_exempt_bad="$fixt_exempt_bad [CWD_MISSING: declared as a \$WORK fixture — it is the accumulator, not one]" ;; esac
+case " $fixt_all " in *" norepo "*) ;; *) fixt_exempt_bad="$fixt_exempt_bad [CWD_NOREPO: not declared, so exempting it exempts nothing]" ;; esac
+case " $fixt_fail " in *" notree "*) ;; *) fixt_exempt_bad="$fixt_exempt_bad [CWD_NOREPO: the failure loop no longer reaches it as 'notree']" ;; esac
 if [ -z "$fixt_exempt_bad" ]; then
-    ok "  and both inventory exemptions are still declared by name (CWD_MISSING, CWD_NOREPO)"
+    ok "  and both exemptions hold by name: CWD_MISSING is the accumulator, CWD_NOREPO runs as 'notree'"
 else
-    bad "  an exempted name is no longer declared, so it exempts nothing:$fixt_exempt_bad"
+    bad "  an exemption no longer resolves, so it exempts nothing:$fixt_exempt_bad"
 fi
 fixt_msg_bad=""
 fixt_loop_bad=""
@@ -2093,9 +2269,51 @@ if [ -z "$fixt_pin_bad" ]; then
 else
     bad "  a URL-carrying fixture is missing from the url_pin_bad read-back (site 3 of 3):$fixt_pin_bad"
 fi
+fixt_order_bad=""
+fixt_n_self="$(grep -c '^SELF_ABS=' "$FIXT_SRC")"
+fixt_n_cd="$(grep -c '^cd "\$REPO_ROOT" || exit 1$' "$FIXT_SRC")"
+if [ "$fixt_n_self" -ne 1 ] || [ "$fixt_n_cd" -ne 1 ]; then
+    fixt_order_bad="the anchors are not unique (SELF_ABS= x$fixt_n_self, cd \"\$REPO_ROOT\" x$fixt_n_cd)"
+else
+    fixt_at_self="$(grep -n '^SELF_ABS=' "$FIXT_SRC" | cut -d: -f1)"
+    fixt_at_cd="$(grep -n '^cd "\$REPO_ROOT" || exit 1$' "$FIXT_SRC" | cut -d: -f1)"
+    [ "$fixt_at_self" -lt "$fixt_at_cd" ] || \
+        fixt_order_bad="SELF_ABS is assigned at line $fixt_at_self, AFTER the cd at line $fixt_at_cd — every read above resolves against the wrong cwd from any directory but the repo root"
+fi
+if [ -z "$fixt_order_bad" ]; then
+    ok "  and SELF_ABS is still assigned BEFORE the cd, which is the placement CI cannot observe"
+else
+    bad "  the SELF_ABS placement regressed: $fixt_order_bad"
+fi
+fixt_pins_bad=""
+for pin_region in make_cwd bare-repo run_probe read-back; do
+    fixt_region=""
+    case "$pin_region" in
+        make_cwd)  fixt_region="$(sed -n '/^make_cwd() {/,/^}/p' "$FIXT_SRC")" ;;
+        bare-repo) fixt_region="$(sed -n '/^mkdir -p "\$CWD_BARE"/,/git init -q --bare/p' "$FIXT_SRC")" ;;
+        run_probe) fixt_region="$(sed -n '/^run_probe() {/,/^}/p' "$FIXT_SRC")" ;;
+        read-back) fixt_region="$(sed -n '/^for pin_form in /,/^done$/p' "$FIXT_SRC")" ;;
+        *) fixt_pins_bad="$fixt_pins_bad [$pin_region: no region arm]"; continue ;;
+    esac
+    if [ -z "$fixt_region" ]; then
+        fixt_pins_bad="$fixt_pins_bad [$pin_region: region not found]"
+    elif ! grep -qF -- 'GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL"' <<<"$fixt_region"; then
+        fixt_pins_bad="$fixt_pins_bad [$pin_region: no GIT_CONFIG_GLOBAL pin]"
+    elif ! grep -qF -- 'GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"' <<<"$fixt_region"; then
+        fixt_pins_bad="$fixt_pins_bad [$pin_region: no GIT_CONFIG_NOSYSTEM pin]"
+    fi
+done
+if [ -z "$fixt_pins_bad" ]; then
+    ok "  and the hermetic git pins are at all four sites that read a fixture (make_cwd, bare-repo, run_probe, read-back)"
+else
+    bad "  a site that reads a fixture lost its hermetic pins, so the developer's own insteadOf reaches it:$fixt_pins_bad"
+fi
 
 D_LOOKUP="$(scenario lookup "$PR_CLEAN" "$RUNS_CLEAN" 3600 green)"
 for form in ssh https sshproto trailing; do
+    # Reset plus a `*)` arm, for the reason the read-back loop above carries
+    # them: a token with no arm re-runs the PREVIOUS fixture and passes.
+    lookup_cwd=""
     case "$form" in
         ssh)      lookup_cwd="$CWD_SSH" ;;
         https)    lookup_cwd="$CWD_HTTPS" ;;
@@ -2105,6 +2323,7 @@ for form in ssh https sshproto trailing; do
         # working remote being refused, so `.repo` must be the clean slug with no
         # `.git` glued on.
         trailing) lookup_cwd="$CWD_TRAILING" ;;
+        *) bad "[$form] no arm in the success loop's case — the loop list and the arms disagree"; continue ;;
     esac
     REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$lookup_cwd" run_probe "$PROBE" "$D_LOOKUP" --pr 301
     expect_field "[$form] the slug is derived from the origin remote" .repo "mock-org/mock-repo"
@@ -2148,7 +2367,12 @@ done
 # does not get that same false cause, which is untestable only on a host that
 # happens to have no git, i.e. exactly what a curated PATH is for.
 for shape in noorigin badurl hostpath threeseg badchar otherhost emptyseg oneseg notree broken bare nogit; do
+    # `fail_path` was already reset per iteration; the other two were not, so a
+    # token with no arm re-ran the PREVIOUS fixture's cwd against this token's
+    # label and passed. Reset all three, and refuse the token outright below.
     fail_path=""
+    fail_cwd=""
+    fail_why=""
     case "$shape" in
         noorigin) fail_cwd="$CWD_NOORIGIN"; fail_why="no 'origin' remote" ;;
         badurl)   fail_cwd="$CWD_BADURL";   fail_why="not a github.com owner/name URL" ;;
@@ -2179,6 +2403,7 @@ for shape in noorigin badurl hostpath threeseg badchar otherhost emptyseg oneseg
         broken)   fail_cwd="$CWD_BROKEN";   fail_why="not inside a readable git work tree — git rev-parse exited" ;;
         bare)     fail_cwd="$CWD_BARE";     fail_why="inside a bare git repository" ;;
         nogit)    fail_cwd="$CWD_SSH";      fail_why="git is not installed"; fail_path="$BIN_NG" ;;
+        *) bad "[$shape] no arm in the failure loop's case — the loop list and the arms disagree"; continue ;;
     esac
     REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$fail_cwd" PATH_OVERRIDE="$fail_path" \
         run_probe "$PROBE" "$D_LOOKUP" --pr 301
@@ -2202,7 +2427,7 @@ done
 # has a URL in hand and nothing to say about it, must name the input and not its
 # value. Asserted over the WHOLE object and the stderr line, not just the detail.
 REPO_ARG_OVERRIDE=none CWD_OVERRIDE="$CWD_BADURL" run_probe "$PROBE" "$D_LOOKUP" --pr 301
-if grep -qF -- "/some/local/path" <<<"$STDOUT$STDERR"; then
+if grep -qF -- "${BADURL_REMOTE%/*}" <<<"$STDOUT$STDERR"; then
     bad "the unparsable origin URL was echoed into a reported field: a credential in one would leak"
     dump
 else
@@ -3781,7 +4006,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=363
+EXPECTED_CASES=367
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked
