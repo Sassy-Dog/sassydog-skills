@@ -654,14 +654,35 @@
 #      it means repointing another gate's window at this table, which belongs to
 #      whoever owns that gate and is not measured here. gh's wording is
 #      measured too (2.98.0): `'<label>' not found`, identical for an add and
-#      for a removal, naming the REMOVAL when both are unresolvable — so the
-#      token is matched QUOTED (the message embeds the issue URL, where a bare
-#      `ready` is satisfied by an owner named `already`, which is what the mock
-#      repo is called), and one residue is STATED rather than closed: an edit
-#      that failed on the removal token wrote nothing either, so `claim`/`block`
-#      report `ok` when the repo lacks THAT SUBCOMMAND's removal label — for
-#      `claim`, `ready` alone — which #288's acceptance requires to stay
-#      tolerated for all four.
+#      for a removal — so the token is matched QUOTED (the message embeds the
+#      issue URL, where a bare `ready` is satisfied by an owner named `already`,
+#      which is what the mock repo is called). Which token gh names when BOTH
+#      sides are unresolvable is a scheduling race rather than a rule, and
+#      nothing here relies on it. THE #288 RESIDUE IS CLOSED (#323). That
+#      residue was `claim`/`block` reporting a silent `ok` on an edit whose
+#      removal had been abandoned; the premise it rested on — "an edit that
+#      failed on the removal token wrote nothing either" — was wrong. #288
+#      measured the case where BOTH sides are
+#      unresolvable, where gh refuses before mutating. With ONE bad token
+#      (gh 2.100.0, 2026-09-04, live repo) adds and removes are INDEPENDENT, so
+#      the removal is abandoned while the adds land — `block` added `blocked`,
+#      kept `ready`, and reported `ok`. The script now re-issues the edit
+#      without the named token, LOOPING bounded by the removal count because gh
+#      names only ONE token per error and `block` carries two: a single pass
+#      regressed a repo carrying NEITHER of block's labels to `failed` + exit 2
+#      with the mandatory `--comment` never posted. #288's acceptance still
+#      holds — the removal edge stays tolerated for all four, and
+#      `release`/`demote` still write no label edit.
+#      It also pins the `detail` field's TWO claims and their precedence
+#      (#323): `requested:` names what the edit ASKED to remove and appears on
+#      the ordinary path of all four removing subcommands; `removed:` reads the
+#      issue's live labels on the REPAIR path and replaces it there — EXCEPT
+#      the `unknown` variant, which rides ALONGSIDE `requested:` because a
+#      non-answer must not suppress a computable fact. An empty list is printed
+#      deliberately, being what makes a no-op strip visible. `unknown` has
+#      exactly TWO triggers, a failed read and a multi-line one; stderr on a
+#      SUCCESSFUL read is PREVENTED rather than reported, because gh-retry.sh
+#      merges the streams and the probe therefore reads bare gh.
 #      No taxonomy colour is transcribed —
 #      the mock's label store is seeded from the `taxonomy` emitter, gate 8's
 #      no-third-copy rule. Mock gh only: no repo, no network.

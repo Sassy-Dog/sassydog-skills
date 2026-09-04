@@ -44,6 +44,28 @@
 #
 # Output: one JSON line per issue on stdout:
 #   {"issue":N,"op":"claim","result":"ok|skipped|would-claim|failed","detail":"..."}
+# NAMED `requested:` RATHER THAN `stripped:`, deliberately and on review. Past
+# tense in a field a coordinator reads is a hazard here specifically:
+# `dispatch-ready` §2 carries a standing order to read a demotion "from live
+# state, never from the exit code alone", and a past-tense token in the same
+# JSON object invites exactly the reading that order forbids. The value is a
+# claim about the REQUEST; the name now says so, and `removed:` is reserved for
+# the live-state answer. Do not rename it back to match the verb the docs use
+# for the operation.
+#
+# On an `ok`, `detail` carries `requested: <labels>` for the FOUR subcommands
+# that remove one — claim, release, block, demote. It names the removals the
+# edit REQUESTED (minus any dropped as absent from the repo), which a zero exit
+# proves gh applied. It is NOT a claim the issue CARRIED them: `demote` on an
+# issue with no `ready` succeeds, removes nothing, and says `requested: ready`
+# all the same. (`block` would say `requested: ready,in-progress` — it always
+# requests both.) Read it as the request, never as the effect. The effect is
+# Label names are matched CASE-INSENSITIVELY, as gh matches them, and reported
+# in taxonomy spelling rather than the repo's. The effect is
+# `removed:`, which reads live state on the repair path and REPLACES
+# `requested:` there — with ONE exception: when the probe could not answer,
+# `removed: unknown` rides ALONGSIDE `requested:` rather than displacing it,
+# because a non-answer must not suppress a computable fact (#323).
 # sync-labels emits one JSON line per label instead:
 #   {"label":"ready","action":"ok|create|update|would-create|would-update|failed","detail":"..."}
 # Human-readable notes go to stderr.
@@ -549,6 +571,154 @@ case "$SUB" in
     promote) REMOVALS=() ;;
 esac
 
+# --- what a strip actually did (issue #323, second half) -----------------------
+# TWO different claims live in the `detail`, and conflating them is what #323's
+# reporter asked to end:
+#
+#   `requested:` — the removals this edit REQUESTED, minus any dropped as absent
+#                 from the repo. A zero exit proves gh applied that set, so it
+#                 is a fact about the EDIT. It is NOT a claim the issue carried
+#                 them: `demote` on an issue with no `ready` succeeds, removes
+#                 nothing, and reports `requested: ready` all the same. `block`
+#                 always requests BOTH of its labels, so its value there is
+#                 `requested: ready,in-progress`.
+#
+#   `removed:`  — the labels that were genuinely ON the issue and are now gone,
+#                 established by READING LIVE STATE. Only the repair path pays
+#                 for it. That is deliberate rather than thrift: once the repair
+#                 re-issues the edit, the ordinary path's rc is trustworthy, so
+#                 a read there would cost one `gh` call per issue per tick in
+#                 dispatch-ready's batched loops and buy back visibility nobody
+#                 had lost. The repair path is where #323 actually bit.
+#
+# labels_removed_detail <issue> <label>...
+#   -> echoes `removed: a,b` naming only those candidate labels the issue
+#      ACTUALLY carried; `removed: ` (empty list) when it carried none.
+#
+# It is called BEFORE the repair re-issues, which is the only moment the
+# pre-state is readable without a second call: the first edit abandoned every
+# removal (measured — see the repair note below), so the labels are still
+# intact here.
+#
+# Constraints for the body:
+#   - bash 3.2 (macOS ships it) under `set -u`: guard every array expansion with
+#     the `${arr[@]+"${arr[@]}"}` idiom used throughout this file.
+#   - this probe is a READ and runs BARE `gh` with stderr discarded; every
+#     WRITE in this script still routes through `ghw`. The reason is below and
+#     `(e5)` pins it — do not "restore" the ghw call.
+#   - a failed read is UNKNOWN, never "removed nothing". promote_residue_gate
+#     sets the precedent (#281: unknown is not verified) — say so in the text
+#     rather than echoing an empty list.
+#   - KNOWN LIMIT, stated rather than closed: `join(",")` is ambiguous, and
+#     GitHub permits a comma in a label name, so a label literally named
+#     `foo,ready` makes this report `ready` as removed. Closing it means
+#     abandoning the joined form for a per-label membership query, which costs
+#     a call per candidate; the trade was judged not worth it for a name shape
+#     nothing in this taxonomy uses.
+#   - NEVER match a label name as a bare substring of anything that can hold the
+#     repo slug: test-claim-lifecycle.sh's $MOCK_REPO is owned by `already`,
+#     which ENDS IN `ready`. Compare label names for equality.
+#   - the caller joins this onto $ok_detail with `; `, so emit no leading
+#     separator and no trailing newline.
+#
+# IMPLEMENTED below. It always echoes a non-empty string — the `unknown` form,
+# or the list form including the empty `removed: ` — so on the repair path the
+# caller's `-n` test is always true.
+labels_removed_detail() {  # $1=issue number, $2..=candidate labels
+    local n="$1"; shift
+    local view carried removed="" lbl
+    # BARE `gh`, NOT `ghw`, and that is the fix rather than an oversight.
+    # gh-retry.sh runs `out=$(gh "$@" 2>&1)` and prints that MERGED stream on
+    # SUCCESS (gh-retry.sh:55,58), so anything gh writes to stderr during a
+    # successful read lands on stdout. Reading bare keeps that text out of the
+    # data and yields the TRUE answer; through `ghw` the multi-line guard below
+    # catches it and degrades to `unknown`, which is safe but strictly worse.
+    # (Measured: the ghw form reports `removed: unknown (malformed …)`, not an
+    # empty list — the guard fires first. `unknown` therefore has exactly TWO
+    # triggers, a failed read and a multi-line one; stderr-on-success is
+    # PREVENTED here rather than reported.) Losing the
+    # retry backoff on one READ is the cheaper half of that trade; every WRITE
+    # in this script still routes through ghw.
+    # DECLARE THEN ASSIGN. `local view="$(...)"` takes `local`'s exit status,
+    # which is always 0, so a failed read would look like an issue carrying no
+    # labels — the one outcome this function must never confuse with a real one.
+    view="$(gh issue view "$n" --repo "$REPO" --json labels \
+        --jq '[.labels[].name] | join(",")' 2>/dev/null)" || {
+        # UNKNOWN IS NOT VERIFIED (#281's posture). An empty list already means
+        # "carried none of them", which is a measured fact; a failed read must
+        # not borrow it.
+        echo "removed: unknown (could not read #$n)"
+        return 0
+    }
+    # SHAPE, mirroring promote_residue_gate's read_ok: this probe emits exactly
+    # ONE line, so a second line means the stream carried something the --jq
+    # cannot produce. Unknown, never an empty list — the same reason the failed
+    # read above does not borrow it.
+    carried="$view"
+    case "$view" in
+        *$'\n'*)
+            echo "removed: unknown (malformed label probe for #$n)"
+            return 0 ;;
+    esac
+    # CASE-FOLDED, because gh is. Measured: `--remove-label READY` strips a
+    # label named `ready`, rc 0 — gh resolves label names with a case-insensitive
+    # compare. A byte-equal membership test therefore reports `removed: ` for a
+    # repo whose label is `Ready`, i.e. "carried none of them", for a strip that
+    # really happened — #323's own ask, inverted. The candidate is reported in
+    # its canonical taxonomy casing rather than the repo's spelling.
+    local carried_lc lbl_lc
+    # LC_ALL=C pins the fold to ASCII, making it a strict SUBSET of gh's
+    # EqualFold: BSD tr under a UTF-8 locale folds some non-ASCII codepoints
+    # that Go does not, which would report a removal gh refused, and GNU tr
+    # folds none — so the answer would differ between a Mac and the runner.
+    carried_lc="$(printf '%s' "$carried" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    for lbl in "$@"; do
+        lbl_lc="$(printf '%s' "$lbl" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+        # Comma-delimited on BOTH sides, so this is equality against a list
+        # member rather than a substring test: `not-ready` must not answer for
+        # `ready`, and the fixture that proves it is issue 21 in
+        # test-claim-lifecycle.sh section 7e.
+        case ",$carried_lc," in
+            *",$lbl_lc,"*) removed="${removed:+$removed,}$lbl" ;;
+        esac
+    done
+    # The empty list is DELIBERATELY still printed. `removed:` with nothing after
+    # it is what makes a no-op strip visible, which is the half of #323 this
+    # function exists for — dropping the field would make it indistinguishable
+    # from a run that never looked.
+    echo "removed: $removed"
+}
+
+# Scan a gh error for a NOT-FOUND naming one of THIS subcommand's own removal
+# tokens and append any newly-named one to $DROPPED. Returns 0 when it appended
+# at least one, 1 otherwise — so a caller can loop on it.
+#
+# ONE matcher, deliberately: the repair below re-issues after each drop and has
+# to re-scan the new error, and a second copy of this predicate is a second
+# place for the quoting to be relaxed. The token is matched QUOTED, the way gh
+# writes it, because gh's message embeds the issue URL and a bare-substring
+# match on `ready` is satisfied by an owner or repo named `already`.
+collect_dropped_removals() {  # $1=gh stderr
+    local err="$1" rl d already found=1
+    case "$err" in
+        *"not found"*|*"could not be found"*) ;;
+        *) return 1 ;;
+    esac
+    for rl in ${REMOVALS[@]+"${REMOVALS[@]}"}; do
+        if [[ "$err" == *"'$rl'"* ]]; then
+            already=0
+            for d in ${DROPPED[@]+"${DROPPED[@]}"}; do
+                [[ "$rl" == "$d" ]] && already=1
+            done
+            if [[ "$already" == "0" ]]; then
+                DROPPED+=("$rl")
+                found=0
+            fi
+        fi
+    done
+    return "$found"
+}
+
 hard_failed=0
 
 for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
@@ -587,35 +757,46 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
     # writes "[gh-retry] attempt ..." progress to stderr even on eventual success.
     rc=0
     err=""
+    # Each arm builds $EDIT_ARGS rather than calling `ghw` itself, because the
+    # REPAIR below has to re-issue THIS edit minus one token (issue #323). The
+    # `--remove-label` flags stay spelled out per arm — the note above explains
+    # why deriving them from $REMOVALS is not this change's to make, and
+    # test-drain-terminal-states.sh reads the `block)` arm's own text for ONE
+    # of its three cross-file facts, asserting it by three literals.
+    # Building an array preserves both: the literals
+    # stay where that gate looks, and the repair filters the array instead of
+    # rebuilding a second copy of every subcommand's ADDS. A repair that had to
+    # respell the adds would be a second home for them, and #288's fixture is
+    # precisely a repo where an add fails.
+    EDIT_ARGS=()
     case "$SUB" in
         claim)
             ensure_label "$INPROG_LABEL" "$INPROG_COLOR" "$INPROG_DESC" || true
-            err=$(ghw issue edit "$n" --repo "$REPO" --add-assignee @me \
-                --add-label "$INPROG_LABEL" --remove-label "$READY_LABEL" 2>&1 >/dev/null) || rc=$?
+            EDIT_ARGS=(--add-assignee @me
+                --add-label "$INPROG_LABEL" --remove-label "$READY_LABEL")
             ;;
         release)
-            err=$(ghw issue edit "$n" --repo "$REPO" \
-                --remove-label "$INPROG_LABEL" 2>&1 >/dev/null) || rc=$?
+            EDIT_ARGS=(--remove-label "$INPROG_LABEL")
             ;;
         block)
             ensure_label "$BLOCKED_LABEL" "$BLOCKED_COLOR" "$BLOCKED_DESC" || true
-            err=$(ghw issue edit "$n" --repo "$REPO" --remove-label "$READY_LABEL" \
-                --remove-label "$INPROG_LABEL" --add-label "$BLOCKED_LABEL" 2>&1 >/dev/null) || rc=$?
+            EDIT_ARGS=(--remove-label "$READY_LABEL"
+                --remove-label "$INPROG_LABEL" --add-label "$BLOCKED_LABEL")
             ;;
         promote)
             ensure_label "$READY_LABEL" "$READY_COLOR" "$READY_DESC" || true
             # One edit, as claim writes one edit. RESIDUE_ARGS is empty unless
             # the shape gate above found residue by construction; the bash 3.2
             # empty-array guard is what keeps that safe under `set -u`.
-            err=$(ghw issue edit "$n" --repo "$REPO" \
-                --add-label "$READY_LABEL" \
-                ${RESIDUE_ARGS[@]+"${RESIDUE_ARGS[@]}"} 2>&1 >/dev/null) || rc=$?
+            EDIT_ARGS=(--add-label "$READY_LABEL"
+                ${RESIDUE_ARGS[@]+"${RESIDUE_ARGS[@]}"})
             ;;
         demote)
-            err=$(ghw issue edit "$n" --repo "$REPO" \
-                --remove-label "$READY_LABEL" 2>&1 >/dev/null) || rc=$?
+            EDIT_ARGS=(--remove-label "$READY_LABEL")
             ;;
     esac
+    err=$(ghw issue edit "$n" --repo "$REPO" \
+        ${EDIT_ARGS[@]+"${EDIT_ARGS[@]}"} 2>&1 >/dev/null) || rc=$?
 
     # `--remove-label` of a label that doesn't exist in the REPO at all is gh's
     # one non-idempotent edge: it errors instead of no-opping (removing a label
@@ -658,14 +839,29 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
     # so it stays as a hedge, and no fixture exercises it: a narrowing recorded
     # rather than a path proved.
     #
-    # KNOWN LIMIT, measured rather than assumed (gh 2.98.0, 2026-08-28, probed
-    # with two labels that exist in no repo, which gh refuses before it mutates
-    # anything): gh resolves the whole label set BEFORE it writes, and when both
-    # an add and a removal are unresolvable it names the REMOVAL. So an edit that
-    # failed on the removal token wrote nothing either. For `release` and
-    # `demote` the removal is the only operation, so tolerating it is exactly
-    # right; for `claim` and `block` it means the ADDS did not land and the run
-    # still reports `ok`.
+    # WAS A KNOWN LIMIT, CLOSED BY #323 — and the correction is kept rather than
+    # overwritten, because the wrong half was measured too and the next reader
+    # needs to know which measurement covers what.
+    #
+    # #288 measured (gh 2.98.0, 2026-08-28) with two labels that exist in no
+    # repo: when BOTH an add and a removal are unresolvable, gh refuses before
+    # mutating anything. WHICH token it names when both sides are unresolvable
+    # is NOT a rule and is not relied on here: gh applies the two operations as
+    # separate goroutines and reports whichever errored first, so it is a
+    # scheduling race (`pkg/cmd/pr/shared/editable_http.go`, `UpdateIssue`).
+    # Both orderings converge on `failed`, by different routes: named-removal
+    # tolerates, retries with the ADD still on it, and fails on the add; named-add
+    # is not a $REMOVALS token, so the tolerance never fires at all. The token match below is scoped to
+    # $REMOVALS for its own reason: an add must never be tolerated.
+    #
+    # What did NOT follow — and was written here as though it did — is "so an
+    # edit that failed on the removal token wrote nothing either." #323 measured
+    # the one-bad-token case (gh 2.100.0, 2026-09-04, live repo) and gh does the
+    # opposite: adds and removes are INDEPENDENT operations, so an unresolvable
+    # removal abandons every OTHER removal in that edit while the adds land.
+    # `block` on a repo without `in-progress` therefore added `blocked`, left
+    # `ready` standing, and reported `ok` — a demoted issue that stayed in every
+    # `--label ready` queue. The repair below closes it.
     #
     # ITS PRECONDITION IS PER SUBCOMMAND, and stating it once for both gets one
     # of them wrong. The loop below carries no `break`, so ANY of a subcommand's
@@ -674,23 +870,20 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
     # "a repo carrying neither" form is the wrong one in the other direction.
     # The argument does NOT rest on `in-progress` being ensured above: that
     # ensure is `|| true`, and its failing is the very premise of the scenario.
-    # It rests on the measured fact that gh names the REMOVAL.
+    # Nor does it rest on which token gh names when both are unresolvable — see
+    # above; that is a race, and both orderings reach the same verdict.
     #
-    # `block` is the worse of the two and nothing observes it: a tolerated
-    # `block` reports `ok`, still posts its `--comment`, and never adds
-    # `blocked` — so a human reads a reason on the issue while
-    # `gh issue list --label blocked` finds nothing and dispatch-ready's §7 held
-    # set stays empty.
+    # `block` was the worse of the two and nothing observed it, which is how
+    # #323 survived to be reported from a live drain rather than caught here.
     #
-    # It is left OPEN rather than closed because #288's acceptance requires the
-    # removal edge to stay tolerated for every subcommand that carries one. The
-    # SOUND closure is to re-issue the edit with the NAMED removal dropped — a
-    # label absent from the REPO is on no issue, so dropping it is a no-op by
-    # construction — which needs the `--remove-label` flags built from
-    # $REMOVALS, the derivation the note above declines. `ensure_label`-ing the
-    # removals too is NOT a closure, and is recorded here so it is not mistaken
-    # for one: that ensure is `|| true` on precisely the repos this limit is
-    # about, so it would reintroduce #288 wearing a fix.
+    # The closure is the SOUND one this note already named: re-issue the edit
+    # with the named removal dropped. #288's acceptance is intact — the removal
+    # edge is still tolerated for every subcommand that carries one, and
+    # `release`/`demote`, whose removal is their only operation, still write
+    # nothing and still report `ok`. `ensure_label`-ing the removals is still
+    # NOT a closure and is still recorded so it is not mistaken for one: that
+    # ensure is `|| true` on precisely the repos this edge is about, so it would
+    # reintroduce #288 wearing a fix.
     #
     # What the tolerance is no longer is SILENT. It names the token it swallowed
     # on stderr and in the JSON detail, so an `ok` reached this way is at least
@@ -698,22 +891,185 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
     # limit that could be closed without touching the verdict #288 freezes.
     tolerated=0
     TOLERATED_NOTE=""
-    if [[ "$rc" -ne 0 ]]; then
-        case "$err" in
-            *"not found"*|*"could not be found"*)
-                for rl in ${REMOVALS[@]+"${REMOVALS[@]}"}; do
-                    if [[ "$err" == *"'$rl'"* ]]; then
-                        tolerated=1
-                        TOLERATED_NOTE="tolerated: '$rl' does not exist in $REPO, so removing it was already the end state"
-                    fi
-                done ;;
-        esac
+    REMOVED_NOTE=""
+    DROPPED=()
+    # retry_args belongs to THIS issue, and unlike the four resets above it is
+    # DEFENSIVE ONLY — deleting it leaves the gate green, measured, and that is
+    # correct rather than a coverage hole: tolerated=1 implies a non-empty
+    # $REMOVALS implies the loop body runs, which always reassigns it, so no
+    # stale value is reachable today. It stays because that is a three-hop
+    # invariant with no guard, and `${#unset[@]}` under `set -u` on bash 3.2 is
+    # FATAL rather than zero — a future path setting tolerated=1 without
+    # entering the loop would abort the batch and lose every remaining issue's
+    # write. Do not delete it as dead, and do not hunt for the assertion that
+    # would pin it; there cannot be one while the invariant holds.
+    retry_args=()
+    if [[ "$rc" -ne 0 ]] && collect_dropped_removals "$err"; then
+        tolerated=1
     fi
+
+    # THE REPAIR (issue #323). Tolerating the failure was never enough, because
+    # gh does NOT abandon the whole edit: MEASURED on gh 2.100.0, 2026-09-04,
+    # against a live repo, adds and removes are INDEPENDENT operations and an
+    # unresolvable token kills only its OWN side.
+    #
+    #   remove ready + remove <absent> + add blocked  ->  blocked ADDED, ready KEPT
+    #   remove ready + add <absent>                   ->  ready REMOVED, add dropped
+    #   the same edit re-issued without the bad token ->  rc 0, end state correct
+    #
+    # The first line is #323 exactly: `block` reported `ok`, wrote `blocked`, and
+    # left `ready` standing, so a demoted issue stayed in every `--label ready`
+    # queue. The old note above this block asserted the opposite ("an edit that
+    # failed on the removal token wrote nothing either") and the tolerance was
+    # built on it. That premise was measured on a DIFFERENT case — #288 probed
+    # two labels that exist in no repo, where BOTH sides are unresolvable and gh
+    # refuses before mutating — and it does not generalise to one bad token.
+    #
+    # So re-issue the edit with the named removal dropped. A label absent from
+    # the REPO is on no issue, so dropping it is a no-op by construction; every
+    # surviving removal and every ADD gets its second chance. This is the
+    # "SOUND closure" the note above names, and it is now affordable because the
+    # arms build $EDIT_ARGS: the repair filters that array rather than respelling
+    # each subcommand's adds. If the retry fails, it falls through to the hard
+    # failure below UNTOLERATED — #288's wholly-failed-add case still reports
+    # `failed`, because the retry names the add and its error names the add.
+    #
+    # The `removed:` hook. A repaired issue costs one extra `gh issue view`
+    # here PLUS up to ${#REMOVALS[@]} re-issued `gh issue edit` calls — for
+    # `block` on a repo carrying neither label, measured, that is 3 edits and
+    # 1 view. Budget the bound, not the best case: this
+    # runs inside `dispatch-ready`'s per-tick loops, the same budget
+    # `queue-snapshot.sh` exists to cut. It is scoped to the repair path
+    # precisely so the ordinary path stays free — there, a zero exit already
+    # proves gh applied the removal set.
+    #
+    # The call site is HERE, before any retry, because that is the only moment
+    # the pre-state is readable without a second call: the first edit abandoned
+    # every removal, so the labels are still intact. It takes $REMOVALS whole
+    # rather than a filtered survivor list — a label absent from the REPO is on
+    # no ISSUE either, so the read excludes a dropped token by itself and no
+    # scan has to duplicate the filter.
+    if [[ "$tolerated" == "1" && ${#REMOVALS[@]} -gt 0 ]]; then
+        REMOVED_NOTE="$(labels_removed_detail "$n" ${REMOVALS[@]+"${REMOVALS[@]}"})"
+    fi
+
+    # BOUNDED, and the bound is not cosmetic. gh names ONE unresolvable token
+    # per error, so a single pass drops one label and re-issues — which is a
+    # hard failure the moment a subcommand carries TWO removals and the repo has
+    # NEITHER. `block` is exactly that subcommand, and the state is ordinary:
+    # `block` ensures only `blocked`, so any repo that has never run
+    # `promote`/`claim`/`sync-labels` carries neither label `block` strips.
+    # Pre-#323 that case reported `ok` and POSTED ITS COMMENT; a single-pass
+    # repair regressed it to `failed` + exit 2 with the `continue` below
+    # skipping the comment entirely — an issue demoted with no reason on it,
+    # which is the one thing `block`'s mandatory --comment exists to prevent,
+    # and `dispatch-ready` §2 reads that failure as "still in-flight this tick".
+    # So keep dropping newly-named removal tokens until the edit lands or the
+    # error stops naming one. At most one pass per token this subcommand
+    # carries, because every pass drops at least one and $REMOVALS is the whole
+    # supply — an error naming nothing droppable breaks out to a hard failure.
+    attempt=0
+    while [[ "$tolerated" == "1" && "$rc" -ne 0 && $attempt -lt ${#REMOVALS[@]} ]]; do
+        attempt=$((attempt + 1))
+        retry_args=()
+        ei=0
+        while [[ $ei -lt ${#EDIT_ARGS[@]} ]]; do
+            ea="${EDIT_ARGS[$ei]}"
+            # EDIT_ARGS holds `--remove-label <token>` as an adjacent PAIR, the
+            # one invariant these walks rest on; every arm above satisfies it.
+            # The bound is checked, not assumed. Every arm satisfies the
+            # adjacent-pair invariant today, but under this file's `set -u` an
+            # out-of-range index is FATAL — it would abort the batch and lose
+            # every remaining issue's write, the same failure the per-issue
+            # reset above hardened against.
+            if [[ "$ea" == "--remove-label" && $((ei + 1)) -lt ${#EDIT_ARGS[@]} ]]; then
+                etok="${EDIT_ARGS[$((ei + 1))]}"
+                edrop=0
+                for d in ${DROPPED[@]+"${DROPPED[@]}"}; do
+                    [[ "$etok" == "$d" ]] && edrop=1
+                done
+                [[ "$edrop" == "0" ]] && retry_args+=("$ea" "$etok")
+                ei=$((ei + 2))
+                continue
+            fi
+            retry_args+=("$ea")
+            ei=$((ei + 1))
+        done
+
+        if [[ ${#retry_args[@]} -eq 0 ]]; then
+            # `release`/`demote` whose ONLY operation was the absent removal.
+            # No LABEL EDIT is left to write and the end state is already
+            # correct — `demote` still posts its mandatory `--comment`.
+            # `block` CANNOT reach here: its `--add-label blocked` is not a
+            # removal pair, so the walk always copies it through and
+            # $retry_args is never empty. Its both-absent case converges on the
+            # loop's SECOND pass instead — which is what the bound above buys,
+            # and why reducing that bound to one pass is the regression M15
+            # exists to catch.
+            # $rc MUST be cleared: it still carries the last edit's failure, and
+            # the verdict line below turns a non-zero $rc back into a hard
+            # failure regardless of $tolerated.
+            rc=0
+            err=""
+            break
+        fi
+
+        rc=0
+        err=""
+        err=$(ghw issue edit "$n" --repo "$REPO" \
+            "${retry_args[@]}" 2>&1 >/dev/null) || rc=$?
+        [[ "$rc" -eq 0 ]] && break
+
+        # Another removal token may be absent too. Go round on any NEWLY named
+        # one; an error naming none is not this edge at all and must reach the
+        # hard failure below untouched.
+        collect_dropped_removals "$err" || break
+    done
+
+    # The note is composed whenever the tolerance FIRED, even if the repair then
+    # failed — silence there is worse output, not safer, because the operator
+    # needs to know a repair was attempted at all. What it must never do is
+    # imply success, which is why the third arm below says so outright and the
+    # VERDICT stays separate, decided by rc alone.
     if [[ "$tolerated" == "1" ]]; then
+        # Comma-joined and number-agreed: this string reaches stderr AND the
+        # machine-read `detail`, and `block` — the only two-removal subcommand —
+        # is exactly the one whose detail an operator reads.
+        _dq=()
+        for _d in ${DROPPED[@]+"${DROPPED[@]}"}; do _dq+=("'$_d'"); done
+        # Guarded like every other array read in this file: `${empty[*]}`
+        # under `set -u` on bash 3.2 is fatal. Unreachable today (tolerated=1
+        # implies DROPPED non-empty), which is exactly why it is cheap to hold.
+        _dlist="$(IFS=,; echo "${_dq[*]+${_dq[*]}}")"
+        _dlist="${_dlist//,/, }"
+        if [[ ${#DROPPED[@]} -gt 1 ]]; then
+            TOLERATED_NOTE="tolerated: $_dlist are absent from $REPO,"
+            TOLERATED_NOTE="$TOLERATED_NOTE so removing them was already the end state"
+            _reissued="re-issued the edit without them"
+        else
+            TOLERATED_NOTE="tolerated: $_dlist is absent from $REPO,"
+            TOLERATED_NOTE="$TOLERATED_NOTE so removing it was already the end state"
+            _reissued="re-issued the edit without it"
+        fi
+        if [[ ${#retry_args[@]} -eq 0 ]]; then
+            TOLERATED_NOTE="$TOLERATED_NOTE; nothing else to write"
+        elif [[ "$rc" -eq 0 ]]; then
+            TOLERATED_NOTE="$TOLERATED_NOTE; $_reissued"
+        else
+            TOLERATED_NOTE="$TOLERATED_NOTE; the re-issued edit FAILED"
+        fi
         echo "issue-claim: #$n — $TOLERATED_NOTE" >&2
     fi
+    # A repair that still failed is a hard failure. Separate from the note above
+    # so the note can report the attempt without ever implying it succeeded.
+    [[ "$rc" -ne 0 ]] && tolerated=0
     if [[ "$rc" -ne 0 && "$tolerated" == "0" ]]; then
         detail="$(echo "$err" | grep -v '^\[gh-retry\]' | head -1)"
+        # The JSON is what a coordinator machine-reads; stderr is not. A repair
+        # that was attempted and failed must say so HERE too, or the verdict
+        # reports only the last error and nothing records that a token was
+        # dropped and the edit re-issued.
+        [[ -n "$TOLERATED_NOTE" ]] && detail="${TOLERATED_NOTE}; $detail"
         # UNVERIFIED, not "not cleared": gh sends labels via updateIssue and
         # assignees via replaceActorsForAssignable, so a non-zero rc on the
         # label half does not establish that the removal did not land.
@@ -742,6 +1098,34 @@ for n in ${ISSUES[@]+"${ISSUES[@]}"}; do
     ok_detail="$RESIDUE_NOTE"
     if [[ -n "$TOLERATED_NOTE" ]]; then
         ok_detail="${ok_detail:+$ok_detail; }$TOLERATED_NOTE"
+    fi
+    # `removed:` (live state, repair path) outranks `requested:` (the request):
+    # strictly better information about the same edit, so they are not both
+    # emitted. EXCEPT when the probe could not answer — `removed: unknown` is
+    # strictly WORSE than a computable `requested:`, so that one variant rides
+    # ALONGSIDE it instead of displacing it. Letting a non-answer suppress a
+    # fact is the same mistake as reporting the non-answer as a fact, which is
+    # what the empty-list rule above forbids. Reachable only for `block`:
+    # every other removing subcommand has ONE removal, which is always the
+    # dropped one, so its `requested:` list is empty and there is nothing to
+    # ride beside. A bare `removed: unknown` on a `release` is that, not a
+    # misfire.
+    if [[ -n "$REMOVED_NOTE" && "$REMOVED_NOTE" != *unknown* ]]; then
+        ok_detail="${ok_detail:+$ok_detail; }$REMOVED_NOTE"
+    else
+        requested=()
+        for rl in ${REMOVALS[@]+"${REMOVALS[@]}"}; do
+            sdrop=0
+            for d in ${DROPPED[@]+"${DROPPED[@]}"}; do
+                [[ "$rl" == "$d" ]] && sdrop=1
+            done
+            [[ "$sdrop" == "0" ]] && requested+=("$rl")
+        done
+        if [[ ${#requested[@]} -gt 0 ]]; then
+            ok_detail="${ok_detail:+$ok_detail; }requested: $(IFS=,; echo "${requested[*]}")"
+        fi
+        # the `unknown` variant, carried beside the request rather than instead
+        [[ -n "$REMOVED_NOTE" ]] && ok_detail="${ok_detail:+$ok_detail; }$REMOVED_NOTE"
     fi
     emit "$n" "ok" "$ok_detail"
 done

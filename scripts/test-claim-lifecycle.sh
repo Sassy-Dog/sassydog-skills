@@ -35,7 +35,12 @@
 # MEASURED, NOT ASSUMED (gh 2.98.0, 2026-08-28, probed with two labels that
 # exist in no repo, which gh refuses before it mutates anything): the message is
 # `failed to update <issue-url>: '<label>' not found`, identical for an add and
-# for a removal, and when BOTH are unresolvable it names the REMOVAL. The mock
+# for a removal. WHICH token it names when BOTH are unresolvable is a
+# goroutine-scheduling race rather than a rule — gh runs the add and the remove
+# as separate `errgroup` closures and returns whichever failed first
+# (`pkg/cmd/pr/shared/editable_http.go`, `UpdateIssue`) — and nothing here
+# relies on it; both orderings reach `failed`. The MOCK names the argv-first
+# missing token, which is a fixture convention, not a claim about gh. The mock
 # reproduces that message WHOLE, and errors only for a label the invocation
 # actually names — both halves are load-bearing here. The URL is why $MOCK_REPO
 # is owned by `already`: the shipped tolerance matches the QUOTED token, and
@@ -44,12 +49,18 @@
 # the removal list has two homes, and a knob that errored unconditionally
 # reported `ok` about a removal the subcommand had stopped performing.
 #
-# One residue is STATED rather than closed: an edit that failed on the removal
-# token wrote nothing either, so `claim`/`block` still report `ok` when the repo
-# lacks THAT SUBCOMMAND'S REMOVAL LABEL — for `claim`, `ready` alone, since
-# `claim` ensures `in-progress` itself and nothing in its path ever creates
-# `ready`. #288's acceptance requires the removal edge to stay tolerated for all
-# four, so the shipped script states the limit and its two available closures.
+# THAT RESIDUE IS NOW CLOSED (issue #323), and the premise it rested on was
+# wrong. It read: "an edit that failed on the removal token wrote nothing
+# either, so `claim`/`block` still report `ok`". #288 measured that with two
+# labels that exist in no repo — where gh refuses before mutating and names the
+# REMOVAL, which is still true and still scopes the token match. It does not
+# generalise to ONE bad token: measured on gh 2.100.0, 2026-09-04 against a live
+# repo, adds and removes are INDEPENDENT, so a `block` naming an absent
+# `in-progress` ADDED `blocked`, KEPT `ready`, and reported `ok`. The shipped
+# script now re-issues the edit without the named removal, so every surviving
+# removal and every add gets its second chance. Section 7b tests that repair:
+# each tolerated-edge row names what the re-issue must still carry, and for
+# `block` that is the OTHER removal — #323 itself.
 #
 # Why the two obvious fixes are NOT what is tested here. Both were considered
 # and rejected on #281, and both are the shape a later "make this symmetric"
@@ -231,6 +242,21 @@ case "$cmd" in
                     echo "gh: Could not resolve to an Issue (HTTP 404)" >&2
                     exit 1
                 fi
+                # A SUCCESSFUL read that also writes to stderr. This models
+                # gh's real behaviour (deprecations, auth notices) and exists
+                # because gh-retry.sh merges stderr into stdout and prints that
+                # merged stream on SUCCESS, so a caller reading through `ghw`
+                # gets the notice in its data. Before this knob the mock had NO
+                # success-with-stderr path at all, so the contamination was
+                # unreachable by construction and no assertion could ever catch
+                # it. It is deliberately BENIGN: the read still succeeds and
+                # still returns the right labels.
+                if [ "${MOCK_VIEW_NOISE:-0}" = "1" ]; then
+                    echo "gh: A new release of gh is available" >&2
+                    # Recorded because the caller discards this stream, so the
+                    # test cannot otherwise tell a fired knob from a dead one.
+                    : > "$MOCK_NOISE_FLAG"
+                fi
                 if [ "${MOCK_SHORT_VIEW:-0}" = "1" ]; then
                     # A TRUNCATED result: one line where the probe asked for
                     # three. Raw, bypassing jq, because the point is what the
@@ -247,8 +273,26 @@ case "$cmd" in
                     '{assignees: ($a | if . == "" then [] else split(",") end | map({login: .})),
                       labels:    ($l | if . == "" then [] else split(",") end | map({name: .})),
                       state:     $s}' \
-                    | jq -r "${jq_expr:-.}" ;;
+                    | jq -r "${jq_expr:-.}"
+                # A SUCCESSFUL read carrying an extra STDOUT line — the shape
+                # the label probe's one-line contract forbids and that no exit
+                # code reports. Distinct from MOCK_SHORT_VIEW, which is short
+                # rather than long and exits before jq.
+                [ "${MOCK_VIEW_EXTRA:-0}" = "1" ] && echo "unexpected second line"
+                exit 0 ;;
             edit|comment)
+                # STATED LIMIT of this arm: it RECORDS the invocation and never
+                # applies it to $MOCK_ISSUES. Two consequences, both disclosed
+                # rather than closed. "Adds land while removes are abandoned" —
+                # the gh behaviour #323 is entirely about — is unmodelled here;
+                # it is measured against live gh and asserted at the source
+                # level instead. And the ORDERING issue-claim.sh calls
+                # load-bearing (read the pre-state BEFORE the repair re-issues,
+                # because the labels are intact only until it lands) is
+                # unobservable: moving that call below the loop leaves every row
+                # green. Closing either means a write-through mock, which would
+                # change what every existing row measures.
+                #
                 # An arbitrary terminal error, so a failure that is NOT the
                 # not-found edge can be exercised — including one that QUOTES a
                 # removal token, which is what pins the phrase conjunct rather
@@ -282,10 +326,18 @@ case "$cmd" in
                     for a in "$@"; do
                         case "$prev_flag" in
                             --add-label|--remove-label)
-                                if [ "$a" = "$MOCK_MISSING_LABEL" ]; then
-                                    echo "failed to update https://github.com/$MOCK_REPO/issues/$num: '$MOCK_MISSING_LABEL' not found" >&2
-                                    exit 1
-                                fi ;;
+                                # A comma-separated SET, so a fixture can make
+                                # BOTH of `block`'s removals absent — the state
+                                # a single-pass repair regressed to `failed`
+                                # with the --comment never posted (#323 review).
+                                # gh names ONE label per error, so this names
+                                # the one the argv actually hit rather than the
+                                # whole knob.
+                                case ",$MOCK_MISSING_LABEL," in
+                                    *",$a,"*)
+                                        echo "failed to update https://github.com/$MOCK_REPO/issues/$num: '$a' not found" >&2
+                                        exit 1 ;;
+                                esac ;;
                         esac
                         prev_flag="$a"
                     done
@@ -314,6 +366,7 @@ export MOCK_REPO="already/mock-repo"
 export MOCK_ISSUES="$WORK/issues.tsv"
 export MOCK_LABELS="$WORK/labels.tsv"
 export MOCK_WRITES="$WORK/writes.log"
+export MOCK_NOISE_FLAG="$WORK/noise.flag"
 export MOCK_LOGIN="tester"
 
 # Label store seeded FROM the emitter — never transcribed (issue #167).
@@ -338,6 +391,13 @@ fi
 #                                                   the shape the pre-fix TSV
 #                                                   split mis-reads (section 4)
 #   16  @me, no in-progress, but CLOSED          -> the who-shipped-it record
+#   20  unassigned, CARRIES ready               -> the `removed:` fixture (7e)
+#   22  unassigned, carries `Ready` (capital)   -> gh folds label case; a
+#                                                 byte-equal probe would call a
+#                                                 real strip a no-op (7e e7)
+#   21  unassigned, carries `not-ready` ONLY    -> the substring trap for 7e:
+#                                                 a label CONTAINING the token
+#                                                 is not the token
 INPROG="in-progress"
 READY="ready"
 BLOCKED="blocked"
@@ -351,6 +411,9 @@ BLOCKED="blocked"
     printf '16\ttester\t\tCLOSED\n'
     printf '17\ttester\t\tOPEN\n'
     printf '18\ttester\t\tOPEN\n'
+    printf '20\t\t%s,bug\tOPEN\n' "$READY"
+    printf '21\t\tnot-%s\tOPEN\n' "$READY"
+    printf '22\t\tReady,bug\tOPEN\n'
 } >"$MOCK_ISSUES"
 
 # The claim-cycle timeline (#287). Every shape above that is assigned to @me
@@ -402,6 +465,7 @@ edit_for()  { printf '%s' "$EDITS" | grep "^issue edit $1 " 2>/dev/null || true;
 # Per-issue, for the batch case: `.[0]` reads the FIRST issue's verdict, which is
 # exactly the one a leak into the SECOND issue hides behind.
 detail_for() { printf '%s' "$OUT" | jq -r -s --argjson n "$1" '[.[] | select(.issue == $n) | .detail] | first // ""'; }
+result_for() { printf '%s' "$OUT" | jq -r -s --argjson n "$1" '[.[] | select(.issue == $n) | .result] | first // ""'; }
 
 # Did this run write a `--remove-assignee` at all? The one question every case
 # below turns on.
@@ -755,38 +819,411 @@ fi
 # One row per subcommand, and `block` twice because it is the only one with TWO
 # removals: a list that dropped its second token would still pass a single-token
 # case. Each row names the label gh's error would carry.
-#   label <TAB> args <TAB> the removal gh names
+#   label <TAB> args <TAB> the removal gh names <TAB> `|`-separated list the
+#   REPAIR edit must carry
+# The fourth column is #323. Tolerating the absent removal is no longer the
+# whole verdict: the shipped script re-issues the edit WITHOUT that token, so
+# every SURVIVING removal and every ADD still lands. `release` and `demote`
+# carry `-` because the absent removal was their only operation — nothing is
+# left to write and no second edit is expected. The other three name what the
+# repair must still carry, and for `block` that is the OTHER removal, which is
+# #323 itself: a `block` whose `in-progress` is absent must still strip `ready`.
 TOLERATED_EDGES=(
-"claim	claim 13	$READY"
-"release	release 10	$INPROG"
-"block ($READY)	block 13 --comment why	$READY"
-"block ($INPROG)	block 13 --comment why	$INPROG"
-"demote	demote 10 --comment why	$READY"
+"claim	claim 13	$READY	--add-assignee @me|--add-label $INPROG"
+"release	release 10	$INPROG	-"
+"block ($READY)	block 13 --comment why	$READY	--remove-label $INPROG"
+"block ($INPROG)	block 13 --comment why	$INPROG	--remove-label $READY"
+"demote	demote 10 --comment why	$READY	-"
 )
+# repair_carries <edits> <`|`-separated fragments> — every fragment must appear.
+# A LIST rather than one string because `claim` writes its two halves in ONE
+# edit and the repair walk filters that edit by positional index: an off-by-one
+# takes the adjacent `--add-assignee @me` with the removal pair, and a repaired
+# `claim` that assigns nobody still reports `ok`. That is #288's double-pick
+# reached through #323's new code — two agents, two PRs, one issue — and section
+# 2 pins the assignee on the ORDINARY path only, so nothing else covers it.
+missing_frag=""
+repair_carries() {  # $1=edits $2=fragment list
+    local edits="$1" frags="$2" f
+    missing_frag=""
+    while [ -n "$frags" ]; do
+        case "$frags" in
+            *"|"*) f="${frags%%|*}"; frags="${frags#*|}" ;;
+            *)     f="$frags"; frags="" ;;
+        esac
+        case "$edits" in
+            *"$f"*) ;;
+            *) missing_frag="$f"; return 1 ;;
+        esac
+    done
+    return 0
+}
 for row in "${TOLERATED_EDGES[@]}"; do
-    IFS=$'\t' read -r t_label t_args t_token <<<"$row"
+    IFS=$'\t' read -r t_label t_args t_token t_repair <<<"$row"
     # shellcheck disable=SC2086
     MOCK_MISSING_LABEL="$t_token" run_claim $t_args
-    # THE KNOB MUST HAVE FIRED. A failed edit records nothing, so a recorded
-    # `issue edit` means the mock saw no missing label in the argv — the row's
-    # subcommand no longer passes the removal this row names, and `ok` below
-    # would be the ordinary path's verdict rather than the tolerance's. It is
-    # the same control the short-read mutant uses, and it is what stops the
-    # duplicated removal list being policed in one direction only.
-    if [ -n "$EDITS" ]; then
-        bad "$t_label recorded an edit ($EDITS) — the invocation never named '$t_token', so no tolerance was exercised and this row proves nothing"
-    elif [ "$(result_of)" != "ok" ]; then
+    # THE KNOB MUST HAVE FIRED, and after #323 the control is the REPAIR rather
+    # than the absence of any edit. A failed edit records nothing, so the FIRST
+    # edit — the one naming the missing label — is never recorded; what a
+    # recorded edit proves now is that the repair re-issued without the dropped
+    # token. Asserting the repair does NOT name `--remove-label $t_token` is
+    # what stops this row passing on an invocation that never named that removal
+    # at all, which is the control the pre-#323 form got from `[ -n "$EDITS" ]`.
+    # The token is matched WITH ITS FLAG, never bare: $MOCK_REPO is owned by
+    # `already`, which ENDS IN `ready`, so a bare match is satisfied by the
+    # --repo argument of every edit this file records.
+    if [ "$t_repair" = "-" ]; then
+        if [ -n "$EDITS" ]; then
+            bad "$t_label recorded an edit ($EDITS) — the absent removal was its only operation, so there was nothing left to re-issue"
+            continue
+        fi
+    elif [ -z "$EDITS" ]; then
+        bad "$t_label recorded NO edit — the repair never re-issued, so the surviving half of the edit was abandoned (#323)"
+        continue
+    elif ! repair_carries "$EDITS" "$t_repair"; then
+        bad "$t_label repaired without '$missing_frag' ($EDITS) — the re-issue dropped more than the absent removal, which is #323's own defect"
+        continue
+    elif has "$EDITS" "--remove-label $t_token"; then
+        bad "$t_label re-issued an edit still naming '$t_token' ($EDITS) — the missing-label knob never fired, so this row proves nothing"
+        continue
+    fi
+    if [ "$(result_of)" != "ok" ]; then
         bad "$t_label lost the 'not found' tolerance for its OWN removal '$t_token': result=$(result_of) — the scoping deleted the edge instead of narrowing it"
     elif [ "$RC" -ne 0 ]; then
         bad "$t_label tolerated '$t_token' not found but still exited $RC"
-    elif ! has "$(detail_of)" "$t_token"; then
+    elif ! has "$(detail_of)" "'$t_token'"; then
         bad "$t_label tolerated '$t_token' but its detail was '$(detail_of)' — an ok that names nothing is indistinguishable from one that wrote something"
     elif ! has "$ERR" "tolerated"; then
         bad "$t_label swallowed '$t_token' with nothing on stderr saying so"
     else
-        ok "$t_label still tolerates '$t_token' not found — its own removal, the edge the tolerance was written for"
+        ok "$t_label tolerates '$t_token' not found AND repairs the rest of the edit (#323)"
     fi
 done
+
+# --- 7c. BOTH of `block`'s removals absent (found reviewing #323) ------------
+# `block` is the only subcommand with TWO removals, and it ensures only
+# `blocked`, so a repo that has never run `promote`/`claim`/`sync-labels`
+# carries NEITHER label it strips. gh names one unresolvable token per error, so
+# a SINGLE-PASS repair drops that one, re-issues, fails on the second, and hard
+# failures out — regressing this case from `ok`/exit 0 to `failed`/exit 2 AND
+# skipping the `--comment` post, because the hard-failure arm `continue`s before
+# it. An issue demoted with no reason on it is the one outcome `block`'s
+# mandatory --comment exists to prevent, and dispatch-ready §2 reads the failure
+# as "still in-flight this tick". The repair loops instead, bounded by the
+# removal count.
+MOCK_MISSING_LABEL="$READY,$INPROG" run_claim block 13 --comment "why"
+comments=$(grep '^issue comment' "$MOCK_WRITES" 2>/dev/null || true)
+if [ "$(result_of)" != "ok" ]; then
+    bad "block with BOTH removals absent reported $(result_of) (rc=$RC) — the end state is correct and pre-#323 this was ok"
+elif [ "$RC" -ne 0 ]; then
+    bad "block with both removals absent reported ok but exited $RC"
+elif [ -z "$comments" ]; then
+    bad "block with both removals absent never posted its --comment — the issue is demoted with no reason on it, which is what the mandatory comment exists to prevent"
+elif ! has "$EDITS" "--add-label $BLOCKED"; then
+    bad "block with both removals absent never added $BLOCKED: edits=$EDITS"
+elif has "$EDITS" "--remove-label"; then
+    bad "block re-issued an edit still naming a removal ($EDITS) — the knob never fired for both tokens"
+elif ! has "$(detail_of)" "'$READY'" || ! has "$(detail_of)" "'$INPROG'"; then
+    # QUOTED, the way the script emits them. A BARE match on $READY is
+    # unconditionally true here: the detail always carries the repo slug, and
+    # $MOCK_REPO is owned by `already`, which ENDS IN `ready` — the same trap
+    # section 7b names 50 lines above. Measured: with the bare form, reducing
+    # TOLERATED_NOTE to name only the LAST dropped token left this row green.
+    bad "block tolerated both removals but its detail named only one: '$(detail_of)'"
+else
+    ok "block with BOTH removals absent: adds $BLOCKED, posts its comment, reports ok, names both swallowed tokens"
+fi
+
+# THE CONTROL for the row above. Bounding the repair by the removal count is
+# what makes it terminate; assert it did not simply give up after one pass by
+# checking the SECOND token reached $DROPPED — the detail above proves that —
+# and that the loop is not unbounded by confirming exactly one edit was
+# recorded (the two failing attempts record nothing).
+if [ "$(n_edits)" != "1" ]; then
+    bad "block with both removals absent recorded $(n_edits) successful edits, expected exactly 1: $EDITS"
+else
+    ok "the bounded repair converges in one recorded write, not a loop of them"
+fi
+
+# --- 7d. the `requested:` field (issue #323, second half) --------------------
+# A user-visible output field documented in SKILL.md with no gate is the rot
+# CLAUDE.md's count rule names: measured during review, replacing the emitter
+# with `:` left this file at "all pass". One row per subcommand that removes
+# something, because the value is built from THAT subcommand's own $REMOVALS
+# and a table with one home is a table that drifts.
+#
+# It reports the REQUEST, not the effect — the mock's issues carry no labels at
+# all, so every row here asserts a `requested:` for labels the issue never had,
+# which IS the documented contract and the reason `removed:` is a separate
+# field, asserted in 7e.
+#   label <TAB> args <TAB> expected value
+STRIPPED_ROWS=(
+"claim	claim 13	requested: $READY"
+"release	release 10	requested: $INPROG"
+"block	block 13 --comment why	requested: $READY,$INPROG"
+"demote	demote 10 --comment why	requested: $READY"
+)
+for row in "${STRIPPED_ROWS[@]}"; do
+    IFS=$'\t' read -r sp_label sp_args sp_want <<<"$row"
+    # shellcheck disable=SC2086
+    run_claim $sp_args
+    # EQUALITY, not containment. The clause runs to end-of-detail on the
+    # ordinary path (nothing follows it there), so extracting to `;`-or-end and
+    # comparing exactly is what makes a WIDENED $REMOVALS visible — measured:
+    # giving `claim` a second removal made it emit `requested: ready,in-progress`
+    # and left this gate fully green under the old substring form.
+    sp_got="$(printf '%s' "$(detail_of)" | sed -n 's/.*requested: \([^;]*\).*/\1/p')"
+    if [ "$(result_of)" != "ok" ]; then
+        bad "$sp_label did not complete on the ordinary path: result=$(result_of)"
+    elif [ "$sp_got" != "${sp_want#requested: }" ]; then
+        bad "$sp_label reported requested=[$sp_got] (empty = field absent, not blank), expected '$sp_want' — containment catches NARROWING only, and drift under an align-the-table sweep goes the other way: widening \$REMOVALS makes the value name a token the edit never passes, which a substring match cannot see"
+    else
+        ok "$sp_label reports '$sp_want' on its ordinary path"
+    fi
+done
+
+# THE NEGATIVE, and it is the one that keeps the field scoped. `promote` removes
+# nothing, so it must stay SILENT — case (d) above asserts its detail is empty,
+# and this says why that is now a claim about `requested:` too. A `requested:`
+# built from anything wider than $REMOVALS lands here first.
+run_claim promote 13
+if has "$(detail_of)" "requested:"; then
+    bad "promote grew a 'requested:' ('$(detail_of)') — it removes nothing, and the ordinary promote path must stay quiet"
+else
+    ok "promote emits no 'requested:' — the field is scoped to subcommands that actually remove"
+fi
+
+# --- 7e. the `removed:` field ------------------------------------------------
+# `labels_removed_detail()` in issue-claim.sh reads live state. These rows were
+# written FIRST, as a deliberately-failing spec, because the
+# reviewer measured the alternative: with the branch uncovered, implementing it
+# as `echo "removed: totally-made-up-label"` left this whole file green, and
+# that form ALSO suppresses `requested:` on every repair run.
+#
+# The contract, from #323's Expected section: report which labels were ACTUALLY
+# removed, "so a no-op strip is visible instead of silent". So the load-bearing
+# property is not that it names something — it is that it names DIFFERENT things
+# for an issue that carried the label and one that did not.
+#
+# All four rows drive the repair path (MOCK_MISSING_LABEL), because that is the
+# only path that calls the seam.
+
+# (e1) the issue CARRIES ready -> it is named.
+MOCK_MISSING_LABEL="$INPROG" run_claim block 20 --comment "why"
+if [ "$(result_of)" != "ok" ]; then
+    bad "(e1) block on the removed: fixture did not complete: result=$(result_of)"
+elif ! has "$(detail_of)" "removed: $READY"; then
+    bad "(e1) wrong: detail was '$(detail_of)', expected it to carry 'removed: $READY'"
+elif has "$(detail_of)" "bug"; then
+    # Fixture 20 carries `ready,bug`. Reporting the issue's WHOLE label set
+    # instead of the intersection with the candidates still contains
+    # `removed: ready` as a substring, so the row above passes it. `bug` is a
+    # label `block` never removes, and naming it is a false removal claim.
+    bad "(e1) detail named 'bug' ('$(detail_of)') — that is the issue's label set, not the labels this edit removed"
+elif has "$(detail_of)" "requested:"; then
+    bad "(e1) detail carries BOTH 'removed:' and 'requested:' ('$(detail_of)') — removed: is live state and supersedes the request on this path; only the 'unknown' variant rides beside it"
+else
+    ok "(e1) an issue carrying $READY reports 'removed: $READY'"
+fi
+
+# (e2) THE POINT OF THE WHOLE FIELD. Same command, an issue carrying NEITHER
+# label. If this reads the same as (e1), the field has not made a no-op strip
+# visible and #323's second half is not done.
+MOCK_MISSING_LABEL="$INPROG" run_claim block 13 --comment "why"
+if [ "$(result_of)" != "ok" ]; then
+    bad "(e2) block on an unlabelled issue did not complete: result=$(result_of)"
+elif has "$(detail_of)" "removed: $READY"; then
+    bad "(e2) detail claims 'removed: $READY' on an issue that never carried it ('$(detail_of)') — this is the no-op strip #323 asked to make VISIBLE, reported as a removal"
+elif ! has "$(detail_of)" "removed:"; then
+    bad "(e2) UNIMPLEMENTED or wrong: detail was '$(detail_of)', expected an EMPTY 'removed:' list rather than no field at all — absence is what makes the no-op visible"
+else
+    ok "(e2) an issue carrying neither label reports an empty 'removed:' — the no-op strip is visible"
+fi
+
+# (e3) UNKNOWN IS NOT VERIFIED (#281's posture, applied here). A failed read
+# must not be reported as "removed nothing" — that is indistinguishable from
+# (e2), which is a measured fact.
+MOCK_MISSING_LABEL="$INPROG" MOCK_FAIL_VIEW=1 run_claim block 20 --comment "why"
+if [ "$(result_of)" != "ok" ]; then
+    bad "(e3) an unreadable pre-state turned the repair into $(result_of) — the edit still landed, so the verdict must stand"
+elif has "$(detail_of)" "removed: $READY"; then
+    bad "(e3) detail claims 'removed: $READY' from a read that FAILED: '$(detail_of)'"
+elif ! has "$(detail_of)" "unknown"; then
+    bad "(e3) an unreadable pre-state reported '$(detail_of)' — it must say UNKNOWN, never an empty list, which (e2) has already spent"
+elif ! has "$(detail_of)" "requested: $READY;"; then
+    # TWO assertions in one conjunct, and both are otherwise ungated.
+    # PRESENCE: `removed: unknown` is a non-answer and must ride ALONGSIDE the
+    # computable `requested:` rather than displacing it — the `!= *unknown*`
+    # arm in issue-claim.sh's precedence test is the only thing doing that, and
+    # deleting it leaves every other row green.
+    # DELIMITED: the trailing `;` is what proves `requested:` STOPPED at the
+    # surviving token. Dropping the DROPPED filter yields
+    # `requested: ready,in-progress` — naming a token the edit provably did not
+    # request, because it was dropped as absent — and a bare match on `ready`
+    # cannot see the difference.
+    bad "(e3) detail was '$(detail_of)' — expected 'requested: $READY;' beside the unknown: a non-answer must not suppress a computable fact, and the request must stop at the surviving token"
+else
+    ok "(e3) an unreadable pre-state reports unknown BESIDE 'requested: $READY', not instead of it"
+fi
+
+# (e4) FIXTURE ADEQUACY for the match, the sibling of the `already` trap the
+# quoted-token match carries. Issue 21 holds `not-ready` and NOT `ready`, so an
+# implementation matching the label name as a SUBSTRING reports a removal that
+# never happened. The fixture can only expose that while a label containing the
+# token exists and the token itself does not.
+# This row IS load-bearing now that the seam is implemented: a substring
+# compare reddens it, verified. It is still a bare NEGATIVE, so it also passes
+# if the field vanishes entirely — (e1) is what pins the field's presence, and
+# the two must be read together.
+MOCK_MISSING_LABEL="$INPROG" run_claim block 21 --comment "why"
+if [ "$(result_of)" != "ok" ]; then
+    bad "(e4) block on the substring fixture did not complete: result=$(result_of)"
+elif has "$(detail_of)" "removed: $READY"; then
+    bad "(e4) 'not-$READY' was matched as '$READY' ('$(detail_of)') — compare label names for EQUALITY, never as substrings"
+else
+    ok "(e4) a label CONTAINING the token is not the token — no false removal reported"
+fi
+
+# --- 7f. the label probe's STREAM and SHAPE (review of #323) -----------------
+# Two failures an exit code cannot report, both reachable only through the two
+# knobs added above.
+
+# (e5) gh wrote to stderr and still SUCCEEDED. Reading through `ghw` would fold
+# that notice into stdout — gh-retry.sh merges the streams and prints the merged
+# result on success. Reading bare keeps it out of the data and yields the TRUE
+# answer; through `ghw` the multi-line guard catches it and degrades to
+# `unknown`, which is safe but strictly worse than the answer available here.
+# (Measured: the ghw form reports `removed: unknown (malformed …)`, not an empty
+# list — the guard fires first.)
+# THE KNOB MUST HAVE FIRED, and it cannot be proven from $ERR: the probe runs
+# `gh ... 2>/dev/null`, so the notice is discarded by the very fix this row
+# tests and never reaches the captured stderr. The mock therefore records that
+# it fired. Without this control, renaming the mock's arm to a dead name leaves
+# (e5) green — measured — which is the vacuity shape §7b guards by hand.
+rm -f "$MOCK_NOISE_FLAG"
+MOCK_MISSING_LABEL="$INPROG" MOCK_VIEW_NOISE=1 run_claim block 20 --comment "why"
+if [ ! -f "$MOCK_NOISE_FLAG" ]; then
+    bad "(e5) the mock never emitted its stderr notice — MOCK_VIEW_NOISE is not a knob the view arm reads, so this row exercises nothing"
+elif [ "$(result_of)" != "ok" ]; then
+    bad "(e5) a benign stderr notice on a successful read broke the run: result=$(result_of)"
+elif ! has "$(detail_of)" "removed: $READY"; then
+    bad "(e5) stderr on a SUCCESSFUL read reached the label probe's stdout — detail was '$(detail_of)'. Read with bare gh, not ghw: gh-retry.sh merges the streams and a real strip then reports as a no-op"
+else
+    ok "(e5) a successful read that also wrote to stderr still reports 'removed: $READY'"
+fi
+
+# (e6) a successful read with an extra STDOUT line. The probe's contract is one
+# line, so a second one is something the --jq cannot produce; it must be
+# UNKNOWN, never an empty list, for the same reason (e3) gives.
+MOCK_MISSING_LABEL="$INPROG" MOCK_VIEW_EXTRA=1 run_claim block 20 --comment "why"
+if [ "$(result_of)" != "ok" ]; then
+    bad "(e6) a malformed-but-successful read turned the repair into $(result_of) — the edit still landed, so the verdict must stand"
+elif has "$(detail_of)" "removed: $READY"; then
+    bad "(e6) a two-line probe result was trusted as a label list: '$(detail_of)'"
+elif ! has "$(detail_of)" "unknown"; then
+    bad "(e6) a malformed probe reported '$(detail_of)' — it must say UNKNOWN, never an empty list, which (e2) has already spent"
+elif ! has "$(detail_of)" "requested: $READY;"; then
+    bad "(e6) a malformed probe suppressed the computable 'requested: $READY': '$(detail_of)'"
+else
+    ok "(e6) a malformed probe reports unknown BESIDE 'requested: $READY'"
+fi
+
+# --- 7g. the per-issue resets, through a BATCH (review pass 4) ---------------
+# Five state variables reset at the loop head. Before this section, deleting ANY
+# ONE left the gate fully green — measured, one at a time — because the file's
+# only multi-issue case was `promote 10 13`, and `promote` has REMOVALS=(), so
+# nothing drove two issues through the REPAIR path at all.
+#
+# WHAT THIS ROW ACTUALLY PINS: `$DROPPED`, and only that. Each row below was
+# measured by HOISTING that reset above the per-issue loop, which is the leak
+# this row is about. (Deletion is a different experiment and not a uniform one:
+# it aborts under `set -u` for some of these and not others, so it measures
+# several things at once. The table is hoisting throughout.)
+#   tolerated=0      hoisted -> M16 goes UNDETECTED (this row stays green)
+#   TOLERATED_NOTE   hoisted -> fully green      <-- UNPINNED
+#   REMOVED_NOTE     hoisted -> fully green      <-- UNPINNED
+#   DROPPED=()       hoisted -> this row reddens <-- the one it pins
+#   retry_args=()    hoisted -> fully green, and correctly so: defensive-only,
+#                               see the note beside it in issue-claim.sh
+# The two unpinned leaks have real harm — a hoisted REMOVED_NOTE reports
+# `removed: ready` for an issue that carried nothing, and a hoisted
+# TOLERATED_NOTE prepends "a repair was attempted" to an issue that 404s.
+# Closing them needs a PER-ISSUE failure knob (`MOCK_FAIL_ISSUE=13`), and every
+# existing knob is run-wide, so the mock cannot express it today. Stated here
+# rather than left implied.
+#
+# $DROPPED is the one with a demonstrable harm: collect_dropped_removals returns
+# 1 for a token already in $DROPPED, so a leaked set makes the tolerance fire
+# for the FIRST issue only and the second hard-fails — §7c's own harm, an issue
+# demoted with no reason on it, reached through the batch shape `groom-backlog`
+# and `dispatch-ready` actually ship. M7/M10 cover this leak class for the
+# residue variables; the ones the repair path added had nothing.
+MOCK_MISSING_LABEL="$INPROG" run_claim block 20 13 --comment "why"
+batch_comments=$(grep -c '^issue comment' "$MOCK_WRITES" 2>/dev/null || true)
+if [ "$RC" -ne 0 ]; then
+    bad "(7g) a two-issue block through the repair path exited $RC — per-issue state leaked between them"
+elif ! has "$(detail_for 20)" "removed: $READY"; then
+    bad "(7g) #20 carries $READY and should report 'removed: $READY': '$(detail_for 20)'"
+elif has "$(detail_for 13)" "removed: $READY"; then
+    bad "(7g) #13 carries no labels but reported 'removed: $READY' — #20's probe result leaked into it: '$(detail_for 13)'"
+elif [ "$batch_comments" != "2" ]; then
+    bad "(7g) $batch_comments --comment posts for a two-issue block, expected 2 — a leaked reset turns the second issue into a hard failure that never posts its reason"
+else
+    ok "(7g) a two-issue block repairs both independently: per-issue details and both --comment posts"
+fi
+
+# (e7) gh RESOLVES LABEL NAMES CASE-INSENSITIVELY, so the probe must too.
+# Measured against live gh: `--remove-label READY` strips a label named `ready`,
+# rc 0. Issue 22 carries `Ready`; the candidate constant is `ready`. A byte-equal
+# membership test reports `removed: ` — "carried none" — for a strip that really
+# happened, which is #323's own ask inverted. This is the class no amount of
+# mock-versus-code review can find: both were written to the same wrong model of
+# gh, and only an external oracle separates them.
+# Measured: reverting the fold to the byte-equal form reddens this row and only
+# this row.
+MOCK_MISSING_LABEL="$INPROG" run_claim block 22 --comment "why"
+if [ "$(result_of)" != "ok" ]; then
+    bad "(e7) block on the case-variant fixture did not complete: result=$(result_of)"
+elif ! has "$(detail_of)" "removed: $READY"; then
+    bad "(e7) an issue carrying 'Ready' reported '$(detail_of)' — gh folds label case on removal, so a byte-equal probe calls a real strip a no-op"
+else
+    ok "(e7) a case-variant label is matched: 'Ready' reports 'removed: $READY'"
+fi
+
+# --- 7h. the FAILED repair's JSON detail (independent review) ----------------
+# The `repair-fail` mutants check stderr and `result`; nothing checked what the
+# FAILED object's `detail` carries. Measured: neutering the line that folds
+# TOLERATED_NOTE into the failed detail, and swapping the "FAILED" wording for
+# the success wording, both left the gate fully green. The JSON is the channel a
+# coordinator machine-reads; stderr is not.
+#
+# Shape: `in-progress` absent (tolerance fires, one token dropped) AND `blocked`
+# absent (the re-issued edit fails on the ADD, which is never tolerated). So the
+# repair is attempted and then fails — the only path that reaches this detail.
+MOCK_MISSING_LABEL="$INPROG,$BLOCKED" run_claim block 20 --comment "why"
+if ! has "$ERR" "tolerated"; then
+    # THE KNOB MUST HAVE FIRED, and this row reaches tolerate->repair->fail only
+    # because the MOCK names the argv-first missing token, which puts the
+    # removal ahead of the add. That is a fixture convention (see the header),
+    # not a property of gh. Without this conjunct, a mock that scanned adds
+    # first would redden the row with the byte-identical message that neutering
+    # the real fold-in line produces, sending the next reader to the wrong file.
+    bad "(7h) the tolerance never fired, so no repair was attempted and this row exercises nothing — check the mock's argv scan order"
+elif [ "$(result_of)" != "failed" ]; then
+    bad "(7h) a repair whose re-issue failed on the ADD reported $(result_of) — #288 requires a failed add to be a hard failure"
+elif [ "$RC" -ne 2 ]; then
+    bad "(7h) a failed repair exited $RC, not 2 — a hard failure must reach the caller's exit code"
+elif ! has "$(detail_of)" "'$INPROG'"; then
+    bad "(7h) the failed detail does not name the token that was dropped: '$(detail_of)'"
+elif ! has "$(detail_of)" "the re-issued edit FAILED"; then
+    bad "(7h) the failed detail does not say the re-issue failed: '$(detail_of)' — without it the JSON records a repair with no outcome"
+elif has "$(detail_of)" "re-issued the edit without"; then
+    bad "(7h) the failed detail claims a SUCCESSFUL re-issue: '$(detail_of)'"
+elif ! has "$(detail_of)" "not found"; then
+    bad "(7h) the failed detail dropped gh's own error: '$(detail_of)'"
+else
+    ok "(7h) a failed repair reports the dropped token, the failed re-issue and gh's error in the JSON detail"
+fi
 
 # FIXTURE ADEQUACY for the QUOTED match — measured, not argued, the posture
 # #263 established and this file already uses for the TSV transport at section
@@ -979,7 +1416,18 @@ mutant_ran() {  # $1=label
 
 # Each row: label <TAB> from-line <TAB> to-line <TAB> env <TAB> args <TAB> expect
 #   expect=cleared     — the mutation must cause a --remove-assignee
-#   expect=false-clear — the mutation must cause a "cleared" claim with no write
+#   expect=repair-fail — the mutation must make the tolerance fire WRONGLY, and
+#                        the #323 repair must then resurface the real failure as
+#                        `failed`. This replaced expect=false-clear and
+#                        expect=false-ok, whose harms are no longer REACHABLE:
+#                        both described a wrongly-tolerated edit reporting `ok`
+#                        after writing nothing, and the repair re-issues that
+#                        edit — ADDS included — so the underlying failure comes
+#                        back rather than being swallowed. The scoping and the
+#                        repair are now two independent guards on one harm; each
+#                        row below still needs the tolerance to FIRE (stderr says
+#                        `tolerated`), which is what keeps it from passing on the
+#                        unmutated path, where `failed` is also the verdict.
 MUTANTS=(
 "M1 different-assignee arm	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if false; then	-	promote 11	cleared	without the different-assignee arm, promote strips a HUMAN's assignee"
 "M2 equality relaxed to claim's substring idiom	    if [[ \"\$assignees\" != \"\$ME\" ]]; then	    if [[ \",\$assignees,\" != *\",\$ME,\"* ]]; then	-	promote 14	cleared	the substring idiom clears on an issue a human ALSO holds"
@@ -990,9 +1438,13 @@ MUTANTS=(
 "M7 the gate stops resetting its verdict	    RESIDUE_ARGS=()	    :	-	promote 10 13	cleared-13	one issue's ARGS leak into the next one's edit in a batch"
 "M9 short-read guard	    if [[ \"\$read_ok\" != \"1\" ]]; then	    if false; then	MOCK_SHORT_VIEW=1	promote 10	state-arm	a truncated probe result is reported as the state arm's verdict instead of malformed"
 "M10 the gate stops resetting its reported verdict	    RESIDUE_NOTE=\"\"	    :	-	promote 10 13	false-detail-13	one issue's REPORT leaks into the next one's JSON, claiming a write that never happened"
-"M8 not-found tolerance re-widened to promote	    promote) REMOVALS=() ;;	    promote) REMOVALS=(\"\$READY_LABEL\") ;;	MOCK_MISSING_LABEL=$READY	promote 10	false-clear	a promote that wrote nothing reports ok and claims the residue was cleared"
+"M8 not-found tolerance re-widened to promote	    promote) REMOVALS=() ;;	    promote) REMOVALS=(\"\$READY_LABEL\") ;;	MOCK_MISSING_LABEL=$READY	promote 10	repair-fail	a promote whose add failed is re-issued unchanged, so the failure resurfaces instead of a false clear"
 "M12 the claim-cycle conjunct is neutered	    case \"\$cycle\" in	    case \"residue\" in	-	promote 18	cleared	without the claim-cycle conjunct, promote strips the OPERATOR's own self-assignment and a cold agent is dispatched onto work a human is already doing"
-"M11 removal-token match re-widened to the bare error string	                    if [[ \"\$err\" == *\"'\$rl'\"* ]]; then	                    if true; then	MOCK_MISSING_LABEL=$INPROG	claim 13	false-ok	a claim whose ADD half failed reports ok, so the loop believes an unclaimed issue was claimed and dispatches it again"
+"M11 removal-token match re-widened to the bare error string	        if [[ \"\$err\" == *\"'\$rl'\"* ]]; then	        if true; then	MOCK_MISSING_LABEL=$INPROG	claim 13	repair-fail	a claim whose ADD half failed is re-issued WITH the add, so the failure resurfaces instead of a silent ok"
+"M13 removed: reports the issue's whole label set	    echo \"removed: \$removed\"	    echo \"removed: \$carried\"	MOCK_MISSING_LABEL=$INPROG	block 20 --comment why	false-removal	the detail names a label this edit never removed, so a reader cannot tell a removal from a coincidence"
+"M14 the repair walk drops --add-assignee	            retry_args+=(\"\$ea\")	            [[ \"\$ea\" != \"--add-assignee\" ]] && retry_args+=(\"\$ea\")	MOCK_MISSING_LABEL=$READY	claim 13	lost-assignee	a repaired claim assigns nobody and still reports ok, which is #288's double-pick reached through #323's code"
+"M15 the repair bound drops to a single pass	    while [[ \"\$tolerated\" == \"1\" && \"\$rc\" -ne 0 && \$attempt -lt \${#REMOVALS[@]} ]]; do	    while [[ \"\$tolerated\" == \"1\" && \"\$rc\" -ne 0 && \$attempt -lt 1 ]]; do	MOCK_MISSING_LABEL=$READY,$INPROG	block 13 --comment why	repair-fail	block on a repo carrying NEITHER removal hard-fails and never posts its mandatory --comment"
+"M16 the DROPPED reset is deleted	    DROPPED=()	    :	MOCK_MISSING_LABEL=$INPROG	block 20 13 --comment why	batch-leak	one issue's learned-absent set leaks into the next, so the second hard-fails and never posts its demotion reason"
 )
 
 mut_ran=0
@@ -1058,24 +1510,54 @@ for row in "${MUTANTS[@]}"; do
             else
                 ok "$m_label CAUGHT: $m_why"
             fi ;;
-        false-clear)
-            if [ "$(result_of)" = "ok" ] && has "$(detail_of)" "cleared claim residue"; then
+        batch-leak)
+            # The harm is per-ISSUE: the first absorbs the tolerance, the second
+            # hard-fails. `result_of` reads the FIRST object, which is exactly
+            # what a leak hides behind, so this asks the SECOND.
+            if [ "$(result_for 13)" = "failed" ]; then
                 ok "$m_label CAUGHT: $m_why"
             else
-                bad "$m_label UNDETECTED: the tolerance was re-widened and no false clear followed — section 7 proves nothing"
+                bad "$m_label UNDETECTED: the reset was deleted and #13 still reported '$(result_for 13)' — 7g proves nothing"
             fi ;;
-        false-ok)
-            # The harm here is a SILENT SUCCESS, not a false detail: a claim that
-            # wrote nothing reports ok, and #288's whole point is that the
-            # verdict is all a coordinator ever sees. The recorded-edit control
-            # is the one the tolerated-edge rows carry — without it a knob that
-            # never fired reports CAUGHT on the ordinary path's verdict.
-            if [ -n "$EDITS" ]; then
-                bad "$m_label INCONCLUSIVE: an edit was recorded, so no failure was injected and 'ok' is the ordinary path's verdict"
-            elif [ "$(result_of)" = "ok" ]; then
+        false-removal)
+            # The harm is a detail naming a label the subcommand never removes.
+            # Fixture 20 is `ready,bug`, so the whole-set form still CONTAINS
+            # (e1)'s `removed: ready` substring — which is exactly why (e1)
+            # gained its `bug` conjunct and why this row exists to keep it.
+            if has "$(detail_of)" "bug"; then
                 ok "$m_label CAUGHT: $m_why"
             else
-                bad "$m_label UNDETECTED: the token match was re-widened to the bare error string and the wholly-failed claim still reported '$(result_of)' — section 7b proves nothing"
+                bad "$m_label UNDETECTED: the intersection was replaced by the whole label set and the detail still named only removals — (e1)'s second conjunct proves nothing"
+            fi ;;
+        lost-assignee)
+            # The recorded edit is the repair's own re-issue; a claim that
+            # repairs without its assignee half is the silent double-pick.
+            if [ -z "$EDITS" ]; then
+                bad "$m_label INCONCLUSIVE: no edit was recorded, so the repair never ran and nothing about the assignee was exercised"
+            elif has "$EDITS" "--add-assignee"; then
+                bad "$m_label UNDETECTED: the walk was told to drop --add-assignee and the repair still carried it — 7b's assignee fragment proves nothing"
+            else
+                ok "$m_label CAUGHT: $m_why"
+            fi ;;
+        repair-fail)
+            # TWO conjuncts, and WHICH ONE carries the row differs by mutant —
+            # stating only one case gets the other wrong.
+            #   M8/M11: the unmutated verdict is ALREADY `failed`, so asserting
+            #     it alone would pass with the mutation reverted. The `tolerated`
+            #     stderr conjunct is what proves the mutation took effect.
+            #   M15 (the loop bound): §7c asserts that exact fixture reports
+            #     `ok` unmutated, and `tolerated` appears on that path too — so
+            #     here `failed` IS the discriminator and `tolerated` is the
+            #     dead-knob guard. Reading the M8 rationale as general retires
+            #     the only assertion separating a bounded repair from a
+            #     single-pass one, which is the regression that skips `block`'s
+            #     mandatory --comment.
+            if ! has "$ERR" "tolerated"; then
+                bad "$m_label INCONCLUSIVE: the mutation did not make the tolerance fire, so nothing about the repair was exercised and 'failed' is the ordinary path's verdict"
+            elif [ "$(result_of)" != "failed" ]; then
+                bad "$m_label UNDETECTED: the tolerance fired wrongly and the run reported '$(result_of)' — the repair did not resurface the real failure (#323)"
+            else
+                ok "$m_label CAUGHT: $m_why"
             fi ;;
         *) bad "$m_label — unknown expectation '$m_expect'" ;;
     esac
@@ -1088,11 +1570,31 @@ else
 fi
 
 # The knob guard itself can go vacuous: if every env cell became `-`, it would
-# check nothing and still pass. Today four mutants carry a knob.
-if [ "$env_knobs_checked" -ge 4 ]; then
-    ok "every mutant fixture knob ($env_knobs_checked) is one the mock actually reads"
+# check nothing and still pass. The count of record is the `(N of N declared)`
+# the run emits, derived below — no literal here to go stale.
+# DERIVED, not a literal. The floor was `-ge 4` with a comment saying "today
+# four mutants carry a knob"; later rows each added one and the sentence went
+# stale, leaving the floor with slack. The current number is whatever the
+# `(N of N declared)` line prints — deliberately not transcribed here, which is
+# this paragraph's own point. Counting the rows
+# whose env cell is not `-` and comparing for EQUALITY is the posture
+# EXPECTED_ASSERTS already takes, and it is CLAUDE.md's rule applied to the
+# guard on the guard: a count in prose is safe only when a gate re-derives it.
+env_knobs_expected=0
+for row in "${MUTANTS[@]}"; do
+    IFS=$'\t' read -r _l _f _t _e _rest <<<"$row"
+    [ "$_e" != "-" ] && env_knobs_expected=$((env_knobs_expected + 1))
+done
+# EQUALITY CATCHES DRIFT, THE FLOOR CATCHES COLLAPSE, and neither alone is
+# enough. Both counters derive from the same table, so rewriting every env cell
+# to `-` makes it 0 == 0 and the guard prints a reassuring `ok` in the one run
+# where it is wrong — measured, in a run where 7 mutant rows reported
+# UNDETECTED. The floor is the independent conjunct the old `-ge 4` literal
+# supplied for free; keeping both is what that literal actually cost.
+if [ "$env_knobs_checked" -eq "$env_knobs_expected" ] && [ "$env_knobs_expected" -ge 4 ]; then
+    ok "every mutant fixture knob ($env_knobs_checked of $env_knobs_expected declared) is one the mock actually reads"
 else
-    bad "only $env_knobs_checked mutant env knobs were checked — fewer than the 4 carried today; did a knob-driven mutant lose its cell?"
+    bad "$env_knobs_checked mutant env knobs checked, $env_knobs_expected declared (floor 4) — a knob-driven mutant lost its cell, a knob stopped being read, or every cell collapsed to '-'"
 fi
 
 # --- vacuity floor ------------------------------------------------------------
@@ -1109,7 +1611,7 @@ fi
 # twice, and a live edition during review carried 24 against 22 actual cases —
 # adding one case while removing another nets zero and passes silently either
 # way, so the number that cannot be re-derived is at least only written once.
-EXPECTED_CASES=38
+EXPECTED_CASES=54
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
