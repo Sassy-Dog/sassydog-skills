@@ -270,7 +270,14 @@ Every template already carries the current `generated-by: sassy-dog:setup-deps` 
 render normalises a pre-rename file's marker for free — keep the template's marker line verbatim
 rather than preserving whatever the existing file carried. Leave each template's
 `template-version` alone unless the template's *content* changed: the producer rename is an
-identity change, and bumping the version would force a needless re-render across every consumer.
+identity change, and the stamp should not move for it. **A bump does not trigger anything** —
+measured while shipping [#316](https://github.com/Sassy-Dog/sassydog-skills/issues/316): no script
+reads `template-version`, and re-render is decided *solely* by the `generated-by:` ownership
+matcher, so a marker-owned file is reconciled on any run regardless of its stamp and a marker-less
+one is skipped regardless of its stamp. The stamp is provenance that rides along on a re-render,
+never a trigger for one. **Nothing compares a consumer's committed version to the shipped one**, so
+consumer drift is invisible from here — that is why a template change rolls out as one issue per
+consumer repo rather than by waiting for re-runs.
 
 Facts: `{{RUNNER}}`, `{{APP_DIR}}`, `{{PKG_DIR}}`, `{{FLUTTER_VERSION}}` (keep in lockstep with the
 release workflow). `{{APP_DIR}}` is the Flutter app directory relative to the repo root — `app` for
@@ -328,7 +335,7 @@ the lock is the prerequisite change — the template becomes renderable the mome
 
 ## 4. Prerequisites the render assumes
 
-- **`PLATFORM_WRITER_APP_ID` / `PLATFORM_WRITER_APP_PRIVATE_KEY` in the DEPENDABOT secrets store**,
+- **`PLATFORM_WRITER_APP_CLIENT_ID` / `PLATFORM_WRITER_APP_PRIVATE_KEY` in the DEPENDABOT secrets store**,
   not the Actions store. Dependabot-triggered runs cannot see Actions secrets at all — this is the
   most common reason a copied workflow silently no-ops. Org-level with `private` visibility
   (= private + internal); source of truth is Doppler `_scm/github`. **That does NOT cover a public
@@ -337,6 +344,16 @@ the lock is the prerequisite change — the template becomes renderable the mome
   failure surfaces weeks later on that repo's next Dependabot PR). See
   [#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178); a merge gate is a necessary but
   not sufficient precondition, repo visibility is the other one.
+  **The CLIENT ID, not the numeric App ID** — `actions/create-github-app-token` v3.2.0 deprecated the
+  `app-id:` input in favour of `client-id:` ([#316](https://github.com/Sassy-Dog/sassydog-skills/issues/316)),
+  and every template here mints with `client-id:`. `PLATFORM_WRITER_APP_ID` still exists in both org
+  stores and is a DIFFERENT value; do not substitute it to avoid provisioning. GitHub's JWT `iss`
+  claim happens to accept either, so the shortcut works and is still wrong: it puts an App ID in an
+  input named `client-id` in every consumer, and the next reader believes the name.
+  The value is the App's **client ID** (`Iv23…`), readable from the App settings page or
+  `gh api /orgs/<org>/installations`; it already exists in both org stores at `private`. A new org
+  adds it to Doppler `_scm/github` and syncs, never by hand — and note `gh api …/secrets` pages at
+  30, so check with `--paginate` before concluding it is absent.
 - **`allow_auto_merge`** on the repo, for the direct-merge arm.
 - A **CI workflow** whose check is actually required. If `detect_failures` reports no conventional
   CI workflow, that repo needs one before auto-merge means anything.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# test-visibility-preconditions.sh — pins the repo-visibility precondition on
-# EVERY setup-deps template that mints a GitHub App token (issues #178, #186).
+# test-visibility-preconditions.sh — pins the repo-visibility precondition AND
+# the credential naming on EVERY setup-deps template that mints a GitHub App
+# token (issues #178, #186, #316).
 #
 # Renamed from test-auto-merge-visibility.sh in #186: the subject was never the
 # auto-merge workflow, it was the credential. Three templates mint
@@ -8,6 +9,17 @@
 # lockfile-sync-bun, lockfile-sync-pod — and #178 gave the precondition to only
 # one of them, leaving the other two rendering into public repos through the
 # door it left open.
+#
+# The pair is PLATFORM_WRITER_APP_CLIENT_ID + PLATFORM_WRITER_APP_PRIVATE_KEY
+# since #316; before that it was PLATFORM_WRITER_APP_ID, whose input
+# `create-github-app-token` deprecated in v3.2.0. Both names exist in both org
+# stores and they are DIFFERENT values, so property 9 asserts the templates mint
+# with `client-id:` and that no `app-id:` survives IN THE MINT STEP — scoped
+# there rather than file-wide, since a file-wide absence check is failed by the
+# prose that explains the rule. The tempting
+# shortcut is to pass the numeric App ID through `client-id`, which GitHub's JWT
+# `iss` claim accepts, and which would silence the deprecation with no new
+# secret while leaving an App ID in an input named client-id in every consumer.
 #
 # Why this is a source-level guard and not a render test. The render decision is
 # not made by a script — `render-dependabot.sh` renders `dependabot.yml` only.
@@ -42,8 +54,14 @@
 #   8. dependabot.yml.template does NOT assert unconditionally that
 #      dependabot-auto-merge.yml holds semver-major, because in a public repo
 #      that workflow is deliberately absent and the claim would be false.
+#   9. All three token-minting templates pass `client-id:` naming
+#      PLATFORM_WRITER_APP_CLIENT_ID, carry the matching presence gate, and
+#      retain NO `app-id:` input or PLATFORM_WRITER_APP_ID reference (#316).
+#      Per-template, because the deprecation warning fires once per template and
+#      a single-template assertion is how #178 came to cover one of three.
 #
-# No gh, no network, no repo mutation — it reads two tracked files.
+# No gh, no network, no repo mutation — it reads two tracked files plus the
+# three token-minting templates.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-visibility-preconditions.sh
@@ -217,6 +235,125 @@ if grep -qiE 'semver-major is excluded' "$TEMPLATE"; then
     ok "template still explains the semver-major exclusion"
 else
     bad "template no longer explains why semver-major is excluded"
+fi
+
+# 9. The credential is the CLIENT ID, per template (#316). One row each, for the
+#    reason #186 exists: the warning fires once per template, and a gate that
+#    checked one of the three is exactly how #178 shipped covering one of three.
+#    Both directions are asserted — the presence of `client-id:` AND the absence
+#    of `app-id:` — because passing the numeric App ID through `client-id` also
+#    satisfies a presence-only check, works at runtime (GitHub's JWT `iss` claim
+#    accepts either), and is the shortcut SKILL.md rules out.
+# DERIVED, not transcribed. A hard-coded list is how a fourth minting template
+# inherits no coverage at all; test-template-actionlint.sh derives its set the
+# same way. The vacuity guard is the point of deriving: an empty set would make
+# every loop below pass by never running.
+TOKEN_TEMPLATES="$(git ls-files 'skills/setup-deps/references/templates/*.template.yml' \
+    | xargs grep -l 'actions/create-github-app-token' 2>/dev/null)"
+if [ -z "$TOKEN_TEMPLATES" ]; then
+    bad "no template references actions/create-github-app-token — the credential rows below would pass vacuously"
+elif [ "$(printf '%s\n' "$TOKEN_TEMPLATES" | wc -l | tr -d ' ')" -lt 3 ]; then
+    bad "only $(printf '%s\n' "$TOKEN_TEMPLATES" | wc -l | tr -d ' ') token-minting template(s) found; #186 established there are three"
+else
+    ok "token-minting templates derived from the tree ($(printf '%s\n' "$TOKEN_TEMPLATES" | wc -l | tr -d ' ') found)"
+fi
+
+# step_region <file> <step name> — one `- name: <step>` step's own lines, ending
+# at the next step. SCOPING IS THE WHOLE POINT: file-wide greps let a
+# commented-out `client-id:` satisfy a presence check and let an `app-id:`
+# anywhere else in the file escape an absence check, and both were reproduced.
+# Six-space step indent, identical in all three templates.
+step_region() {
+    awk -v want="      - name: $2" '
+        index($0, want) == 1 { f = 1; print; next }
+        f && /^      - name: / { exit }
+        f { print }' "$1"
+}
+
+# 9. The credential is the CLIENT ID, per template (#316), asserted INSIDE the
+#    two steps that carry it. One row each, for the reason #186 exists: the
+#    warning fires once per template, and a gate that checked one of three is
+#    exactly how #178 shipped covering one of three.
+#
+#    The presence gate is asserted MECHANICALLY, not by its message. Its six
+#    places (env key, `[ -n ]` test, `missing=` string, per template) were all
+#    renamed here, and a message-only check certifies none of them. Three
+#    mutations were GREEN against the message-only form and are red now:
+#      - `[ -n "$APP_CLIENT_ID" ]` -> `[ -n "$APP_KEY" ]`: an unprovisioned
+#        client ID stops being caught and dies later inside the mint, as the
+#        opaque auth error this step exists to replace.
+#      - env key `APP_CLIENT_ID:` -> `APP_ID:`: the variable is unset, `missing`
+#        is ALWAYS non-empty, and every consumer's Dependabot PR hard-fails with
+#        a bogus "Missing Dependabot secret(s)" even when provisioning is right.
+#      - `exit 1` -> `echo`: the gate degrades to a warning and stops gating.
+#    The env key is CAPTURED and compared, never spelled twice, so renaming it
+#    consistently stays legal and renaming it in one place does not.
+#
+#    The absence check matches `app[-_]id` case-insensitively with optional
+#    quotes: `"app-id":` and `App-id:` are legal YAML, resolve to the same
+#    input, still emit the deprecation warning, and both passed the plain
+#    `^[[:space:]]*app-id:` anchor.
+for tf in $TOKEN_TEMPLATES; do
+    t="$(basename "$tf" .template.yml)"
+    gate_step="$(step_region "$tf" "Require the app credentials")"
+    mint_step="$(step_region "$tf" "Mint GitHub App token")"
+    env_key="$(printf '%s\n' "$gate_step" \
+        | sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\):[[:space:]]*\${{[[:space:]]*secrets\.PLATFORM_WRITER_APP_CLIENT_ID[[:space:]]*}}.*/\1/p' \
+        | head -1)"
+
+    if [ -z "$mint_step" ] || [ -z "$gate_step" ]; then
+        bad "$t: could not slice the credential steps — 'Require the app credentials' and/or 'Mint GitHub App token' no longer parse at the expected indent"
+    elif ! printf '%s\n' "$mint_step" | grep -q 'client-id:[[:space:]]*\${{[[:space:]]*secrets\.PLATFORM_WRITER_APP_CLIENT_ID[[:space:]]*}}'; then
+        bad "$t: the mint step does not pass client-id: PLATFORM_WRITER_APP_CLIENT_ID (#316)"
+    elif printf '%s\n' "$mint_step" | grep -qEi '^[[:space:]]*"?app[-_]id"?[[:space:]]*:'; then
+        bad "$t: the mint step still passes the deprecated app-id: input — it warns on every consumer run and breaks when the fallback is dropped"
+    elif printf '%s\n' "$mint_step" | grep -q 'PLATFORM_WRITER_APP_ID'; then
+        bad "$t: the mint step references PLATFORM_WRITER_APP_ID — a DIFFERENT value from the client ID; passing it through client-id: is the shortcut SKILL.md rules out"
+    elif [ -z "$env_key" ]; then
+        bad "$t: the presence gate binds no env var to PLATFORM_WRITER_APP_CLIENT_ID, so it cannot be checking the secret the mint uses"
+    elif ! printf '%s\n' "$gate_step" | grep -qF "[ -n \"\$$env_key\" ]"; then
+        bad "$t: the presence gate binds \$$env_key but never tests it — an unprovisioned client ID is no longer caught here and dies opaquely inside the mint"
+    elif ! printf '%s\n' "$gate_step" | grep -q 'missing PLATFORM_WRITER_APP_CLIENT_ID'; then
+        bad "$t: the presence gate tests \$$env_key but names a different secret in its failure message"
+    elif ! printf '%s\n' "$gate_step" | grep -qE '^[[:space:]]*exit 1$'; then
+        bad "$t: the presence gate no longer exits non-zero — it degrades to a warning and stops gating"
+    else
+        ok "$t: mints with client-id: PLATFORM_WRITER_APP_CLIENT_ID, and its presence gate tests \$$env_key and exits"
+    fi
+done
+
+# 10. THE TWO VERSION MARKERS MOVE TOGETHER. Every template carries its version
+#     twice — the `# TEMPLATE: <name> · version N` file header and the
+#     `generated-by: … | template-version: N` marker — and eight prior bumps
+#     moved both. Nothing checked it, and #316's first commit bumped only the
+#     second in all three files, leaving 2/3, 8/9 and 5/6. The split is silent
+#     in the worst direction: the header block is stripped before render, so no
+#     consumer sees it and only the next EDITOR is misled — including about
+#     whether the next bump is 9 or 10, since the header prose cites its own
+#     version by number to explain render rules.
+for tf in $TOKEN_TEMPLATES; do
+    t="$(basename "$tf" .template.yml)"
+    hdr_v="$(sed -n '1s/.*· version \([0-9][0-9]*\).*/\1/p' "$tf")"
+    gen_v="$(sed -n 's/.*| template-version: \([0-9][0-9]*\).*/\1/p' "$tf" | head -1)"
+    if [ -z "$hdr_v" ] || [ -z "$gen_v" ]; then
+        bad "$t: could not read both version markers (header='$hdr_v' generated-by='$gen_v') — one of the two has moved or changed shape"
+    elif [ "$hdr_v" != "$gen_v" ]; then
+        bad "$t: version markers disagree — file header says $hdr_v, generated-by says $gen_v. Both move on every bump"
+    else
+        ok "$t: both version markers read $hdr_v"
+    fi
+done
+
+# The prerequisite list is the one place a human is told which secret to
+# provision, and it named the deprecated one. A template/doc split here costs a
+# consumer a failed run per repo, which is how #316 was found. Scoped to §4 and
+# asserted on the IDENTIFIER alone: pinning the sentence would fail identically
+# on a harmless reflow and on a genuine revert.
+skill_s4="$(awk '/^## 4\. Prerequisites/{f=1} f&&/^## 5\./{exit} f' "$SKILL")"
+if printf '%s\n' "$skill_s4" | grep -q 'PLATFORM_WRITER_APP_CLIENT_ID'; then
+    ok "SKILL.md §4 names the client ID as the secret to provision"
+else
+    bad "SKILL.md §4 does not name PLATFORM_WRITER_APP_CLIENT_ID — the templates and the provisioning instruction disagree"
 fi
 
 if [ "$fails" -ne 0 ]; then

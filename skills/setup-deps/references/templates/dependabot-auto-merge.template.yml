@@ -1,4 +1,4 @@
-# TEMPLATE: dependabot-auto-merge · version 2
+# TEMPLATE: dependabot-auto-merge · version 3
 # Rendered by sassy-dog:setup-deps.
 #   {{FACT}}              → replace with the detected/confirmed value
 #   {{RUNNER}}            → runs-on value. Default [self-hosted, linux, sassy-dog]
@@ -10,7 +10,7 @@
 #                           and every render is valid by construction.
 # Delete this header block from the rendered output; keep the generated-by line.
 ---
-# generated-by: sassy-dog:setup-deps | template: dependabot-auto-merge | template-version: 2
+# generated-by: sassy-dog:setup-deps | template: dependabot-auto-merge | template-version: 3
 #
 # Auto-merge green Dependabot PRs so security bumps do not rot in the queue.
 #
@@ -63,12 +63,12 @@ jobs:
       # next Dependabot PR, which may be weeks later.
       - name: Require the app credentials
         env:
-          APP_ID: ${{ secrets.PLATFORM_WRITER_APP_ID }}
+          APP_CLIENT_ID: ${{ secrets.PLATFORM_WRITER_APP_CLIENT_ID }}
           APP_KEY: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
         run: |
           missing=
-          [ -n "$APP_ID" ]  || missing="$missing PLATFORM_WRITER_APP_ID"
-          [ -n "$APP_KEY" ] || missing="$missing PLATFORM_WRITER_APP_PRIVATE_KEY"
+          [ -n "$APP_CLIENT_ID" ] || missing="$missing PLATFORM_WRITER_APP_CLIENT_ID"
+          [ -n "$APP_KEY" ]       || missing="$missing PLATFORM_WRITER_APP_PRIVATE_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Missing Dependabot secret(s):$missing — org secrets are private-visibility and do not reach public repositories. If this repo has gone public, this workflow should be REMOVED rather than re-credentialed (Sassy-Dog/sassydog-skills#178)."
             exit 1
@@ -79,7 +79,7 @@ jobs:
         id: app_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.PLATFORM_WRITER_APP_ID }}
+          client-id: ${{ secrets.PLATFORM_WRITER_APP_CLIENT_ID }}
           private-key: ${{ secrets.PLATFORM_WRITER_APP_PRIVATE_KEY }}
 
 # {{IF:MERGE_QUEUE}}
