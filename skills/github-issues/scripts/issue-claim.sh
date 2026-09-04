@@ -435,7 +435,20 @@ promote_residue_gate() {  # $1=issue number
         echo "issue-claim: #$n is assigned to '$assignees' — a live claim, left alone" >&2
         return 0
     fi
-    if [[ ",$labels," == *",$INPROG_LABEL,"* ]]; then
+    # CASE-FOLDED on both sides, because gh is — the same measured reason
+    # `labels_removed_detail` folds below (#326). gh resolves label names with
+    # `strings.EqualFold` (`api/queries_repo.go`'s `LabelsToIDs`), so `claim`
+    # writes the constant `in-progress` and a repo spelling it `In-Progress`
+    # stores THAT. A byte-equal test then fails to see a LIVE claim: the gate
+    # falls through to the timeline conjunct, classifies it `never_claimed`,
+    # leaves the assignee, and reports a "self-assignment" — #281's silent skip
+    # returning on that class of repo with the wrong cause named (#334).
+    # LC_ALL=C pins the fold to ASCII, a strict SUBSET of EqualFold, so a Mac
+    # and the runner cannot disagree.
+    local labels_lc inprog_lc
+    labels_lc="$(printf '%s' "$labels" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    inprog_lc="$(printf '%s' "$INPROG_LABEL" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    if [[ ",$labels_lc," == *",$inprog_lc,"* ]]; then
         RESIDUE_NOTE="assignee '$assignees' left alone: $INPROG_LABEL present, a live claim"
         echo "issue-claim: #$n is assigned to '$assignees' WITH $INPROG_LABEL — in-flight, left alone" >&2
         return 0
@@ -498,10 +511,14 @@ promote_residue_gate() {  # $1=issue number
         echo "issue-claim: #$n — could not read the timeline, so a claim residue cannot be told from a self-assignment; left in place" >&2
         return 0
     fi
+    # The LabeledEvent name is CASE-FOLDED against the constant for the same
+    # reason as the label-presence test above: the timeline returns the label as
+    # the repo SPELLS it, not as this script passes it. `ascii_downcase` is
+    # jq's ASCII-only fold, matching the LC_ALL=C bound used there (#334).
     cycle=$(jq -r --arg me "$ME" --arg lab "$INPROG_LABEL" --argjson grace "$RESIDUE_GRACE" '
         (.data.repository.issue.timelineItems.nodes // []) as $ns
         | ([ $ns[] | select(.__typename == "AssignedEvent" and ((.assignee.login // "") == $me)) | .createdAt ] | last) as $a
-        | ([ $ns[] | select(.__typename == "LabeledEvent"  and ((.label.name    // "") == $lab)) | .createdAt ] | last) as $l
+        | ([ $ns[] | select(.__typename == "LabeledEvent"  and (((.label.name // "") | ascii_downcase) == ($lab | ascii_downcase))) | .createdAt ] | last) as $l
         | if   $a == null then "no_assign_event"
           elif $l == null then "never_claimed"
           elif (($l | fromdateiso8601) >= (($a | fromdateiso8601) - $grace)) then "residue"
