@@ -1096,7 +1096,14 @@
 #      which is what proves it is the bound rather than a scan matching
 #      nothing. Mock `gh` under one `mktemp -d`: no repo, no network, and no
 #      real issue is ever filed — the reproduction in #339 cost a live
-#      duplicate and is deliberately not repeated as a test.
+#      duplicate and is deliberately not repeated as a test. One harness trap
+#      worth knowing before editing a target line here: the mutation cells
+#      reach awk through `$ENVIRON`, never `-v`, because `-v` performs escape
+#      processing and three targets end in a shell line-continuation backslash
+#      — with `-v` this gate was green on macOS's BWK awk and red on CI's gawk
+#      claiming three STALE MUTATIONS, a diagnostic naming the wrong file. The
+#      transport is round-tripped and asserted, with an adequacy conjunct, so
+#      the next such awk reports the transport rather than the targets.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not

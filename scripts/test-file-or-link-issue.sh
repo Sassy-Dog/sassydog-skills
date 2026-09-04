@@ -84,6 +84,13 @@
 # was never run. The inventory is the MUTANTS array; the run asserts every
 # member ran, so no count here can go stale (#276).
 #
+# The cells reach awk through $ENVIRON rather than `-v`, and the transport is
+# ROUND-TRIPPED and asserted before the battery runs. `-v` performs escape
+# processing, three targets here end in a shell line-continuation backslash, and
+# with `-v` this file passed on macOS's BWK awk and failed on CI's gawk claiming
+# three stale mutations — a diagnostic that sends the reader to edit target lines
+# that were correct. See apply_mutation.
+#
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-file-or-link-issue.sh
 
@@ -509,10 +516,20 @@ esac
 # above, which is what stops a row passing on the ordinary path.
 MUTANT="$WORK/mutant.sh"
 
+# THE MUTATION VALUES REACH awk THROUGH $ENVIRON, NOT THROUGH `-v`, AND THAT IS
+# NOT A STYLE CHOICE. `awk -v var=value` performs ESCAPE-SEQUENCE PROCESSING on
+# the value, and three of the target lines below end in a shell line-continuation
+# backslash while one also carries `\"`. Measured 2026-09-04: with `-v`, all six
+# mutants applied cleanly on macOS's BWK awk and M2, M3 and M5 reported "the
+# mutation is stale, repoint it" on CI's gawk — a green local run, a red CI, and
+# a diagnostic pointing at the wrong file. $ENVIRON is defined to carry the
+# environment byte-for-byte, so it is the transport with no escape layer at all.
+# `test-claim-lifecycle.sh` uses `-v` safely only because no line it targets
+# contains a backslash; do not read that as licence to switch back here.
 apply_mutation() {  # <label> <exact source line> <replacement line>
     local label="$1" from="$2" to="$3" rc=0
-    awk -v from="$from" -v to="$to" '
-        BEGIN { n = 0 }
+    MUT_FROM="$from" MUT_TO="$to" awk '
+        BEGIN { n = 0; from = ENVIRON["MUT_FROM"]; to = ENVIRON["MUT_TO"] }
         $0 == from { print to; n++; next }
         { print }
         END { if (n != 1) exit 3 }
@@ -563,6 +580,38 @@ MUTANTS=(
 "M6 the search stage stops short-circuiting	if [[ \"\$existing_count\" -gt 0 ]]; then	if false; then	deep	duplicate	deleting stage 1 as redundant loses every marker older than the scan window — the mirror-image defect"
 )
 
+# THE TRANSPORT IS MEASURED, NOT TRUSTED. Every cell is round-tripped through
+# the SAME awk that applies the mutations and must come back byte-identical.
+# Without this the only symptom of a mangling awk is "the mutation is stale,
+# repoint it" — which names the wrong file and invites someone to edit a target
+# line that was correct all along. This assertion says the transport broke.
+transport_bad=""
+risky_cells=0
+for row in "${MUTANTS[@]}"; do
+    IFS=$'\t' read -r t_label t_from t_to _rest <<<"$row"
+    for cell in "$t_from" "$t_to"; do
+        case "$cell" in *\\*) risky_cells=$((risky_cells + 1)) ;; esac
+        if ! printf '%s\n' "$cell" | MUT_FROM="$cell" awk '
+            BEGIN { from = ENVIRON["MUT_FROM"]; n = 0 }
+            $0 == from { n++ }
+            END { if (n != 1) exit 3 }'; then
+            transport_bad="$transport_bad $t_label"
+        fi
+    done
+done
+# ADEQUACY IS THE SECOND CONJUNCT. A round-trip over cells that carry no
+# backslash at all cannot detect an escape-processing transport, so it would
+# report a reassuring `ok` on precisely the awk this check exists for. The count
+# is derived from the table, so a future row that drops the last backslash-
+# bearing target reddens here rather than quietly making this vacuous.
+if [ -n "$transport_bad" ]; then
+    bad "this awk mangles the mutation cells for:$transport_bad — the battery below would report them as stale targets, which is the wrong diagnosis. The transport is \$ENVIRON precisely so escape processing cannot happen; something reintroduced it."
+elif [ "$risky_cells" -lt 1 ]; then
+    bad "no mutation cell contains a backslash, so this round-trip cannot detect an escape-processing transport — it would pass on the awk it exists to catch"
+else
+    ok "every mutation cell survives the awk transport byte-for-byte (${#MUTANTS[@]} rows, both cells; $risky_cells carry a backslash, so the check is not vacuous)"
+fi
+
 mut_ran=0
 for row in "${MUTANTS[@]}"; do
     IFS=$'\t' read -r m_label m_from m_to m_scenario m_expect m_why <<<"$row"
@@ -608,7 +657,7 @@ fi
 # exactly one assertion on every path, and each mutant contributes exactly one
 # whether it is applied, run, or refused. A floor cannot catch a deleted case;
 # an equality forces a deliberate bump here instead of a quiet drift.
-EXPECTED_CASES=32
+EXPECTED_CASES=33
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
