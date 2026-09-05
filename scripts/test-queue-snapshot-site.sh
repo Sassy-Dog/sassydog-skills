@@ -19,20 +19,25 @@
 # fenced example, a template placeholder — declares nothing at all now.
 #
 # WHAT THE ROWS COVER, and the one that is a rule rather than a case:
-#   * present -> value, absent -> null, in BOTH buckets (sections 1-2).
-#   * the emitted shape is the pre-#340 key set plus `site` and `sites`, checked
-#     as a SET so a renamed or dropped field fails (section 3).
+#   * present -> the value, absent -> `[]`, in BOTH buckets (sections 1-2).
+#   * the emitted shape is the pre-#340 key set plus `sites`, checked as a SET
+#     so a renamed or dropped field fails (section 3).
 #   * folding, on the key and on the value independently, and a value written
 #     with spaces around it (section 4).
-#   * PREFIX, never substring: `offsite:x` and a label named `website` declare
-#     nothing (section 5).
+#   * the prefix rule has TWO halves and each has its own row (section 5): it is
+#     a prefix rather than a substring, so `offsite:x` and `website` — which
+#     merely contain the text — declare nothing; and the COLON is part of it, so
+#     `site-vdi` declares nothing either. The second half had no row and no
+#     mutant when this gate first shipped, and its `UNPINNED_ROWS` entry said so
+#     wrongly.
 #   * an empty value declares nothing, and does not turn a real declaration
 #     beside it into a conflict (section 6).
 #   * SEVERAL labels must never resolve to "any site" (section 7). That is the
 #     direction #322's originating bug ran — an unread declaration letting the
-#     wrong loop claim the issue — so `sites` is the fact and `site` is null on
-#     a conflict as well as on an absence. The rows pin both halves, because a
-#     consumer reading the scalar alone is reading half the contract.
+#     wrong loop claim the issue — and it is why `sites` is emitted with NO
+#     scalar beside it: a scalar is null both for "nothing declared" and for
+#     "several declared", so its obvious reading turns a conflict into "any
+#     site". The list's obvious reading cannot.
 #
 # THE MUTANTS' REACH IS DERIVED, NEVER WRITTEN DOWN. The version of this gate
 # that #340 first shipped carried a hand-written roster asserting which rows
@@ -182,10 +187,13 @@ ready = [
     # conflict. Without this row, deduplication and conflict detection are
     # indistinguishable.
     issue(106, "same site twice", ["ready", "site:vdi", "Site:VDI"]),
-    # 107/108 — PREFIX, not substring, from both sides: a longer name that
-    # CONTAINS the prefix, and one that starts with it but has no colon.
-    issue(107, "prefix not substring", ["ready", "offsite:x"]),
-    issue(108, "no colon", ["ready", "website"]),
+    # 107/113 — the prefix rule's two halves, one row each.
+    # 107 CONTAINS `site:` at an offset: a substring test would take it.
+    issue(107, "contains the prefix at an offset", ["ready", "offsite:x"]),
+    # 113 starts with `site` but not with `site:`. A `startswith("site")`
+    # loosening keeps the value slice and declares `vdi` from it, which is what
+    # M8 does — nothing else in this file reaches the colon.
+    issue(113, "prefix without the colon", ["ready", "site-vdi"]),
     # 109 — a bare `site:` names no site.
     issue(109, "empty value", ["ready", "site:"]),
     # 110 — and an empty one beside a real one is not a conflict.
@@ -218,13 +226,8 @@ run_snapshot() { # <script-path>
     STATUS=$?
 }
 
-site_of()  { jq -r --argjson n "$2" ".$1[] | select(.number==\$n) | .site | tostring" "$OUT"; }
 sites_of() { jq -c --argjson n "$2" ".$1[] | select(.number==\$n) | .sites" "$OUT"; }
 
-expect_site() { # <label> <bucket> <number> <expected>
-    local got; got="$(site_of "$2" "$3")"
-    if [ "$got" = "$4" ]; then ok "$1"; else bad "$1 — #$3 site=$got, expected $4"; fi
-}
 expect_sites() { # <label> <bucket> <number> <expected-json>
     local got; got="$(sites_of "$2" "$3")"
     if [ "$got" = "$4" ]; then ok "$1"; else bad "$1 — #$3 sites=$got, expected $4"; fi
@@ -257,14 +260,12 @@ fi
 
 # --- 1/2. present and absent, in BOTH buckets ---------------------------------
 echo "1. a site: label declares, in both buckets" >&2
-expect_site  "a site:vdi label declares in ready[]" ready 101 vdi
-expect_sites "  and sites carries it" ready 101 '["vdi"]'
-expect_site  "and in in_flight[] — both buckets, per #340" in_flight 201 vdi
+expect_sites "a site:vdi label declares in ready[]" ready 101 '["vdi"]'
+expect_sites "and in in_flight[] — both buckets, per #340" in_flight 201 '["vdi"]'
 
 echo "2. no site: label declares nothing, in both buckets" >&2
-expect_site  "no site: label in ready[] gives null" ready 102 null
-expect_sites "  with an empty sites" ready 102 '[]'
-expect_site  "no site: label in in_flight[] gives null" in_flight 202 null
+expect_sites "no site: label in ready[] gives an empty sites" ready 102 '[]'
+expect_sites "no site: label in in_flight[] does too" in_flight 202 '[]'
 
 # --- 3. no shape change for existing consumers --------------------------------
 # A key SET check, not a spot check: a renamed or dropped field is the failure
@@ -272,13 +273,13 @@ expect_site  "no site: label in in_flight[] gives null" in_flight 202 null
 echo "3. the emitted shape is the old one plus site and sites" >&2
 ready_keys="$(jq -r '.ready[] | select(.number==102) | keys_unsorted | sort | join(",")' "$OUT")"
 flight_keys="$(jq -r '.in_flight[] | select(.number==202) | keys_unsorted | sort | join(",")' "$OUT")"
-if [ "$ready_keys" = "assignees,depends_on,labels,number,site,sites,stack,title,touches,unannotated" ]; then
-    ok "ready[] carries exactly its pre-#340 keys plus site and sites"
+if [ "$ready_keys" = "assignees,depends_on,labels,number,sites,stack,title,touches,unannotated" ]; then
+    ok "ready[] carries exactly its pre-#340 keys plus sites — and NO scalar"
 else
     bad "ready[] keys drifted: $ready_keys"
 fi
-if [ "$flight_keys" = "assignees,labels,mine,number,site,sites,stack,title,touches" ]; then
-    ok "in_flight[] carries exactly its pre-#340 keys plus site and sites"
+if [ "$flight_keys" = "assignees,labels,mine,number,sites,stack,title,touches" ]; then
+    ok "in_flight[] carries exactly its pre-#340 keys plus sites — and NO scalar"
 else
     bad "in_flight[] keys drifted: $flight_keys"
 fi
@@ -301,36 +302,38 @@ fi
 
 # --- 4. folding and whitespace ------------------------------------------------
 echo "4. the key and the value both fold" >&2
-expect_site "the KEY folds: SITE:vdi declares" ready 103 vdi
-expect_site "the VALUE folds: site:VDI declares vdi" ready 112 vdi
-expect_site "a value written with spaces around it is stripped" ready 104 vdi
+expect_sites "the KEY folds: SITE:vdi declares" ready 103 '["vdi"]'
+expect_sites "the VALUE folds: site:VDI declares vdi" ready 112 '["vdi"]'
+expect_sites "a value written with spaces around it is stripped" ready 104 '["vdi"]'
 
 # --- 5. prefix, never substring -----------------------------------------------
-echo "5. the match is a prefix" >&2
-expect_site  "offsite:x is not a site label" ready 107 null
-expect_sites "  and declares nothing" ready 107 '[]'
-expect_site  "a label named 'website' is not one either" ready 108 null
+echo "5. the match is a prefix, and the colon is part of it" >&2
+expect_sites "a name CONTAINING site: at an offset declares nothing" ready 107 '[]'
+expect_sites "a name starting with 'site' but not 'site:' declares nothing" ready 113 '[]'
 
 # --- 6. an empty value names no site ------------------------------------------
 echo "6. a bare site: label declares nothing" >&2
-expect_site  "site: with no value gives null" ready 109 null
-expect_sites "  and an empty sites" ready 109 '[]'
-expect_site  "and it does not make a real declaration beside it a conflict" ready 110 vdi
+expect_sites "site: with no value declares nothing" ready 109 '[]'
+expect_sites "and it does not make a real declaration beside it a conflict" ready 110 '["vdi"]'
 
 # --- 7. several labels must never read as "any site" --------------------------
 # The fail-safe direction. #322's originating bug was an unread declaration
 # letting the wrong loop claim an issue, and a conflict resolving to "any site"
 # is that bug with two labels instead of none.
 echo "7. two declarations are a conflict, not an absence" >&2
-expect_sites "sites carries BOTH declared values" ready 105 '["mac","vdi"]'
-expect_site  "  and the scalar refuses to pick one" ready 105 null
+expect_sites "sites carries BOTH declared values, sorted" ready 105 '["mac","vdi"]'
 expect_sites "the same site twice is ONE declaration, not a conflict" ready 106 '["vdi"]'
-expect_site  "  so the scalar still resolves" ready 106 vdi
+# The whole point of emitting a list: the obvious reading of `sites` cannot
+# turn a conflict into "any site", where the obvious reading of a scalar can.
+if [ "$(jq -c '.ready[] | select(.number==105) | has("site")' "$OUT")" = "false" ]; then
+    ok "and there is no scalar to misread it as unconstrained"
+else
+    bad "a site scalar is back — its obvious reading resolves a conflict to 'any site'"
+fi
 
 # --- 8. the body declares nothing — the reason for the move -------------------
 echo "8. a prose site: line in the body declares nothing" >&2
-expect_site  "a body quoting the old contract, fenced and in prose, declares nothing" ready 111 null
-expect_sites "  and carries no site at all" ready 111 '[]'
+expect_sites "a body quoting the old contract, fenced and in prose, declares nothing" ready 111 '[]'
 
 # --- 9. mutation proofs, and the matrix derived from them ---------------------
 # `mutant` diffs each mutant's answers against the shipped baseline and records
@@ -343,16 +346,25 @@ mutants_run=0
 FLIPPED="$WORK/flipped.txt"
 : >"$FLIPPED"
 
+# BOTH buckets: the rows this gate asserts on live in both, and a universe of
+# `ready[]` alone lets an in_flight-only regression report an empty flip set
+# while the honesty check below stays green.
+#
+# Plain `sort`, never `sort -n`. `comm` compares BYTES under LC_ALL=C, so a
+# numerically-sorted input desynchronises it the moment row numbers differ in
+# width — reproduced with rows 9/10/11 where only 9 had changed and `comm`
+# reported all three.
 site_map() {
-    jq -r '.ready[] | "\(.number)\t\(.site|tostring)|\(.sites|tostring)"' "$1" | sort -n
+    jq -r '(.ready + .in_flight)[] | "\(.number)\t\(.sites|tostring)"' "$1" | sort
 }
 run_snapshot "$SNAP"
 BASELINE="$WORK/baseline.tsv"
 site_map "$OUT" >"$BASELINE"
-if [ "$(grep -c . "$BASELINE")" = "$READY_N" ]; then
-    ok "captured the shipped baseline for all $READY_N rows"
+BASELINE_N=$((READY_N + 2))
+if [ "$(grep -c . "$BASELINE")" = "$BASELINE_N" ]; then
+    ok "captured the shipped baseline for all $BASELINE_N rows, both buckets"
 else
-    bad "the baseline holds $(grep -c . "$BASELINE") rows, expected $READY_N — every flip set below would be measured against the wrong thing"
+    bad "the baseline holds $(grep -c . "$BASELINE") rows, expected $BASELINE_N — every flip set below would be measured against the wrong thing"
 fi
 
 mutant() { # <label> <named-row> <from> <to>
@@ -375,7 +387,7 @@ PY
         return 1
     fi
     run_snapshot "$MUT"
-    if [ "$STATUS" != "0" ] || ! jq -e ".ready | length == $READY_N" "$OUT" >/dev/null 2>&1; then
+    if [ "$STATUS" != "0" ] || ! jq -e "(.ready | length) == $READY_N and (.in_flight | length) == 2" "$OUT" >/dev/null 2>&1; then
         bad "$label — the mutant did not run (exit $STATUS), so its verdict proves nothing"
         return 1
     fi
@@ -413,13 +425,26 @@ if mutant "M5: without the empty-value filter a bare site: names a site" 109 \
     '            if value:' \
     '            if True:'; then :; fi
 
-if mutant "M6: a scalar that picks one of two turns a conflict into a claim" 105 \
-    '        "site": sites[0] if len(sites) == 1 else None,' \
-    '        "site": sites[0] if sites else None,'; then :; fi
+if mutant "M6: collapsing a conflict to one site turns it into a claim" 105 \
+    '    return sorted(found)' \
+    '    return sorted(found)[:1]'; then :; fi
 
 if mutant "M7: dropping labels from the pull darkens every site" 101 \
     'FIELDS="number,title,labels,assignees,body"' \
     'FIELDS="number,title,assignees,body"'; then :; fi
+
+# B1: the colon half of the prefix rule had no reach at all. This loosening
+# keeps the value slice, so `site-vdi` declares `vdi` from it.
+if mutant "M8: dropping the colon lets site-vdi declare" 113 \
+    '        if name[:len(SITE_PREFIX)].lower() == SITE_PREFIX:' \
+    '        if name.lower().startswith("site"):'; then :; fi
+
+# N6: nothing mutated the ordering, so row 105's sorted expectation was free.
+# `sorted(..., reverse=True)` rather than `list(found)` — a set's iteration
+# order is hash-dependent and would make this row flaky.
+if mutant "M9: an unsorted set makes the conflict's order arbitrary" 105 \
+    '    return sorted(found)' \
+    '    return sorted(found, reverse=True)'; then :; fi
 
 # Every mutant in this section ran. Derived from the source rather than
 # transcribed: the count is whatever `mutant` was called with, and a call that
@@ -436,18 +461,16 @@ fi
 # file, and the gate checks it. Each entry needs a reason, because a row nothing
 # can redden proves nothing:
 #
-#   102  the undeclared control. Every mutant here either widens what counts as
-#        a declaration or narrows it, and #102 carries no `site:`-shaped label
-#        at all, so nothing can make it declare. Its job is section 3's key set
-#        and the body-contract check, both of which are assertions rather than
+#   102  the undeclared control, and 202 is its in_flight twin. Neither carries
+#        a `site:`-shaped label at all, so no widening or narrowing of what
+#        counts as a declaration can reach them. Their job is section 3's key
+#        set and the body-contract check, which are assertions rather than
 #        mutation targets.
-#   108  a label named `website`. M2's substring widening does not reach it —
-#        there is no colon — so it is the half of the prefix rule that only a
-#        rule change, not a loosening, could break. Row 107 carries the mutant.
 #   111  the prose-only body. Nothing in this file can make a body line declare
-#        again: that capability was deleted with the parser, which is the point
-#        of the row. It fails only if `site` starts being read from the body.
-UNPINNED_ROWS="102 108 111"
+#        again — that capability was deleted with the parser, which is the point
+#        of the row. It fails only if the site starts being read from the body.
+#   202  see 102.
+UNPINNED_ROWS="102 111 202"
 derived_unpinned=""
 flipped_set=" $(sort -un "$FLIPPED" | tr '\n' ' ') "
 while read -r n _; do
@@ -507,17 +530,19 @@ expect_flat "  and why a label rather than a body line" \
 expect_flat "  and that the three body contracts are untouched" \
     'keep the raw-line parse they have always had'
 expect_flat "  that the match is a prefix, never a substring" \
-    'It is a PREFIX, never a substring'
+    'it is a PREFIX rather than a substring'
 expect_flat "  that the value folds" \
     'stripped and folded to lowercase'
 expect_flat "  that an empty value declares nothing" \
     'label with an EMPTY value declares nothing'
-expect_flat "  that sites is the fact and site the convenience" \
-    'is the FACT'
-expect_flat "  and that a conflict is not an absence" \
-    'IS A CONFLICT, NOT AN ABSENCE'
-expect_flat "  with the reason it must not read as unconstrained" \
-    'cannot resolve to "any site"'
+expect_flat "  that more than one declaration is a conflict" \
+    'MORE THAN ONE IS A CONFLICT'
+expect_flat "  that there is deliberately no scalar beside the list" \
+    'There is deliberately NO SCALAR beside it'
+expect_flat "  with the reason: a scalar's obvious reading is unsafe" \
+    'resolves a conflict to "any'
+expect_flat "  and that the colon is part of the prefix" \
+    'the COLON is part of it'
 expect_flat "  and that no character grammar is applied to the value" \
     'No character grammar is applied'
 

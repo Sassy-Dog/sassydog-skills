@@ -475,7 +475,7 @@ some work is executable only from one machine — the host holding a vendor's mu
 sibling checkout, the network reach — and nothing in the workflow skills could express that.
 
 The issue half is a **label**, `site:<name>`, which `github-issues`' `queue-snapshot.sh` reads off
-the labels it already fetches and emits as a per-issue `site` and `sites`
+the labels it already fetches and emits as a per-issue `sites`
 ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)). An issue with no such label runs
 anywhere.
 
@@ -489,12 +489,14 @@ of them matter to whoever writes a config:
 - **The match is a prefix on the label name, folded.** `site:vdi`, `SITE:vdi` and `site: VDI` are
   one declaration; `offsite:x` and a label named `website` are not declarations at all. A bare
   `site:` with no value names no site.
-- **Several `site:` labels are a CONFLICT, never "any site".** `sites` carries the sorted set and is
-  the fact; `site` is the scalar and is set only when exactly one is declared. A null `site` beside
-  a non-empty `sites` therefore means "declared two things", not "declared nothing" — a reading
-  skill that treats it as unconstrained re-creates
+- **Several `site:` labels are a CONFLICT, never "any site".** `sites` is a sorted list and there is
+  deliberately no scalar beside it: `[]` means any site, one member means that site, and more than
+  one matches no checkout. A scalar would be null for *both* "nothing declared" and "several
+  declared", so its obvious reading — `site is None or site == execution_site` — turns a conflict
+  into "any site", which re-creates
   [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug with two labels
-  instead of none.
+  instead of none. The list's obvious reading, `not sites or execution_site in sites`, cannot.
+  **Read `sites`; a reader that wants a scalar has to decide what a conflict means first.**
 - **The comparison is case-insensitive on both sides, and the value is data.** `queue-snapshot.sh`
   folds the label's value; folding the configured value is the reading skill's half, so write
   `execution_site` lowercase by convention but never implement the match as plain equality against
@@ -523,29 +525,30 @@ container that exists for one run is not a workstation with a name — proposing
 write a site into a checkout that should answer to none. A Linux user whose machine *is* a
 workstation names it themselves, like everybody else.
 
-**Absent means this checkout answers to no name.** There is then nothing for a `site:` line to be
+**Absent means this checkout answers to no name.** There is then nothing for a `site:` label to be
 compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
 work all runs from one machine should simply omit it.
 
 **A refresh carries an existing value across verbatim and leaves an absent key absent.** This is an
 exception to *re-verify every fact against live state*, and it is not `review_site:`'s reason
-repeated. There is no live state to re-verify against: the platform
-answers what kind of machine this is, never what the user named it, so a refresh that re-derived
-would overwrite `vdi` with `windows` on the checkout whose whole point is being the VDI. The
-harm is silent in the direction that matters — an absent or wrong `execution_site` turns a site
-filter OFF, which is [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating
-bug — so the rule is: carry the value, never re-derive it, and surface rather than rewrite if the
-user disputes it. **`setup-config`'s guardrail list owns the absent-key half and is the copy to
-trust**; `references/update-mode.md` and `references/migrate-mode.md` carry the operational side for
-their own modes. Do not restate the rule here — five copies of it is how the last one went stale.
+repeated: there is no live state to re-verify against, because the platform answers what *kind* of
+machine this is and never what the user named it. The harm runs in the silent direction — an absent
+or overwritten `execution_site` turns a site filter OFF, which is
+[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
 
-**Who reads it, by the change that adds the reader.** The body half — the parse and this contract
-— landed first and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that
-each consumer stayed small enough to review:
+**`setup-config`'s guardrail list owns this rule and is the copy to trust.** `update-mode.md` and
+`migrate-mode.md` carry the operational side for their own modes, because a mode reads its own file
+and inherits nothing. Everywhere else — including here — points rather than restates: the rule was
+written out in five places once, and the copy that drifted was found by a reviewer rather than by
+anything that fails.
+
+**Who reads it, by the change that adds the reader.** The label read and this contract landed first
+and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that each consumer
+stayed small enough to review:
 
 | Change | Adds |
 | --- | --- |
-| [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) | `dispatch-ready` skips a Ready issue whose `site:` differs from this value; `take-it` refuses one before claiming it |
+| [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) | `dispatch-ready` skips a Ready issue whose `sites` excludes this value; `take-it` refuses one before claiming it |
 | [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) | `groom-backlog` requires the declaration before Ready; `survey-work` shows the site on backlog lines; `setup-config` asks for this key |
 
 **Read the skill, not this table, for what a given release does.** The table says which change

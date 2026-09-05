@@ -156,12 +156,15 @@ set -uo pipefail
 # `site:<name>` IS DELIBERATELY NOT IN HERE, and must not be added. The
 # execution-site labels `queue-snapshot.sh` reads (issue #340, epic #322) are an
 # open-ended PER-REPO convention — whatever workstations a repo's work runs on —
-# while every row below is a fixed set this org applies everywhere. Enumerating
-# an open prefix here would make `--collisions` and `--migrate` treat a repo's
-# own site labels as one-off labels to fold away, and a `--migrate` delete
-# strips the declaration from every issue carrying it. CLAUDE.md's "a consumer
-# runs the owner or reads its `taxonomy` emitter" rule is about THIS table's
-# members; `site:*` has no members to transcribe.
+# while every row below is a fixed set this org applies everywhere. The harm is
+# the ALIGN pass's, not migrate's: this table is the set of labels that must
+# EXIST in every repo, so enumerating `site:mac` here would create it in every
+# repo that has no VDI and no laptop, and `--check` would then report every such
+# repo as non-conformant for not carrying a site it has never had. There is no
+# correct row to write, because the members differ per repo — which is the
+# distinction CLAUDE.md's "a consumer runs the owner or reads its `taxonomy`
+# emitter" rule turns on: that rule is about THIS table's members, and `site:*`
+# has none to transcribe.
 CANONICAL_LABELS=(
     "architecture|1d76db|Architecture & structure"
     "assessment|5319e7|Filed by assess-it"

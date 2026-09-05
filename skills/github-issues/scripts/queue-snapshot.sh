@@ -27,22 +27,27 @@
 # Site resolution, stated because a repo can carry more than one label and the
 # answer must not depend on which:
 #   * A label declares a site when its name starts with `site:`, matched
-#     case-insensitively. It is a PREFIX, never a substring: `offsite:x` and a
-#     label named `website` declare nothing.
+#     case-insensitively. Both halves of that carry weight and are pinned
+#     separately: it is a PREFIX rather than a substring, so `offsite:x` and
+#     `website` — which merely contain the text — declare nothing; and the
+#     COLON is part of it, so `site-vdi` declares nothing either.
 #   * The value is everything after that first colon, stripped and folded to
 #     lowercase, so `Site: VDI` and `site:vdi` are one declaration and not two.
 #   * A `site:` label with an EMPTY value declares nothing — there is no site
 #     named "", and treating it as one would hold every issue carrying the bare
 #     label.
-#   * `sites` is the FACT: the sorted set of declared values, always present.
-#     `site` is a convenience scalar, and is the value ONLY when exactly one
-#     site is declared.
-#   * **A NULL `site` WITH A NON-EMPTY `sites` IS A CONFLICT, NOT AN ABSENCE.**
-#     Two labels cannot resolve to "any site" — that is the direction #322's
-#     originating bug ran, where an unread declaration let the wrong loop claim
-#     the issue. A consumer that reads `site` alone is reading half of this
-#     contract; read `sites`, or treat a null `site` as a hold unless `sites`
-#     is empty.
+#   * `sites` is the sorted set of declared values and is ALWAYS present. `[]`
+#     means any site, one member means that site, and MORE THAN ONE IS A
+#     CONFLICT that matches no checkout.
+#   * There is deliberately NO SCALAR beside it. A scalar is null both when
+#     nothing is declared and when several things are, so its obvious reading —
+#     `site is None or site == execution_site` — resolves a conflict to "any
+#     site", which is the direction #322's originating bug ran: an unread
+#     declaration letting the wrong loop claim the issue. The obvious reading
+#     of the list, `not sites or execution_site in sites`, cannot make that
+#     mistake. A shape that permits the wrong reading eventually gets read that
+#     way, and prose in three files is not what should be standing between a
+#     cold-worktree agent and that bug.
 #   * No character grammar is applied to the value. A label is created through
 #     the GitHub UI or API by somebody with triage, is visible on the issue,
 #     and cannot be edited into an issue body unnoticed — so the body-contract
@@ -67,8 +72,8 @@
 #
 # Output: single JSON object on stdout:
 #   {"repo":"...","me":"login-or-null",
-#    "ready":[{number,title,labels,assignees,site,sites,touches,stack,depends_on,unannotated}...],
-#    "in_flight":[{number,title,labels,assignees,mine,site,sites,touches,stack}...],
+#    "ready":[{number,title,labels,assignees,sites,touches,stack,depends_on,unannotated}...],
+#    "in_flight":[{number,title,labels,assignees,mine,sites,touches,stack}...],
 #    "blocked":[N...]}
 #
 # Exit codes: 0 ok; 10 skipped (gh/python3 missing or no repo); 64 usage.
@@ -167,17 +172,14 @@ def sites_of(labels):
 def slim(issue, with_deps):
     touches, depends, stack = parse_body(issue.get("body"))
     labels = sorted(l["name"] for l in issue.get("labels", []))
-    sites = sites_of(labels)
     out = {
         "number": issue["number"],
         "title": issue.get("title", ""),
         "labels": labels,
         "assignees": sorted(a["login"] for a in issue.get("assignees", [])),
-        # `site` is null both when nothing is declared and when SEVERAL are.
-        # `sites` is what tells those apart, and the header says why a consumer
-        # must not read the scalar alone.
-        "site": sites[0] if len(sites) == 1 else None,
-        "sites": sites,
+        # A list, never a scalar: see the header for why a scalar's obvious
+        # reading turns a conflict into "any site".
+        "sites": sites_of(labels),
         "touches": touches,
         "stack": stack,
     }

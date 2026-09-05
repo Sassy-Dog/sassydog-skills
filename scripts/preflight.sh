@@ -1160,9 +1160,11 @@
 #      buckets, the key set as a SET, folding on the key and the value
 #      independently, PREFIX-not-substring from both sides, an empty value, and
 #      the rule with teeth: SEVERAL `site:` labels are a CONFLICT and must
-#      never resolve to "any site" — the direction #322's originating bug ran —
-#      so `sites` is the fact and `site` is null on a conflict as well as on an
-#      absence. One row pins the whole reason for the move: a body quoting the
+#      never resolve to "any site" — the direction #322's originating bug ran.
+#      That is why `sites` is emitted as a LIST with no scalar beside it: a
+#      scalar is null for both "nothing declared" and "several declared", so
+#      its obvious reading turns a conflict into "any site" where the list's
+#      cannot. One row pins the whole reason for the move: a body quoting the
 #      old contract declares nothing. THE MUTANTS' REACH IS DERIVED, never
 #      written down — the first version of this gate carried a hand-written
 #      roster over a 21x94 matrix nothing re-computed, and three separate
