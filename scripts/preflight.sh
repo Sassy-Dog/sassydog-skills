@@ -1146,6 +1146,34 @@
 #      transport is round-tripped and asserted, with an adequacy conjunct, so
 #      the next such awk reports the transport rather than the targets.
 #
+#  39. queue-snapshot site tests (scripts/test-queue-snapshot-site.sh) — the
+#      execution site is read from `site:<name>` LABELS, and the three body
+#      contracts are untouched by that (issue #340, epic #322). The label is
+#      the point: #340 first shipped `site:` as a fourth BODY contract, and a
+#      body line can be QUOTED — both issues introducing the contract carried a
+#      fenced example that declared a site by accident. Preventing that meant
+#      deciding what a fenced block, a code span, an HTML comment, an info
+#      string and their interactions mean, i.e. implementing a subset of
+#      CommonMark and discovering its edges one review at a time. A label
+#      cannot be quoted in prose, so the class is gone and both the parser and
+#      most of this gate went with it. Rows cover present/absent in BOTH
+#      buckets, the key set as a SET, folding on the key and the value
+#      independently, PREFIX-not-substring from both sides, an empty value, and
+#      the rule with teeth: SEVERAL `site:` labels are a CONFLICT and must
+#      never resolve to "any site" — the direction #322's originating bug ran.
+#      That is why `sites` is emitted as a LIST with no scalar beside it: a
+#      scalar is null for both "nothing declared" and "several declared", so
+#      its obvious reading turns a conflict into "any site" where the list's
+#      cannot. One row pins the whole reason for the move: a body quoting the
+#      old contract declares nothing. THE MUTANTS' REACH IS DERIVED, never
+#      written down — the first version of this gate carried a hand-written
+#      roster over a 21x94 matrix nothing re-computed, and three separate
+#      review rounds each found a row that had gone vacuous, so `mutant` now
+#      diffs against the shipped baseline and the rows NO mutant flips are
+#      derived and compared to a declared set. Mock `gh` that honours `--json`,
+#      its shim resolution verified after `chmod`, an RFC 2606 `.invalid` slug:
+#      no repo, no network, structurally.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -1867,6 +1895,10 @@ else
     failed "detect-capabilities tests (scripts/test-detect-capabilities.sh)"
 fi
 
+# --- 37. plugin-root-in-references tests ---------------------------------------
+# `${CLAUDE_PLUGIN_ROOT}` is substituted into SKILL.md at load time and nowhere
+# else, so a reference doc writing it in a command resolves against `/` and
+# exits 127. The header entry above carries the rest.
 if bash scripts/test-plugin-root-in-references.sh; then
     pass "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
 else
@@ -1886,6 +1918,19 @@ if bash scripts/test-file-or-link-issue.sh; then
     pass "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
 else
     failed "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
+fi
+
+# --- 39. queue-snapshot site tests ---------------------------------------------
+# The execution site comes from a `site:<name>` label, never the body: a body
+# line can be quoted in prose and both issues introducing the contract quoted
+# it. Rows cover present/absent in both buckets, folding, prefix-not-substring,
+# an empty value, and the fail-safe rule — several labels are a conflict, never
+# "any site". Mutant reach is derived from a baseline diff rather than asserted
+# in prose. Mock `gh`, no repo, no network.
+if bash scripts/test-queue-snapshot-site.sh; then
+    pass "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
+else
+    failed "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
 fi
 
 # ------------------------------------------------------------------------------

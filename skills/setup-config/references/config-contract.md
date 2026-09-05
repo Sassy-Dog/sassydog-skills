@@ -71,7 +71,7 @@ Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry:
 documented exception to this principle is `sentry: none`, below, a form three sibling keys now share
 (`testflight: none`, `posthog: none`, `mobile: none`) with a deliberately *different* consequence.
 The same holds for `board`, `testflight`, `mobile`,
-`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, and `claim_label`. Presence remains
+`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, `execution_site`, and `claim_label`. Presence remains
 the toggle for the four `none` keys too — `none` is an *additional* value on them, never a
 replacement for presence, so a key that is simply absent is still off.
 
@@ -180,9 +180,11 @@ the form is scoped to keys whose absence is *loud*:
 - **`board:` is excluded.** `survey-work` §3B already ships a boardless form that reads open issues
   directly, so an absent `board:` selects a documented alternative path rather than going dark. It
   renders no blind-spot row today and needs no opt-out.
-- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:` and `review_surfaces:` are
-  excluded.** None of them render a blind-spot row, so their absence costs a reader nothing and a
-  `none` would only add a state to get wrong.
+- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:`, `review_surfaces:` and
+  `execution_site:` are excluded.** None of them render a blind-spot row, so their absence costs a
+  reader nothing and a `none` would only add a state to get wrong. `execution_site:` is the
+  clearest of them: its absence already reads as "this checkout answers to no particular name",
+  which is what a `none` would have said.
 - **`stacked_prs:` is excluded, and for a third reason.** Its absence already means something
   specific — the repo has not opted in — and a refresh is forbidden from adding it at all
   (`references/update-mode.md`). Enablement is availability; the block is consent. A `none` there
@@ -257,6 +259,7 @@ review_agent: qr-ninja-review-orchestrator   # override; omit -> sassy-dog:pr-re
 review_surfaces:                            # optional; steers the shipped orchestrator only
   "ops/**": sassy-dog:infra-platform-reviewer
 review_site: agent                          # where the gate runs on the dispatching paths
+execution_site: mac                         # the name THIS checkout answers to
 claim_label: in-progress
 posthog: true                               # or `none` — confirmed: no product analytics
 merge_queue: false
@@ -459,6 +462,100 @@ Three things are deliberately NOT configured here, because they are derived:
 The preview is still rolling out per-repo, so enablement is exactly the kind of fact that would go stale the day after it was written down. Config carries only the *policy* — may we stack here, and how deep.
 
 **`stacked_prs` and `merge_queue: true` together are refused at merge time,** not at config time: GitHub's queue support for stacks is still rolling out, and `pr-shepherd` stops with exit 24 rather than guessing. Setting both is legal — it simply means the dispatchers may open stacks that a human has to land.
+
+### `execution_site` — read by `dispatch-ready`, `take-it`, `groom-backlog` and `survey-work`
+
+```yaml
+execution_site: mac
+```
+
+Written into the `.claude/sassy-dog/*.md` file of each skill that reads it — `dispatch-ready.md`,
+`take-it.md`, `groom-backlog.md` and `survey-work.md` — like every other shared block. A value in
+any other file is carried across verbatim by every refresh and read by nobody.
+
+A free-form lowercase token naming the workstation this checkout runs on. It is the config half of
+the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)):
+some work is executable only from one machine — the host holding a vendor's multi-GB images, the
+sibling checkout, the network reach — and nothing in the workflow skills could express that.
+
+The issue half is a **label**, `site:<name>`, which `github-issues`' `queue-snapshot.sh` reads off
+the labels it already fetches and emits as a per-issue `sites`
+([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)). An issue with no such label runs
+anywhere.
+
+**It is a label and not a body line on purpose.** The three body contracts beside it — `touches:`,
+`Depends on #N`, `stack:` — can be quoted: an issue documenting the contract, or a template
+carrying an unfilled placeholder, would declare a site by accident, and preventing that means
+deciding what a fenced block, a code span, an HTML comment and their interactions mean. A label
+cannot be quoted in prose. The script's header is the copy to trust for the resolution rules; three
+of them matter to whoever writes a config:
+
+- **The match is a prefix on the label name, folded.** `site:vdi`, `SITE:vdi` and `site: VDI` are
+  one declaration; `offsite:x` and a label named `website` are not declarations at all. A bare
+  `site:` with no value names no site.
+- **Several `site:` labels are a CONFLICT, never "any site".** `sites` is a sorted list and there is
+  deliberately no scalar beside it: `[]` means any site, one member means that site, and more than
+  one matches no checkout. A scalar would be null for *both* "nothing declared" and "several
+  declared", so its obvious reading — `site is None or site == execution_site` — turns a conflict
+  into "any site", which re-creates
+  [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug with two labels
+  instead of none. The list's obvious reading, `not sites or execution_site in sites`, cannot.
+  **Read `sites`; a reader that wants a scalar has to decide what a conflict means first.**
+- **The comparison is case-insensitive on both sides, and the value is data.** `queue-snapshot.sh`
+  folds the label's value; folding the configured value is the reading skill's half, so write
+  `execution_site` lowercase by convention but never implement the match as plain equality against
+  the raw config value — `execution_site: VDI` would then hold the VDI loop's own work. No character
+  grammar is applied to a label value: labels are created through the UI or API by somebody with
+  triage and are visible on the issue. A consumer still treats the value as data — quote it, never
+  build a command or a URL by concatenation.
+
+**This key fits the config model unusually well.** Config is per-checkout by construction — one
+`.claude/sassy-dog/` tree per clone, never shared — and the site is exactly a per-checkout fact.
+That is why it is configured rather than derived, and it is not the `review_site:` exception
+repeated: the machine's *kind* is derivable, but the resolved name is the **user's**, because `vdi`
+carries a meaning no platform string does.
+
+**Where a proposal would come from, when one exists.** The source is `uname -s`, not a language
+runtime's platform constant — an agent following this contract runs a shell:
+
+| `uname -s` | Proposed name |
+| --- | --- |
+| `Darwin` | `mac` |
+| `MINGW64_NT-…` / `MSYS_NT-…` / `CYGWIN_NT-…` | `windows` |
+| `Linux` | **no proposal** |
+
+`Linux` gets none on purpose. It is what every cloud and scheduled-routine session reports, and a
+container that exists for one run is not a workstation with a name — proposing `linux` there would
+write a site into a checkout that should answer to none. A Linux user whose machine *is* a
+workstation names it themselves, like everybody else.
+
+**Absent means this checkout answers to no name.** There is then nothing for a `site:` label to be
+compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
+work all runs from one machine should simply omit it.
+
+**A refresh neither re-derives this key nor fills it in — `setup-config`'s guardrail list owns that
+rule and is the copy to trust.** `update-mode.md` and `migrate-mode.md` carry the operational side
+for their own modes, because a mode reads its own file and inherits nothing. Nothing else restates
+it, here included: the rule was written out in five places once, and the copy that drifted was found
+by a reviewer rather than by anything that fails.
+
+**Who reads it, by the change that adds the reader.** The label read and this contract landed first
+and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that each consumer
+stayed small enough to review:
+
+| Change | Adds |
+| --- | --- |
+| [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) | `dispatch-ready` skips a Ready issue whose `sites` excludes this value; `take-it` refuses one before claiming it |
+| [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) | `groom-backlog` requires the declaration before Ready; `survey-work` shows the site on backlog lines; `setup-config` asks for this key |
+
+**Read the skill, not this table, for what a given release does.** The table says which change
+introduces each reader, not which of them have landed — deliberately, because the alternative is a
+sentence about issue state that nothing re-derives. Getting it wrong in the "not yet" direction is
+the one that bites: a reader who concludes the key is inert skips it on a mac checkout, which turns
+the site filter off — #322's originating bug, reintroduced by its own contract.
+
+**Cross-site dispatch is a non-goal** at every stage: the contract only lets a loop on one site step
+around work that belongs to another, and say so.
 
 ## Per-skill schemas
 

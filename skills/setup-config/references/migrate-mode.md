@@ -262,3 +262,12 @@ find ~/Repos/sassy-dog -maxdepth 4 -type d -path '*/.claude/skills'
 francisco, mission-control, platform, qr-ninja, quickshot, sassydog-web, tailoredtip, what2wear,
 `velovate/velovate-app`, `devcanopy/devcanopy`. `lupita/lupita` is excluded — legacy prefixed
 skills, no markers, and the product is being sunset.
+
+## `execution_site` on a migration
+
+A legacy generated skill has no way to express an execution site, so an extracted config never
+carries `execution_site` and a migration must **leave it absent** — the same answer update mode
+gives (`update-mode.md`). Do not propose a platform-derived name: the interview that offers one is
+[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s, and until it exists there is no
+way to record that the user declined. This rule is stated here as well as in `update-mode.md`
+because migrate mode reads this file, and a rule stated only there is a rule this path never reads.

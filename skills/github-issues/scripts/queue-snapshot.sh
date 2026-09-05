@@ -10,6 +10,51 @@
 #                         itself. Distinct from `Depends on`: a dependency
 #                         often means "later", a stack means "ship together".
 #
+# The execution site is read from LABELS, not from the body (issue #340, epic
+# #322): a `site:<name>` label declares the workstation an issue can only be
+# worked from, and no label means "any site".
+#
+# WHY A LABEL AND NOT A BODY LINE, which is the shape the three contracts above
+# use. A body line can be QUOTED — an issue documenting the contract, or a
+# template carrying an unfilled placeholder, would declare a site by accident.
+# Preventing that means deciding what a fenced block, a code span, an HTML
+# comment, an info string and their interactions mean, i.e. implementing a
+# subset of CommonMark and discovering its edges one at a time. A label cannot
+# be quoted in prose, so nothing needs masking and the whole class is gone. The
+# three body contracts above are untouched by this and keep the raw-line parse
+# they have always had.
+#
+# Site resolution, stated because a repo can carry more than one label and the
+# answer must not depend on which:
+#   * A label declares a site when its name starts with `site:`, matched
+#     case-insensitively. Both halves of that carry weight and are pinned
+#     separately: it is a PREFIX rather than a substring, so `offsite:x` and
+#     `website` — which merely contain the text — declare nothing; and the
+#     COLON is part of it, so `site-vdi` declares nothing either.
+#   * The value is everything after that first colon, stripped and folded to
+#     lowercase, so `Site: VDI` and `site:vdi` are one declaration and not two.
+#   * A `site:` label with an EMPTY value declares nothing — there is no site
+#     named "", and treating it as one would hold every issue carrying the bare
+#     label.
+#   * `sites` is the sorted set of declared values and is ALWAYS present. `[]`
+#     means any site, one member means that site, and MORE THAN ONE IS A
+#     CONFLICT that matches no checkout.
+#   * There is deliberately NO SCALAR beside it. A scalar is null both when
+#     nothing is declared and when several things are, so its obvious reading —
+#     `site is None or site == execution_site` — resolves a conflict to "any
+#     site", which is the direction #322's originating bug ran: an unread
+#     declaration letting the wrong loop claim the issue. The obvious reading
+#     of the list, `not sites or execution_site in sites`, cannot make that
+#     mistake. A shape that permits the wrong reading eventually gets read that
+#     way, and prose in three files is not what should be standing between a
+#     cold-worktree agent and that bug.
+#   * No character grammar is applied to the value. A label is created through
+#     the GitHub UI or API by somebody with triage, is visible on the issue,
+#     and cannot be edited into an issue body unnoticed — so the body-contract
+#     defence a free-text field needs is not the right cost here. The rule for
+#     whoever reports the value is unchanged: treat it as data, never
+#     interpolate it into a command or a URL.
+#
 # Buckets:
 #   ready     open + `ready` label, ordered number-ascending (oldest first)
 #   in_flight open + `in-progress` label; assignee filter is reported, not
@@ -27,8 +72,8 @@
 #
 # Output: single JSON object on stdout:
 #   {"repo":"...","me":"login-or-null",
-#    "ready":[{number,title,labels,assignees,touches,stack,depends_on,unannotated}...],
-#    "in_flight":[{number,title,labels,assignees,mine,touches,stack}...],
+#    "ready":[{number,title,labels,assignees,sites,touches,stack,depends_on,unannotated}...],
+#    "in_flight":[{number,title,labels,assignees,mine,sites,touches,stack}...],
 #    "blocked":[N...]}
 #
 # Exit codes: 0 ok; 10 skipped (gh/python3 missing or no repo); 64 usage.
@@ -105,13 +150,36 @@ def parse_body(body):
             depends += [int(x) for x in ref_re.findall(m.group(1))]
     return touches, sorted(set(depends)), stack
 
+SITE_PREFIX = "site:"
+
+
+def sites_of(labels):
+    """The sorted set of sites declared by `site:<name>` labels.
+
+    A PREFIX test, not a substring one: `offsite:x` and `website` declare
+    nothing. The value is folded, so `Site: VDI` and `site:vdi` are one
+    declaration; an empty value declares nothing at all.
+    """
+    found = set()
+    for name in labels:
+        if name[:len(SITE_PREFIX)].lower() == SITE_PREFIX:
+            value = name[len(SITE_PREFIX):].strip().lower()
+            if value:
+                found.add(value)
+    return sorted(found)
+
+
 def slim(issue, with_deps):
     touches, depends, stack = parse_body(issue.get("body"))
+    labels = sorted(l["name"] for l in issue.get("labels", []))
     out = {
         "number": issue["number"],
         "title": issue.get("title", ""),
-        "labels": sorted(l["name"] for l in issue.get("labels", [])),
+        "labels": labels,
         "assignees": sorted(a["login"] for a in issue.get("assignees", [])),
+        # A list, never a scalar: see the header for why a scalar's obvious
+        # reading turns a conflict into "any site".
+        "sites": sites_of(labels),
         "touches": touches,
         "stack": stack,
     }

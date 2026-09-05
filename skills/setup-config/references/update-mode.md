@@ -114,6 +114,29 @@ interview step. That instruction also lives in `migrate-mode.md` itself, because
 opening says migrate mode is covered there, and a rule stated only here is a rule that path never
 reads.
 
+**`execution_site` is a NAME, not a detected fact — carry an existing value verbatim.** It is the
+sibling of the `stacked_prs` rule above: both are keys a refresh must never derive, for different
+reasons — that one because availability is not consent, this one because there is nothing to derive
+from. It records what the user calls the workstation this checkout runs on, and step 3 has nothing
+to re-verify it against: `uname -s` answers what *kind* of machine this is (`Darwin`, `Linux`,
+`MINGW64_NT-…`), never what it was named, so a refresh that "re-derived" would replace `vdi` with
+`windows` on the one checkout the name exists to distinguish. **An absent key stays absent here.**
+The interview that proposes a name is [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s
+to add; until that section exists there is no question shape and no way to record "declined", so a
+proposal made here would be re-offered on every refresh forever. A platform kind that differs from
+the configured name is not a disagreement — it is why the name is configured; only the user
+disputing their own value is, and that is a stop and surface as everywhere else. Getting this wrong
+is silent in the dangerous direction: a missing or overwritten `execution_site` turns a site filter
+OFF rather than on, which is
+[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
+
+**This paragraph sits below the migrate-mode handoff deliberately, and migrate mode's own rule is
+in `migrate-mode.md`.** Beside its `stacked_prs` sibling, where it reads as though it belongs, it
+breaks `window_is_bounded` in `scripts/test-sentry-verification.sh` — that gate's header explains
+what the window is and why; this is a pointer, not a second copy of it. Nothing here is weakened by
+the move, but the handoff above no longer covers this paragraph, so the migrate path carries its own
+copy rather than inheriting one it never reads.
+
 ## Adopt mode (no marker — legacy hand-written skills)
 
 For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>-get-it`,
