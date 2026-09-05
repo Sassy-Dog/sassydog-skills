@@ -1174,6 +1174,41 @@
 #      its shim resolution verified after `chmod`, an RFC 2606 `.invalid` slug:
 #      no repo, no network, structurally.
 #
+#  40. site filter tests (scripts/test-site-filter.sh) — the two CONSUMERS of
+#      the execution-site declaration #340 emits: dispatch-ready §4's Site
+#      filter and take-it's refusal before the claim (issue #341, epic #322).
+#      #340 gated the emitter and nothing read it. The costs here are
+#      asymmetric, which is why the answer is a HOLD rather than a recovery: a
+#      mis-groom is fixed by a human moving a card, while a wrong dispatch
+#      claims the issue, spends a worktree agent that cannot reach the other
+#      machine's artifacts, and lands it in `blocked` under a comment naming
+#      the wrong cause. Four decisions are pinned. THE MATCH IS THE ARRAY FORM
+#      FOLDED ON BOTH SIDES — `not sites or execution_site.lower() in sites` —
+#      because the array read is the only one that cannot resolve an ambiguous
+#      declaration to "any site", and because the snapshot folds only the LABEL
+#      side, so a raw `execution_site: VDI` holds the VDI loop's own work; every
+#      copy of that form is held to one spelling, and the three that existed
+#      before #341 disagreed — `queue-snapshot.sh`'s header and
+#      `config-contract.md` unfolded, `github-issues/SKILL.md` folded. THE
+#      DISCRIMINATION HALF IS LOAD-BEARING — an empty `sites` dispatches
+#      exactly as today, and a `sites` containing this checkout's site
+#      dispatches however many members it carries, since a filter that holds
+#      everything satisfies "mismatched work is held" and is useless. AN
+#      UNNAMED CHECKOUT IS FAIL-OPEN and is a DIFFERENT QUESTION from an
+#      unlabelled issue, each with its own row, because collapsing the two
+#      sends whichever half is dropped dark. A SITE HOLD IS NOT A FAILURE: no
+#      redispatch budget, no demotion, and in take-it the refusal is raised
+#      BEFORE the claim, checked as a line-number comparison against the claim
+#      step's heading rather than from prose that reads the same wherever it
+#      sits. It re-checks none of #340's resolution rules, which are
+#      test-queue-snapshot-site.sh's, and nothing about §7's terminal states,
+#      which are test-drain-terminal-states.sh's. Mutant reach is DERIVED: the
+#      gate re-runs ITSELF against each mutated copy of the tree, diffs the
+#      failing-row set against a baseline proved clean first, and the rows no
+#      mutant reddens are derived and compared to a declared set. Source-level,
+#      five tracked files, copies only — nothing tracked is written — no `gh`,
+#      no network.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -1931,6 +1966,21 @@ if bash scripts/test-queue-snapshot-site.sh; then
     pass "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
 else
     failed "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
+fi
+
+# --- 40. site filter tests -----------------------------------------------------
+# The two consumers of the execution-site declaration: dispatch-ready §4's Site
+# filter and take-it's refusal before the claim. Rows cover the folded array
+# match across all four copies of it, the discrimination half (an unlabelled
+# issue still dispatches, and membership dispatches however many members
+# `sites` carries), fail-open in an unnamed checkout as its own question, the
+# hold costing no redispatch budget and never demoting, and take-it's refusal
+# preceding the claim by line number. Mutant reach is derived from a baseline
+# diff of the gate re-run against mutated copies. No repo, no network.
+if bash scripts/test-site-filter.sh; then
+    pass "site filter tests (scripts/test-site-filter.sh)"
+else
+    failed "site filter tests (scripts/test-site-filter.sh)"
 fi
 
 # ------------------------------------------------------------------------------

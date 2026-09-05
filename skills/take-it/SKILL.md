@@ -29,8 +29,8 @@ shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
-`review_site`, and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs`
-blocks. Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
+`review_site`, and the optional `board`, `migrations`, `codegen`, `claim_label`, `execution_site`
+and `stacked_prs` blocks. Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
 
 `stack_summary` (the repo's tech stack, always present) and `stacked_prs` (stacked pull requests,
 usually absent) are unrelated despite the shared word.
@@ -132,6 +132,41 @@ before calling it a stub**, since scope often lives in a follow-up comment.
 
 For survivors capture title, body, and labels. Map label → conventional-commit prefix: `bug`→`fix`,
 `enhancement`→`feat`, `documentation`→`docs`, else `chore`.
+
+### Site — refuse BEFORE the claim, never after it
+
+`execution_site` in config names the machine this checkout answers to; a `site:<name>` label on the
+issue names the machine the work needs. Where both exist and they disagree, **refuse the issue
+here** — announce `#N requires site <x>`, listing all of `sites` when the issue carries more than
+one — and go no further with it. §4 must not run for that issue: a claim writes an assignee and an
+`in-progress` label, which takes the issue off the queue every OTHER checkout reads while leaving
+it with the one machine that cannot do the work. Discovering the mismatch afterwards costs a spent
+worktree agent and an issue parked under a comment naming the wrong cause
+([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)); refusing before the claim costs
+one line of output.
+
+**Resolve `sites` from the issue's `site:<name>` LABELS, never from its body.** The `gh issue view`
+above already returned them, and `sassy-dog:github-issues`' `queue-snapshot.sh` header is the copy
+to trust for the resolution rules — prefix including the colon, folded, an empty value declares
+nothing, several labels are a set. Where a `queue-snapshot.sh` read already covers the issue —
+`dispatch-ready` §5 dispatches through these mechanics, and its own Site filter has run first —
+reuse that `sites` rather than resolving it a second time. **Do not make that snapshot the only
+source here**, the way `dispatch-ready` §4 can: its buckets are label-scoped (`ready`,
+`in-progress`, `blocked`), §3 above already skips the latter two, and `take #N` on an issue nobody
+promoted to Ready is the ordinary invocation of this skill — so a snapshot-only read would leave
+the commonest path through take-it unfiltered, which is the hole this step exists to close.
+
+**The match is `not sites or execution_site.lower() in sites`, and it folds case on BOTH sides.**
+The label's value arrives already folded, so folding the configured one is this skill's half:
+compared raw, a repo configured `execution_site: VDI` refuses the VDI checkout its own work. Two
+consequences, because a filter is only as good as what it lets through:
+
+- **`sites` empty → proceed exactly as today.** No `site:` label is the ordinary case, and a step
+  that holds those issues too is not a filter, it is a stopped queue.
+- **No `execution_site` configured → this step DOES NOT RUN and every named issue proceeds.**
+  Fail-open, deliberately: an absent key means this repo has not adopted sites. It is **not** the
+  same question as an issue with no label — an unnamed checkout ignores every declaration, a
+  declaration-free issue is taken by every checkout — and neither is evidence for the other.
 
 ## 4. Claim each issue
 

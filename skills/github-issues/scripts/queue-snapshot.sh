@@ -38,16 +38,25 @@
 #     label.
 #   * `sites` is the sorted set of declared values and is ALWAYS present. `[]`
 #     means any site, one member means that site, and MORE THAN ONE IS A
-#     CONFLICT that matches no checkout.
+#     CONFLICT this script does not resolve: it reports every declared value
+#     and the reader's membership test settles it, so only a checkout NAMED
+#     among them may take the issue. Never "any site" — narrowing, not
+#     widening, is the whole point (issue #341).
 #   * There is deliberately NO SCALAR beside it. A scalar is null both when
 #     nothing is declared and when several things are, so its obvious reading —
 #     `site is None or site == execution_site` — resolves a conflict to "any
 #     site", which is the direction #322's originating bug ran: an unread
 #     declaration letting the wrong loop claim the issue. The obvious reading
-#     of the list, `not sites or execution_site in sites`, cannot make that
-#     mistake. A shape that permits the wrong reading eventually gets read that
-#     way, and prose in three files is not what should be standing between a
-#     cold-worktree agent and that bug.
+#     of the list, `not sites or execution_site.lower() in sites`, cannot
+#     make that mistake. A shape that permits the wrong reading eventually
+#     gets read that way, and prose in three files is not what should be
+#     standing between a cold-worktree agent and that bug.
+#   * THE READER FOLDS THE CONFIG SIDE. This script folds the label's value, so
+#     the other half of the comparison is the consumer's and nothing here can
+#     perform it: an `execution_site: VDI` matched raw against the folded `vdi`
+#     holds the VDI loop's own work — the filter refusing exactly the checkout
+#     it was written for. Write it `not sites or execution_site.lower() in
+#     sites`, never plain equality against the raw config value (issue #341).
 #   * No character grammar is applied to the value. A label is created through
 #     the GitHub UI or API by somebody with triage, is visible on the issue,
 #     and cannot be edited into an issue body unnoticed — so the body-contract

@@ -495,16 +495,20 @@ of them matter to whoever writes a config:
   `site:` with no value names no site.
 - **Several `site:` labels are a CONFLICT, never "any site".** `sites` is a sorted list and there is
   deliberately no scalar beside it: `[]` means any site, one member means that site, and more than
-  one matches no checkout. A scalar would be null for *both* "nothing declared" and "several
+  one means only a checkout **named among them** may take the issue — narrowing, never widening.
+  A scalar would be null for *both* "nothing declared" and "several
   declared", so its obvious reading — `site is None or site == execution_site` — turns a conflict
   into "any site", which re-creates
   [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug with two labels
-  instead of none. The list's obvious reading, `not sites or execution_site in sites`, cannot.
+  instead of none. The list's obvious reading, `not sites or execution_site.lower() in sites`,
+  cannot.
   **Read `sites`; a reader that wants a scalar has to decide what a conflict means first.**
 - **The comparison is case-insensitive on both sides, and the value is data.** `queue-snapshot.sh`
-  folds the label's value; folding the configured value is the reading skill's half, so write
-  `execution_site` lowercase by convention but never implement the match as plain equality against
-  the raw config value — `execution_site: VDI` would then hold the VDI loop's own work. No character
+  folds the label's value; folding the configured value is the reading skill's half, so write it
+  `not sites or execution_site.lower() in sites` — write `execution_site` lowercase by convention,
+  but never implement the match as plain equality against
+  the raw config value, since `execution_site: VDI` would then hold the VDI loop's own work
+  ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)). No character
   grammar is applied to a label value: labels are created through the UI or API by somebody with
   triage and are visible on the issue. A consumer still treats the value as data — quote it, never
   build a command or a URL by concatenation.
