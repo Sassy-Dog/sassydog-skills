@@ -44,14 +44,29 @@
 # three pulls in a temp dir it removes on exit.
 set -euo pipefail
 
-REPO="${REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)}"
 ALL_LIMIT="${ALL_LIMIT:-500}"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "skipped: gh not installed" >&2
   exit 10
 fi
-[[ -z "$REPO" ]] && { echo "skipped: not in a GitHub repo and REPO not set" >&2; exit 10; }
+
+# RESOLVED AFTER the tooling check, with its status captured. The previous form
+# was `REPO="${REPO:-$(gh repo view ...)}"` placed ABOVE it, under `set -e`: an
+# assignment adopts its command substitution's status, so the script aborted
+# before either guard could speak. Measured: REPO unset and not a GitHub repo
+# exited 1 with no message; REPO unset with gh off PATH exited 127 with no
+# message. Only a preset REPO ever reached the 10 this header promises — and a
+# caller told "10 is not a clean result" saw neither 10 nor a reason.
+if [[ -z "${REPO:-}" ]]; then
+  repo_rc=0
+  # 2>&1 so a failure carries gh's own words; on success this is just the slug.
+  REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1) || repo_rc=$?
+  if [[ "$repo_rc" -ne 0 || -z "$REPO" ]]; then
+    echo "skipped: could not resolve the repo and REPO not set. gh said: $(tr '\n' ' ' <<<"$REPO")" >&2
+    exit 10
+  fi
+fi
 
 # Each pull lands in a FILE and python is handed the path, never the payload.
 # These three documents carry every issue body, plus (since #337) every recent
@@ -199,14 +214,32 @@ BODY_REF_RE = re.compile(r'(?<![\w/])#(\d+)(?![0-9A-Za-z])')
 # GitHub's documented closing keywords, same-line-adjacent to the ref.
 # The separator is its own constant so the gate can swap it for the
 # newline-spanning `\s` form and prove the same-line rule is load-bearing.
-KEYWORD_SEP = r'[ \t]*:?[ \t]*'
+# The colon branch owns its own trailing run, so there is only ONE way to split
+# the whitespace before the `#`. The previous `[ \t]*:?[ \t]*` put two
+# variable-length runs side by side and backtracked quadratically: measured
+# 8000 -> 0.086s, 16000 -> 0.347s, 32000 -> 1.394s, 4x per doubling. Same
+# language, same seven keyword forms verified identical; 0.0026s at 65536.
+KEYWORD_SEP = r'[ \t]*(?::[ \t]*)?'
 CLOSING_KEYWORD_RE = re.compile(
     r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)' + KEYWORD_SEP + r'#(\d+)(?![0-9A-Za-z])',
     re.IGNORECASE,
 )
 # Non-prose spans, blanked before the keyword scan only. Refs stay readable
 # everywhere, because reporting one too many is the harmless direction.
-CODE_FENCE_RE = re.compile(r'(?P<fence>```+|~~~+).*?(?P=fence)', re.DOTALL)
+# ANCHORED TO LINE STARTS AND BOUNDED. The previous
+# `(?P<fence>```+|~~~+).*?(?P=fence)` is O(n^3) on a backtick-dense body:
+# measured 2000 -> 0.085s, 4000 -> 0.660s, 8000 -> 5.145s, ~7.8x per doubling,
+# which at GitHub's 65536-char body cap is far past any sane runtime for ONE
+# body — against a pull of `--limit 100`. This repo is PUBLIC by exception and
+# CI fires for fork PRs, so the input is untrusted. A hang is not a crash
+# anyone notices; it is the same "unknown rendered as clean" this script
+# refuses everywhere else. Anchoring the open and close to their own lines and
+# capping the marker makes a pure backtick run unmatchable: measured 0.0008s at
+# 65536, with masking byte-identical on a real fenced block.
+CODE_FENCE_RE = re.compile(
+    r'^[ \t]{0,3}(?P<fence>`{3,10}|~{3,10})[^\n]*\n.*?^[ \t]{0,3}(?P=fence)[ \t]*$',
+    re.DOTALL | re.MULTILINE,
+)
 CODE_SPAN_RE = re.compile(r'`[^`\n]*`')
 BLOCKQUOTE_RE = re.compile(r'^[ \t]{0,3}>[^\n]*$', re.MULTILINE)
 # `(?:(?!<!--).)*?` is what stops a stray opener from pairing with a distant
@@ -227,14 +260,30 @@ def blank(text):
 
 
 def strip_html_comments(text):
-    """Blank bounded HTML comments. Returns (masked_text, refused_count)."""
+    """Blank bounded HTML comments. Returns (masked_text, refused_count).
+
+    Comments are LOCATED on a copy with code fences and spans blanked, and then
+    blanked out of the ORIGINAL at those offsets. Running the search over the
+    raw body was a third silent-swallow shape, in the same class as the two the
+    nested-opener guard and COMMENT_MAX_SPAN close: a backticked ``<!--`` in
+    prose is literal text, not an opener, but the raw scan paired it with any
+    later plain `-->` and blanked everything between. Measured: a body reading
+    "We use `<!--` rule markers here." then "Fixed in #451 and #452." then
+    "flow: A --> B" reported NO refs, with comment_strip_refused 0 and nothing
+    on stderr — under 2000 chars and free of a nested opener, so neither
+    existing guard fires. Both ingredients are ordinary here: CLAUDE.md
+    documents `<!-- rule: <id> -->` parity markers, and `-->` is a mermaid
+    arrow. blank() is length-preserving, which is what makes the offsets from
+    the probe index the original exactly.
+    """
+    probe = mask(text, CODE_FENCE_RE, CODE_SPAN_RE)
     out, pos, refused = [], 0, 0
-    for m in HTML_COMMENT_RE.finditer(text):
+    for m in HTML_COMMENT_RE.finditer(probe):
         if m.end() - m.start() > COMMENT_MAX_SPAN:
             refused += 1          # left in place: refs inside stay visible
             continue
         out.append(text[pos:m.start()])
-        out.append(blank(m.group(0)))
+        out.append(blank(text[m.start():m.end()]))
         pos = m.end()
     out.append(text[pos:])
     return "".join(out), refused

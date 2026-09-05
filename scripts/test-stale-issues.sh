@@ -216,15 +216,26 @@ case "$cmd $sub" in
             *)    echo "mock gh: unhandled issue list --state '$state'" >&2; exit 1 ;;
         esac ;;
     "pr list")
-        fields=""; limit=30
+        # `--state` is parsed AND dispatched on, exactly as the issue-list arm
+        # above does. It used to fall to the `*) shift` catch-all and be served
+        # regardless, so deleting `--state merged` from the script left all 46
+        # rows green — while `gh pr list` with no --state returns OPEN PRs, and
+        # with this detector's broad body arm nearly every open PR would produce
+        # a shipped-but-still-open finding. The gate's own header measures 35 of
+        # the last 40 PR bodies naming an issue.
+        state=""; fields=""; limit=30
         while [ $# -gt 0 ]; do
             case "$1" in
+                --state) state="${2:-}"; shift 2 ;;
                 --json)  fields="${2:-}"; shift 2 ;;
                 --limit) limit="${2:-}"; shift 2 ;;
                 *)       shift ;;
             esac
         done
-        serve "$MOCK_PRS" "$fields" "$limit" ;;
+        case "$state" in
+            merged) serve "$MOCK_PRS" "$fields" "$limit" ;;
+            *)      echo "mock gh: unhandled pr list --state '$state'" >&2; exit 1 ;;
+        esac ;;
     "repo view")
         printf '%s\n' "$MOCK_REPO" ;;
     *)
@@ -507,8 +518,23 @@ mutate_run() {
         bad "mutation '$label' changed nothing — its target was renamed or reshaped; re-point this proof"
         return 1
     fi
+    # THE MUTANT MUST RUN. Its status and output were discarded, so a mutation
+    # that left invalid Python satisfied every purely-negative assertion — a row
+    # asserting only `! has_issue 811 && ! has_issue 813` passes just as well
+    # when the program crashed and printed nothing. Swept across all ten rows
+    # with a universally-crashing mutant, nine reddened and one stayed green.
+    # `cmp -s` above catches a RENAMED target; this catches a reshaped one.
+    local mrc=0
     env PATH="$WORK/bin:$PATH" REPO="$MOCK_REPO" bash "$WORK/$label.sh" \
-        >"$WORK/$label.out" 2>/dev/null
+        >"$WORK/$label.out" 2>"$WORK/$label.err" || mrc=$?
+    if [ "$mrc" -ne 0 ]; then
+        bad "mutation '$label' did not complete (exit $mrc) — a crashed mutant satisfies a negative assertion without proving anything: $(head -c 160 "$WORK/$label.err")"
+        return 1
+    fi
+    if [ ! -s "$WORK/$label.out" ]; then
+        bad "mutation '$label' produced no output — its verdict would come from absence, not from the decision under test"
+        return 1
+    fi
     section shipped-but-still-open "$WORK/$label.out" >"$WORK/$label.json"
     section tracking-parent-complete "$WORK/$label.out" >"$WORK/$label.tpc.json"
 }
@@ -926,10 +952,23 @@ fi
 # changes nothing here while production silently pages at 30 against an
 # ALL_LIMIT of 500 — `truncated` then computes false forever and detector 3's
 # "unknown is not clean" guarantee is gone with it.
-if grep -q -- '--limit "\$ALL_LIMIT"' "$SCRIPT"; then
-    ok "the all-state pull passes --limit \"\$ALL_LIMIT\", so truncated= means something"
+# ANCHORED TO THE ALL-STATE PULL'S OWN COMMAND. A bare `--limit "$ALL_LIMIT"`
+# grep is satisfiable while the property is false: moving the flag onto the
+# OPEN-issues pull kept this row green, message and all. The fixture cannot
+# see it either, so this grep is the only protection detector 3's truncation
+# guarantee has.
+ALL_PULL_RE='issue list --repo "\$REPO" --state all --limit "\$ALL_LIMIT"'
+if grep -q -- "$ALL_PULL_RE" "$SCRIPT"; then
+    ok "the all-state pull itself carries --limit \"\$ALL_LIMIT\", so truncated= means something"
 else
-    bad "the all-state pull no longer passes --limit \"\$ALL_LIMIT\" — truncated= is now unfalsifiable"
+    bad "the all-state pull no longer carries --limit \"\$ALL_LIMIT\" on its own command — truncated= is now unfalsifiable"
+fi
+# LIVENESS: the pattern must not match a pull that lacks the flag, or the row
+# above proves nothing. Same shape as the ARGV guard's own proof below.
+if grep -q -- "$ALL_PULL_RE" <<<'issue list --repo "$REPO" --state all'; then
+    bad "the all-state pull shape guard matches a command WITHOUT the flag — the row above is vacuous"
+else
+    ok "…and that shape guard does not match an all-state pull missing the flag"
 fi
 
 # ------------------------------------------------------------------------------
