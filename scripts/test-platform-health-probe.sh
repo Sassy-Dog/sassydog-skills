@@ -251,8 +251,10 @@
 #   comment always were, and still can be. The count is spelled with its
 #   members beside it because an earlier revision said FOUR here with nothing
 #   above enumerating four, in the one paragraph that explicitly refuses bare
-#   counts. The only four-round list in this file is 130 lines below and counts
-#   CASING rounds, which are a different set.)
+#   counts. A four-round list does appear further down, under WHAT SHIPPED
+#   UNCASED, but it counts CASING rounds — a different set. Cited by heading
+#   rather than by offset: issue #324 records line refs in this file going
+#   +10 stale within a day, and this very paragraph's own citation did.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong FOUR times, and NOT
 #   all the same way — the shas and per-edition causes are below, because the
 #   edition that wrote "each time by asserting a closed set nobody had
@@ -2142,7 +2144,7 @@ fi
 #     already names every non-exempt fixture including `broken` and `bare`, which
 #     have no `make_cwd` call at all. Two derivations that must agree; no count.
 #   * THE FOUR SINGLE-LINE SITES ARE ASSERTED TO HAVE MATCHED EXACTLY ONE LINE,
-#     and their reads are newline-normalised. Three of them were neither, and
+#     and their reads are newline-normalised. All four were neither, and
 #     both directions were measured green: a second column-0 `for form in …`
 #     (this file already carries two identical `for site in …` headers, so the
 #     shape is established practice) made `trailing` present in BOTH verdict
@@ -2178,7 +2180,8 @@ fi
 # They live at four sites and none was pinned by anything, so deleting the
 # `run_probe` one reddened nothing while being the deletion the read-back cannot
 # see: the read-back measures its own subshell, not the probe's.
-# The joiner is SHELL-AWARE. `awk '{ while (line ~ /\\$/) ... }'` treated any
+# The joiner honours the two continuation rules that bite here — it is NOT a
+# shell parser. `awk '{ while (line ~ /\\$/) ... }'` treated any
 # trailing backslash as a continuation, which shell does not: a `\` ending a
 # COMMENT is comment text, and an EVEN run of backslashes is an escaped
 # backslash. The first case is a new absorption class this very block created —
@@ -2186,6 +2189,13 @@ fi
 # it, dropping that fixture out of `fixt_url` and letting it be deleted from the
 # read-back list with every assertion still green. Joining removed the wrapped
 # `make_cwd` escape and introduced its inverse.
+#
+# Residual, stated rather than implied: it still honours a trailing backslash on
+# a comment line REACHED BY A JOIN (the `#` test sees the joined line's start),
+# and it joins a backslash inside single quotes, where bash would not. Neither
+# shape exists at head — no comment line ends in a backslash, and the one
+# in-quotes backslash is not at end of line — and both fail in the SAFE
+# direction here, producing a false red rather than a silent absorption.
 FIXT_SRC="$WORK/self-joined.sh"
 awk '
 function odd_trailing_backslashes(s,   n) {
@@ -2207,19 +2217,34 @@ fixt_exempt="norepo"
 fixt_all="$(sed -n 's/^[[:space:]]*CWD_\([A-Z][A-Z0-9_]*\)="\$WORK\/.*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
 fixt_acc="$(sed -n 's/.*CWD_MISSING="\$CWD_MISSING \([a-z][a-z0-9]*\)".*/\1/p' "$FIXT_SRC" | tr '\n' ' ')"
 fixt_url="$(sed -n 's/^[[:space:]]*make_cwd  *"\$CWD_\([A-Z][A-Z0-9_]*\)" *"[^"]*".*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
-# fixt_url gets a SECOND derivation, the way fixt_all is cross-checked against
-# the CWD_MISSING ledger. The single read above is position- and quoting-bound:
-# it needs `make_cwd` at line start, single spaces between the arguments, and a
-# double-quoted origin. Four shapes therefore dropped a fixture out of the set
-# silently — an env prefix (`LC_ALL=C make_cwd ...`), a TAB between the two
-# arguments, a single-quoted origin, and comment absorption — and each pairs
-# with deleting that fixture from the read-back list to leave site 3 of 3
-# required at ZERO sites, with the assertion count unchanged so the
-# EXPECTED_CASES floor cannot see it either. This read is anchored nowhere and
-# accepts any quoting, so the two agree only when the set is really the set.
-fixt_url2="$(grep -E 'make_cwd[[:space:]]+"\$CWD_[A-Z0-9_]+"[[:space:]]+["'"'"'$]' "$FIXT_SRC" \
-    | sed -E 's/.*make_cwd[[:space:]]+"\$CWD_([A-Z0-9_]+)".*/\1/' \
-    | tr '[:upper:]' '[:lower:]' | sort -u | tr '\n' ' ')"
+# THE URL-CARRYING SET IS DERIVED FROM WHAT WAS BUILT, not from source text.
+# The first attempt at a second derivation shared the first read's anchor: both
+# required the literal `"$CWD_` for the first argument, so `"${CWD_HOSTPATH}"`
+# and an unquoted origin missed BOTH reads and the two agreed by MISSING
+# TOGETHER — which is the one way two derivations are worse than one, because
+# agreement then looks like confirmation. It closed the four shapes it named and
+# not the class, while its own prose claimed to be "anchored nowhere".
+#
+# A fixture that answers `git remote get-url origin` HAS an origin, whatever the
+# call that built it looked like: brace-, quote-, spacing- and joiner-
+# independent by construction, because it reads the built tree rather than the
+# text that built it. `fixt_url` stays as the source read and is cross-checked
+# against this one, so a source read that drifts is reported rather than
+# silently agreeing.
+fixt_url_built=""
+for fx in $fixt_all; do
+    case " $fixt_exempt " in *" $fx "*) continue ;; esac
+    fx_upper="$(printf '%s' "$fx" | tr '[:lower:]' '[:upper:]')"
+    eval "fx_dir=\${CWD_$fx_upper:-}"
+    [ -n "$fx_dir" ] && [ -d "$fx_dir" ] || continue
+    if ( cd "$fx_dir" \
+         && GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL" \
+            GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM" \
+            git remote get-url origin >/dev/null 2>&1 ); then
+        fixt_url_built="$fixt_url_built $fx"
+    fi
+done
+fixt_url_built="${fixt_url_built# }"
 fixt_built_raw="$(sed -n 's/^[[:space:]]*ok "the cwd fixtures were built (\([^)]*\))".*/\1/p' "$FIXT_SRC")"
 fixt_pin_raw="$(sed -n 's/^for pin_form in \(.*\); do$/\1/p' "$FIXT_SRC")"
 fixt_succ_raw="$(sed -n 's/^for form in \(.*\); do$/\1/p' "$FIXT_SRC")"
@@ -2246,24 +2271,24 @@ fixt_derived_bad=""
 [ -n "$fixt_all" ] || fixt_derived_bad="$fixt_derived_bad [the CWD_* declarations: empty]"
 [ -n "$fixt_acc" ] || fixt_derived_bad="$fixt_derived_bad [the CWD_MISSING ledger: empty]"
 [ -n "$fixt_url" ] || fixt_derived_bad="$fixt_derived_bad [the make_cwd URL arguments: empty]"
-[ -n "$fixt_url2" ] || fixt_derived_bad="$fixt_derived_bad [the quoting-agnostic make_cwd read: empty]"
+[ -n "$fixt_url_built" ] || fixt_derived_bad="$fixt_derived_bad [no fixture answered git remote get-url: the built set is empty]"
 # THE TWO READS MUST AGREE, both directions. Non-emptiness alone was the whole
 # guard on this set, and it holds while a fixture silently leaves it.
 for fx in $fixt_url; do
-    case " $fixt_url2 " in *" $fx "*) : ;;
-        *) fixt_derived_bad="$fixt_derived_bad [$fx: in the anchored make_cwd read but not the quoting-agnostic one]" ;;
+    case " $fixt_url_built " in *" $fx "*) : ;;
+        *) fixt_derived_bad="$fixt_derived_bad [$fx: the source read calls it URL-carrying but the built tree has no origin for it]" ;;
     esac
 done
-for fx in $fixt_url2; do
+for fx in $fixt_url_built; do
     case " $fixt_url " in *" $fx "*) : ;;
-        *) fixt_derived_bad="$fixt_derived_bad [$fx: carries a make_cwd origin but the anchored read missed it — position or quoting, not absence]" ;;
+        *) fixt_derived_bad="$fixt_derived_bad [$fx: HAS an origin in the built tree but the source read missed it — position or quoting, not absence]" ;;
     esac
 done
 for fx in $fixt_url; do
     case " $fixt_all " in *" $fx "*) ;; *) fixt_derived_bad="$fixt_derived_bad [$fx: given an origin URL but not declared]" ;; esac
 done
 if [ -z "$fixt_derived_bad" ]; then
-    ok "  and the three derived sets are non-empty, with every URL-carrying fixture among the declared ones"
+    ok "  and the four derived sets are non-empty, with every URL-carrying fixture among the declared ones"
 else
     bad "  a derivation came back empty or disagreed with the declarations, so the parity checks are vacuous:$fixt_derived_bad"
 fi
@@ -2302,7 +2327,7 @@ for fx in $fixt_all; do
     case " $fixt_fail " in *" $fx "*) fixt_n=$((fixt_n + 1)) ;; esac
     [ "$fixt_n" -eq 1 ] || fixt_loop_bad="$fixt_loop_bad [$fx: in $fixt_n of the 2 verdict loops]"
 done
-for fx in $fixt_url; do
+for fx in $fixt_url_built; do
     case " $fixt_exempt " in *" $fx "*) continue ;; esac
     case " $fixt_pin " in *" $fx "*) ;; *) fixt_pin_bad="$fixt_pin_bad $fx" ;; esac
 done
@@ -2345,6 +2370,14 @@ fixt_pins_bad=""
 # the developer's real config, still printing the four-sites ok. The reviewing
 # machine's own ~/.gitconfig carries a Sassy-Dog insteadOf, which is why these
 # pins exist at all.
+# EXACTLY ONE ASSIGNMENT EACH. Existence alone is not enough: inserting a
+# second `GIT_HERMETIC_NOSYSTEM=0` after the first left the census printing
+# "4 live pin sites" while every site bound 0 — the later assignment wins and
+# the -x match still found the earlier one.
+for hv in GIT_HERMETIC_GLOBAL GIT_HERMETIC_NOSYSTEM; do
+    hn=$(grep -cE "^$hv=" "$FIXT_SRC")
+    [ "$hn" -eq 1 ] || fixt_pins_bad="$fixt_pins_bad [$hv: $hn assignments, want exactly one — a later one silently overrides]"
+done
 if ! grep -qx 'GIT_HERMETIC_GLOBAL=/dev/null' "$FIXT_SRC"; then
     fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_GLOBAL is no longer /dev/null]"
 fi
@@ -2353,7 +2386,8 @@ if ! grep -qx 'GIT_HERMETIC_NOSYSTEM=1' "$FIXT_SRC"; then
 fi
 
 # A COMMENT-STRIPPED COPY. `grep -qF` over the raw region is satisfied by the
-# pin appearing in a comment — and `:2046-2049` explicitly predicts an editor
+# pin appearing in a comment — and the paragraph beginning "THE PROSE COPIES
+# ARE GONE" explicitly predicts an editor
 # reading run_probe's pin as redundant, which is exactly the editor who leaves
 # the note behind. Deleting the live pin and leaving the commented one was
 # `all pass (420)`; under a global url.insteadOf rewrite the same tree went red
@@ -2368,7 +2402,7 @@ PIN_G='GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL"'
 PIN_N='GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"'
 fixt_pin_sites=$(grep -cF -- "$PIN_G" <<<"$fixt_live")
 
-pin_regions="make_cwd bare-repo run_probe read-back"
+pin_regions="make_cwd bare-repo run_probe read-back url-derive"
 fixt_regions_seen=0
 for pin_region in $pin_regions; do
     fixt_region=""
@@ -2384,6 +2418,11 @@ for pin_region in $pin_regions; do
         bare-repo) fixt_region="$(sed -n '/^mkdir -p "\$CWD_BARE"/,/^[[:space:]]*git init .*--bare/p' "$FIXT_SRC")" ;;
         run_probe) fixt_region="$(sed -n '/^run_probe() {/,/^}/p' "$FIXT_SRC")" ;;
         read-back) fixt_region="$(sed -n '/^for pin_form in /,/^done$/p' "$FIXT_SRC")" ;;
+        # The runtime URL derivation is itself a site that reads a fixture under
+        # the pins, so it is a census region. The count check found it the
+        # moment it was written — 5 live pin sites against 4 regions walked —
+        # which is the census doing exactly its job on code added after it.
+        url-derive) fixt_region="$(sed -n '/^fixt_url_built=""$/,/^fixt_url_built="\${fixt_url_built# }"$/p' "$FIXT_SRC")" ;;
         *) fixt_pins_bad="$fixt_pins_bad [$pin_region: no region arm]"; continue ;;
     esac
     fixt_regions_seen=$((fixt_regions_seen + 1))
@@ -2406,6 +2445,14 @@ done
 # naming run_probe as checked. That is the defect #324 exists to close, one
 # level up, so the count is derived from the source and the message below names
 # the regions actually walked rather than a frozen four.
+# WHAT THIS EQUALITY DOES AND DOES NOT CATCH. It pins MEMBERSHIP — a pin
+# deleted while its region stays reddens, which is the realistic single edit and
+# the one the prose two screens up predicts. It does NOT catch deleting a pin
+# AND its region entry together: 3 and 3 balance. What that can no longer do is
+# LIE, because the ok line below names the regions actually walked rather than a
+# frozen four, so the double deletion changes the printed list. Closing it
+# properly needs "sites that read a fixture" derived from the code, which is not
+# mechanically available here.
 if [ "$fixt_pin_sites" -ne "$fixt_regions_seen" ]; then
     fixt_pins_bad="$fixt_pins_bad [$fixt_pin_sites live pin sites in the source but $fixt_regions_seen regions walked — a pinned site is outside the census, or a region lost its pin]"
 fi
