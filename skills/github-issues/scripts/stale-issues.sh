@@ -226,21 +226,93 @@ CLOSING_KEYWORD_RE = re.compile(
 )
 # Non-prose spans, blanked before the keyword scan only. Refs stay readable
 # everywhere, because reporting one too many is the harmless direction.
-# ANCHORED TO LINE STARTS AND BOUNDED. The previous
-# `(?P<fence>```+|~~~+).*?(?P=fence)` is O(n^3) on a backtick-dense body:
-# measured 2000 -> 0.085s, 4000 -> 0.660s, 8000 -> 5.145s, ~7.8x per doubling,
-# which at GitHub's 65536-char body cap is far past any sane runtime for ONE
-# body — against a pull of `--limit 100`. This repo is PUBLIC by exception and
-# CI fires for fork PRs, so the input is untrusted. A hang is not a crash
-# anyone notices; it is the same "unknown rendered as clean" this script
-# refuses everywhere else. Anchoring the open and close to their own lines and
-# capping the marker makes a pure backtick run unmatchable: measured 0.0008s at
-# 65536, with masking byte-identical on a real fenced block.
-CODE_FENCE_RE = re.compile(
-    r'^[ \t]{0,3}(?P<fence>`{3,10}|~{3,10})[^\n]*\n.*?^[ \t]{0,3}(?P=fence)[ \t]*$',
-    re.DOTALL | re.MULTILINE,
-)
-CODE_SPAN_RE = re.compile(r'`[^`\n]*`')
+# Fenced blocks and code spans are found by LINE/RUN SCANNERS, not regexes.
+# Both regex forms backtracked super-linearly on untrusted bodies, and the first
+# attempt to fix the fence was MEASURED WRONG. The original
+# `(?P<fence>```+|~~~+).*?(?P=fence)` is O(n^3); the anchored replacement was
+# still 5.227s on 13107 unclosed openers at GitHub's 65536-char cap, run twice
+# per body across a `--limit 100` pull. The "0.0008s at 65536" recorded for it
+# came from a newline-free backtick run — an input an anchored pattern rejects
+# at the first character. That number described the INPUT, not the improvement.
+# These scanners are 0.0115s on the same shape and linear on every shape tried.
+#
+# Anchoring had also narrowed the language: a CRLF closer and a closer longer
+# than its opener (both CommonMark-legal, both handled by the ORIGINAL regex)
+# stopped being masked, so a `Closes #N` inside such a block silently began
+# suppressing again. The scanner handles both.
+#
+# The span scanner fixes a correctness hole the regex had all along:
+# `` `[^`\n]*` `` pairs a DOUBLE backtick as an empty span, leaving the content
+# of a ``like this`` span unmasked. The comment probe then read a `<!--` inside
+# one as a real opener and swallowed the body. CommonMark 6.1 is the rule
+# implemented here: an opening run of n backticks closes at the next run of
+# EXACTLY n on the same line, and an unclosed run is literal text.
+FENCE_OPEN_RE = re.compile(r'(`{3,}|~{3,})')
+
+
+def mask_fences(text):
+    """Blank fenced code blocks. An unclosed fence runs to end of document."""
+    out, fence = [], None
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip(' \t')
+        indent = len(line) - len(stripped)
+        m = FENCE_OPEN_RE.match(stripped) if indent <= 3 else None
+        if fence is None:
+            # A backtick fence's info string may not contain a backtick.
+            if m and (m.group(1)[0] != '`' or '`' not in stripped[m.end(1):]):
+                fence = m.group(1)
+                out.append(blank(line))
+                continue
+            out.append(line)
+        else:
+            out.append(blank(line))
+            # Same character, at least as long, nothing after it. `.strip()`
+            # absorbs a trailing CR, so a CRLF closer still closes.
+            if (m and m.group(1)[0] == fence[0]
+                    and len(m.group(1)) >= len(fence)
+                    and stripped[m.end(1):].strip() == ''):
+                fence = None
+    return "".join(out)
+
+
+def mask_code_spans(text):
+    """Blank inline code spans, pairing runs by exact length (CommonMark 6.1)."""
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] != '`':
+            i += 1
+            continue
+        j = i
+        while j < n and text[j] == '`':
+            j += 1
+        run, k, closed = j - i, j, -1
+        while k < n and text[k] != '\n':
+            if text[k] == '`':
+                m = k
+                while m < n and text[m] == '`':
+                    m += 1
+                if m - k == run:
+                    closed = m
+                    break
+                k = m
+            else:
+                k += 1
+        if closed < 0:            # an unclosed run is literal text, not a span
+            i = j
+            continue
+        for p in range(i, closed):
+            if out[p] != '\n':
+                out[p] = ' '
+        i = closed
+    return "".join(out)
+
+
+def mask_code(text):
+    """Fences first, then spans — a span inside a fence is already blanked."""
+    return mask_code_spans(mask_fences(text))
+
+
 BLOCKQUOTE_RE = re.compile(r'^[ \t]{0,3}>[^\n]*$', re.MULTILINE)
 # `(?:(?!<!--).)*?` is what stops a stray opener from pairing with a distant
 # `-->`: a span containing another `<!--` is not a comment, so the engine falls
@@ -265,7 +337,7 @@ def strip_html_comments(text):
     Comments are LOCATED on a copy with code fences and spans blanked, and then
     blanked out of the ORIGINAL at those offsets. Running the search over the
     raw body was a third silent-swallow shape, in the same class as the two the
-    nested-opener guard and COMMENT_MAX_SPAN close: a backticked ``<!--`` in
+    nested-opener guard and COMMENT_MAX_SPAN close: a backticked `<!--` in
     prose is literal text, not an opener, but the raw scan paired it with any
     later plain `-->` and blanked everything between. Measured: a body reading
     "We use `<!--` rule markers here." then "Fixed in #451 and #452." then
@@ -275,8 +347,13 @@ def strip_html_comments(text):
     documents `<!-- rule: <id> -->` parity markers, and `-->` is a mermaid
     arrow. blank() is length-preserving, which is what makes the offsets from
     the probe index the original exactly.
+
+    The example above uses SINGLE backticks deliberately. The first version of
+    this docstring wrote it with double ones, and the span regex of the day
+    paired `` as an empty span — so the very body this text offered as fixed
+    still swallowed, silently.
     """
-    probe = mask(text, CODE_FENCE_RE, CODE_SPAN_RE)
+    probe = mask_code(text)
     out, pos, refused = [], 0, 0
     for m in HTML_COMMENT_RE.finditer(probe):
         if m.end() - m.start() > COMMENT_MAX_SPAN:
@@ -311,7 +388,7 @@ for pr in prs:
 
     # Keywords come from prose only; refs come from everywhere. Same length,
     # so the offsets below index both strings interchangeably.
-    keyword_text = mask(body, CODE_FENCE_RE, CODE_SPAN_RE, BLOCKQUOTE_RE)
+    keyword_text = mask(mask_code(body), BLOCKQUOTE_RE)
     governed = {m.start(1) for m in CLOSING_KEYWORD_RE.finditer(keyword_text)}
 
     for m in BODY_REF_RE.finditer(body):

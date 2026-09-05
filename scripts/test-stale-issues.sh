@@ -237,6 +237,10 @@ case "$cmd $sub" in
             *)      echo "mock gh: unhandled pr list --state '$state'" >&2; exit 1 ;;
         esac ;;
     "repo view")
+        if [ "${MOCK_FAIL_REPO_VIEW:-0}" = "1" ]; then
+            echo "gh: Bad credentials (HTTP 401)" >&2
+            exit 1
+        fi
         printf '%s\n' "$MOCK_REPO" ;;
     *)
         echo "gh $cmd $sub $*" >>"$MOCK_WRITES"
@@ -336,6 +340,8 @@ cat >"$MOCK_ALL_ISSUES" <<'JSON'
    "body": "A merged PR names this issue after a stray HTML comment opener whose closer is the PR template's, which used to delete the text between."},
   {"number": 813, "state": "OPEN",   "title": "Second of two swallowed by a stray comment opener",
    "body": "Named in the same swallowed span as its sibling, so the failure silences every issue a PR named at once rather than only one of them."},
+  {"number": 817, "state": "OPEN",   "title": "Keyword inside a DOUBLE-backtick code span",
+   "body": "A merged PR writes the convention for this issue in double backticks — the form the detector's own docstring used, and the one a span regex mis-pairs as an empty span."},
   {"number": 815, "state": "OPEN",   "title": "Named inside an oversized HTML comment",
    "body": "Named inside an HTML comment past the strip's span cap, so the strip is refused and the reference stays visible with the refusal marked."},
   {"number": 7,   "state": "OPEN",   "title": "The hex-colour decoy",
@@ -377,6 +383,8 @@ cat >"$MOCK_OPEN_ISSUES" <<'JSON'
   {"number": 700, "title": "Named only inside template boilerplate",
    "body": "Named only inside an HTML comment carried over from the PR template, which is boilerplate rather than any author reference.",
    "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
+  {"number": 817, "title": "Keyword inside a DOUBLE-backtick code span",
+   "state": "OPEN", "body": "A merged PR writes the convention for this issue in double backticks, which is the form the detector's own docstring used and the one a span regex mis-pairs as an empty span."},
   {"number": 801, "title": "Keyword inside a fenced code block",
    "body": "A merged PR shows a Closes line for this issue inside a fenced code block, which is an illustration and not GitHub closing anything.",
    "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
@@ -434,7 +442,7 @@ cat >"$MOCK_PRS" <<'JSON'
    "body": "Real work; this body names no issue of its own.\n\n<!--\nClosing an issue needs a literal `Closes #123` on its own line, one per issue.\nSee #700 for the convention.\n-->\n",
    "mergedAt": "2026-08-18T00:00:00Z"},
   {"number": 900, "title": "docs: every keyword form that must NOT suppress",
-   "body": "Roll-up of the shapes GitHub does not honour as closing refs.\n\n```text\nCloses #801\n```\n\nOur docs write the convention as `Closes #803`, in backticks.\n\n> The old body said: Fixes #805\n\n## Resolved\n\n#807\n\nCloses #809 — and #809 turns up again later in this very sentence.\n",
+   "body": "Roll-up of the shapes GitHub does not honour as closing refs.\n\n```text\nCloses #801\n```\n\nOur docs write the convention as `Closes #803`, in backticks.\n\nAnd sometimes as ``Closes #817``, in DOUBLE backticks — the form a span regex mis-pairs.\n\n> The old body said: Fixes #805\n\n## Resolved\n\n#807\n\nCloses #809 — and #809 turns up again later in this very sentence.\n",
    "mergedAt": "2026-08-22T00:00:00Z"},
   {"number": 910, "title": "fix: a stray comment opener above the template block",
    "body": "Real work.\n\n<!-- stray opener, left behind by an edit and never closed\n\nThis lands the behaviour for #811 and #813.\n\n<!--\nClosing an issue needs a literal `Closes #123` on its own line, one per issue.\n-->\n",
@@ -637,7 +645,7 @@ section shipped-but-still-open "$WORK/run1.out" >"$WORK/shipped.json"
 
 # The whole set at once, so an arm that starts over-firing shows up here rather
 # than passing every single-issue check below.
-expected_hits="[400, 189, 190, 316, 600, 801, 803, 805, 807, 809, 811, 813, 815]"
+expected_hits="[400, 189, 190, 316, 600, 817, 801, 803, 805, 807, 809, 811, 813, 815]"
 if [ "$(q '[i["issue"] for i in d]' <"$WORK/shipped.json")" = "$expected_hits" ]; then
     ok "detector 1 reports exactly the expected hit set, and nothing else"
 else
@@ -684,7 +692,7 @@ fi
 # --- 4d. findings name the arm that matched ----------------------------------
 via=$(q '" ".join("%d:%s" % (i["issue"], "/".join(p["matched_via"] for p in i["merged_prs"])) for i in d)' <"$WORK/shipped.json")
 expected_via="400:title 189:title 190:title 316:body 600:title+body"
-expected_via="$expected_via 801:body 803:body 805:body 807:body 809:body"
+expected_via="$expected_via 817:body 801:body 803:body 805:body 807:body 809:body"
 expected_via="$expected_via 811:body 813:body 815:body"
 if [ "$via" = "$expected_via" ]; then
     ok "every finding names its arm, and a both-arms hit merges to one 'title+body' entry"
@@ -700,6 +708,7 @@ fi
 for probe in \
     "801|a Closes line inside a FENCED CODE BLOCK" \
     "803|a backticked \`Closes #N\` in prose — the form this repo's own docs model" \
+    "817|a DOUBLE-backticked \`\`Closes #N\`\` span — mis-paired as empty by a regex, masked by the scanner" \
     "805|a Fixes line inside a QUOTATION of somebody else's text" \
     "807|a keyword separated from the ref by BLANK LINES (\\s must not span newlines)" \
     "809|a SECOND mention after a genuine close — suppression is positional, not body-global"
@@ -805,7 +814,7 @@ fi
 #      #809 survive it, because those two are the separator and positional bugs
 #      rather than the masking one, and a mutation that killed all five at once
 #      would not tell the three defects apart.
-if mutate_run 's/^    keyword_text = mask(body.*/    keyword_text = body/' mask-off; then
+if mutate_run 's/^    keyword_text = mask(mask_code(body).*/    keyword_text = body/' mask-off; then
     if ! has_issue 801 "$WORK/mask-off.json" \
        && ! has_issue 803 "$WORK/mask-off.json" \
        && ! has_issue 805 "$WORK/mask-off.json" \
@@ -814,6 +823,21 @@ if mutate_run 's/^    keyword_text = mask(body.*/    keyword_text = body/' mask-
         ok "unmasked prose DOES suppress #801/#803/#805 and leaves #807/#809 — the masking is live and targeted"
     else
         bad "the unmasked keyword scan reported $(q '[i["issue"] for i in d]' <"$WORK/mask-off.json") — 4g's code/quote rows prove nothing"
+    fi
+fi
+
+# (vi-b) restore the SPAN REGEX that paired a double backtick as an empty span.
+#        `mask_code_spans` replaced `re.compile(r'`[^`\n]*`')`, which matched
+#        the leading `` of ``like this`` as a zero-length span and left the
+#        content unmasked — so a `<!--` inside one reached the comment probe and
+#        swallowed the whole body. #817 carries the double-backtick form; #801's
+#        single-backtick form must be unaffected, which is what separates this
+#        mutant from (vi).
+if mutate_run 's|^    return mask_code_spans(mask_fences(text))|    return re.sub(r"`[^`\\n]*`", lambda m: blank(m.group(0)), mask_fences(text))|' span-regex; then
+    if ! has_issue 817 "$WORK/span-regex.json" && has_issue 801 "$WORK/span-regex.json"; then
+        ok "the old span regex mis-pairs a DOUBLE backtick, so #817's keyword goes UNMASKED and wrongly suppresses — while #801's fence still masks, isolating the span scanner"
+    else
+        bad "restoring the span regex reported $(q '[i[\"issue\"] for i in d]' <"$WORK/span-regex.json") — the double-backtick row proves nothing"
     fi
 fi
 
@@ -904,6 +928,49 @@ if [ "$(q '[i["issue"] for i in d]' <"$WORK/stub.json")" = "[28, 341]" ]; then
     ok "detector 2 (stub-body) still flags the short bodies"
 else
     bad "detector 2 regressed: $(cat "$WORK/stub.json")"
+fi
+
+# --- 4l. the exit-code contract itself ---------------------------------------
+# EVERY other row presets REPO, so the resolution path this gate's script
+# rewrote never executed here: reverting it to the pre-change one-liner kept the
+# whole gate green while that copy exited 1 (not a repo) and 127 (gh missing),
+# both silently — the exact measurements the script's own header records as the
+# bug. These three rows are the only thing that runs it, and (c) proves the
+# mock's `repo view` arm is reachable rather than dead code.
+ec_out="$WORK/ec.out"; ec_err="$WORK/ec.err"
+
+# (a) gh missing entirely. A minimal PATH is used rather than an empty one so
+#     python3/coreutils still resolve; if this host cannot express "gh absent
+#     but python3 present" the row says so instead of passing quietly.
+if PATH=/usr/bin:/bin command -v python3 >/dev/null 2>&1 && ! PATH=/usr/bin:/bin command -v gh >/dev/null 2>&1; then
+    ec_rc=0
+    env -u REPO PATH=/usr/bin:/bin bash "$SCRIPT" >"$ec_out" 2>"$ec_err" || ec_rc=$?
+    if [ "$ec_rc" = "10" ] && grep -q 'gh not installed' "$ec_err"; then
+        ok "gh missing exits 10 and names the cause"
+    else
+        bad "gh missing exited $ec_rc (want 10): $(head -c 140 "$ec_err")"
+    fi
+else
+    bad "cannot express 'gh absent, python3 present' on this host — the gh-missing row did not run, which is a gap, not a pass"
+fi
+
+# (b) REPO unset and `gh repo view` fails — the transport case.
+ec_rc=0
+env -u REPO PATH="$WORK/bin:$PATH" MOCK_FAIL_REPO_VIEW=1 bash "$SCRIPT" >"$ec_out" 2>"$ec_err" || ec_rc=$?
+if [ "$ec_rc" = "10" ] && grep -q 'could not resolve the repo' "$ec_err"; then
+    ok "a failed repo resolution exits 10 and relays gh's own words"
+else
+    bad "a failed repo resolution exited $ec_rc (want 10): $(head -c 140 "$ec_err")"
+fi
+
+# (c) REPO unset and `gh repo view` WORKS. Without this, (a) and (b) could both
+#     pass on a script that never resolves a repo at all.
+ec_rc=0
+env -u REPO PATH="$WORK/bin:$PATH" bash "$SCRIPT" >"$ec_out" 2>"$ec_err" || ec_rc=$?
+if [ "$ec_rc" = "0" ]; then
+    ok "…and with REPO unset but resolvable, the run completes normally"
+else
+    bad "REPO unset with a working repo view exited $ec_rc (want 0): $(head -c 200 "$ec_err")"
 fi
 
 # --- 5. read-only ------------------------------------------------------------
