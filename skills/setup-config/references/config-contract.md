@@ -71,7 +71,7 @@ Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry:
 documented exception to this principle is `sentry: none`, below, a form three sibling keys now share
 (`testflight: none`, `posthog: none`, `mobile: none`) with a deliberately *different* consequence.
 The same holds for `board`, `testflight`, `mobile`,
-`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, and `claim_label`. Presence remains
+`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, `execution_site`, and `claim_label`. Presence remains
 the toggle for the four `none` keys too — `none` is an *additional* value on them, never a
 replacement for presence, so a key that is simply absent is still off.
 
@@ -257,6 +257,7 @@ review_agent: qr-ninja-review-orchestrator   # override; omit -> sassy-dog:pr-re
 review_surfaces:                            # optional; steers the shipped orchestrator only
   "ops/**": sassy-dog:infra-platform-reviewer
 review_site: agent                          # where the gate runs on the dispatching paths
+execution_site: mac                         # the name THIS checkout answers to
 claim_label: in-progress
 posthog: true                               # or `none` — confirmed: no product analytics
 merge_queue: false
@@ -459,6 +460,52 @@ Three things are deliberately NOT configured here, because they are derived:
 The preview is still rolling out per-repo, so enablement is exactly the kind of fact that would go stale the day after it was written down. Config carries only the *policy* — may we stack here, and how deep.
 
 **`stacked_prs` and `merge_queue: true` together are refused at merge time,** not at config time: GitHub's queue support for stacks is still rolling out, and `pr-shepherd` stops with exit 24 rather than guessing. Setting both is legal — it simply means the dispatchers may open stacks that a human has to land.
+
+### `execution_site` — the name this checkout answers to
+
+```yaml
+execution_site: mac
+```
+
+A free-form lowercase token naming the workstation this checkout runs on. It is the config half of
+the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)):
+some work is executable only from one machine — the host holding a vendor's multi-GB images, the
+sibling checkout, the network reach — and nothing in the workflow skills could express that.
+
+The issue half is a body line that `github-issues`' `queue-snapshot.sh` parses beside `touches:` and
+`Depends on #N`, and emits as a per-issue `site` ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)):
+
+```text
+site: vdi
+```
+
+**One line, one token, and an absent line means "any site".** So does a malformed one — the
+script's header states every resolution rule and is the copy to trust, but the two that matter to
+whoever writes a config are: the token is **case-folded**, so `execution_site` should be written as
+a lowercase token and compared as plain equality; and a `site:` line inside a fenced code block or
+an HTML comment is **not** a declaration, so an issue may quote the contract without claiming it.
+
+**This key fits the config model unusually well.** Config is per-checkout by construction — one
+`.claude/sassy-dog/` tree per clone, never shared — and the site is exactly a per-checkout fact.
+That is why it is configured rather than derived, and it is not the `review_site:` exception
+repeated: the platform *is* derivable and a generator may propose from it (`darwin` → `mac`,
+`win32` → `windows`), but the resolved name is the **user's**, because `vdi` carries a meaning the
+platform string does not.
+
+**Absent means this checkout answers to no name.** There is then nothing for a `site:` line to be
+compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
+work all runs from one machine should simply omit it.
+
+**Nothing reads this key yet, and nothing behaves differently because of it.** #340 landed the
+deterministic substrate only — the parse and this documentation — so that the skills consuming it
+stay small and independently reviewable. The consumers are
+[#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) (`dispatch-ready`'s site filter and
+`take-it`'s refusal before claiming) and
+[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) (`groom-backlog`'s rubric,
+`survey-work`'s plate, and `setup-config`'s interview question for this key). Until those land,
+writing the key is inert and a `site:` line only shows up in the snapshot. **Cross-site dispatch is
+a non-goal** at every stage: the contract only lets a loop on one site step around work that belongs
+to another, and say so.
 
 ## Per-skill schemas
 
