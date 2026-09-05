@@ -950,19 +950,30 @@ fi
 # mock's `repo view` arm is reachable rather than dead code.
 ec_out="$WORK/ec.out"; ec_err="$WORK/ec.err"
 
-# (a) gh missing entirely. A minimal PATH is used rather than an empty one so
-#     python3/coreutils still resolve; if this host cannot express "gh absent
-#     but python3 present" the row says so instead of passing quietly.
-if PATH=/usr/bin:/bin command -v python3 >/dev/null 2>&1 && ! PATH=/usr/bin:/bin command -v gh >/dev/null 2>&1; then
+# (a) gh missing entirely. The condition is CONSTRUCTED rather than borrowed
+#     from the host's PATH layout: a directory of symlinks to the tools this
+#     script needs, with no gh in it. Keying on `/usr/bin:/bin` was
+#     host-dependent and went red on the CI runner, where gh ships in /usr/bin
+#     — a legitimately different layout must not fail the build.
+NOGH="$WORK/nogh"
+mkdir -p "$NOGH"
+nogh_missing=""
+for t in bash sh python3 mktemp sed tr grep cat wc head sort awk date rm env; do
+    p="$(command -v "$t" 2>/dev/null)" || { nogh_missing="$nogh_missing $t"; continue; }
+    ln -sf "$p" "$NOGH/$t"
+done
+if [ -n "$nogh_missing" ]; then
+    bad "cannot build a gh-free PATH: missing$nogh_missing — the gh-missing row did not run, which is a gap, not a pass"
+elif PATH="$NOGH" command -v gh >/dev/null 2>&1; then
+    bad "the constructed gh-free PATH still resolves gh — the gh-missing row would prove nothing"
+else
     ec_rc=0
-    env -u REPO PATH=/usr/bin:/bin bash "$SCRIPT" >"$ec_out" 2>"$ec_err" || ec_rc=$?
+    env -u REPO PATH="$NOGH" bash "$SCRIPT" >"$ec_out" 2>"$ec_err" || ec_rc=$?
     if [ "$ec_rc" = "10" ] && grep -q 'gh not installed' "$ec_err"; then
         ok "gh missing exits 10 and names the cause"
     else
         bad "gh missing exited $ec_rc (want 10): $(head -c 140 "$ec_err")"
     fi
-else
-    bad "cannot express 'gh absent, python3 present' on this host — the gh-missing row did not run, which is a gap, not a pass"
 fi
 
 # (b) REPO unset and `gh repo view` fails — the transport case.
