@@ -1164,14 +1164,25 @@
 #      therefore masked — and the mask is `site:`-ONLY, a deliberate asymmetry
 #      pinned in one body: narrowing `touches:` the same way would flip a
 #      fence-only annotation to `unannotated` and change what dispatch-ready's
-#      collision filter reads. Indentation is likewise not a code block, since
-#      the leading-whitespace tolerance is what lets the contract sit under a
-#      list item. Three mutants, each proved applied, proved to RUN, and proved
-#      by the row it reddens: the extraction, the mask, the case fold. Mock
-#      `gh` on PATH with REPO= suppressing the repo lookup: no repo, no
-#      network, and bucket sizes are asserted first because queue-snapshot
-#      swallows a failed list into `[]`, which reads exactly like a correct
-#      "nothing declared".
+#      collision filter reads. Two shapes inside that rule each have their own
+#      row, because each is a whole class the obvious implementation misses: a
+#      comment is masked by REMAINDER rather than by line, so the standard
+#      `site: <!-- vdi | mac -->` template placeholder declares nothing instead
+#      of declaring `<!--`; and fence delimiters pair on CHARACTER, RUN LENGTH
+#      and a whitespace-only tail, so a quoted example cannot end the block
+#      quoting it. Indentation is likewise not a code block, since the
+#      leading-whitespace tolerance is what lets the contract sit under a
+#      NESTED list item — and that row is at four columns on purpose, because a
+#      two-space fixture would pass with a 4-space rule in force. ELEVEN
+#      mutants, each proved applied, proved to RUN, and proved by the row it
+#      reddens; the roster and which row answers to which live in the gate's
+#      own header. Mock
+#      `gh` on PATH, with `REPO=<owner/name>` in the environment suppressing
+#      the `gh repo view` lookup (queue-snapshot runs that only when REPO is
+#      EMPTY): no repo, no network. The mock HONOURS `--json`, so dropping
+#      `body` from the pull reddens rather than passing. Bucket sizes are
+#      asserted first, because queue-snapshot swallows a failed list into `[]`,
+#      which reads exactly like a correct "nothing declared".
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1922,11 +1933,12 @@ fi
 # --- 39. queue-snapshot site tests ---------------------------------------------
 # The `site:` body contract added by #340 is substrate only, so nothing else in
 # the tree would notice it breaking. Both directions are pinned — the contract
-# parses, an example in a fence or an HTML comment does not — because #322 and
-# #340 both carry a fenced `site: vdi` and a fence-blind parse marks the
-# substrate issues themselves as VDI-only. The mask is `site:`-only on purpose;
-# narrowing `touches:` the same way is a behaviour change for every consumer
-# already reading it. Mock `gh`, no repo, no network.
+# parses; a fenced example, an unfilled `<!-- ... -->` placeholder and a quoted
+# fence do not — because #322 and #340 both carry a fenced `site: vdi` and a
+# fence-blind parse marks the substrate issues themselves as VDI-only. The mask
+# is `site:`-only on purpose; narrowing `touches:` the same way is a behaviour
+# change for every consumer already reading it. Eleven mutants; mock `gh` that
+# honours `--json`; no repo, no network.
 if bash scripts/test-queue-snapshot-site.sh; then
     pass "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
 else

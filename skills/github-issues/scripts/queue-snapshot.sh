@@ -11,8 +11,7 @@
 #                         often means "later", a stack means "ship together".
 #   - `site:` line      → the execution site an issue can only be worked from
 #                         (issue #340, epic #322). One line, one free-form
-#                         token; ABSENT MEANS "any site", and so does a
-#                         malformed line. Emitted lowercased, or null.
+#                         token, emitted lowercased; ABSENT MEANS "any site".
 #
 # `site:` resolution, spelled out because a body can be ambiguous in several
 # ways at once and the answer must not depend on WHICH ambiguity it carries:
@@ -21,19 +20,32 @@
 #   * Only the first whitespace-separated token is the site: `site: vdi (corp
 #     laptop)` is `vdi`. The contract is one token, so the rest is a remark.
 #   * Backticks are tolerated in the value, as in `touches:`.
-#   * Case is folded. A site name is an identifier compared for equality
-#     against a per-checkout `execution_site:`, and a case difference between
-#     an issue body and a config file is invisible in both places.
+#   * Case is folded. A site name is a token compared for equality against a
+#     per-checkout `execution_site:`, and a case difference between an issue
+#     body and a config file is invisible in both places. The comparison is
+#     case-insensitive on BOTH sides — folding the configured value is the
+#     reading skill's half, which this script cannot do for it.
 #   * A `site:` line carrying no token at all is not a declaration: the scan
 #     continues past it, and if nothing else declares one the answer is null.
-#     Null and absent are the same answer — any site.
-#   * Lines inside a FENCED code block or an HTML comment are not read as a
-#     declaration. This is not hypothetical: both issues that introduced the
-#     contract, #322 and #340, carry a fenced example holding a `site: vdi`
-#     line, so a fence-blind parse marks the substrate issues themselves
-#     VDI-only. Indentation is deliberately NOT read as a code block — the
-#     leading-whitespace tolerance is what lets the contract sit inside a list
-#     item, and a 4-space rule would take that away.
+#     Null and absent are the same answer — any site. That valueless line is
+#     the ONLY malformed shape this parser recognises.
+#   * NOTHING IS RESERVED. Every other token is emitted verbatim (lowercased),
+#     `site: any` and `site: none` included — to this script they are ordinary
+#     site names, not escapes. Do not read "absent means any site" as though
+#     the word `any` were a value: it is the MISSING LINE that means it.
+#   * Lines inside a FENCED code block are not read as a declaration, and
+#     neither is text inside an HTML comment — the site parse reads the
+#     comment-stripped remainder of a line, so an unfilled issue-template
+#     placeholder (`site: <!-- vdi | mac -->`) declares nothing while
+#     `site: <!-- pick one --> vdi` declares `vdi`. The fenced half is not
+#     hypothetical: both issues that introduced the contract, #322 and #340,
+#     carry a fenced example holding a `site: vdi` line, so a fence-blind
+#     parse marks the substrate issues themselves VDI-only.
+#   * Indentation is deliberately NOT read as a code block. CommonMark makes
+#     four leading spaces an indented code block; here the leading-whitespace
+#     tolerance is what lets the contract sit as a continuation line under a
+#     NESTED list item, which is already past four columns, and a 4-space rule
+#     would take that away.
 #   * The masking above applies to `site:` ALONE. `touches:`, `stack:` and
 #     `Depends on` keep the parse they shipped with: narrowing them is a
 #     behaviour change for every consumer already reading them, and #340 is
@@ -114,53 +126,86 @@ stack_re = re.compile(r'^\s*stack:\s*(.+)$', re.IGNORECASE)
 # `site:` (or one followed only by whitespace) fail to match at all, so it is
 # never mistaken for a declaration of the empty site.
 site_re = re.compile(r'^\s*site:\s*(\S.*)$', re.IGNORECASE)
-# A fence DELIMITER, not a fence: the opening and closing lines look alike, so
-# the marker character is what pairs them.
+# A fence DELIMITER, not a fence: openers and closers look alike, so an opener
+# is remembered as (character, run length) and `closes_fence` decides pairing.
 fence_re = re.compile(r'^\s*(`{3,}|~{3,})')
 ref_re = re.compile(r'#(\d+)')
 
 
-def scan_lines(body):
-    """Yield (line, masked) per body line.
+def strip_comments(line, in_comment):
+    """Return (visible, in_comment): the line with HTML-comment spans removed.
 
-    `masked` marks a line sitting inside a fenced code block or an HTML
-    comment — text that LOOKS like a body contract but is an example or a
-    template remark. Only the `site:` parse honours it; see the header for why
-    the older contracts are deliberately left fence-blind.
+    The site parse reads this REMAINDER rather than the raw line. Keying on
+    "did the line START inside a comment" instead is a different rule, and it
+    misses the shape issue templates actually use: `site: <!-- vdi | mac -->`
+    starts outside the comment, so the raw line matches and the unfilled
+    placeholder itself becomes the site.
     """
-    fence = None            # the fence character currently open, or None
+    out, rest = [], line
+    while rest:
+        if in_comment:
+            cut = rest.find('-->')
+            if cut < 0:
+                break                        # comment runs past end of line
+            rest, in_comment = rest[cut + 3:], False
+        else:
+            cut = rest.find('<!--')
+            if cut < 0:
+                out.append(rest)
+                break
+            out.append(rest[:cut])
+            rest, in_comment = rest[cut + 4:], True
+    return ''.join(out), in_comment
+
+
+def closes_fence(line, fence):
+    """CommonMark's closer test. All three clauses earn their place.
+
+    Same CHARACTER as the opener, or a ``` inside a ~~~ block ends it. At
+    least as LONG, or a ```-fenced example quoted inside a ````-fenced block
+    ends the quote early. Nothing but WHITESPACE after it, or an info string
+    (```text) reads as a closer.
+    """
+    m = fence_re.match(line)
+    if not m:
+        return False
+    marker = m.group(1)
+    return (marker[0] == fence[0] and len(marker) >= fence[1]
+            and not line[m.end():].strip())
+
+
+def scan_lines(body):
+    """Yield (line, visible) per body line.
+
+    `visible` is the only text the `site:` parse may read: empty for anything
+    inside a fenced code block (delimiters included), and stripped of HTML
+    comments everywhere else. The older contracts read `line` instead and are
+    deliberately left fence-blind — see the header.
+    """
+    fence = None            # (character, run length) of the open fence, or None
     in_comment = False
     for line in (body or "").splitlines():
-        opened_in_comment = in_comment
-        # Walk this line's comment markers in order, so a line that both opens
-        # and closes one leaves the state where it found it.
-        rest = line
-        while True:
-            if in_comment:
-                cut = rest.find('-->')
-                if cut < 0:
-                    break
-                rest, in_comment = rest[cut + 3:], False
-            else:
-                cut = rest.find('<!--')
-                if cut < 0:
-                    break
-                rest, in_comment = rest[cut + 4:], True
-        masked = opened_in_comment or fence is not None
-        if not opened_in_comment:
-            m = fence_re.match(line)
-            if m:
-                marker = m.group(1)[0]
-                if fence is None:
-                    fence = marker
-                elif marker == fence:
-                    fence = None
-                masked = True   # the delimiter line is never content
-        yield line, masked
+        if fence is not None:
+            # Inside a fence, comment syntax is CONTENT, so the comment walk
+            # does not run here. An unclosed `<!--` in a fenced example would
+            # otherwise swallow the closing delimiter and every real
+            # declaration after it — the false NEGATIVE, where "absent means
+            # any site" lets the wrong loop claim a site-held issue.
+            if closes_fence(line, fence):
+                fence = None
+            yield line, ""                   # fenced content declares nothing
+            continue
+        visible, in_comment = strip_comments(line, in_comment)
+        m = fence_re.match(visible)
+        if m:
+            fence = (m.group(1)[0], len(m.group(1)))
+            yield line, ""                   # the delimiter declares nothing
+            continue
+        yield line, visible
 
 def parse_body(body):
     touches, depends, stack, site = [], [], [], None
-    for line, masked in scan_lines(body):
+    for line, visible in scan_lines(body):
         m = touches_re.match(line)
         if m and not touches:
             raw = m.group(1).replace('`', ' ')
@@ -175,8 +220,8 @@ def parse_body(body):
                     seen.add(n)
                     stack.append(n)
             continue
-        if site is None and not masked:
-            m = site_re.match(line)
+        if site is None:
+            m = site_re.match(visible)
             if m:
                 token = m.group(1).replace('`', ' ').split()
                 if token:              # a valueless line declares nothing

@@ -114,6 +114,19 @@ interview step. That instruction also lives in `migrate-mode.md` itself, because
 opening says migrate mode is covered there, and a rule stated only here is a rule that path never
 reads.
 
+**`execution_site` is a NAME, not a detected fact — carry an existing value verbatim.** It is the
+sibling of the `stacked_prs` rule above: both are keys a refresh must never derive, for different
+reasons — that one because availability is not consent, this one because there is nothing to derive
+from. It records what the user calls the workstation this checkout runs on, and step 3 has nothing
+to re-verify it against: the platform answers what *kind* of machine this is (`darwin`, `win32`),
+never what it was named, so a refresh that "re-derived" would replace `vdi` with `windows` on the
+one checkout the name exists to distinguish. The platform-derived name is a **proposal for an
+ABSENT key only** — offered in the preview like any other addition, never written silently, and
+"leave it unset" is a valid answer. A value the user disputes is a stop and surface, as everywhere
+else. Getting this wrong is silent in the dangerous direction: a missing or overwritten
+`execution_site` turns a site filter OFF rather than on, which is
+[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
+
 ## Adopt mode (no marker — legacy hand-written skills)
 
 For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>-get-it`,

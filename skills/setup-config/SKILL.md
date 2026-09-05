@@ -193,6 +193,14 @@ in every run's output. If live visibility no longer matches what the configured 
 user decide. If the key is absent because the config predates it, propose the seeded value as an
 addition and say so in the preview; until then the reading skills default it to `agent`.
 
+**`execution_site:` is the same kind of fact, for a different reason.** It names the workstation
+this checkout answers to, and nothing derives that: the platform says what kind of machine this is,
+never what the user called it, so re-deriving would overwrite a `vdi` with `windows` on the very
+checkout the name exists for. **Carry an existing value across verbatim.** Where the key is absent,
+a platform-derived name (`darwin` → `mac`, `win32` → `windows`) may be *proposed* in the preview and
+never written silently — the user owns the name. A disagreement is surfaced, never applied.
+`config-contract.md` carries the key's contract; `references/update-mode.md` the operational half.
+
 **The three `none` answers are carried forward, not re-asked** — but an **absent** one is asked.
 **`sentry: none` is not one of them.** `testflight: none`, `posthog: none` and `mobile: none` each record
 a human's confirmation, so re-litigating them on every refresh reopens exactly what the form closed.
@@ -244,7 +252,9 @@ user approves** — writing into a product repo is outward-facing and never sile
 - Never delete a directory lacking a `generated-by:` marker.
 - Never delete generated skills before their config is written and verified.
 - Never copy a fact forward without re-verifying it against live state — except `review_site:`,
-  which is seeded once and carried forward by design, and the three confirmed-absent `none` forms
+  which is seeded once and carried forward by design; `execution_site:`, which names a machine no
+  live state can name back and is likewise carried verbatim, the platform default being a proposal
+  into an ABSENT key only; and the three confirmed-absent `none` forms
   (`testflight:`, `posthog:`, `mobile:`), which record a check that already happened.
   **`sentry: none` is not one of them**: it is re-derived on every refresh, because it is also
   written when the culprit check merely could not run, so freezing it would retire the plate's

@@ -180,9 +180,11 @@ the form is scoped to keys whose absence is *loud*:
 - **`board:` is excluded.** `survey-work` §3B already ships a boardless form that reads open issues
   directly, so an absent `board:` selects a documented alternative path rather than going dark. It
   renders no blind-spot row today and needs no opt-out.
-- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:` and `review_surfaces:` are
-  excluded.** None of them render a blind-spot row, so their absence costs a reader nothing and a
-  `none` would only add a state to get wrong.
+- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:`, `review_surfaces:` and
+  `execution_site:` are excluded.** None of them render a blind-spot row, so their absence costs a
+  reader nothing and a `none` would only add a state to get wrong. `execution_site:` is the
+  clearest of them: its absence already reads as "this checkout answers to no particular name",
+  which is what a `none` would have said.
 - **`stacked_prs:` is excluded, and for a third reason.** Its absence already means something
   specific — the repo has not opted in — and a refresh is forbidden from adding it at all
   (`references/update-mode.md`). Enablement is availability; the block is consent. A `none` there
@@ -472,18 +474,28 @@ the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-sk
 some work is executable only from one machine — the host holding a vendor's multi-GB images, the
 sibling checkout, the network reach — and nothing in the workflow skills could express that.
 
-The issue half is a body line that `github-issues`' `queue-snapshot.sh` parses beside `touches:` and
-`Depends on #N`, and emits as a per-issue `site` ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)):
+The issue half is a body line that `github-issues`' `queue-snapshot.sh` parses beside the three
+contracts it already read — `touches:`, `Depends on #N` and `stack:` — and emits as a per-issue
+`site` ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)):
 
 ```text
 site: vdi
 ```
 
-**One line, one token, and an absent line means "any site".** So does a malformed one — the
-script's header states every resolution rule and is the copy to trust, but the two that matter to
-whoever writes a config are: the token is **case-folded**, so `execution_site` should be written as
-a lowercase token and compared as plain equality; and a `site:` line inside a fenced code block or
-an HTML comment is **not** a declaration, so an issue may quote the contract without claiming it.
+**One line, one token, and an absent line means "any site".** The script's header states every
+resolution rule and is the copy to trust; three of them matter to whoever writes a config:
+
+- **Nothing is reserved.** The only malformed shape the parser recognises is a `site:` line with no
+  token at all, which declares nothing. Every other token is emitted verbatim, `site: any` and
+  `site: none` included — they are ordinary site names, not escapes, so an issue written `site: any`
+  is held for a site called `any`. It is the *missing line* that means "any site".
+- **The comparison is case-insensitive on both sides.** `queue-snapshot.sh` folds the issue's token
+  to lowercase; folding the configured value is the reading skill's half. Write `execution_site`
+  lowercase by convention, but a reader must not implement the match as plain equality against the
+  raw config value — `execution_site: VDI` would then hold the VDI loop's own work.
+- **A quoted contract is not a declaration.** A `site:` line inside a fenced code block, or inside
+  an HTML comment, does not declare — so an issue may show the contract, and an unfilled
+  `site: <!-- vdi | mac -->` template placeholder holds nothing.
 
 **This key fits the config model unusually well.** Config is per-checkout by construction — one
 `.claude/sassy-dog/` tree per clone, never shared — and the site is exactly a per-checkout fact.
@@ -495,6 +507,17 @@ platform string does not.
 **Absent means this checkout answers to no name.** There is then nothing for a `site:` line to be
 compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
 work all runs from one machine should simply omit it.
+
+**A refresh carries an existing value across verbatim; the platform name is a proposal for an
+ABSENT key only.** This is the second exception to *re-verify every fact against live state*, and it
+is not `review_site:`'s reason repeated. There is no live state to re-verify against: the platform
+answers what kind of machine this is, never what the user named it, so a refresh that re-derived
+would overwrite `vdi` with `windows` on the checkout whose whole point is being the VDI. The
+harm is silent in the direction that matters — an absent or wrong `execution_site` turns a site
+filter OFF, which is [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating
+bug — so the rule is: carry the value, propose only into an empty slot, and surface rather than
+rewrite if the user disagrees. `setup-config`'s guardrail list is the copy to trust for this, and
+`references/update-mode.md` carries the operational half.
 
 **Nothing reads this key yet, and nothing behaves differently because of it.** #340 landed the
 deterministic substrate only — the parse and this documentation — so that the skills consuming it
