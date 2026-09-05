@@ -1146,6 +1146,57 @@
 #      transport is round-tripped and asserted, with an adequacy conjunct, so
 #      the next such awk reports the transport rather than the targets.
 #
+#  39. queue-snapshot site tests (scripts/test-queue-snapshot-site.sh) —
+#      `queue-snapshot.sh`'s `site:` body contract (issue #340, epic #322): one
+#      line, one free-form token, absent meaning "any site". It is SUBSTRATE
+#      ONLY — nothing filters or reports differently because of it until #341
+#      and #343 land — which is exactly why it needs a gate: a field nothing
+#      consumes yet is a field nobody notices is wrong, and by the time #341
+#      reads it a false `site` is an issue the loop refuses to dispatch for a
+#      reason naming a workstation nobody asked about. So every row is a PAIR,
+#      the shape that must parse against the shape that must not, and the
+#      no-`site:` body is pinned KEY-SET-wide against what it emitted before —
+#      #340's "no shape change for existing consumers" line, which a spot check
+#      cannot express. The must-not half is measured, not hypothetical: #322
+#      and #340 both carry a fenced example holding a `site: vdi` line, so a
+#      fence-blind parse marks the substrate issues THEMSELVES as VDI-only on
+#      the first tick after landing. Fenced blocks and HTML comments are
+#      therefore masked — and the mask is `site:`-ONLY, a deliberate asymmetry
+#      pinned in one body: narrowing `touches:` the same way would flip a
+#      fence-only annotation to `unannotated` and change what dispatch-ready's
+#      collision filter reads. Two shapes inside that rule each have their own
+#      row, because each is a whole class the obvious implementation misses: a
+#      comment is masked by REMAINDER rather than by line, so the standard
+#      `site: <!-- vdi | mac -->` template placeholder declares nothing instead
+#      of declaring `<!--`; and fence delimiters pair on CHARACTER, RUN LENGTH
+#      and a whitespace-only tail, so a quoted example cannot end the block
+#      quoting it. Indentation is likewise not a code block, since the
+#      leading-whitespace tolerance is what lets the contract sit under a
+#      NESTED list item — and that row is at four columns on purpose, because a
+#      two-space fixture would pass with a 4-space rule in force. The mask must
+#      also never swallow text GitHub RENDERS, the false-negative direction:
+#      code spans are blanked before markup is looked for (this repo's issue #6
+#      carries a backticked `<!-- generated-by: …` that masked 25 of its 30
+#      non-blank lines), the empty comments `<!-->` and `<!--->` close where
+#      they stand, and a mid-line `<!--` dies at its paragraph. `<script>`,
+#      `<style>` and `<?…?>` are an ACCEPTED divergence, pinned by a row rather
+#      than closed. The token carries a grammar, because a consumer echoes it
+#      into a refusal reason and a public repo's body stays editable after
+#      `ready`, and the grammar's four clauses carry a row each. THREE
+#      divergences from CommonMark are ACCEPTED rather than closed, each with a
+#      pinning row, so changing one is a decision. TWENTY-ONE mutants, each
+#      proved applied, proved to RUN, and proved
+#      by the row it reddens; the roster and which row answers to which live in
+#      the gate's own header. Mock `gh` on PATH, with `REPO=<owner/name>` in
+#      the environment suppressing the `gh repo view` lookup (queue-snapshot
+#      runs that only when REPO is EMPTY), the shim's resolution verified
+#      immediately after `chmod`, and an RFC 2606 `.invalid` slug so no read
+#      can reach a real namespace: no repo, no network, structurally. The mock
+#      HONOURS `--json`, so dropping `body` from the pull reddens rather than
+#      passing. Bucket sizes are asserted first as a DIAGNOSTIC — the rows fail
+#      loudly on their own, and this turns thirty red rows into one line naming
+#      the cause.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -1867,6 +1918,10 @@ else
     failed "detect-capabilities tests (scripts/test-detect-capabilities.sh)"
 fi
 
+# --- 37. plugin-root-in-references tests ---------------------------------------
+# `${CLAUDE_PLUGIN_ROOT}` is substituted into SKILL.md at load time and nowhere
+# else, so a reference doc writing it in a command resolves against `/` and
+# exits 127. The header entry above carries the rest.
 if bash scripts/test-plugin-root-in-references.sh; then
     pass "plugin-root-in-references tests (scripts/test-plugin-root-in-references.sh)"
 else
@@ -1886,6 +1941,21 @@ if bash scripts/test-file-or-link-issue.sh; then
     pass "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
 else
     failed "file-or-link-issue tests (scripts/test-file-or-link-issue.sh)"
+fi
+
+# --- 39. queue-snapshot site tests ---------------------------------------------
+# The `site:` body contract added by #340 is substrate only, so nothing else in
+# the tree would notice it breaking. Both directions are pinned — the contract
+# parses; a fenced example, an unfilled `<!-- ... -->` placeholder and a quoted
+# fence do not; and text GitHub renders (a code span, an empty comment, a
+# mid-line comment past its paragraph) is never masked. The mask is
+# `site:`-only on purpose; narrowing `touches:` the same way is a behaviour
+# change for every consumer already reading it. Twenty-one mutants; mock `gh`
+# that honours `--json`; no repo, no network.
+if bash scripts/test-queue-snapshot-site.sh; then
+    pass "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
+else
+    failed "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
 fi
 
 # ------------------------------------------------------------------------------

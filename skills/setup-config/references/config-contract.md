@@ -71,7 +71,7 @@ Omit the `sentry:` key entirely and the surface is skipped. There is no `sentry:
 documented exception to this principle is `sentry: none`, below, a form three sibling keys now share
 (`testflight: none`, `posthog: none`, `mobile: none`) with a deliberately *different* consequence.
 The same holds for `board`, `testflight`, `mobile`,
-`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, and `claim_label`. Presence remains
+`migrations`, `codegen`, `secret_bootstrap`, `review_surfaces`, `execution_site`, and `claim_label`. Presence remains
 the toggle for the four `none` keys too — `none` is an *additional* value on them, never a
 replacement for presence, so a key that is simply absent is still off.
 
@@ -180,9 +180,11 @@ the form is scoped to keys whose absence is *loud*:
 - **`board:` is excluded.** `survey-work` §3B already ships a boardless form that reads open issues
   directly, so an absent `board:` selects a documented alternative path rather than going dark. It
   renders no blind-spot row today and needs no opt-out.
-- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:` and `review_surfaces:` are
-  excluded.** None of them render a blind-spot row, so their absence costs a reader nothing and a
-  `none` would only add a state to get wrong.
+- **`secret_bootstrap:`, `migrations:`, `codegen:`, `claim_label:`, `review_surfaces:` and
+  `execution_site:` are excluded.** None of them render a blind-spot row, so their absence costs a
+  reader nothing and a `none` would only add a state to get wrong. `execution_site:` is the
+  clearest of them: its absence already reads as "this checkout answers to no particular name",
+  which is what a `none` would have said.
 - **`stacked_prs:` is excluded, and for a third reason.** Its absence already means something
   specific — the repo has not opted in — and a refresh is forbidden from adding it at all
   (`references/update-mode.md`). Enablement is availability; the block is consent. A `none` there
@@ -257,6 +259,7 @@ review_agent: qr-ninja-review-orchestrator   # override; omit -> sassy-dog:pr-re
 review_surfaces:                            # optional; steers the shipped orchestrator only
   "ops/**": sassy-dog:infra-platform-reviewer
 review_site: agent                          # where the gate runs on the dispatching paths
+execution_site: mac                         # the name THIS checkout answers to
 claim_label: in-progress
 posthog: true                               # or `none` — confirmed: no product analytics
 merge_queue: false
@@ -459,6 +462,103 @@ Three things are deliberately NOT configured here, because they are derived:
 The preview is still rolling out per-repo, so enablement is exactly the kind of fact that would go stale the day after it was written down. Config carries only the *policy* — may we stack here, and how deep.
 
 **`stacked_prs` and `merge_queue: true` together are refused at merge time,** not at config time: GitHub's queue support for stacks is still rolling out, and `pr-shepherd` stops with exit 24 rather than guessing. Setting both is legal — it simply means the dispatchers may open stacks that a human has to land.
+
+### `execution_site` — the name this checkout answers to
+
+```yaml
+execution_site: mac
+```
+
+A free-form lowercase token naming the workstation this checkout runs on. It is the config half of
+the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)):
+some work is executable only from one machine — the host holding a vendor's multi-GB images, the
+sibling checkout, the network reach — and nothing in the workflow skills could express that.
+
+The issue half is a body line that `github-issues`' `queue-snapshot.sh` parses beside the three
+contracts it already read — `touches:`, `Depends on #N` and `stack:` — and emits as a per-issue
+`site` ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)):
+
+```text
+site: vdi
+```
+
+**One line, one token, and an absent line means "any site".** The script's header states every
+resolution rule and is the copy to trust; four of them matter to whoever writes a config:
+
+- **The token has a grammar, and nothing inside it is reserved.** After folding, a site token is
+  `^[a-z0-9][a-z0-9._-]{0,63}$`. Within that, `site: any` and `site: none` are ordinary site names
+  rather than escapes, so an issue written `site: any` is held for a site called `any` — it is the
+  *missing line* that means "any site". Two shapes are malformed and answer alike: a `site:` line
+  with no token, and one whose token fails the grammar. Neither declares, so both fall through to
+  "any site" — which is why the grammar is deliberately permissive rather than a whitelist.
+- **A consumer never interpolates the token raw.** The grammar already excludes whitespace, quoting
+  and shell metacharacters, so this is defence in depth rather than the only line — but a site name
+  reaches a human through a refusal reason, and issue bodies on a public repo stay editable after
+  `ready` is applied. Treat it as data: quote it, never build a command or a URL by concatenation,
+  and if the grammar is ever widened, revisit every reader before the parse.
+- **The comparison is case-insensitive on both sides.** `queue-snapshot.sh` folds the issue's token
+  to lowercase; folding the configured value is the reading skill's half. Write `execution_site`
+  lowercase by convention, but a reader must not implement the match as plain equality against the
+  raw config value — `execution_site: VDI` would then hold the VDI loop's own work.
+- **A quoted contract is not a declaration.** A `site:` line inside a fenced code block, or inside
+  an HTML comment, does not declare — so an issue may show the contract, and an unfilled
+  `site: <!-- vdi | mac -->` template placeholder holds nothing.
+
+**This key fits the config model unusually well.** Config is per-checkout by construction — one
+`.claude/sassy-dog/` tree per clone, never shared — and the site is exactly a per-checkout fact.
+That is why it is configured rather than derived, and it is not the `review_site:` exception
+repeated: the machine's *kind* is derivable, but the resolved name is the **user's**, because `vdi`
+carries a meaning no platform string does.
+
+**Where a proposal would come from, when one exists.** The source is `uname -s`, not a language
+runtime's platform constant — an agent following this contract runs a shell:
+
+| `uname -s` | Proposed name |
+| --- | --- |
+| `Darwin` | `mac` |
+| `MINGW64_NT-…` / `MSYS_NT-…` / `CYGWIN_NT-…` | `windows` |
+| `Linux` | **no proposal** |
+
+`Linux` gets none on purpose. It is what every cloud and scheduled-routine session reports, and a
+container that exists for one run is not a workstation with a name — proposing `linux` there would
+write a site into a checkout that should answer to none. A Linux user whose machine *is* a
+workstation names it themselves, like everybody else.
+
+**Absent means this checkout answers to no name.** There is then nothing for a `site:` line to be
+compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
+work all runs from one machine should simply omit it.
+
+**A refresh carries an existing value across verbatim; the platform name is a proposal for an
+ABSENT key only.** This is the second exception to *re-verify every fact against live state*, and it
+is not `review_site:`'s reason repeated. There is no live state to re-verify against: the platform
+answers what kind of machine this is, never what the user named it, so a refresh that re-derived
+would overwrite `vdi` with `windows` on the checkout whose whole point is being the VDI. The
+harm is silent in the direction that matters — an absent or wrong `execution_site` turns a site
+filter OFF, which is [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating
+bug — so the rule is: carry the value, never re-derive it, and surface rather than rewrite if the
+user disputes it. **An absent key stays absent for now.** Proposing a name into an empty slot is
+[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s interview to add; until that
+section exists there is no question shape and no way to record "declined", so a proposal would be
+re-offered on every refresh forever. `setup-config`'s guardrail list is the copy to trust for this,
+and `references/update-mode.md` carries the operational half.
+
+**Who reads it, by the change that adds the reader.** The body half — the parse and this contract
+— landed first and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that
+each consumer stayed small enough to review:
+
+| Change | Adds |
+| --- | --- |
+| [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) | `dispatch-ready` skips a Ready issue whose `site:` differs from this value; `take-it` refuses one before claiming it |
+| [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) | `groom-backlog` requires the declaration before Ready; `survey-work` shows the site on backlog lines; `setup-config` asks for this key |
+
+**Read the skill, not this table, for what a given release does.** The table says which change
+introduces each reader, not which of them have landed — deliberately, because the alternative is a
+sentence about issue state that nothing re-derives. Getting it wrong in the "not yet" direction is
+the one that bites: a reader who concludes the key is inert skips it on a mac checkout, which turns
+the site filter off — #322's originating bug, reintroduced by its own contract.
+
+**Cross-site dispatch is a non-goal** at every stage: the contract only lets a loop on one site step
+around work that belongs to another, and say so.
 
 ## Per-skill schemas
 
