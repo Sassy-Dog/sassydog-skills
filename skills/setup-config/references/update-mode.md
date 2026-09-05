@@ -131,11 +131,13 @@ OFF rather than on, which is
 [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
 
 **This paragraph sits below the migrate-mode handoff deliberately, and migrate mode's own rule is
-in `migrate-mode.md`.** Beside its `stacked_prs` sibling it would push the absent-key window above
-from 1727 bytes to 2171 against `test-sentry-verification.sh`'s 2400-byte backstop, and that gate
-asserts the window ends at its stop MARKER rather than at the cap. Nothing here is weakened by the
-move — the rule reads the same either way — but the handoff above no longer covers it, so the
-migrate path carries its own copy rather than inheriting one it never reads.
+in `migrate-mode.md`.** Inserted above the `**Migrate mode inherits` stop marker — beside its
+`stacked_prs` sibling, where it reads as though it belongs — this paragraph carries the absent-key
+window past the byte cap in `test-sentry-verification.sh`, and `window_is_bounded` reddens: that
+gate requires the window to end at its stop MARKER, and treats the cap as a backstop against a
+missing marker rather than a budget to spend. Nothing here is weakened by the move — the rule reads
+the same either way — but the handoff above no longer covers it, so the migrate path carries its own
+copy rather than inheriting one it never reads.
 
 ## Adopt mode (no marker — legacy hand-written skills)
 

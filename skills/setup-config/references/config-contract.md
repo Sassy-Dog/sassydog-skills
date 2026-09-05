@@ -483,7 +483,7 @@ site: vdi
 ```
 
 **One line, one token, and an absent line means "any site".** The script's header states every
-resolution rule and is the copy to trust; three of them matter to whoever writes a config:
+resolution rule and is the copy to trust; four of them matter to whoever writes a config:
 
 - **The token has a grammar, and nothing inside it is reserved.** After folding, a site token is
   `^[a-z0-9][a-z0-9._-]{0,63}$`. Within that, `site: any` and `site: none` are ordinary site names
@@ -535,21 +535,27 @@ answers what kind of machine this is, never what the user named it, so a refresh
 would overwrite `vdi` with `windows` on the checkout whose whole point is being the VDI. The
 harm is silent in the direction that matters — an absent or wrong `execution_site` turns a site
 filter OFF, which is [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating
-bug — so the rule is: carry the value, propose only into an empty slot, and surface rather than
-rewrite if the user disagrees. `setup-config`'s guardrail list is the copy to trust for this, and
-`references/update-mode.md` carries the operational half.
+bug — so the rule is: carry the value, never re-derive it, and surface rather than rewrite if the
+user disputes it. **An absent key stays absent for now.** Proposing a name into an empty slot is
+[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s interview to add; until that
+section exists there is no question shape and no way to record "declined", so a proposal would be
+re-offered on every refresh forever. `setup-config`'s guardrail list is the copy to trust for this,
+and `references/update-mode.md` carries the operational half.
 
-**Who reads it.** `dispatch-ready` skips a Ready issue whose `site:` differs from this value and
-`take-it` refuses one before claiming it
-([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)); `groom-backlog` requires the
-declaration before Ready, `survey-work` shows the site on backlog lines, and `setup-config` asks
-for this key ([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). The body half —
-the parse and this contract — landed first and on its own, so that each of those stayed small
-enough to review
-([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)). **Check the skill, not this
-list, for what a given release does:** a reader who takes an out-of-date "nothing reads it yet" at
-face value skips the key on a mac checkout, which turns the site filter off — #322's originating
-bug, reintroduced by its own contract.
+**Who reads it, by the change that adds the reader.** The body half — the parse and this contract
+— landed first and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that
+each consumer stayed small enough to review:
+
+| Change | Adds |
+| --- | --- |
+| [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) | `dispatch-ready` skips a Ready issue whose `site:` differs from this value; `take-it` refuses one before claiming it |
+| [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) | `groom-backlog` requires the declaration before Ready; `survey-work` shows the site on backlog lines; `setup-config` asks for this key |
+
+**Read the skill, not this table, for what a given release does.** The table says which change
+introduces each reader, not which of them have landed — deliberately, because the alternative is a
+sentence about issue state that nothing re-derives. Getting it wrong in the "not yet" direction is
+the one that bites: a reader who concludes the key is inert skips it on a mac checkout, which turns
+the site filter off — #322's originating bug, reintroduced by its own contract.
 
 **Cross-site dispatch is a non-goal** at every stage: the contract only lets a loop on one site step
 around work that belongs to another, and say so.

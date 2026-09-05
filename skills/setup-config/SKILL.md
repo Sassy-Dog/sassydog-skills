@@ -260,9 +260,13 @@ user approves** — writing into a product repo is outward-facing and never sile
 - Never delete generated skills before their config is written and verified.
 - Never copy a fact forward without re-verifying it against live state — except `review_site:`,
   which is seeded once and carried forward by design; `execution_site:`, which names a machine no
-  live state can name back and is likewise carried verbatim, the platform default being a proposal
-  into an ABSENT key only; and the three confirmed-absent `none` forms
+  live state can name back and is likewise carried verbatim, with an absent one left absent; and
+  the three confirmed-absent `none` forms
   (`testflight:`, `posthog:`, `mobile:`), which record a check that already happened.
+  **Nothing proposes an `execution_site:` today** — the platform-derived name becomes a proposal
+  into that empty slot only once
+  [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s interview exists to record a
+  "declined", or it is re-offered on every refresh forever.
   **`sentry: none` is not one of them**: it is re-derived on every refresh, because it is also
   written when the culprit check merely could not run, so freezing it would retire the plate's
   highest-signal surface with no path back (Phase 4, `references/update-mode.md`). A

@@ -1182,7 +1182,10 @@
 #      `<style>` and `<?…?>` are an ACCEPTED divergence, pinned by a row rather
 #      than closed. The token carries a grammar, because a consumer echoes it
 #      into a refusal reason and a public repo's body stays editable after
-#      `ready`. FIFTEEN mutants, each proved applied, proved to RUN, and proved
+#      `ready`, and the grammar's four clauses carry a row each. THREE
+#      divergences from CommonMark are ACCEPTED rather than closed, each with a
+#      pinning row, so changing one is a decision. TWENTY-ONE mutants, each
+#      proved applied, proved to RUN, and proved
 #      by the row it reddens; the roster and which row answers to which live in
 #      the gate's own header. Mock `gh` on PATH, with `REPO=<owner/name>` in
 #      the environment suppressing the `gh repo view` lookup (queue-snapshot
@@ -1947,8 +1950,8 @@ fi
 # fence do not; and text GitHub renders (a code span, an empty comment, a
 # mid-line comment past its paragraph) is never masked. The mask is
 # `site:`-only on purpose; narrowing `touches:` the same way is a behaviour
-# change for every consumer already reading it. Fifteen mutants; mock `gh` that
-# honours `--json`; no repo, no network.
+# change for every consumer already reading it. Twenty-one mutants; mock `gh`
+# that honours `--json`; no repo, no network.
 if bash scripts/test-queue-snapshot-site.sh; then
     pass "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"
 else

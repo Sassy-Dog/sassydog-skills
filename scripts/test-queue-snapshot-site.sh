@@ -39,7 +39,10 @@
 #     quote, a ``` does not close a ~~~, and an info string is not a closer.
 #     Rows 118-122 are the three clauses plus the recovery afterwards.
 #   * An HTML COMMENT is masked by REMAINDER, not by line: the site parse reads
-#     what is left of the line outside every comment span. Rows 115-117.
+#     what is left of the line outside every comment span. Rows 115-117. A line
+#     that opens or continues a BLOCK comment is an HTML block for its whole
+#     length, so no fence opens on it either (row 138), and a `<!--` inside a
+#     fence opener's info string is not markup at all (row 136).
 #   * Inside a fence, comment syntax is CONTENT — the walk does not run
 #     there, or comment state LEAKS PAST the block and masks the first real
 #     declaration after it (row 123). The closer itself is unaffected either
@@ -53,13 +56,26 @@
 #     backticked info string); the EMPTY COMMENTS `<!-->` and `<!--->` close
 #     where they stand (rows 126-127); and a mid-line `<!--` is inline HTML
 #     that dies at its paragraph (row 130).
-#   * ACCEPTED DIVERGENCE, pinned by row 129 rather than closed. `<script>`,
-#     `<style>` and `<?…?>` are not masked, so a `site:` inside one is read
-#     although GitHub's sanitizer drops those elements with their contents. It
-#     is the only one of these whose error is a false POSITIVE, no instance
-#     appeared in 554 sampled org bodies, and closing it costs a third
-#     line-state machine. The row exists so changing the answer is a decision.
-#   * The token has a GRAMMAR (rows 131-133): `^[a-z0-9][a-z0-9._-]{0,63}$`
+#   * ACCEPTED DIVERGENCES, pinned rather than closed — THREE of them, each
+#     with a row, so changing any one is a decision rather than a surprise.
+#     None appeared in 554 sampled org bodies.
+#       - `<script>`, `<style>` and `<?…?>` are not masked (row 129), so a
+#         `site:` inside one is read although GitHub's sanitizer drops those
+#         elements with their contents. FALSE POSITIVE; closing it costs a
+#         third line-state machine. Row 142 is its RECOVERY row and is why 129
+#         is not weak: a correct mask and a never-closing one flip 129
+#         identically, and only 142 tells them apart — the same job row 122
+#         does for fences.
+#       - A code span pairs per LINE, so one spanning a break does not blank
+#         and text inside it declares (row 139). FALSE POSITIVE; closing it
+#         means carrying span state across lines, which the per-line index map
+#         exists to avoid.
+#       - An UNCLOSED mid-line `<!--` masks the rest of its paragraph (row
+#         140), though CommonMark renders it literally. FALSE NEGATIVE, and
+#         bounded — row 130's blank-line rule stops it at the paragraph.
+#         Closing it needs lookahead for a closer that may never arrive.
+#   * The token has a GRAMMAR (rows 131-135, one row per clause):
+#     `^[a-z0-9][a-z0-9._-]{0,63}$`
 #     after folding. A consumer echoes the token into a refusal reason (#341)
 #     and a public repo's body stays editable after `ready` is applied, so the
 #     boundary is asserted once at the parse. Both malformed shapes — no token,
@@ -81,9 +97,9 @@
 # two-space fixture would satisfy this row while a 4-space rule was in force,
 # so the row would be measuring nothing — M4 is what proves it is not.
 #
-# THE MUTATION PROOFS. Fifteen, each neutering ONE decision, each proved applied
-# (the mutant must differ from the source), proved to RUN (a mutant that dies
-# proves nothing), and proved by the row it reddens:
+# THE MUTATION PROOFS. Twenty-one, each neutering ONE decision, each proved
+# applied (the mutant must differ from the source), proved to RUN (a mutant that
+# dies proves nothing), and proved by the row it reddens:
 #   M1  the extraction itself        -> 101, the plain `site: vdi` row
 #   M2  the fenced-content mask      -> 106, the fenced example declares
 #   M3  the case fold                -> 103, `Site: VDI` stops matching
@@ -99,6 +115,12 @@
 #   M13 code-span blanking           -> 125 (and 128 — same mechanism)
 #   M14 the empty-comment forms      -> 126, `<!-->` never closes
 #   M15 the inline-comment paragraph -> 130, a mid-line `<!--` runs to EOF
+#   M16 the grammar's LENGTH bound   -> 134, a long real hostname is rejected
+#   M17 the grammar's FIRST class    -> 135, `--help` becomes a site name
+#   M18 the info-string comment reset-> 136, state leaks past the block
+#   M19 the backtick info-string rule-> 137, a fence opens and never closes
+#   M20 the HTML-block line rule     -> 138, a fence marker masks the body
+#   M21 `re.ASCII` on the key match  -> 141, a lookalike key declares
 # The named row is the one to read; it is NOT a claim of exclusivity, and two
 # of these deliberately reach further. M5 also reddens 122, because a bare
 # 3-tick line that wrongly closes the 4-tick block leaves the trailing 4-tick
@@ -110,7 +132,10 @@
 # placeholder is kept out twice over — the comment span is stripped, and
 # independently `<!--` fails the token grammar — so M10 leaves it null for the
 # second reason. That is why M10 asserts on 108, whose token is a clean `vdi`
-# inside a block comment and has no second cover. M11 is why row 118 exists at
+# inside a block comment and has no second cover. Row 117 HAD the same property
+# and was reshaped rather than annotated: it now carries a block comment holding
+# a clean `vdi`, so the mask is its only rejector and M10 reaches it. Two rows
+# of one shape needed one of each. M11 is why row 118 exists at
 # all: its tagged inner opener is stopped by the LENGTH clause and the TAIL
 # clause independently, so no single-clause mutant reaches it and only the
 # pre-fix character-only rule does. Without M2 and M10 in particular a reviewer
@@ -296,8 +321,13 @@ ready = [
     issue(115, "comment placeholder", "site: <!-- vdi | mac -->\n", ["ready"]),
     # 116 — a comment BEFORE the value on the same line: the value still counts.
     issue(116, "comment then value", "site: <!-- pick one --> vdi\n", ["ready"]),
-    # 117 — first-wins must not lock a placeholder in ahead of a real line.
-    issue(117, "placeholder then real", "site: <!-- vdi | mac -->\nsite: mac\n", ["ready"]),
+    # 117 — first-wins must not lock a COMMENTED-OUT declaration in ahead of a
+    # real line. A block comment holding a clean `vdi`, deliberately: with the
+    # placeholder shape the grammar rejected `<!--` on its own and the mask was
+    # not this row's only rejector, so M10 left it green — the same double
+    # cover row 115 has, and there it is documented rather than reshaped.
+    issue(117, "commented-out then real",
+          "<!--\nsite: vdi\n-->\nsite: mac\n", ["ready"]),
 
     # --- fence pairing: character, length, tail (N1) --------------------------
     # 118 — a 4-tick quote containing a tagged 3-tick example: the shape the
@@ -369,6 +399,50 @@ ready = [
     # 133 — and the grammar is PERMISSIVE: a realistic hostname-shaped name
     # passes. Without this row an over-tight grammar would look correct.
     issue(133, "realistic name", "site: mac-mini.local\n", ["ready"]),
+    # 134/135 — the grammar's other two clauses. Without these, tightening the
+    # repeat to {0,31} or flattening the first-character class to
+    # `^[a-z0-9._-]{1,64}$` both leave every other row green: the first rejects
+    # a long but real hostname (false negative), the second accepts `--help`
+    # and `.hidden` for a consumer to echo.
+    issue(134, "token at the bound", "site: " + ("a" * 64) + "\n", ["ready"]),
+    issue(135, "flag-shaped token", "site: --help\n", ["ready"]),
+
+    # --- markup on the fence OPENER's own line -------------------------------
+    # 136 — a `<!--` in an info string is not markup. Entering a comment there
+    # and letting it survive the block leaks state past the closer, which is
+    # M8's defect reached by another route.
+    issue(136, "comment in an info string",
+          "%spython <!-- x\ncode\n%s\nsite: vdi\n" % (F3, F3), ["ready"]),
+    # 137 — CommonMark: a backtick fence's info string may not contain a
+    # backtick, so this is a paragraph. Blanking alone does not catch it — the
+    # run here is PAIRED and therefore already erased — so the opener carries
+    # its own check against the unblanked remainder.
+    issue(137, "backtick in an info string, unpaired",
+          "%spython `x`\nsite: vdi\n" % F3, ["ready"]),
+    # 138 — `<!-- x --> ```` is ONE HTML block, not a comment followed by a
+    # fence. Opening a fence there masks the rest of the body.
+    issue(138, "html block, then a fence marker",
+          "<!-- x --> %s\nsite: vdi\n" % F3, ["ready"]),
+
+    # --- the two remaining ACCEPTED DIVERGENCES, pinned like row 129 ---------
+    # 139 — a code span pairs per LINE, so one spanning a break does not blank
+    # and text inside it declares. FALSE POSITIVE, recorded in the header.
+    issue(139, "multi-line code span (accepted divergence)",
+          "`foo\nsite: vdi`\nsite: mac\n", ["ready"]),
+    # 140 — an UNCLOSED mid-line `<!--` masks the rest of its paragraph, though
+    # CommonMark renders it literally. FALSE NEGATIVE, bounded by row 130's
+    # blank-line rule. Recorded in the header.
+    issue(140, "unclosed inline comment, no blank line (accepted divergence)",
+          "We write <!-- markers\nsite: vdi\n", ["ready"]),
+
+    # 141 — `re.IGNORECASE` on a str pattern folds Unicode, so `ſite:` (U+017F)
+    # matched a key whose value grammar is ASCII-only.
+    issue(141, "unicode-folded key", "\u017Fite: vdi\n", ["ready"]),
+    # 142 — the RECOVERY row for the <style> divergence. Row 129 alone is
+    # flipped identically by a correct mask and by one that never closes, so
+    # closing the divergence later could ship a mask that swallows the body.
+    # This is the style side's row 122.
+    issue(142, "style block closes", "<style>\n</style>\nsite: vdi\n", ["ready"]),
 ]
 
 in_progress = [
@@ -383,7 +457,7 @@ for name, payload in (("ready", ready), ("in-progress", in_progress), ("blocked"
         json.dump(payload, fh)
 PY
 
-READY_N=33
+READY_N=42
 
 # --- runner -------------------------------------------------------------------
 OUT="$WORK/out.json"
@@ -516,15 +590,24 @@ expect_site "the empty comment '<!-->' closes where it stands" ready 126 vdi
 expect_site "  and its long form '<!--->' does too" ready 127 vdi
 expect_site "a backtick in an info string means a code span, not a fence" ready 128 vdi
 expect_site "an unterminated mid-line comment dies at its paragraph" ready 130 vdi
+expect_site "a comment in a fence info string does not leak past the block" ready 136 vdi
+expect_site "a backtick in a backtick fence's info string means a paragraph" ready 137 vdi
+expect_site "a comment then a 3-tick marker is one HTML block, not a fence" ready 138 vdi
+expect_site "a Unicode-folded key does not declare" ready 141 null
 
-# The accepted divergence, pinned rather than closed — see the header.
+# The three accepted divergences, pinned rather than closed — see the header.
 expect_site "ACCEPTED: a <style> block is NOT masked, though GitHub drops it" ready 129 nowhere
+expect_site "  and its recovery row: the block still ENDS" ready 142 vdi
+expect_site "ACCEPTED: a code span spanning a line break declares from inside" ready 139 vdi
+expect_site "ACCEPTED: an unclosed mid-line comment masks its paragraph" ready 140 null
 
 # --- 9. the token grammar -----------------------------------------------------
 echo "9. the token grammar bounds what a consumer is handed" >&2
 expect_site "shell metacharacters are not a site name" ready 131 null
 expect_site "a token past the 64-character bound is not a site name" ready 132 null
 expect_site "and the grammar is permissive — a realistic name passes" ready 133 mac-mini.local
+expect_site "  a 64-character token is at the bound, not past it" ready 134 "$(printf 'a%.0s' $(seq 64))"
+expect_site "a flag-shaped token is not a site name" ready 135 null
 
 # --- 10. the scope decisions --------------------------------------------------
 echo "10. what is deliberately NOT masked" >&2
@@ -659,7 +742,7 @@ if mutate "M11 pre-fix character-only pairing" \
 fi
 
 if mutate "M12 the token grammar" \
-    '                if site_token_re.match(candidate):' \
+    '                if site_token_re.fullmatch(candidate):' \
     '                if candidate:'; then
     reddens "M12: without the grammar a shell-metacharacter token is emitted" ready 131 null
 fi
@@ -689,10 +772,47 @@ if mutate "M15 the inline-comment paragraph bound" \
     reddens "M15: without the bound a mid-line '<!--' runs to the end of the body" ready 130 vdi
 fi
 
-if [ "$mutants_run" -eq 15 ]; then
-    ok "every declared mutant ran (15 of 15)"
+if mutate "M16 the grammar's length bound" \
+    '{0,63}$' \
+    '{0,31}$'; then
+    reddens "M16: a tightened repeat rejects a long but real hostname" ready 134 "$(printf 'a%.0s' $(seq 64))"
+fi
+
+if mutate "M17 the grammar's first-character class" \
+    "site_token_re = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}\$')" \
+    "site_token_re = re.compile(r'^[a-z0-9._-]{1,64}\$')"; then
+    reddens "M17: a flattened first character accepts a flag-shaped token" ready 135 null
+fi
+
+if mutate "M18 the info-string comment reset" \
+    '            comment = None                   # an info string is not markup' \
+    '            pass'; then
+    reddens "M18: without it a comment in an info string leaks past the block" ready 136 vdi
+fi
+
+if mutate "M19 the backtick info-string rule" \
+    '        if m and not tainted_info:' \
+    '        if m:'; then
+    reddens "M19: without it an unpaired backtick opens a fence that never closes" ready 137 vdi
+fi
+
+if mutate "M20 the HTML-block line rule" \
+    "        if scan.lstrip().startswith('<!--'):
+            html_line = True" \
+    '        pass'; then
+    reddens "M20: without it a fence marker after a comment masks the body" ready 138 vdi
+fi
+
+if mutate "M21 the ASCII flag on the key match" \
+    're.IGNORECASE | re.ASCII' \
+    're.IGNORECASE'; then
+    reddens "M21: without it Unicode folding lets a lookalike key declare" ready 141 null
+fi
+
+if [ "$mutants_run" -eq 21 ]; then
+    ok "every declared mutant ran (21 of 21)"
 else
-    bad "only $mutants_run of 15 declared mutants ran — the rest proved nothing"
+    bad "only $mutants_run of 21 declared mutants ran — the rest proved nothing"
 fi
 
 # Restore the un-mutated snapshot for anything reading $OUT after this point.
@@ -772,7 +892,7 @@ expect_flat "  and that the mask is site-only, with the reason" \
 
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then
-    echo "queue-snapshot site tests: all green ($asserts assertions, 15 mutants)" >&2
+    echo "queue-snapshot site tests: all green ($asserts assertions, 21 mutants)" >&2
     exit 0
 fi
 echo "queue-snapshot site tests: FAILURES above ($asserts assertions)" >&2

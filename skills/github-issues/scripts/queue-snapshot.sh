@@ -61,22 +61,43 @@
 #         on the line; treating it as a comment ran the state to the next
 #         `-->` 15 lines later, swallowed a fence opener on the way, and masked
 #         25 of 30 non-blank lines. A backticked ```-run is likewise not a
-#         fence, so an info string carrying a backtick cannot open one.
+#         fence, and CommonMark's rule that a BACKTICK fence's info string may
+#         not contain a backtick is applied at the opener, so neither a paired
+#         nor an unpaired one can open a block that never closes.
 #       - The EMPTY COMMENTS `<!-->` and `<!--->` close where they stand.
 #         Searching for `-->` four characters in misses both, and an unclosed
 #         comment masks the entire rest of the body.
 #       - A `<!--` that starts MID-LINE is inline HTML and cannot outlive its
 #         paragraph, so it is dropped at the next blank line. One that starts a
 #         line keeps CommonMark's block semantics and runs to its closer.
-#   * ACCEPTED DIVERGENCE, recorded rather than closed. Raw-text HTML blocks
-#     (`<script>`, `<style>`) and processing instructions (`<?…?>`) are NOT
-#     masked, so `<style>` + `site: nowhere` + `</style>` declares `nowhere`
-#     although GitHub's sanitizer drops those elements with their contents.
-#     It is the only one of these four whose error is a false POSITIVE, no
-#     instance appeared in 554 sampled org bodies, and closing it means a third
-#     line-state machine beside the fence and the comment — more surface than
-#     the shape is worth in a substrate parser. The gate pins the current
-#     answer, so changing it is a decision rather than a surprise.
+#       - A fence OPENER's info string is not markup either: entering a
+#         comment there and letting it survive the block leaks state past the
+#         closer, which is the same defect as running the walk inside a fence.
+#   * ACCEPTED DIVERGENCE, recorded rather than closed — THREE shapes, each
+#     with a row pinning today's answer so that changing one is a decision
+#     rather than a surprise:
+#       - Raw-text HTML blocks (`<script>`, `<style>`) and processing
+#         instructions (`<?…?>`) are NOT masked, so `<style>` + `site: nowhere`
+#         + `</style>` declares `nowhere` although GitHub's sanitizer drops
+#         those elements with their contents. FALSE POSITIVE. Closing it means
+#         a third line-state machine beside the fence and the comment.
+#       - A CODE SPAN is paired per line, so one spanning a line break does not
+#         blank and text inside it declares. FALSE POSITIVE. Closing it means
+#         carrying span state across lines, which the per-line index map is
+#         built to avoid.
+#       - An UNCLOSED mid-line `<!--` masks the rest of its paragraph, though
+#         CommonMark renders it as literal text. FALSE NEGATIVE, and bounded:
+#         the blank-line rule above stops it at the paragraph. Closing it needs
+#         lookahead for a closer that may never arrive, i.e. a second pass.
+#     None appeared in 554 sampled org bodies.
+#   * KNOWN AND ACCEPTED, left to #341. A token that FAILS the grammar is
+#     emitted as `null`, byte-identical to a body with no `site:` line at all,
+#     so a consumer cannot tell "rejected" from "absent" — `site: vdi<U+200B>`
+#     renders on GitHub as `site: vdi` and emits null. A `site_rejected:`
+#     sibling would let a consumer HOLD rather than claim, but it is a schema
+#     addition whose only reader is the dispatch filter, so the skill that
+#     acquires the reader is the one that should decide it. #340 emits the
+#     value and nothing more.
 #   * Indentation is deliberately NOT read as a code block. CommonMark makes
 #     four leading spaces an indented code block; here the leading-whitespace
 #     tolerance is what lets the contract sit as a continuation line under a
@@ -161,7 +182,12 @@ stack_re = re.compile(r'^\s*stack:\s*(.+)$', re.IGNORECASE)
 # `site:` line — the execution-site contract. `(\S.*)` is what makes a valueless
 # `site:` (or one followed only by whitespace) fail to match at all, so it is
 # never mistaken for a declaration of the empty site.
-site_re = re.compile(r'^\s*site:\s*(\S.*)$', re.IGNORECASE)
+# `re.ASCII` beside `re.IGNORECASE`, because Unicode folding makes `ſite:`
+# (U+017F), `SİTE:` and `sıte:` match a key whose VALUE grammar is ASCII-only.
+# The trade is that `\s` narrows too, so a non-breaking space BEFORE the key no
+# longer matches while one after the colon still parses. Scoped to this pattern:
+# the older three contracts keep the parse they shipped with.
+site_re = re.compile(r'^\s*site:\s*(\S.*)$', re.IGNORECASE | re.ASCII)
 # The site TOKEN's grammar, applied AFTER folding. Not a whitelist: the
 # boundary past which a token was never a workstation name. See the header for
 # why the parse owns this rather than each consumer.
@@ -292,11 +318,25 @@ def scan_lines(body):
             continue
         if comment == 'inline' and not line.strip():
             comment = None                   # inline HTML dies at its paragraph
+        # A line that OPENS or CONTINUES a block comment is an HTML block for
+        # its whole length, so no fence opens on it: `<!-- x --> ``` ` is one
+        # HTML block, not a comment followed by a fence. Its visible remainder
+        # still declares, because GitHub renders that text.
+        html_line = comment == 'block'
         scan = blank_code_spans(line)
+        if scan.lstrip().startswith('<!--'):
+            html_line = True
         visible, vscan, comment = strip_comments(line, scan, comment)
-        m = fence_re.match(vscan)
-        if m:
+        m = None if html_line else fence_re.match(vscan)
+        # A BACKTICK fence's info string may not contain a backtick (CommonMark);
+        # such a line is a paragraph. `visible` is checked rather than `vscan`
+        # because the blanking has already erased any PAIRED run, and it is the
+        # unpaired leftovers that disqualify the opener. Tilde fences are exempt,
+        # as the spec has them.
+        tainted_info = bool(m) and m.group(1)[0] == '`' and '`' in visible[m.end():]
+        if m and not tainted_info:
             fence = (m.group(1)[0], len(m.group(1)))
+            comment = None                   # an info string is not markup
             yield line, ""                   # the delimiter declares nothing
             continue
         yield line, visible
@@ -322,7 +362,7 @@ def parse_body(body):
             m = site_re.match(visible)
             if m:
                 candidate = (m.group(1).replace('`', ' ').split() or [''])[0].lower()
-                if site_token_re.match(candidate):
+                if site_token_re.fullmatch(candidate):
                     site = candidate   # both malformed shapes fall through
                 continue
         m = depends_re.match(line)
