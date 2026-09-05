@@ -246,8 +246,13 @@
 #   history says are ALWAYS missed sit in the half that is still prose. Which
 #   half a member is in is stated below, once, rather than annotated here.
 #   The built-message, the loops and the `url_pin_bad` read-back were never
-#   the ones missed across the four rounds above, guard or no guard; the
-#   enumeration and the prose comment always were, and still can be.)
+#   the ones missed across the three rounds enumerated above — `ed66e95`,
+#   `7ed60c6`, `17cb16b` — guard or no guard; the enumeration and the prose
+#   comment always were, and still can be. The count is spelled with its
+#   members beside it because an earlier revision said FOUR here with nothing
+#   above enumerating four, in the one paragraph that explicitly refuses bare
+#   counts. The only four-round list in this file is 130 lines below and counts
+#   CASING rounds, which are a different set.)
 #   WHAT SHIPPED UNCASED. This sentence has now been wrong FOUR times, and NOT
 #   all the same way — the shas and per-edition causes are below, because the
 #   edition that wrote "each time by asserting a closed set nobody had
@@ -994,8 +999,15 @@ make_cwd "$CWD_NOORIGIN"                                                || CWD_M
 # end of 17d, and the header's prose — of which the read-back coupled two. The
 # leak assertion is a MUST-NOT-APPEAR, so a copy that drifts does not redden it:
 # it passes, having looked for a string this fixture never carried. The needle
-# is now `${BADURL_REMOTE%/*}`, derived rather than retyped. The prose stays a
-# copy on purpose — a header quoting a variable name explains nothing.
+# is now `${BADURL_REMOTE%/*}`, derived rather than retyped. THE PROSE COPIES
+# ARE GONE, not kept: the path literal appears exactly once in this file, in the
+# assignment immediately below, and every reader derives from it. An earlier
+# revision of this paragraph said the prose stays a copy on purpose — true when
+# written, and made false by the same commit that wrote it, since the header and
+# the comment beside the read-back both lost their copy to the coupling. Naming
+# the variable rather than quoting the value is less illustrative and cannot
+# drift; that is the trade, taken deliberately. This sentence spells no path,
+# for the same reason: a prose copy here would make its own claim false.
 BADURL_REMOTE="/some/local/path/mock-repo.git"
 make_cwd "$CWD_BADURL"    "$BADURL_REMOTE"                             || CWD_MISSING="$CWD_MISSING badurl"
 # THE TWO PARSER FIXES, EACH WITH A FIXTURE THAT DIES WITHOUT IT. Both landed in
@@ -2166,10 +2178,24 @@ fi
 # They live at four sites and none was pinned by anything, so deleting the
 # `run_probe` one reddened nothing while being the deletion the read-back cannot
 # see: the read-back measures its own subshell, not the probe's.
+# The joiner is SHELL-AWARE. `awk '{ while (line ~ /\\$/) ... }'` treated any
+# trailing backslash as a continuation, which shell does not: a `\` ending a
+# COMMENT is comment text, and an EVEN run of backslashes is an escaped
+# backslash. The first case is a new absorption class this very block created —
+# appending one ` \` to a comment made it swallow the `make_cwd` call beneath
+# it, dropping that fixture out of `fixt_url` and letting it be deleted from the
+# read-back list with every assertion still green. Joining removed the wrapped
+# `make_cwd` escape and introduced its inverse.
 FIXT_SRC="$WORK/self-joined.sh"
-awk '{
+awk '
+function odd_trailing_backslashes(s,   n) {
+    n = 0
+    while (n < length(s) && substr(s, length(s) - n, 1) == "\\") n++
+    return n % 2
+}
+{
     line = $0
-    while (line ~ /\\$/) {
+    while (line !~ /^[[:space:]]*#/ && odd_trailing_backslashes(line)) {
         sub(/\\$/, "", line)
         if ((getline nxt) <= 0) break
         sub(/^[[:space:]]+/, " ", nxt)
@@ -2181,6 +2207,19 @@ fixt_exempt="norepo"
 fixt_all="$(sed -n 's/^[[:space:]]*CWD_\([A-Z][A-Z0-9_]*\)="\$WORK\/.*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
 fixt_acc="$(sed -n 's/.*CWD_MISSING="\$CWD_MISSING \([a-z][a-z0-9]*\)".*/\1/p' "$FIXT_SRC" | tr '\n' ' ')"
 fixt_url="$(sed -n 's/^[[:space:]]*make_cwd  *"\$CWD_\([A-Z][A-Z0-9_]*\)" *"[^"]*".*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
+# fixt_url gets a SECOND derivation, the way fixt_all is cross-checked against
+# the CWD_MISSING ledger. The single read above is position- and quoting-bound:
+# it needs `make_cwd` at line start, single spaces between the arguments, and a
+# double-quoted origin. Four shapes therefore dropped a fixture out of the set
+# silently — an env prefix (`LC_ALL=C make_cwd ...`), a TAB between the two
+# arguments, a single-quoted origin, and comment absorption — and each pairs
+# with deleting that fixture from the read-back list to leave site 3 of 3
+# required at ZERO sites, with the assertion count unchanged so the
+# EXPECTED_CASES floor cannot see it either. This read is anchored nowhere and
+# accepts any quoting, so the two agree only when the set is really the set.
+fixt_url2="$(grep -E 'make_cwd[[:space:]]+"\$CWD_[A-Z0-9_]+"[[:space:]]+["'"'"'$]' "$FIXT_SRC" \
+    | sed -E 's/.*make_cwd[[:space:]]+"\$CWD_([A-Z0-9_]+)".*/\1/' \
+    | tr '[:upper:]' '[:lower:]' | sort -u | tr '\n' ' ')"
 fixt_built_raw="$(sed -n 's/^[[:space:]]*ok "the cwd fixtures were built (\([^)]*\))".*/\1/p' "$FIXT_SRC")"
 fixt_pin_raw="$(sed -n 's/^for pin_form in \(.*\); do$/\1/p' "$FIXT_SRC")"
 fixt_succ_raw="$(sed -n 's/^for form in \(.*\); do$/\1/p' "$FIXT_SRC")"
@@ -2207,6 +2246,19 @@ fixt_derived_bad=""
 [ -n "$fixt_all" ] || fixt_derived_bad="$fixt_derived_bad [the CWD_* declarations: empty]"
 [ -n "$fixt_acc" ] || fixt_derived_bad="$fixt_derived_bad [the CWD_MISSING ledger: empty]"
 [ -n "$fixt_url" ] || fixt_derived_bad="$fixt_derived_bad [the make_cwd URL arguments: empty]"
+[ -n "$fixt_url2" ] || fixt_derived_bad="$fixt_derived_bad [the quoting-agnostic make_cwd read: empty]"
+# THE TWO READS MUST AGREE, both directions. Non-emptiness alone was the whole
+# guard on this set, and it holds while a fixture silently leaves it.
+for fx in $fixt_url; do
+    case " $fixt_url2 " in *" $fx "*) : ;;
+        *) fixt_derived_bad="$fixt_derived_bad [$fx: in the anchored make_cwd read but not the quoting-agnostic one]" ;;
+    esac
+done
+for fx in $fixt_url2; do
+    case " $fixt_url " in *" $fx "*) : ;;
+        *) fixt_derived_bad="$fixt_derived_bad [$fx: carries a make_cwd origin but the anchored read missed it — position or quoting, not absence]" ;;
+    esac
+done
 for fx in $fixt_url; do
     case " $fixt_all " in *" $fx "*) ;; *) fixt_derived_bad="$fixt_derived_bad [$fx: given an origin URL but not declared]" ;; esac
 done
