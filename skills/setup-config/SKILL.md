@@ -203,10 +203,10 @@ question shape and no way to record "declined", so a proposal here would be re-o
 refresh forever.
 
 **A platform that differs from the configured name is NOT a disagreement**, and must not be routed
-into the stop-and-surface rule above. `win32` against `execution_site: vdi` is the ordinary case —
-it is *why* the name is configured rather than derived. Only the user disputing their own value is
-a disagreement, and that is theirs to raise. `config-contract.md` carries the key's contract;
-`references/update-mode.md` the operational half.
+into the stop-and-surface rule above. `MINGW64_NT-…` against `execution_site: vdi` is the ordinary
+case — it is *why* the name is configured rather than derived. Only the user disputing their own
+value is a disagreement, and that is theirs to raise. `config-contract.md` carries the key's
+contract; `references/update-mode.md` the operational half.
 
 **The three `none` answers are carried forward, not re-asked** — but an **absent** one is asked.
 **`sentry: none` is not one of them.** `testflight: none`, `posthog: none` and `mobile: none` each record

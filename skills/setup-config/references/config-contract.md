@@ -474,35 +474,34 @@ the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-sk
 some work is executable only from one machine — the host holding a vendor's multi-GB images, the
 sibling checkout, the network reach — and nothing in the workflow skills could express that.
 
-The issue half is a body line that `github-issues`' `queue-snapshot.sh` parses beside the three
-contracts it already read — `touches:`, `Depends on #N` and `stack:` — and emits as a per-issue
-`site` ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)):
+The issue half is a **label**, `site:<name>`, which `github-issues`' `queue-snapshot.sh` reads off
+the labels it already fetches and emits as a per-issue `site` and `sites`
+([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)). An issue with no such label runs
+anywhere.
 
-```text
-site: vdi
-```
+**It is a label and not a body line on purpose.** The three body contracts beside it — `touches:`,
+`Depends on #N`, `stack:` — can be quoted: an issue documenting the contract, or a template
+carrying an unfilled placeholder, would declare a site by accident, and preventing that means
+deciding what a fenced block, a code span, an HTML comment and their interactions mean. A label
+cannot be quoted in prose. The script's header is the copy to trust for the resolution rules; three
+of them matter to whoever writes a config:
 
-**One line, one token, and an absent line means "any site".** The script's header states every
-resolution rule and is the copy to trust; four of them matter to whoever writes a config:
-
-- **The token has a grammar, and nothing inside it is reserved.** After folding, a site token is
-  `^[a-z0-9][a-z0-9._-]{0,63}$`. Within that, `site: any` and `site: none` are ordinary site names
-  rather than escapes, so an issue written `site: any` is held for a site called `any` — it is the
-  *missing line* that means "any site". Two shapes are malformed and answer alike: a `site:` line
-  with no token, and one whose token fails the grammar. Neither declares, so both fall through to
-  "any site" — which is why the grammar is deliberately permissive rather than a whitelist.
-- **A consumer never interpolates the token raw.** The grammar already excludes whitespace, quoting
-  and shell metacharacters, so this is defence in depth rather than the only line — but a site name
-  reaches a human through a refusal reason, and issue bodies on a public repo stay editable after
-  `ready` is applied. Treat it as data: quote it, never build a command or a URL by concatenation,
-  and if the grammar is ever widened, revisit every reader before the parse.
-- **The comparison is case-insensitive on both sides.** `queue-snapshot.sh` folds the issue's token
-  to lowercase; folding the configured value is the reading skill's half. Write `execution_site`
-  lowercase by convention, but a reader must not implement the match as plain equality against the
-  raw config value — `execution_site: VDI` would then hold the VDI loop's own work.
-- **A quoted contract is not a declaration.** A `site:` line inside a fenced code block, or inside
-  an HTML comment, does not declare — so an issue may show the contract, and an unfilled
-  `site: <!-- vdi | mac -->` template placeholder holds nothing.
+- **The match is a prefix on the label name, folded.** `site:vdi`, `SITE:vdi` and `site: VDI` are
+  one declaration; `offsite:x` and a label named `website` are not declarations at all. A bare
+  `site:` with no value names no site.
+- **Several `site:` labels are a CONFLICT, never "any site".** `sites` carries the sorted set and is
+  the fact; `site` is the scalar and is set only when exactly one is declared. A null `site` beside
+  a non-empty `sites` therefore means "declared two things", not "declared nothing" — a reading
+  skill that treats it as unconstrained re-creates
+  [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug with two labels
+  instead of none.
+- **The comparison is case-insensitive on both sides, and the value is data.** `queue-snapshot.sh`
+  folds the label's value; folding the configured value is the reading skill's half, so write
+  `execution_site` lowercase by convention but never implement the match as plain equality against
+  the raw config value — `execution_site: VDI` would then hold the VDI loop's own work. No character
+  grammar is applied to a label value: labels are created through the UI or API by somebody with
+  triage and are visible on the issue. A consumer still treats the value as data — quote it, never
+  build a command or a URL by concatenation.
 
 **This key fits the config model unusually well.** Config is per-checkout by construction — one
 `.claude/sassy-dog/` tree per clone, never shared — and the site is exactly a per-checkout fact.
@@ -528,19 +527,17 @@ workstation names it themselves, like everybody else.
 compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
 work all runs from one machine should simply omit it.
 
-**A refresh carries an existing value across verbatim; the platform name is a proposal for an
-ABSENT key only.** This is the second exception to *re-verify every fact against live state*, and it
-is not `review_site:`'s reason repeated. There is no live state to re-verify against: the platform
+**A refresh carries an existing value across verbatim and leaves an absent key absent.** This is an
+exception to *re-verify every fact against live state*, and it is not `review_site:`'s reason
+repeated. There is no live state to re-verify against: the platform
 answers what kind of machine this is, never what the user named it, so a refresh that re-derived
 would overwrite `vdi` with `windows` on the checkout whose whole point is being the VDI. The
 harm is silent in the direction that matters — an absent or wrong `execution_site` turns a site
 filter OFF, which is [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating
 bug — so the rule is: carry the value, never re-derive it, and surface rather than rewrite if the
-user disputes it. **An absent key stays absent for now.** Proposing a name into an empty slot is
-[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s interview to add; until that
-section exists there is no question shape and no way to record "declined", so a proposal would be
-re-offered on every refresh forever. `setup-config`'s guardrail list is the copy to trust for this,
-and `references/update-mode.md` carries the operational half.
+user disputes it. **`setup-config`'s guardrail list owns the absent-key half and is the copy to
+trust**; `references/update-mode.md` and `references/migrate-mode.md` carry the operational side for
+their own modes. Do not restate the rule here — five copies of it is how the last one went stale.
 
 **Who reads it, by the change that adds the reader.** The body half — the parse and this contract
 — landed first and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that
