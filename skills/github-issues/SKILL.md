@@ -144,7 +144,7 @@ REPO=<owner/name> bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/stale-
 
 Three buckets: `shipped-but-still-open` (a merged PR named the issue without closing it — either in a title `(#N)` parenthetical or in the PR **body** with no closing keyword; every hit carries `matched_via: title | body | title+body`, and a body hit is a review prompt rather than a verdict), `stub-body` (needs scoping) and `tracking-parent-complete` (an open epic whose children have all closed). **Before flagging a stub to the user, read its comments** — `gh issue view N --comments` — scope often lives in a follow-up comment.
 
-**Exit 10 is not a clean result.** Every bucket answers a healthy repo with an empty list, so a failed pull is reported as skipped-with-a-reason and never as "nothing found". Read stderr too: `truncated: true` and `comment_strip_refused` both mean *unknown*, not clear.
+**Exit 10 is not a clean result.** Every bucket answers a healthy repo with an empty list, so a failed pull is reported as skipped-with-a-reason and never as "nothing found". Read stderr too — but the two degraded signals point in OPPOSITE directions and must not be collapsed. `truncated: true` is a possible false **negative**, scoped to `tracking-parent-complete`: the all-state pull hit its ceiling, so a finished epic may be unseen. `comment_strip_refused` is a possible false **positive**, scoped to detector 1's body arm: a comment too large to strip was left in place, so refs inside it are still readable and may be template boilerplate. One means *something may be missing*; the other means *something here may not count*.
 
 ## Writes: dedupe-then-file
 

@@ -50,6 +50,14 @@ if ! command -v gh >/dev/null 2>&1; then
   echo "skipped: gh not installed" >&2
   exit 10
 fi
+# python3 is as load-bearing as gh here — the three detectors are one embedded
+# program — and without this guard its absence exits 127 with no message, which
+# is outside the exit contract above and outside the four values groom-backlog
+# is told to choose from.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "skipped: python3 not installed" >&2
+  exit 10
+fi
 
 # RESOLVED AFTER the tooling check, with its status captured. The previous form
 # was `REPO="${REPO:-$(gh repo view ...)}"` placed ABOVE it, under `set -e`: an
@@ -60,10 +68,23 @@ fi
 # caller told "10 is not a clean result" saw neither 10 nor a reason.
 if [[ -z "${REPO:-}" ]]; then
   repo_rc=0
-  # 2>&1 so a failure carries gh's own words; on success this is just the slug.
-  REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1) || repo_rc=$?
+  # Stderr goes to a FILE, never `2>&1` into the value. gh writes to stderr on
+  # success too — `GH_DEBUG=1` emits six lines, `GH_DEBUG=api` fifty-six — and
+  # folding those into $REPO produces a slug that is not a slug. It fails closed
+  # (the first pull rejects it) but blames the pull rather than the resolution,
+  # which is the wrong cause in the one message a degraded run gets to print.
+  repo_err=$(mktemp) || { echo "skipped: could not create a scratch file" >&2; exit 10; }
+  REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>"$repo_err") || repo_rc=$?
   if [[ "$repo_rc" -ne 0 || -z "$REPO" ]]; then
-    echo "skipped: could not resolve the repo and REPO not set. gh said: $(tr '\n' ' ' <<<"$REPO")" >&2
+    echo "skipped: could not resolve the repo and REPO not set. gh said: $(tr '\n' ' ' <"$repo_err")" >&2
+    rm -f "$repo_err"
+    exit 10
+  fi
+  rm -f "$repo_err"
+  # A resolved slug is `owner/name`. Anything else means something other than a
+  # slug arrived, and guessing with it is worse than refusing.
+  if [[ ! "$REPO" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
+    echo "skipped: resolved repo slug is not owner/name: '$REPO'" >&2
     exit 10
   fi
 fi

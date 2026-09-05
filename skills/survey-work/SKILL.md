@@ -173,7 +173,7 @@ PR ever names a tracking issue, so it stays on the backlog as apparent work inde
 (issue #198). One line each under the backlog section — `#<parent> · N children, all closed` —
 labelled as finished work still open. **Never score it as available work, never recommend it in
 §5's top 5, and never close it**: this skill is read-only here whatever the `write_policy`, and a
-human closes. A `truncated: true` result is reported as unknown, not clean.
+human closes. A `truncated: true` result is reported as unknown, not clean — and so is an **exit 10**, where the detector printed no sections at all: a run that could not read GitHub has nothing to report `none` from, and saying `none` there is exactly the false-clean this detector exists to prevent. Name the failure and the cause.
 
 ### C. Tech debt + dev experience
 

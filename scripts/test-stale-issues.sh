@@ -51,7 +51,7 @@
 #     no visible trace, since HTML comments render as nothing. The pattern now
 #     refuses to span a nested `<!--`, oversized spans are left in place, and
 #     the refusal reaches the reader as both a finding field and a stderr line.
-#   - A ref needs BOUNDARIES: `owner/repo#123` is not this repo's #123 and the
+#   - A ref needs BOUNDARIES: `owner/repo#951` is not this repo's #951 and the
 #     hex colour `#7A3FE4` is not issue #7.
 #
 # Every one of those trades the same way: an over-broad suppression is a SILENT
@@ -121,8 +121,8 @@
 #     naive `<!--.*?-->` mutant must swallow them both
 #   - an oversized comment is REFUSED rather than stripped, #815 stays visible,
 #     and the refusal is on the finding AND on stderr
-#   - a body ref carries boundaries: `owner/repo#123` and `#7A3FE4` claim
-#     neither #123 nor #7, and the unbounded mutant must claim both
+#   - a body ref carries boundaries: `owner/repo#951` and `#7A3FE4` claim
+#     neither #951 nor #7, and the unbounded mutant must claim both
 #   - dropping `body` from EITHER `--json` pull reddens — the merged-PR one
 #     drops #316, the all-state one drops detector 3's #283
 #   - a FAILED pull exits 10 with gh's own reason, printing no sections at all
@@ -202,14 +202,21 @@ PYPROJECT
 case "$cmd $sub" in
     "issue list")
         state=""; fields=""; limit=30      # gh's own default page size
+        repo=""
         while [ $# -gt 0 ]; do
             case "$1" in
+                --repo)  repo="${2:-}";  shift 2 ;;
                 --state) state="${2:-}"; shift 2 ;;
                 --json)  fields="${2:-}"; shift 2 ;;
                 --limit) limit="${2:-}"; shift 2 ;;
                 *)       shift ;;
             esac
         done
+        # `--repo` was parsed by nobody, so dropping it from a pull stayed green
+        # while production would read whatever repo the cwd happened to be.
+        if [ "$repo" != "$MOCK_REPO" ]; then
+            echo "mock gh: issue list aimed at '$repo', expected '$MOCK_REPO'" >&2; exit 1
+        fi
         case "$state" in
             open) serve "$MOCK_OPEN_ISSUES" "$fields" "$limit" ;;
             all)  serve "$MOCK_ALL_ISSUES" "$fields" "$limit" ;;
@@ -223,15 +230,19 @@ case "$cmd $sub" in
         # with this detector's broad body arm nearly every open PR would produce
         # a shipped-but-still-open finding. The gate's own header measures 35 of
         # the last 40 PR bodies naming an issue.
-        state=""; fields=""; limit=30
+        state=""; fields=""; limit=30; repo=""
         while [ $# -gt 0 ]; do
             case "$1" in
+                --repo)  repo="${2:-}";  shift 2 ;;
                 --state) state="${2:-}"; shift 2 ;;
                 --json)  fields="${2:-}"; shift 2 ;;
                 --limit) limit="${2:-}"; shift 2 ;;
                 *)       shift ;;
             esac
         done
+        if [ "$repo" != "$MOCK_REPO" ]; then
+            echo "mock gh: pr list aimed at '$repo', expected '$MOCK_REPO'" >&2; exit 1
+        fi
         case "$state" in
             merged) serve "$MOCK_PRS" "$fields" "$limit" ;;
             *)      echo "mock gh: unhandled pr list --state '$state'" >&2; exit 1 ;;
@@ -346,7 +357,7 @@ cat >"$MOCK_ALL_ISSUES" <<'JSON'
    "body": "Named inside an HTML comment past the strip's span cap, so the strip is refused and the reference stays visible with the refusal marked."},
   {"number": 7,   "state": "OPEN",   "title": "The hex-colour decoy",
    "body": "A merged PR body contains the hex colour 7A3FE4, which an unbounded ref regex reads as a reference to this issue number seven."},
-  {"number": 123, "state": "OPEN",   "title": "The cross-repo decoy",
+  {"number": 951, "state": "OPEN",   "title": "The cross-repo decoy",
    "body": "A merged PR body names another repository's issue with an owner/repo prefix, which an unbounded ref regex attributes to this repo."}
 ]
 JSON
@@ -412,7 +423,7 @@ cat >"$MOCK_OPEN_ISSUES" <<'JSON'
   {"number": 7,   "title": "The hex-colour decoy",
    "body": "A merged PR body contains the hex colour 7A3FE4, which an unbounded ref regex reads as a reference to this issue number seven.",
    "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 123, "title": "The cross-repo decoy",
+  {"number": 951, "title": "The cross-repo decoy",
    "body": "A merged PR body names another repository's issue with an owner/repo prefix, which an unbounded ref regex attributes to this repo.",
    "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"}
 ]
@@ -448,7 +459,7 @@ cat >"$MOCK_PRS" <<'JSON'
    "body": "Real work.\n\n<!-- stray opener, left behind by an edit and never closed\n\nThis lands the behaviour for #811 and #813.\n\n<!--\nClosing an issue needs a literal `Closes #123` on its own line, one per issue.\n-->\n",
    "mergedAt": "2026-08-24T00:00:00Z"},
   {"number": 930, "title": "chore: strings that only LOOK like refs to this repo",
-   "body": "Ports the change that landed as Sassy-Dog/velovate#123 over there.\n\nThe badge colour is #7A3FE4, which is deliberately NOT a canonical taxonomy colour — test-label-taxonomy.sh fails on any of those found outside their home (issue #167).\n",
+   "body": "Ports the change that landed as Sassy-Dog/velovate#951 over there.\n\nThe badge colour is #7A3FE4, which is deliberately NOT a canonical taxonomy colour — test-label-taxonomy.sh fails on any of those found outside their home (issue #167).\n",
    "mergedAt": "2026-08-28T00:00:00Z"}
 ]
 JSON
@@ -865,17 +876,17 @@ if mutate_run 's/{m\.start(1) for m in CLOSING_KEYWORD_RE/{m.group(1) for m in C
 fi
 
 # --- 4l. a body ref needs boundaries -----------------------------------------
-# `#(\d+)` with nothing either side reads `owner/repo#123` as THIS repo's #123
+# `#(\d+)` with nothing either side reads `owner/repo#951` as THIS repo's #951
 # and the hex colour `#7A3FE4` as issue #7. Both decoys sit in PR #930's body.
 if has_issue 123 "$WORK/shipped.json" || has_issue 7 "$WORK/shipped.json"; then
     bad "a cross-repo ref or a hex colour was read as this repo's issue: $(q '[i["issue"] for i in d]' <"$WORK/shipped.json")"
 else
-    ok "'Sassy-Dog/velovate#123' and '#7A3FE4' are NOT read as refs to #123 and #7"
+    ok "'Sassy-Dog/velovate#951' and '#7A3FE4' are NOT read as refs to #951 and #7"
 fi
 
 if mutate_run '/^BODY_REF_RE = /s/.*/BODY_REF_RE = re.compile(r"#(\\d+)")/' unbounded-refs; then
-    if has_issue 123 "$WORK/unbounded-refs.json" && has_issue 7 "$WORK/unbounded-refs.json"; then
-        ok "the unbounded regex DOES claim #123 and #7 — the boundaries are live"
+    if has_issue 951 "$WORK/unbounded-refs.json" && has_issue 7 "$WORK/unbounded-refs.json"; then
+        ok "the unbounded regex DOES claim #951 and #7 — the boundaries are live"
     else
         bad "the unbounded regex claimed neither decoy — 4l's fixture exercises nothing"
     fi
@@ -985,9 +996,14 @@ fi
 # Adding `body` to the merged-PR pull (issue #337) pushed the three documents
 # past ARG_MAX on a real repo: `python3: Argument list too long`, exit 126, the
 # detector's entire output gone — and the all-state pull was already close at
-# ALL_LIMIT=500. THIS FIXTURE CANNOT REPRODUCE IT: its payload is a few kB, so
-# every row above stays green on a script that is broken on every repo it is
-# actually pointed at. Hence a source-level assertion.
+# ALL_LIMIT=500. THIS FIXTURE, AS SIZED, does not reproduce it — its payload is
+# a few kB, so every row above stays green on a script that is broken on every
+# repo it is actually pointed at. The earlier wording said the fixture CANNOT
+# reproduce it; that is false. 20 PRs carrying 60000-char bodies trip the
+# pre-fix script to exit 126, on macOS and on Linux's 128 KB per-argument cap.
+# A behavioural row is the stronger pin and is deliberately NOT taken here: it
+# would add ~1.2 MB of fixture, and its build cost, to a gate on preflight's
+# critical path. That is a decision, recorded — not a limit of the fixture.
 # ONE pattern, used by both the check and its own liveness proof. Re-typing it
 # as a second literal would let a neutered pattern here keep every row green,
 # INCLUDING the row claiming the guard is live.
@@ -1025,7 +1041,12 @@ fi
 # see it either, so this grep is the only protection detector 3's truncation
 # guarantee has.
 ALL_PULL_RE='issue list --repo "\$REPO" --state all --limit "\$ALL_LIMIT"'
-if grep -q -- "$ALL_PULL_RE" "$SCRIPT"; then
+# Comment lines are stripped first: a `# was: issue list --repo ... --limit
+# "$ALL_LIMIT"` note left behind by whoever removed the flag satisfies a raw
+# grep, which is the same free-floating weakness this row was written to end.
+SCRIPT_LIVE="$WORK/script-live.sh"
+sed 's/^[[:space:]]*#.*$//' "$SCRIPT" >"$SCRIPT_LIVE"
+if grep -q -- "$ALL_PULL_RE" "$SCRIPT_LIVE"; then
     ok "the all-state pull itself carries --limit \"\$ALL_LIMIT\", so truncated= means something"
 else
     bad "the all-state pull no longer carries --limit \"\$ALL_LIMIT\" on its own command — truncated= is now unfalsifiable"
