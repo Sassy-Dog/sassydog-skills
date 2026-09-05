@@ -44,7 +44,7 @@ An issue whose counts could not be confirmed is `skip-unconfirmed`: it never qua
 
 Read `references/qualifying-gate.md`; apply each rule and tag non-qualifiers (`skip-noise` / `skip-stale` / `skip-parked` / `skip-nonprod` / `skip-unconfirmed` / `already-linked`) so the report shows *why* something didn't escalate, not just that it didn't.
 
-Cross-reference against GitHub by marker: `gh issue list --search '"sentry-source: <SHORT_ID>" in:body' --state all`. If the caller also pulled TestFlight crash feedback, fuzzy-merge on `culprit`/stack signature before reporting — the same crash in two surfaces is one item, not two.
+Cross-reference against GitHub by marker: `gh issue list --search '"sentry-source: <SHORT_ID>" in:body' --state all`. **That search is a hint, not a verdict** — it matches a token subsequence, so it also hits `sentry-source: <SHORT_ID>-<something>`; a hit may annotate the preview but must never drop a candidate. `file-or-link-issue.sh` owns the `already-linked` decision (see rule 4 in `references/qualifying-gate.md`). If the caller also pulled TestFlight crash feedback, fuzzy-merge on `culprit`/stack signature before reporting — the same crash in two surfaces is one item, not two.
 
 ### 4. Report
 
