@@ -180,6 +180,14 @@ if [ -n "${MOCK_FAIL:-}" ] && [ "$cmd $sub" = "$MOCK_FAIL" ]; then
     exit 1
 fi
 
+# MOCK_EMPTY="<cmd> <sub>" is the QUIETER failure: exit 0 having printed
+# nothing. No exit code reports it, and `pull()`'s size check is the only thing
+# between it and three empty sections that read exactly like a healthy repo.
+# That branch had no row and was deletable with the whole gate green.
+if [ -n "${MOCK_EMPTY:-}" ] && [ "$cmd $sub" = "$MOCK_EMPTY" ]; then
+    exit 0
+fi
+
 # serve <fixture-file> <fields-csv> <limit>
 #
 # Projects to the requested --json fields and truncates to --limit, exactly as
@@ -362,72 +370,17 @@ cat >"$MOCK_ALL_ISSUES" <<'JSON'
 ]
 JSON
 
-cat >"$MOCK_OPEN_ISSUES" <<'JSON'
-[
-  {"number": 28,  "title": "Standalone issue",
-   "body": "A short standalone issue with no children at all.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 283, "title": "Epic: token minting",
-   "body": "Tracking issue for the token-minting work. It tracks the split rather than dispatching any of it.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 341, "title": "Epic: lockfile sync",
-   "body": "Tracking issue for the lockfile-sync work.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 400, "title": "Ordinary open issue",
-   "body": "An ordinary issue with a body comfortably longer than the eighty-character stub floor.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 189, "title": "Compound-ref sibling A",
-   "body": "One half of a hand-written compound title parenthetical, with a body well past the eighty-character stub floor.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 190, "title": "Compound-ref sibling B",
-   "body": "The other half of that compound title parenthetical, likewise past the eighty-character stub floor.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 316, "title": "setup-deps mints app tokens with the deprecated app-id",
-   "body": "The workflow templates mint an app token with the deprecated app-id input, and the docs still describe it that way.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 500, "title": "Named under a closing keyword",
-   "body": "A merged PR body names this issue under a Closes keyword, so GitHub already handled it and a still-open copy is an anomaly.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 600, "title": "Named by both arms of detector 1",
-   "body": "Named in a merged PR title parenthetical and again in that same PR body, so both arms of detector one see it.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 700, "title": "Named only inside template boilerplate",
-   "body": "Named only inside an HTML comment carried over from the PR template, which is boilerplate rather than any author reference.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 817, "title": "Keyword inside a DOUBLE-backtick code span",
-   "state": "OPEN", "body": "A merged PR writes the convention for this issue in double backticks, which is the form the detector's own docstring used and the one a span regex mis-pairs as an empty span."},
-  {"number": 801, "title": "Keyword inside a fenced code block",
-   "body": "A merged PR shows a Closes line for this issue inside a fenced code block, which is an illustration and not GitHub closing anything.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 803, "title": "Keyword inside an inline code span",
-   "body": "A merged PR writes the convention for this issue in backticks, which is the form this repo's own docs and PR template both model.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 805, "title": "Keyword inside a quotation",
-   "body": "A merged PR quotes somebody else's old body carrying a Fixes line for this issue, which is reporting text rather than closing it.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 807, "title": "Keyword separated from the ref by blank lines",
-   "body": "A merged PR carries a Resolved heading two lines above this bare reference, which GitHub does not read as a closing keyword at all.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 809, "title": "Named again after a genuine closing keyword",
-   "body": "A merged PR closes this issue on one line and then mentions the same number again later, which a body-global number set would swallow.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 811, "title": "First of two swallowed by a stray comment opener",
-   "body": "A merged PR names this issue after a stray HTML comment opener whose closer is the PR template's, which used to delete the text between.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 813, "title": "Second of two swallowed by a stray comment opener",
-   "body": "Named in the same swallowed span as its sibling, so the failure silences every issue a PR named at once rather than only one of them.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 815, "title": "Named inside an oversized HTML comment",
-   "body": "Named inside an HTML comment past the strip's span cap, so the strip is refused and the reference stays visible with the refusal marked.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 7,   "title": "The hex-colour decoy",
-   "body": "A merged PR body contains the hex colour 7A3FE4, which an unbounded ref regex reads as a reference to this issue number seven.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"},
-  {"number": 951, "title": "The cross-repo decoy",
-   "body": "A merged PR body names another repository's issue with an owner/repo prefix, which an unbounded ref regex attributes to this repo.",
-   "createdAt": "2026-08-01T00:00:00Z", "updatedAt": "2026-08-01T00:00:00Z"}
-]
-JSON
+# THE OPEN PULL IS DERIVED, not hand-maintained beside the all-state one. The
+# two diverged: #346 was marked OPEN in the all-state fixture and simply absent
+# from the open one, so the stub-body expectation was asserted against a shape
+# gh would never return — an open-issues pull that omits an issue the same mock
+# calls OPEN. Deriving it removes the class rather than the instance.
+python3 - "$MOCK_ALL_ISSUES" "$MOCK_OPEN_ISSUES" <<'DERIVE'
+import json, sys
+rows = json.load(open(sys.argv[1]))
+json.dump([r for r in rows if r.get("state") == "OPEN"], open(sys.argv[2], "w"), indent=1)
+DERIVE
+
 
 # The merged PRs. #328's title is the REAL shape of the bug: a conventional
 # commit whose only parentheses hold a scope, never an issue ref — GitHub puts
@@ -558,6 +511,30 @@ mutate_run() {
     section tracking-parent-complete "$WORK/$label.out" >"$WORK/$label.tpc.json"
 }
 
+# mutate_refuses <sed-program> <label> <expected-rc> <stderr-regex>
+#
+# The sibling of mutate_run, for a property whose removal makes the MOCK refuse
+# rather than the detector misreport. mutate_run cannot host these: it treats a
+# non-zero mutant as a failed proof, which is correct for a mutation that should
+# still produce output and wrong for one whose whole point is that the run
+# cannot proceed. Without it the `--state merged` fix was pinned only by a
+# sentence claiming "32 rows redden".
+mutate_refuses() {
+    local prog="$1" label="$2" want_rc="$3" want_err="$4" rc=0
+    sed "$prog" "$SCRIPT" >"$WORK/$label.sh"
+    if cmp -s "$SCRIPT" "$WORK/$label.sh"; then
+        bad "mutation '$label' changed nothing — its target was renamed or reshaped; re-point this proof"
+        return 1
+    fi
+    env PATH="$WORK/bin:$PATH" REPO="$MOCK_REPO" bash "$WORK/$label.sh" \
+        >"$WORK/$label.out" 2>"$WORK/$label.err" || rc=$?
+    if [ "$rc" = "$want_rc" ] && grep -qE "$want_err" "$WORK/$label.err"; then
+        return 0
+    fi
+    bad "mutation '$label' expected exit $want_rc with stderr matching /$want_err/, got exit $rc: $(head -c 160 "$WORK/$label.err")"
+    return 1
+}
+
 # --- 1. the happy path -------------------------------------------------------
 rc=0
 run_stale "$WORK/run1.out" "$WORK/run1.err" || rc=$?
@@ -609,17 +586,15 @@ fi
 # criterion names — and this same fixture must now hand #28 the finished
 # children of #283. If the mutant comes back clean, the decoy has stopped
 # exercising anything and the assertion above is decoration.
-sed '/^PART_OF_RE = /{ s/(?!\[0-9\])//; s/(\\d+)/(\\d\\d)/; }' "$SCRIPT" >"$WORK/mutant.sh"
-if cmp -s "$SCRIPT" "$WORK/mutant.sh"; then
-    bad "the mutation changed nothing — PART_OF_RE was renamed or reshaped; re-point this proof"
-else
-    env PATH="$WORK/bin:$PATH" REPO="$MOCK_REPO" bash "$WORK/mutant.sh" \
-        >"$WORK/mutant.out" 2>/dev/null
-    section tracking-parent-complete "$WORK/mutant.out" >"$WORK/tpc-mutant.json"
-    if has_parent 28 "$WORK/tpc-mutant.json"; then
+# Routed through mutate_run rather than hand-rolled: the local copy discarded
+# the mutant's status and stderr, so a mutation that left invalid Python read as
+# "reported nothing" instead of "did not run". Same guard every other mutant
+# gets.
+if mutate_run '/^PART_OF_RE = /{ s/(?!\[0-9\])//; s/(\\d+)/(\\d\\d)/; }' part-of-unguarded; then
+    if has_parent 28 "$WORK/part-of-unguarded.tpc.json"; then
         ok "the unguarded regex DOES report #28 on this fixture — the decoy is live"
     else
-        bad "the unguarded regex reported $(q '[p["issue"] for p in d["parents"]]' <"$WORK/tpc-mutant.json") — the fixture no longer exercises the prefix collision"
+        bad "the unguarded regex reported $(q '[p["issue"] for p in d["parents"]]' <"$WORK/part-of-unguarded.tpc.json") — the fixture no longer exercises the prefix collision"
     fi
 fi
 
@@ -656,7 +631,7 @@ section shipped-but-still-open "$WORK/run1.out" >"$WORK/shipped.json"
 
 # The whole set at once, so an arm that starts over-firing shows up here rather
 # than passing every single-issue check below.
-expected_hits="[400, 189, 190, 316, 600, 817, 801, 803, 805, 807, 809, 811, 813, 815]"
+expected_hits="[400, 189, 190, 316, 600, 801, 803, 805, 807, 809, 811, 813, 817, 815]"
 if [ "$(q '[i["issue"] for i in d]' <"$WORK/shipped.json")" = "$expected_hits" ]; then
     ok "detector 1 reports exactly the expected hit set, and nothing else"
 else
@@ -703,8 +678,8 @@ fi
 # --- 4d. findings name the arm that matched ----------------------------------
 via=$(q '" ".join("%d:%s" % (i["issue"], "/".join(p["matched_via"] for p in i["merged_prs"])) for i in d)' <"$WORK/shipped.json")
 expected_via="400:title 189:title 190:title 316:body 600:title+body"
-expected_via="$expected_via 817:body 801:body 803:body 805:body 807:body 809:body"
-expected_via="$expected_via 811:body 813:body 815:body"
+expected_via="$expected_via 801:body 803:body 805:body 807:body 809:body"
+expected_via="$expected_via 811:body 813:body 817:body 815:body"
 if [ "$via" = "$expected_via" ]; then
     ok "every finding names its arm, and a both-arms hit merges to one 'title+body' entry"
 else
@@ -914,6 +889,14 @@ fi
 # Three empty sections and exit 0 is byte-identical to a healthy repo, so an
 # expired token or a rate limit must not be able to render as "nothing found".
 rc=0
+run_stale "$WORK/run4.out" "$WORK/run4.err" MOCK_EMPTY="issue list" || rc=$?
+if [ "$rc" -eq 10 ] && grep -q 'returned no output at all' "$WORK/run4.err"; then
+    ok "a pull that exits 0 having printed NOTHING also exits 10 — no exit code reports that one"
+else
+    bad "an empty pull exited $rc (want 10): $(head -c 140 "$WORK/run4.err")"
+fi
+
+rc=0
 run_stale "$WORK/run3.out" "$WORK/run3.err" MOCK_FAIL="pr list" || rc=$?
 if [ "$rc" -eq 10 ]; then
     ok "a failed pull exits 10 (UNKNOWN), not 0"
@@ -935,7 +918,11 @@ fi
 
 # --- 4f. detector 2 still works ----------------------------------------------
 section stub-body "$WORK/run1.out" >"$WORK/stub.json"
-if [ "$(q '[i["issue"] for i in d]' <"$WORK/stub.json")" = "[28, 341]" ]; then
+# #346 joined this list when the open pull became DERIVED: it is OPEN with a
+# 26-character body, so gh would return it and it is genuinely a stub. The
+# hand-maintained open fixture omitted it, and the expectation was tuned to
+# that omission rather than to what gh does.
+if [ "$(q '[i["issue"] for i in d]' <"$WORK/stub.json")" = "[28, 341, 346]" ]; then
     ok "detector 2 (stub-body) still flags the short bodies"
 else
     bad "detector 2 regressed: $(cat "$WORK/stub.json")"
@@ -993,6 +980,16 @@ if [ "$ec_rc" = "0" ]; then
     ok "…and with REPO unset but resolvable, the run completes normally"
 else
     bad "REPO unset with a working repo view exited $ec_rc (want 0): $(head -c 200 "$ec_err")"
+fi
+
+# --- 4m. the merged-PR pull asks for merged PRs ------------------------------
+# `gh pr list` with no --state returns OPEN PRs, and with this detector's body
+# arm nearly every open PR would produce a shipped-but-still-open finding — the
+# gate's own header measures 35 of the last 40 PR bodies naming an issue. The
+# mock now refuses the mismatch, so the proof is a refusal rather than a
+# misreport, and needs mutate_refuses to express it.
+if mutate_refuses 's/ --state merged//' pr-state-dropped 10 "unhandled pr list --state"; then
+    ok "dropping --state merged is refused: the pull would return OPEN PRs, not merged ones"
 fi
 
 # --- 5. read-only ------------------------------------------------------------
