@@ -2286,25 +2286,79 @@ else
     bad "  the SELF_ABS placement regressed: $fixt_order_bad"
 fi
 fixt_pins_bad=""
-for pin_region in make_cwd bare-repo run_probe read-back; do
+# THE PINNED VALUES, NOT JUST THE NAMES. The census used to grep for
+# `GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL"` — the variable NAME — so rewriting
+# the declarations to `GIT_HERMETIC_GLOBAL="${HOME}/.gitconfig"` and
+# `GIT_HERMETIC_NOSYSTEM=0` kept every site "pinned" while reverting all four to
+# the developer's real config, still printing the four-sites ok. The reviewing
+# machine's own ~/.gitconfig carries a Sassy-Dog insteadOf, which is why these
+# pins exist at all.
+if ! grep -qx 'GIT_HERMETIC_GLOBAL=/dev/null' "$FIXT_SRC"; then
+    fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_GLOBAL is no longer /dev/null]"
+fi
+if ! grep -qx 'GIT_HERMETIC_NOSYSTEM=1' "$FIXT_SRC"; then
+    fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_NOSYSTEM is no longer 1]"
+fi
+
+# A COMMENT-STRIPPED COPY. `grep -qF` over the raw region is satisfied by the
+# pin appearing in a comment — and `:2046-2049` explicitly predicts an editor
+# reading run_probe's pin as redundant, which is exactly the editor who leaves
+# the note behind. Deleting the live pin and leaving the commented one was
+# `all pass (420)`; under a global url.insteadOf rewrite the same tree went red
+# with six failures, proving the deleted line was load-bearing.
+# Comments stripped, AND this census's own pattern declarations removed — they
+# are literals describing a pin, not a site that applies one, and counting them
+# would make the census claim one more site than exists. Renaming PIN_G/PIN_N
+# breaks this deletion visibly rather than silently, because the count then
+# disagrees with the regions walked.
+fixt_live="$(sed 's/^[[:space:]]*#.*$//; /^PIN_[GN]=/d' "$FIXT_SRC")"
+PIN_G='GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL"'
+PIN_N='GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"'
+fixt_pin_sites=$(grep -cF -- "$PIN_G" <<<"$fixt_live")
+
+pin_regions="make_cwd bare-repo run_probe read-back"
+fixt_regions_seen=0
+for pin_region in $pin_regions; do
     fixt_region=""
     case "$pin_region" in
         make_cwd)  fixt_region="$(sed -n '/^make_cwd() {/,/^}/p' "$FIXT_SRC")" ;;
-        bare-repo) fixt_region="$(sed -n '/^mkdir -p "\$CWD_BARE"/,/git init -q --bare/p' "$FIXT_SRC")" ;;
+        # STRUCTURAL terminator. `git init -q --bare` matched a flag ORDER, not
+        # a structure, so reordering it to `git init --bare -q .` — semantically
+        # identical — or reflowing the block with backslash continuations left
+        # the sed range UNTERMINATED, running to EOF: measured 3 -> 1183 lines,
+        # swallowing two unrelated pin occurrences and passing. The `-z` guard
+        # below cannot see that, because an unterminated range is not empty, it
+        # is maximal; the length bound is what catches it.
+        bare-repo) fixt_region="$(sed -n '/^mkdir -p "\$CWD_BARE"/,/^[[:space:]]*git init .*--bare/p' "$FIXT_SRC")" ;;
         run_probe) fixt_region="$(sed -n '/^run_probe() {/,/^}/p' "$FIXT_SRC")" ;;
         read-back) fixt_region="$(sed -n '/^for pin_form in /,/^done$/p' "$FIXT_SRC")" ;;
         *) fixt_pins_bad="$fixt_pins_bad [$pin_region: no region arm]"; continue ;;
     esac
-    if [ -z "$fixt_region" ]; then
+    fixt_regions_seen=$((fixt_regions_seen + 1))
+    fixt_region="$(sed 's/^[[:space:]]*#.*$//' <<<"$fixt_region")"
+    region_lines=$(printf '%s\n' "$fixt_region" | wc -l | tr -d ' ')
+    if [ -z "${fixt_region//[[:space:]]/}" ]; then
         fixt_pins_bad="$fixt_pins_bad [$pin_region: region not found]"
-    elif ! grep -qF -- 'GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL"' <<<"$fixt_region"; then
-        fixt_pins_bad="$fixt_pins_bad [$pin_region: no GIT_CONFIG_GLOBAL pin]"
-    elif ! grep -qF -- 'GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"' <<<"$fixt_region"; then
-        fixt_pins_bad="$fixt_pins_bad [$pin_region: no GIT_CONFIG_NOSYSTEM pin]"
+    elif [ "$region_lines" -gt 200 ]; then
+        fixt_pins_bad="$fixt_pins_bad [$pin_region: region is $region_lines lines — its end anchor did not match, so the range ran past its block]"
+    elif ! grep -qF -- "$PIN_G" <<<"$fixt_region"; then
+        fixt_pins_bad="$fixt_pins_bad [$pin_region: no live GIT_CONFIG_GLOBAL pin]"
+    elif ! grep -qF -- "$PIN_N" <<<"$fixt_region"; then
+        fixt_pins_bad="$fixt_pins_bad [$pin_region: no live GIT_CONFIG_NOSYSTEM pin]"
     fi
 done
+
+# EVERY LIVE PIN MUST BE INSIDE A VISITED REGION. Without this the region list
+# is a hand-maintained inventory certifying itself: deleting run_probe's pin AND
+# its entry from the list left the census green while it printed a message
+# naming run_probe as checked. That is the defect #324 exists to close, one
+# level up, so the count is derived from the source and the message below names
+# the regions actually walked rather than a frozen four.
+if [ "$fixt_pin_sites" -ne "$fixt_regions_seen" ]; then
+    fixt_pins_bad="$fixt_pins_bad [$fixt_pin_sites live pin sites in the source but $fixt_regions_seen regions walked — a pinned site is outside the census, or a region lost its pin]"
+fi
 if [ -z "$fixt_pins_bad" ]; then
-    ok "  and the hermetic git pins are at all four sites that read a fixture (make_cwd, bare-repo, run_probe, read-back)"
+    ok "  and the hermetic git pins are live at every site the census walks ($pin_regions), with $fixt_pin_sites live pin sites in the source"
 else
     bad "  a site that reads a fixture lost its hermetic pins, so the developer's own insteadOf reaches it:$fixt_pins_bad"
 fi
