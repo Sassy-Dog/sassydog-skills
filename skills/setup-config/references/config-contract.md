@@ -463,11 +463,15 @@ The preview is still rolling out per-repo, so enablement is exactly the kind of 
 
 **`stacked_prs` and `merge_queue: true` together are refused at merge time,** not at config time: GitHub's queue support for stacks is still rolling out, and `pr-shepherd` stops with exit 24 rather than guessing. Setting both is legal — it simply means the dispatchers may open stacks that a human has to land.
 
-### `execution_site` — the name this checkout answers to
+### `execution_site` — read by `dispatch-ready`, `take-it`, `groom-backlog` and `survey-work`
 
 ```yaml
 execution_site: mac
 ```
+
+Written into the `.claude/sassy-dog/*.md` file of each skill that reads it — `dispatch-ready.md`,
+`take-it.md`, `groom-backlog.md` and `survey-work.md` — like every other shared block. A value in
+any other file is carried across verbatim by every refresh and read by nobody.
 
 A free-form lowercase token naming the workstation this checkout runs on. It is the config half of
 the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)):
@@ -529,18 +533,11 @@ workstation names it themselves, like everybody else.
 compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
 work all runs from one machine should simply omit it.
 
-**A refresh carries an existing value across verbatim and leaves an absent key absent.** This is an
-exception to *re-verify every fact against live state*, and it is not `review_site:`'s reason
-repeated: there is no live state to re-verify against, because the platform answers what *kind* of
-machine this is and never what the user named it. The harm runs in the silent direction — an absent
-or overwritten `execution_site` turns a site filter OFF, which is
-[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
-
-**`setup-config`'s guardrail list owns this rule and is the copy to trust.** `update-mode.md` and
-`migrate-mode.md` carry the operational side for their own modes, because a mode reads its own file
-and inherits nothing. Everywhere else — including here — points rather than restates: the rule was
-written out in five places once, and the copy that drifted was found by a reviewer rather than by
-anything that fails.
+**A refresh neither re-derives this key nor fills it in — `setup-config`'s guardrail list owns that
+rule and is the copy to trust.** `update-mode.md` and `migrate-mode.md` carry the operational side
+for their own modes, because a mode reads its own file and inherits nothing. Nothing else restates
+it, here included: the rule was written out in five places once, and the copy that drifted was found
+by a reviewer rather than by anything that fails.
 
 **Who reads it, by the change that adds the reader.** The label read and this contract landed first
 and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that each consumer

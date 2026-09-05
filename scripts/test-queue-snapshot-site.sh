@@ -64,6 +64,12 @@
 set -uo pipefail
 export LC_ALL=C
 
+# Resolved BEFORE the `cd` below, because `$0` is caller-relative: run as
+# `cd scripts && bash test-queue-snapshot-site.sh`, the mutant-inventory grep
+# further down read nothing and reported "only 9 of  declared mutants ran".
+# Same idiom as test-review-gate-decisions.sh.
+SELF_ABS="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/$(basename "${BASH_SOURCE[0]:-$0}")"
+
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && { echo "test-queue-snapshot-site: not in a git repo" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
@@ -175,7 +181,8 @@ ready = [
     issue(101, "declared", ["ready", "site:vdi"]),
     # 102 — nothing declared. Also the control for the emitted key set, and it
     # carries the body contracts so section 3 can check them unchanged.
-    issue(102, "undeclared", ["ready"], "touches: a/b c/d\nDepends on #7\n"),
+    issue(102, "undeclared", ["ready"],
+          "touches: `a/b`, c/d\nstack: #1 #2\nDepends on #7 and #8\n"),
     # 103/112 — folding, keyed separately so one mutant cannot cover both.
     issue(103, "key case", ["ready", "SITE:vdi"]),
     issue(112, "value case", ["ready", "site:VDI"]),
@@ -268,26 +275,39 @@ expect_sites "no site: label in ready[] gives an empty sites" ready 102 '[]'
 expect_sites "no site: label in in_flight[] does too" in_flight 202 '[]'
 
 # --- 3. no shape change for existing consumers --------------------------------
-# A key SET check, not a spot check: a renamed or dropped field is the failure
-# this catches, and `site`/`sites` are the only additions permitted.
-echo "3. the emitted shape is the old one plus site and sites" >&2
-ready_keys="$(jq -r '.ready[] | select(.number==102) | keys_unsorted | sort | join(",")' "$OUT")"
-flight_keys="$(jq -r '.in_flight[] | select(.number==202) | keys_unsorted | sort | join(",")' "$OUT")"
+# A key SET check, and UNIVERSAL over every row in both buckets rather than one
+# fixture each. That is not tidiness: the rows it used to check were #102 and
+# #202, both of which declare nothing, so a scalar emitted CONDITIONALLY —
+# `if len(sites) == 1: out["site"] = sites[0]`, which is exactly what a later
+# editor writes after reading the header's "deliberately NO SCALAR" paragraph —
+# appears on no row this section looked at, and the gate stayed green while
+# seven rows carried it. Every row's key set is collapsed to a unique list, so
+# the check fails both when the set is wrong and when the rows disagree.
+echo "3. every row's key set is the pre-#340 set plus sites" >&2
+keysets_of() { # <bucket> — the distinct key sets across that bucket
+    jq -r "[.$1[] | keys | sort | join(\",\")] | unique
+           | if length == 1 then .[0] else \"MIXED: \" + (. | tostring) end" "$OUT"
+}
+ready_keys="$(keysets_of ready)"
+flight_keys="$(keysets_of in_flight)"
 if [ "$ready_keys" = "assignees,depends_on,labels,number,sites,stack,title,touches,unannotated" ]; then
-    ok "ready[] carries exactly its pre-#340 keys plus sites — and NO scalar"
+    ok "every ready[] row carries exactly its pre-#340 keys plus sites — and NO scalar"
 else
-    bad "ready[] keys drifted: $ready_keys"
+    bad "ready[] keys drifted or differ between rows: $ready_keys"
 fi
 if [ "$flight_keys" = "assignees,labels,mine,number,sites,stack,title,touches" ]; then
-    ok "in_flight[] carries exactly its pre-#340 keys plus sites — and NO scalar"
+    ok "every in_flight[] row carries exactly its pre-#340 keys plus sites — and NO scalar"
 else
-    bad "in_flight[] keys drifted: $flight_keys"
+    bad "in_flight[] keys drifted or differ between rows: $flight_keys"
 fi
+# What this row checks is that the three body contracts still PARSE, on a body
+# carrying all three. It is not the parity guarantee and does not claim to be:
+# that guarantee is the diff, where `parse_body` has no hunk at all.
 control="$(jq -c '.ready[] | select(.number==102) | {touches, depends_on, stack, unannotated}' "$OUT")"
-if [ "$control" = '{"touches":["a/b","c/d"],"depends_on":[7],"stack":[],"unannotated":false}' ]; then
-    ok "and the body contracts are byte-for-byte what they were"
+if [ "$control" = '{"touches":["a/b","c/d"],"depends_on":[7,8],"stack":[1,2],"unannotated":false}' ]; then
+    ok "the three body contracts still parse, unchanged by the label read"
 else
-    bad "the body contracts changed: $control"
+    bad "a body contract changed: $control"
 fi
 if [ "$(jq -r '.in_flight[] | select(.number==201) | .mine' "$OUT")" = "true" ]; then
     ok "the 'mine' flag still resolves beside a declared site"
@@ -325,10 +345,12 @@ expect_sites "sites carries BOTH declared values, sorted" ready 105 '["mac","vdi
 expect_sites "the same site twice is ONE declaration, not a conflict" ready 106 '["vdi"]'
 # The whole point of emitting a list: the obvious reading of `sites` cannot
 # turn a conflict into "any site", where the obvious reading of a scalar can.
-if [ "$(jq -c '.ready[] | select(.number==105) | has("site")' "$OUT")" = "false" ]; then
-    ok "and there is no scalar to misread it as unconstrained"
+# Universal, for B1's reason: checked on the conflict row alone, a scalar
+# emitted only when unambiguous never appears here and the check passes.
+if [ "$(jq -c '[.ready[], .in_flight[]] | all(has("site") | not)' "$OUT")" = "true" ]; then
+    ok "and NO row in either bucket carries a scalar to misread as unconstrained"
 else
-    bad "a site scalar is back — its obvious reading resolves a conflict to 'any site'"
+    bad "a site scalar is back on some row — its obvious reading resolves a conflict to 'any site'"
 fi
 
 # --- 8. the body declares nothing — the reason for the move -------------------
@@ -354,8 +376,12 @@ FLIPPED="$WORK/flipped.txt"
 # numerically-sorted input desynchronises it the moment row numbers differ in
 # width — reproduced with rows 9/10/11 where only 9 had changed and `comm`
 # reported all three.
+# The KEY SET travels with the value, so the matrix is not blind to a mutant
+# that adds a field rather than changing one — which is how a conditionally
+# emitted `site` scalar slipped past an earlier version of this gate.
 site_map() {
-    jq -r '(.ready + .in_flight)[] | "\(.number)\t\(.sites|tostring)"' "$1" | sort
+    jq -r '(.ready + .in_flight)[]
+           | "\(.number)\t\(keys|sort|join(","))|\(.sites|tostring)"' "$1" | sort
 }
 run_snapshot "$SNAP"
 BASELINE="$WORK/baseline.tsv"
@@ -446,10 +472,28 @@ if mutant "M9: an unsorted set makes the conflict's order arbitrary" 105 \
     '    return sorted(found)' \
     '    return sorted(found, reverse=True)'; then :; fi
 
+# B1: the conditional scalar. This is the shape a later editor reaches for after
+# reading "deliberately NO SCALAR" — emit it only when unambiguous — and it
+# re-creates the consumer bug the decision exists to prevent, because `.get
+# ("site")` is then None on a conflict and `site is None or site ==
+# execution_site` resolves it to "any site".
+if mutant "M10: a scalar emitted only when unambiguous is still misreadable" 101 \
+    '    if with_deps:' \
+    '    if len(out["sites"]) == 1:
+        out["site"] = out["sites"][0]
+    if with_deps:'; then :; fi
+
+# N1: nothing exercised the `[]` representation, so "an empty sites means any
+# site" was asserted six times and proved by nothing. `or None` is the natural
+# way to lose it.
+if mutant "M11: collapsing an empty sites to null loses the any-site form" 102 \
+    '    return sorted(found)' \
+    '    return sorted(found) or None'; then :; fi
+
 # Every mutant in this section ran. Derived from the source rather than
 # transcribed: the count is whatever `mutant` was called with, and a call that
 # died has already recorded its own failure above.
-declared="$(grep -c '^if mutant ' "$0")"
+declared="$(grep -c '^if mutant ' "$SELF_ABS")"
 if [ "$mutants_run" -eq "$declared" ]; then
     ok "every declared mutant ran ($mutants_run of $declared)"
 else
@@ -461,16 +505,18 @@ fi
 # file, and the gate checks it. Each entry needs a reason, because a row nothing
 # can redden proves nothing:
 #
-#   102  the undeclared control, and 202 is its in_flight twin. Neither carries
-#        a `site:`-shaped label at all, so no widening or narrowing of what
-#        counts as a declaration can reach them. Their job is section 3's key
-#        set and the body-contract check, which are assertions rather than
-#        mutation targets.
-#   111  the prose-only body. Nothing in this file can make a body line declare
-#        again — that capability was deleted with the parser, which is the point
-#        of the row. It fails only if the site starts being read from the body.
-#   202  see 102.
-UNPINNED_ROWS="102 111 202"
+# It is EMPTY, and that is the goal state rather than a coincidence: every row
+# in both buckets is reachable by some mutant. It was not empty before — 102,
+# 111 and 202 were declared here with reasons that were true about the shipped
+# mutants and false about reach, which is the same defect one level in from the
+# roster this machinery replaced. M11 (`or None`) reaches all three, because
+# what they have in common is not "nothing can touch them" but "nothing had
+# exercised the empty-list representation".
+#
+# Adding a row that no mutant reddens now fails here. Give it a mutant; if it
+# genuinely cannot have one, declare it WITH A REASON THAT IS ABOUT REACH — not
+# about which assertions happen to mention it.
+UNPINNED_ROWS=""
 derived_unpinned=""
 flipped_set=" $(sort -un "$FLIPPED" | tr '\n' ' ') "
 while read -r n _; do

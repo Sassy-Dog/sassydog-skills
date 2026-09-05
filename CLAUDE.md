@@ -23,7 +23,7 @@ Which header to read, keyed by what you are touching:
 | `setup-hooks`, stack detection, `generated-by:` ownership, the stray-artifact guard | `test-detect-hook-stack.sh`, `test-ownership-matchers.sh`, `test-artifact-guard.sh` |
 | the label taxonomy or `align-labels.sh` | `test-label-taxonomy.sh`, `test-label-migrate.sh` |
 | `github-issues` scripts — stale detection, `gotcha_summary`, grooming drift | `test-stale-issues.sh`, `test-gotcha-claims.sh`, `test-verify-issue-refs.sh` |
-| `queue-snapshot.sh`'s execution-site read — why it is a label and not a body contract, and why several `site:` labels are a conflict rather than "any site" | `test-queue-snapshot-site.sh` |
+| `queue-snapshot.sh` — its emitted key set, the `touches:`/`Depends on #N`/`stack:` body parse, and the execution-site read (why a label rather than a body contract, and why several `site:` labels are a conflict rather than "any site") | `test-queue-snapshot-site.sh` |
 | `file-or-link-issue.sh` — the two idempotency stages, the delimited-footer match, the refusal to file on an unverified scan | `test-file-or-link-issue.sh` |
 | `repo-health` security pulls (code scanning and secret scanning states) | `test-scanning-states.sh` |
 | `whats-on-fire`'s ranking and reporting — a security-labelled issue is never collapsed into a bare count | `test-security-listing.sh` |
