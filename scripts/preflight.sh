@@ -1173,16 +1173,26 @@
 #      quoting it. Indentation is likewise not a code block, since the
 #      leading-whitespace tolerance is what lets the contract sit under a
 #      NESTED list item — and that row is at four columns on purpose, because a
-#      two-space fixture would pass with a 4-space rule in force. ELEVEN
-#      mutants, each proved applied, proved to RUN, and proved by the row it
-#      reddens; the roster and which row answers to which live in the gate's
-#      own header. Mock
-#      `gh` on PATH, with `REPO=<owner/name>` in the environment suppressing
-#      the `gh repo view` lookup (queue-snapshot runs that only when REPO is
-#      EMPTY): no repo, no network. The mock HONOURS `--json`, so dropping
-#      `body` from the pull reddens rather than passing. Bucket sizes are
-#      asserted first, because queue-snapshot swallows a failed list into `[]`,
-#      which reads exactly like a correct "nothing declared".
+#      two-space fixture would pass with a 4-space rule in force. The mask must
+#      also never swallow text GitHub RENDERS, the false-negative direction:
+#      code spans are blanked before markup is looked for (this repo's issue #6
+#      carries a backticked `<!-- generated-by: …` that masked 25 of its 30
+#      non-blank lines), the empty comments `<!-->` and `<!--->` close where
+#      they stand, and a mid-line `<!--` dies at its paragraph. `<script>`,
+#      `<style>` and `<?…?>` are an ACCEPTED divergence, pinned by a row rather
+#      than closed. The token carries a grammar, because a consumer echoes it
+#      into a refusal reason and a public repo's body stays editable after
+#      `ready`. FIFTEEN mutants, each proved applied, proved to RUN, and proved
+#      by the row it reddens; the roster and which row answers to which live in
+#      the gate's own header. Mock `gh` on PATH, with `REPO=<owner/name>` in
+#      the environment suppressing the `gh repo view` lookup (queue-snapshot
+#      runs that only when REPO is EMPTY), the shim's resolution verified
+#      immediately after `chmod`, and an RFC 2606 `.invalid` slug so no read
+#      can reach a real namespace: no repo, no network, structurally. The mock
+#      HONOURS `--json`, so dropping `body` from the pull reddens rather than
+#      passing. Bucket sizes are asserted first as a DIAGNOSTIC — the rows fail
+#      loudly on their own, and this turns thirty red rows into one line naming
+#      the cause.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1934,10 +1944,10 @@ fi
 # The `site:` body contract added by #340 is substrate only, so nothing else in
 # the tree would notice it breaking. Both directions are pinned — the contract
 # parses; a fenced example, an unfilled `<!-- ... -->` placeholder and a quoted
-# fence do not — because #322 and #340 both carry a fenced `site: vdi` and a
-# fence-blind parse marks the substrate issues themselves as VDI-only. The mask
-# is `site:`-only on purpose; narrowing `touches:` the same way is a behaviour
-# change for every consumer already reading it. Eleven mutants; mock `gh` that
+# fence do not; and text GitHub renders (a code span, an empty comment, a
+# mid-line comment past its paragraph) is never masked. The mask is
+# `site:`-only on purpose; narrowing `touches:` the same way is a behaviour
+# change for every consumer already reading it. Fifteen mutants; mock `gh` that
 # honours `--json`; no repo, no network.
 if bash scripts/test-queue-snapshot-site.sh; then
     pass "queue-snapshot site tests (scripts/test-queue-snapshot-site.sh)"

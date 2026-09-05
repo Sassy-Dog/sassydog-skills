@@ -25,14 +25,24 @@
 #     body and a config file is invisible in both places. The comparison is
 #     case-insensitive on BOTH sides — folding the configured value is the
 #     reading skill's half, which this script cannot do for it.
-#   * A `site:` line carrying no token at all is not a declaration: the scan
-#     continues past it, and if nothing else declares one the answer is null.
-#     Null and absent are the same answer — any site. That valueless line is
-#     the ONLY malformed shape this parser recognises.
-#   * NOTHING IS RESERVED. Every other token is emitted verbatim (lowercased),
-#     `site: any` and `site: none` included — to this script they are ordinary
-#     site names, not escapes. Do not read "absent means any site" as though
-#     the word `any` were a value: it is the MISSING LINE that means it.
+#   * The token has a GRAMMAR, applied after folding: `[a-z0-9]` then up to 63
+#     more of `[a-z0-9._-]`. It is not a whitelist of known sites — it is
+#     deliberately permissive, so that every plausible workstation name fits
+#     and a token which FAILS it was never a site name at all. The parse bounds
+#     this rather than leaving it to whoever reports the value: a consumer
+#     echoes the token into a refusal reason (#341), issue bodies on a public
+#     repo stay editable after `ready` is applied, and a boundary asserted once
+#     here is worth more than the same boundary asked of every reader.
+#   * TWO malformed shapes exist and both answer the SAME way — a `site:` line
+#     with no token at all, and one whose token fails the grammar. Neither is a
+#     declaration: the scan continues past it, and if nothing else declares one
+#     the answer is null. Null and absent are the same answer — any site. That
+#     direction is deliberate and is why the grammar is permissive: rejection
+#     means "this was never a site", and "any site" is then the right answer.
+#   * NOTHING IS RESERVED inside that grammar: `site: any` and `site: none`
+#     are ordinary site names, not escapes. Do not read "absent means any
+#     site" as though the word `any` were a value: it is the MISSING LINE that
+#     means it.
 #   * Lines inside a FENCED code block are not read as a declaration, and
 #     neither is text inside an HTML comment — the site parse reads the
 #     comment-stripped remainder of a line, so an unfilled issue-template
@@ -41,6 +51,32 @@
 #     hypothetical: both issues that introduced the contract, #322 and #340,
 #     carry a fenced example holding a `site: vdi` line, so a fence-blind
 #     parse marks the substrate issues themselves VDI-only.
+#   * Neither mask may swallow text GitHub RENDERS, which is the failure
+#     direction that matters: a masked declaration reads as "any site" and the
+#     wrong loop claims the issue. Three CommonMark constructs are honoured for
+#     that reason alone, each measured against a real body before it was
+#     written:
+#       - CODE SPANS are blanked before any markup is looked for. This repo's
+#         issue #6 carries a backticked `<!-- generated-by: …` with no closer
+#         on the line; treating it as a comment ran the state to the next
+#         `-->` 15 lines later, swallowed a fence opener on the way, and masked
+#         25 of 30 non-blank lines. A backticked ```-run is likewise not a
+#         fence, so an info string carrying a backtick cannot open one.
+#       - The EMPTY COMMENTS `<!-->` and `<!--->` close where they stand.
+#         Searching for `-->` four characters in misses both, and an unclosed
+#         comment masks the entire rest of the body.
+#       - A `<!--` that starts MID-LINE is inline HTML and cannot outlive its
+#         paragraph, so it is dropped at the next blank line. One that starts a
+#         line keeps CommonMark's block semantics and runs to its closer.
+#   * ACCEPTED DIVERGENCE, recorded rather than closed. Raw-text HTML blocks
+#     (`<script>`, `<style>`) and processing instructions (`<?…?>`) are NOT
+#     masked, so `<style>` + `site: nowhere` + `</style>` declares `nowhere`
+#     although GitHub's sanitizer drops those elements with their contents.
+#     It is the only one of these four whose error is a false POSITIVE, no
+#     instance appeared in 554 sampled org bodies, and closing it means a third
+#     line-state machine beside the fence and the comment — more surface than
+#     the shape is worth in a substrate parser. The gate pins the current
+#     answer, so changing it is a decision rather than a surprise.
 #   * Indentation is deliberately NOT read as a code block. CommonMark makes
 #     four leading spaces an indented code block; here the leading-whitespace
 #     tolerance is what lets the contract sit as a continuation line under a
@@ -126,36 +162,95 @@ stack_re = re.compile(r'^\s*stack:\s*(.+)$', re.IGNORECASE)
 # `site:` (or one followed only by whitespace) fail to match at all, so it is
 # never mistaken for a declaration of the empty site.
 site_re = re.compile(r'^\s*site:\s*(\S.*)$', re.IGNORECASE)
+# The site TOKEN's grammar, applied AFTER folding. Not a whitelist: the
+# boundary past which a token was never a workstation name. See the header for
+# why the parse owns this rather than each consumer.
+site_token_re = re.compile(r'^[a-z0-9][a-z0-9._-]{0,63}$')
 # A fence DELIMITER, not a fence: openers and closers look alike, so an opener
 # is remembered as (character, run length) and `closes_fence` decides pairing.
 fence_re = re.compile(r'^\s*(`{3,}|~{3,})')
 ref_re = re.compile(r'#(\d+)')
 
 
-def strip_comments(line, in_comment):
-    """Return (visible, in_comment): the line with HTML-comment spans removed.
+def blank_code_spans(text):
+    """Replace paired backtick code spans with spaces, PRESERVING LENGTH.
+
+    CommonMark pairs a run of N backticks with the next run of exactly N, and
+    what lies between is literal text — so `` `<!-- x` `` opens no comment and
+    ```gh pr merge``` opens no fence. An unpaired run is an ordinary character
+    and is left alone, which is what keeps a real ```-fence opener visible.
+
+    Length is preserved so the result serves as an INDEX MAP over the original
+    line: markup is located here and text is cut from there, which is how a
+    backticked VALUE (`site: `vdi``) still reaches the token split intact.
+    """
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] != '`':
+            i += 1
+            continue
+        j = i
+        while j < n and text[j] == '`':
+            j += 1
+        k = j
+        while k < n:
+            if text[k] != '`':
+                k += 1
+                continue
+            e = k
+            while e < n and text[e] == '`':
+                e += 1
+            if e - k == j - i:               # a closer of exactly equal length
+                out[i:e] = ' ' * (e - i)
+                i = e
+                break
+            k = e
+        else:
+            i = j                            # unpaired: literal backticks
+    return ''.join(out)
+
+
+def strip_comments(line, scan, comment):
+    """Return (visible, visible_scan, comment) — the line minus comment spans.
 
     The site parse reads this REMAINDER rather than the raw line. Keying on
     "did the line START inside a comment" instead is a different rule, and it
     misses the shape issue templates actually use: `site: <!-- vdi | mac -->`
     starts outside the comment, so the raw line matches and the unfilled
     placeholder itself becomes the site.
+
+    Marker positions are found in `scan` (code spans blanked) and text is cut
+    from `line`; the two are the same length, so the indices agree. `comment`
+    is None, `block` (the `<!--` began a line, so CommonMark block semantics
+    apply and it runs to its closer) or `inline` (it began mid-line, so it
+    cannot outlive its paragraph — `scan_lines` drops it at a blank line).
     """
-    out, rest = [], line
-    while rest:
-        if in_comment:
-            cut = rest.find('-->')
-            if cut < 0:
+    out, outs, i, n = [], [], 0, len(line)
+    while i < n:
+        if comment:
+            end = scan.find('-->', i)
+            if end < 0:
                 break                        # comment runs past end of line
-            rest, in_comment = rest[cut + 3:], False
+            i, comment = end + 3, None
         else:
-            cut = rest.find('<!--')
-            if cut < 0:
-                out.append(rest)
+            start = scan.find('<!--', i)
+            if start < 0:
+                out.append(line[i:])
+                outs.append(scan[i:])
                 break
-            out.append(rest[:cut])
-            rest, in_comment = rest[cut + 4:], True
-    return ''.join(out), in_comment
+            out.append(line[i:start])
+            outs.append(scan[i:start])
+            comment = 'inline' if line[:start].strip() else 'block'
+            i = start + 4
+            # CommonMark's two EMPTY comments close where they stand. Resuming
+            # the search for `-->` past them misses both, and an unclosed
+            # comment masks the whole rest of the body.
+            if scan.startswith('>', i):
+                i, comment = i + 1, None
+            elif scan.startswith('->', i):
+                i, comment = i + 2, None
+    return ''.join(out), ''.join(outs), comment
 
 
 def closes_fence(line, fence):
@@ -183,20 +278,23 @@ def scan_lines(body):
     deliberately left fence-blind — see the header.
     """
     fence = None            # (character, run length) of the open fence, or None
-    in_comment = False
+    comment = None          # None, 'block' or 'inline' — see strip_comments
     for line in (body or "").splitlines():
         if fence is not None:
             # Inside a fence, comment syntax is CONTENT, so the comment walk
-            # does not run here. An unclosed `<!--` in a fenced example would
-            # otherwise swallow the closing delimiter and every real
-            # declaration after it — the false NEGATIVE, where "absent means
-            # any site" lets the wrong loop claim a site-held issue.
+            # does not run here. Letting it run leaks comment state PAST the
+            # block, and the first real declaration after the fence is then
+            # masked — the false NEGATIVE, where "absent means any site" lets
+            # the wrong loop claim a site-held issue.
             if closes_fence(line, fence):
                 fence = None
             yield line, ""                   # fenced content declares nothing
             continue
-        visible, in_comment = strip_comments(line, in_comment)
-        m = fence_re.match(visible)
+        if comment == 'inline' and not line.strip():
+            comment = None                   # inline HTML dies at its paragraph
+        scan = blank_code_spans(line)
+        visible, vscan, comment = strip_comments(line, scan, comment)
+        m = fence_re.match(vscan)
         if m:
             fence = (m.group(1)[0], len(m.group(1)))
             yield line, ""                   # the delimiter declares nothing
@@ -223,9 +321,9 @@ def parse_body(body):
         if site is None:
             m = site_re.match(visible)
             if m:
-                token = m.group(1).replace('`', ' ').split()
-                if token:              # a valueless line declares nothing
-                    site = token[0].lower()
+                candidate = (m.group(1).replace('`', ' ').split() or [''])[0].lower()
+                if site_token_re.match(candidate):
+                    site = candidate   # both malformed shapes fall through
                 continue
         m = depends_re.match(line)
         if m:

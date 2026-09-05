@@ -31,8 +31,8 @@
 # parse reading the raw line rather than the comment-stripped remainder would
 # hold every unfilled issue at "requires site `<!--`".
 #
-# WHAT IS MASKED, EXACTLY, because two near-misses look like this rule and are
-# not it:
+# WHAT IS MASKED, EXACTLY. Every bullet below is a near-miss that looks like
+# the rule and is not it, and each names the rows that hold it up:
 #   * A FENCED block is masked, delimiters included. Openers and closers pair
 #     on CHARACTER, RUN LENGTH and a whitespace-only tail (CommonMark), so a
 #     ```-fenced example quoted inside a ````-fenced block does not end the
@@ -40,9 +40,30 @@
 #     Rows 118-122 are the three clauses plus the recovery afterwards.
 #   * An HTML COMMENT is masked by REMAINDER, not by line: the site parse reads
 #     what is left of the line outside every comment span. Rows 115-117.
-#   * Inside a fence, comment syntax is CONTENT — the walk does not run there,
-#     or an unclosed `<!--` in a fenced example swallows the closing delimiter
-#     and every declaration after it (row 123).
+#   * Inside a fence, comment syntax is CONTENT — the walk does not run
+#     there, or comment state LEAKS PAST the block and masks the first real
+#     declaration after it (row 123). The closer itself is unaffected either
+#     way: `closes_fence` reads the raw line.
+#   * Neither mask may swallow text GitHub RENDERS. Three CommonMark
+#     constructs are honoured for that reason, each measured against a real
+#     body first: CODE SPANS are blanked before markup is looked for (row 125
+#     — this repo's issue #6 carries a backticked `<!-- generated-by: …` with
+#     no closer, which masked 25 of its 30 non-blank lines and swallowed a
+#     fence opener; row 128 is the same mechanism opening a bogus fence from a
+#     backticked info string); the EMPTY COMMENTS `<!-->` and `<!--->` close
+#     where they stand (rows 126-127); and a mid-line `<!--` is inline HTML
+#     that dies at its paragraph (row 130).
+#   * ACCEPTED DIVERGENCE, pinned by row 129 rather than closed. `<script>`,
+#     `<style>` and `<?…?>` are not masked, so a `site:` inside one is read
+#     although GitHub's sanitizer drops those elements with their contents. It
+#     is the only one of these whose error is a false POSITIVE, no instance
+#     appeared in 554 sampled org bodies, and closing it costs a third
+#     line-state machine. The row exists so changing the answer is a decision.
+#   * The token has a GRAMMAR (rows 131-133): `^[a-z0-9][a-z0-9._-]{0,63}$`
+#     after folding. A consumer echoes the token into a refusal reason (#341)
+#     and a public repo's body stays editable after `ready` is applied, so the
+#     boundary is asserted once at the parse. Both malformed shapes — no token,
+#     and a token failing the grammar — answer alike: not a declaration.
 #
 # THE ASYMMETRY IS DELIBERATE AND IS PINNED HERE (row 112). All of that applies
 # to `site:` alone. `touches:` inside a fence is still parsed, exactly as it
@@ -60,31 +81,59 @@
 # two-space fixture would satisfy this row while a 4-space rule was in force,
 # so the row would be measuring nothing — M4 is what proves it is not.
 #
-# THE MUTATION PROOFS. Eleven, each neutering ONE decision, each proved applied
+# THE MUTATION PROOFS. Fifteen, each neutering ONE decision, each proved applied
 # (the mutant must differ from the source), proved to RUN (a mutant that dies
 # proves nothing), and proved by the row it reddens:
-#   M1  the extraction itself        -> the plain `site: vdi` row goes dark
-#   M2  the fenced-content mask      -> the fenced example starts declaring
-#   M3  the case fold                -> `Site: VDI` stops matching `vdi`
-#   M4  a 4-space indented-code rule -> the nested list continuation goes dark
-#   M5  the closer's LENGTH clause   -> a bare 3-tick line ends a 4-tick block
-#   M6  the closer's CHAR clause     -> a 3-tick line ends a ~~~ block
-#   M7  the closer's TAIL clause     -> a delimiter with a tail reads as one
-#   M8  the comment walk, in fences  -> a fenced `<!--` eats the real line
-#   M9  `body` dropped from --json   -> every contract goes dark at once
-#   M10 the site match on `line`     -> the comment placeholder becomes a site
-#   M11 ALL THREE closer clauses     -> the quoted example declares (pre-fix)
-# M5/M6/M7 each hold up exactly one row, and M11 is why row 118 exists at all:
-# the tagged inner opener is stopped by the LENGTH clause and the TAIL clause
-# independently, so no single-clause mutant reaches it and only the pre-fix
-# character-only rule does. Without M2 and M10 in particular a reviewer cannot
-# tell the masking from decoration.
+#   M1  the extraction itself        -> 101, the plain `site: vdi` row
+#   M2  the fenced-content mask      -> 106, the fenced example declares
+#   M3  the case fold                -> 103, `Site: VDI` stops matching
+#   M4  a 4-space indented-code rule -> 111, the nested list continuation
+#   M5  the closer's LENGTH clause   -> 119 (and 122 — see below)
+#   M6  the closer's CHAR clause     -> 120, a 3-tick line ends a ~~~ block
+#   M7  the closer's TAIL clause     -> 121, a delimiter with a tail closes
+#   M8  the comment walk, in fences  -> 123, state leaks past the block
+#   M9  `body` dropped from --json   -> 101, every contract at once
+#   M10 the site match on `line`     -> 108, a block comment declares
+#   M11 ALL THREE closer clauses     -> 118, the pre-fix rule
+#   M12 the token grammar            -> 131, shell metacharacters emit
+#   M13 code-span blanking           -> 125 (and 128 — same mechanism)
+#   M14 the empty-comment forms      -> 126, `<!-->` never closes
+#   M15 the inline-comment paragraph -> 130, a mid-line `<!--` runs to EOF
+# The named row is the one to read; it is NOT a claim of exclusivity, and two
+# of these deliberately reach further. M5 also reddens 122, because a bare
+# 3-tick line that wrongly closes the 4-tick block leaves the trailing 4-tick
+# delimiter to OPEN one over `site: mac`; M13 also reddens 128, which is the
+# same missing blanking seen from the fence side; M10 also reddens 116.
+#
+# ROW 115 IS DOUBLE-COVERED AND NO MUTANT REDDENS IT, which is worth knowing
+# before reading it as M10's proof. The unfilled `<!-- vdi | mac -->`
+# placeholder is kept out twice over — the comment span is stripped, and
+# independently `<!--` fails the token grammar — so M10 leaves it null for the
+# second reason. That is why M10 asserts on 108, whose token is a clean `vdi`
+# inside a block comment and has no second cover. M11 is why row 118 exists at
+# all: its tagged inner opener is stopped by the LENGTH clause and the TAIL
+# clause independently, so no single-clause mutant reaches it and only the
+# pre-fix character-only rule does. Without M2 and M10 in particular a reviewer
+# cannot tell the masking from decoration.
+#
+# ROW 124 IS A SMOKE ROW AND CARRIES NO MUTANT, deliberately. CRLF is what
+# GitHub actually stores, so the row is worth having, but `splitlines()` cannot
+# be mutated into failing it: under `split("\n")` the `\r` is absorbed
+# independently by `^\s*`, by `.split()` and by the grammar's own anchors, so
+# every candidate mutation stays green. Read it as coverage, not as a pin.
 #
 # Network-free: a PATH-shimmed mock `gh` serving recorded `gh issue list`
 # payloads per label, plus `gh api user`. `REPO=<owner/name>` in the
 # environment is what suppresses queue-snapshot's `gh repo view` lookup (it
 # runs that lookup only when REPO is EMPTY), so a machine with a real
-# authenticated gh behaves exactly like CI. The mock HONOURS `--json`,
+# authenticated gh behaves exactly like CI. Two clauses make "no network"
+# STRUCTURAL rather than merely intended, both carried from
+# test-file-or-link-issue.sh: the shim's resolution is verified immediately
+# after `chmod` and EXITS if PATH did not pick it up — a noexec `$TMPDIR` would
+# otherwise send every read to the operator's real `gh` — and the slug uses the
+# RFC 2606 `.invalid` TLD, because `mock-org` is a REAL GitHub organization and
+# 12 runs times 4 reads is 48 authenticated requests into a third party's
+# namespace. The mock HONOURS `--json`,
 # projecting each fixture to the requested fields, because a script that
 # stopped asking for `body` would otherwise still pass every row here while
 # returning nothing against real `gh` (M9). queue-snapshot swallows a failed
@@ -169,6 +218,17 @@ case "${1:-}" in
 esac
 MOCK
 chmod +x "$BIN/gh"
+
+# STRUCTURAL, not ordering. A failed `chmod`, or a noexec `$TMPDIR`, means PATH
+# search skips the shim and queue-snapshot reaches the operator's REAL `gh` —
+# read-only here, but 48 authenticated requests against somebody else's
+# namespace, and this file's header claims "no network". Same shape and same
+# reason as test-file-or-link-issue.sh: the check sits immediately after the
+# chmod and EXITS rather than recording a failed assertion.
+if [ "$(PATH="$BIN:$PATH" command -v gh)" != "$BIN/gh" ]; then
+    echo "test-queue-snapshot-site: the mock gh shim did not install at $BIN/gh — refusing to run, because every read below would reach the real GitHub API" >&2
+    exit 1
+fi
 
 # --- recorded issue bodies ----------------------------------------------------
 # Written by python3 rather than by hand: every interesting body here is
@@ -265,8 +325,50 @@ ready = [
     issue(123, "unclosed comment in fence",
           "%shtml\n<!-- template\n%s\nsite: mac\n" % (F3, F3), ["ready"]),
 
-    # 124 — a CRLF body, which is what GitHub actually stores.
+    # 124 — a CRLF body, which is what GitHub actually stores. SMOKE ROW: no
+    # mutant can redden it (see the header), so read it as coverage, not a pin.
     issue(124, "crlf", "prose\r\nsite: vdi\r\n", ["ready"]),
+
+    # --- markup GitHub RENDERS is never masked (P1/P2) ------------------------
+    # 125 — this repo's issue #6, reduced to its mechanism: a backticked
+    # `<!-- generated-by: …` with no closer on the line. Read as a comment it
+    # runs on, eats the fence opener two lines down, and masks the real
+    # declaration. No blank line, so the paragraph rule cannot save it — code
+    # span blanking is the only thing that does.
+    issue(125, "comment inside a code span",
+          "- registered with the raw comment: `<!-- generated-by: x | template: y`\n"
+          "- did not register at all\n"
+          "%smarkdown\nname: survey-work\n%s\n"
+          "site: vdi\n" % (F3, F3), ["ready"]),
+    # 126/127 — CommonMark's two empty comments close where they stand.
+    # Resuming the search for `-->` past them masks the rest of the body.
+    issue(126, "empty comment", "<!-->\nsite: vdi\n", ["ready"]),
+    issue(127, "empty comment, long form", "<!--->\nsite: vdi\n", ["ready"]),
+    # 128 — a backtick fence's info string may not contain a backtick, so this
+    # is a code span and opens nothing. The same blanking as 125, seen from the
+    # fence side.
+    issue(128, "backtick in an info string",
+          "%sgh pr merge%s here\nsite: vdi\n" % (F3, F3), ["ready"]),
+    # 129 — THE ACCEPTED DIVERGENCE, pinned so changing it is a decision.
+    # GitHub's sanitizer drops <style> with its contents; this parser does not,
+    # so the declaration is read. See the header for why it is not closed.
+    issue(129, "style block (accepted divergence)",
+          "<style>\nsite: nowhere\n</style>\n", ["ready"]),
+    # 130 — a mid-line `<!--` is inline HTML and cannot outlive its paragraph.
+    # Without the blank-line bound it masks every line to the end of the body.
+    issue(130, "unterminated inline comment",
+          "We write <!-- markers in the body\n\nsite: vdi\n", ["ready"]),
+
+    # --- the token grammar (C1) ----------------------------------------------
+    # 131 — shell metacharacters are not a site name. A consumer echoes this
+    # token into a refusal reason, and a public repo's body stays editable
+    # after `ready` is applied.
+    issue(131, "shell metacharacters", "site: $(id);rm\n", ["ready"]),
+    # 132 — 65 characters, one past the grammar's bound.
+    issue(132, "over-long token", "site: " + ("a" * 65) + "\n", ["ready"]),
+    # 133 — and the grammar is PERMISSIVE: a realistic hostname-shaped name
+    # passes. Without this row an over-tight grammar would look correct.
+    issue(133, "realistic name", "site: mac-mini.local\n", ["ready"]),
 ]
 
 in_progress = [
@@ -281,13 +383,13 @@ for name, payload in (("ready", ready), ("in-progress", in_progress), ("blocked"
         json.dump(payload, fh)
 PY
 
-READY_N=24
+READY_N=33
 
 # --- runner -------------------------------------------------------------------
 OUT="$WORK/out.json"
 STATUS=0
 run_snapshot() { # <script-path>
-    PATH="$BIN:$PATH" SCENARIO_DIR="$FX" REPO=mock-org/mock-repo \
+    PATH="$BIN:$PATH" SCENARIO_DIR="$FX" REPO=mock-org.invalid/mock-repo \
         bash "$1" >"$OUT" 2>"$WORK/err"
     STATUS=$?
 }
@@ -301,9 +403,12 @@ expect_site() { # <label> <bucket> <number> <expected>
 }
 
 # --- 0. the run itself, and the buckets are non-empty -------------------------
-# Every must-NOT-parse row below reads a field out of a bucket. queue-snapshot
-# turns a failed `gh issue list` into `[]`, and `null` out of an empty array
-# looks exactly like a correct "no site declared" — so the sizes come first.
+# queue-snapshot turns a failed `gh issue list` into `[]`, so a broken mock
+# would empty every bucket. That does NOT pass silently — `site_of` on an empty
+# bucket yields the empty string, which `expect_site … null` rejects — so the
+# rows below fail loudly on their own. This assertion is the DIAGNOSTIC: it
+# turns thirty red rows into one line naming the cause, and it runs first so
+# that line is the first thing read.
 echo "0. the snapshot runs and the mock served every bucket" >&2
 run_snapshot "$SNAP"
 if [ "$STATUS" = "0" ]; then
@@ -402,8 +507,27 @@ expect_site "trailing text after a closer is not a closer" ready 121 null
 expect_site "and the block still ENDS — a line after it declares" ready 122 mac
 expect_site "comment syntax inside a fence is content, not markup" ready 123 mac
 
-# --- 8. the scope decisions ---------------------------------------------------
-echo "8. what is deliberately NOT masked" >&2
+# --- 8. markup GitHub renders is never masked ---------------------------------
+# All false-negative: a masked declaration reads as "no site", which under #341
+# means "any site", so the wrong loop claims the issue.
+echo "8. code spans, empty comments and inline comments" >&2
+expect_site "a code-spanned '<!--' opens no comment (issue #6's shape)" ready 125 vdi
+expect_site "the empty comment '<!-->' closes where it stands" ready 126 vdi
+expect_site "  and its long form '<!--->' does too" ready 127 vdi
+expect_site "a backtick in an info string means a code span, not a fence" ready 128 vdi
+expect_site "an unterminated mid-line comment dies at its paragraph" ready 130 vdi
+
+# The accepted divergence, pinned rather than closed — see the header.
+expect_site "ACCEPTED: a <style> block is NOT masked, though GitHub drops it" ready 129 nowhere
+
+# --- 9. the token grammar -----------------------------------------------------
+echo "9. the token grammar bounds what a consumer is handed" >&2
+expect_site "shell metacharacters are not a site name" ready 131 null
+expect_site "a token past the 64-character bound is not a site name" ready 132 null
+expect_site "and the grammar is permissive — a realistic name passes" ready 133 mac-mini.local
+
+# --- 10. the scope decisions --------------------------------------------------
+echo "10. what is deliberately NOT masked" >&2
 expect_site "a nested list continuation at four columns declares" ready 111 vdi
 asym="$(jq -c '.ready[] | select(.number==112) | {touches, site}' "$OUT")"
 if [ "$asym" = '{"touches":["fenced/only.md"],"site":null}' ]; then
@@ -418,11 +542,11 @@ else
     bad "cross-talk between the body contracts: $coexist"
 fi
 
-# --- 9. mutation proofs -------------------------------------------------------
+# --- 11. mutation proofs ------------------------------------------------------
 # Each mutant neuters ONE decision. The exact-string replace is asserted to have
 # applied (a drifted target reports "did not match", never a silent pass), the
 # mutant is asserted to RUN, and only then is its row read.
-echo "9. mutation proofs" >&2
+echo "11. mutation proofs" >&2
 MUT="$WORK/mutant.sh"
 mutants_run=0
 mutate() { # <label> <from> <to>
@@ -461,7 +585,7 @@ reddens() { # <label> <bucket> <number> <value-the-shipped-script-gives>
 }
 
 if mutate "M1 extraction" \
-    '                    site = token[0].lower()' \
+    '                    site = candidate   # both malformed shapes fall through' \
     '                    pass'; then
     reddens "M1: dropping the extraction darkens the plain 'site: vdi' row" ready 101 vdi
 fi
@@ -473,14 +597,14 @@ if mutate "M2 fenced-content mask" \
 fi
 
 if mutate "M3 case fold" \
-    '                    site = token[0].lower()' \
-    '                    site = token[0]'; then
+    ".split() or [''])[0].lower()" \
+    ".split() or [''])[0]"; then
     reddens "M3: dropping the case fold breaks 'Site: VDI'" ready 103 vdi
 fi
 
 if mutate "M4 indented-code rule" \
-    '        visible, in_comment = strip_comments(line, in_comment)' \
-    '        visible, in_comment = strip_comments(line, in_comment)
+    '        visible, vscan, comment = strip_comments(line, scan, comment)' \
+    '        visible, vscan, comment = strip_comments(line, scan, comment)
         if re.match(r"^(?: {4}|\t)", line):
             visible = ""'; then
     reddens "M4: a 4-space indented-code rule darkens the nested list row" ready 111 vdi
@@ -507,9 +631,9 @@ fi
 
 if mutate "M8 comment walk inside fences" \
     '            if closes_fence(line, fence):' \
-    '            visible, in_comment = strip_comments(line, in_comment)
+    '            visible, vscan, comment = strip_comments(line, blank_code_spans(line), comment)
             if closes_fence(line, fence):'; then
-    reddens "M8: walking comments inside a fence eats the closer and the real line" ready 123 mac
+    reddens "M8: walking comments inside a fence leaks state past the block" ready 123 mac
 fi
 
 if mutate "M9 body dropped from --json" \
@@ -521,7 +645,7 @@ fi
 if mutate "M10 site matched on the raw line" \
     '            m = site_re.match(visible)' \
     '            m = site_re.match(line)'; then
-    reddens "M10: matching the raw line makes '<!--' the site of a placeholder" ready 115 null
+    reddens "M10: matching the raw line declares from inside a block comment" ready 108 null
 fi
 
 # The whole closer test reverted to the pre-fix rule — pairing on the marker
@@ -534,16 +658,47 @@ if mutate "M11 pre-fix character-only pairing" \
     reddens "M11: pairing on the marker character alone lets a quoted example declare" ready 118 null
 fi
 
-if [ "$mutants_run" -eq 11 ]; then
-    ok "every declared mutant ran (11 of 11)"
+if mutate "M12 the token grammar" \
+    '                if site_token_re.match(candidate):' \
+    '                if candidate:'; then
+    reddens "M12: without the grammar a shell-metacharacter token is emitted" ready 131 null
+fi
+
+if mutate "M13 code-span blanking" \
+    '        scan = blank_code_spans(line)' \
+    '        scan = line'; then
+    reddens "M13: without code-span blanking issue #6's body masks its own declaration" ready 125 vdi
+fi
+
+# Double-quoted, because the target carries single quotes and bash has no
+# escape for one inside a single-quoted string. Nothing here is expanded: no
+# `$`, no backtick, no backslash.
+if mutate "M14 the empty-comment forms" \
+    "            if scan.startswith('>', i):
+                i, comment = i + 1, None
+            elif scan.startswith('->', i):
+                i, comment = i + 2, None" \
+    '            pass'; then
+    reddens "M14: without them an empty comment never closes and masks the body" ready 126 vdi
+fi
+
+if mutate "M15 the inline-comment paragraph bound" \
+    "        if comment == 'inline' and not line.strip():
+            comment = None                   # inline HTML dies at its paragraph" \
+    '        pass'; then
+    reddens "M15: without the bound a mid-line '<!--' runs to the end of the body" ready 130 vdi
+fi
+
+if [ "$mutants_run" -eq 15 ]; then
+    ok "every declared mutant ran (15 of 15)"
 else
-    bad "only $mutants_run of 11 declared mutants ran — the rest proved nothing"
+    bad "only $mutants_run of 15 declared mutants ran — the rest proved nothing"
 fi
 
 # Restore the un-mutated snapshot for anything reading $OUT after this point.
 run_snapshot "$SNAP"
 
-# --- 10. the header states the resolution --------------------------------------
+# --- 12. the header states the resolution -------------------------------------
 # #340's acceptance requires the multiple/malformed choice to be stated in the
 # script header, because a deterministic answer is only useful to a reader who
 # can find out what it is. Scoped to the LEADING COMMENT BLOCK: flattening the
@@ -553,13 +708,23 @@ run_snapshot "$SNAP"
 # test-doc-reconciliation.sh applies to blockquote markers, and for the same
 # reason: without it a wrapped sentence flattens to "... read as a # declaration"
 # and every needle spanning a wrap silently fails.
-echo "10. the header documents the resolution" >&2
+echo "12. the header documents the resolution" >&2
 FLAT="$WORK/snap.flat"
 awk '/^#/ {print; next} /^[[:space:]]*$/ {next} {exit}' "$SNAP" |
     sed -e 's/^[[:space:]]*#[[:space:]]\{0,1\}//' -e 's/^[[:space:]]*//' |
     tr '\n' ' ' | tr -s ' \t' ' ' >"$FLAT"
-if [ -s "$FLAT" ] && ! grep -qF -- 'def parse_body' "$FLAT"; then
-    ok "the flattened text is the leading comment block only"
+# TWO negative needles, because one of them cannot catch the regression this
+# section exists to prevent. `def parse_body` is a CODE line, and the awk
+# already drops every line that is not a comment — so a flatten that swallowed
+# the whole file's `#` comments (measured: delete the awk's `{exit}`) still
+# never contains it and the guard stays green. The second needle is a phrase
+# living ONLY in the python comment region, which is exactly the text a
+# runaway flatten would pull in.
+flatten_bounded=1
+grep -qF -- 'def parse_body' "$FLAT" && flatten_bounded=0
+grep -qF -- 'first matching line wins; entries split on commas' "$FLAT" && flatten_bounded=0
+if [ -s "$FLAT" ] && [ "$flatten_bounded" = "1" ]; then
+    ok "the flattened text is the leading comment block only, code and python comments excluded"
 else
     bad "the header flatten is empty or reached past the comment block — every needle below would be measuring the wrong text"
 fi
@@ -578,12 +743,22 @@ expect_flat "  and that case is folded" \
     'Case is folded'
 expect_flat "  and that the comparison is case-insensitive on BOTH sides" \
     'case-insensitive on BOTH sides'
-expect_flat "  and that a valueless line declares nothing" \
-    'carrying no token at all is not a declaration'
-expect_flat "  and that it is the ONLY malformed shape recognised" \
-    'the ONLY malformed shape this parser recognises'
-expect_flat "  and that no token is reserved" \
-    'NOTHING IS RESERVED'
+expect_flat "  and that the token has a bounded grammar" \
+    'The token has a GRAMMAR, applied after folding'
+expect_flat "  and why the parse owns that boundary rather than each consumer" \
+    'echoes the token into a refusal reason'
+expect_flat "  and that BOTH malformed shapes answer alike" \
+    'TWO malformed shapes exist and both answer the SAME way'
+expect_flat "  and that no token is reserved inside the grammar" \
+    'NOTHING IS RESERVED inside that grammar'
+expect_flat "  and that code spans are blanked before markup is looked for" \
+    'CODE SPANS are blanked before any markup is looked for'
+expect_flat "  and that the empty comments close where they stand" \
+    'close where they stand'
+expect_flat "  and that a mid-line comment dies at its paragraph" \
+    'cannot outlive its'
+expect_flat "  and that the script/style divergence is accepted, not missed" \
+    'ACCEPTED DIVERGENCE, recorded rather than closed'
 expect_flat "  and that a fenced line is not a declaration" \
     'Lines inside a FENCED code block are not read as a declaration'
 expect_flat "  and that comments are masked by REMAINDER, not by line" \
@@ -597,7 +772,7 @@ expect_flat "  and that the mask is site-only, with the reason" \
 
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then
-    echo "queue-snapshot site tests: all green ($asserts assertions, 11 mutants)" >&2
+    echo "queue-snapshot site tests: all green ($asserts assertions, 15 mutants)" >&2
     exit 0
 fi
 echo "queue-snapshot site tests: FAILURES above ($asserts assertions)" >&2

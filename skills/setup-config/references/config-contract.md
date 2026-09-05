@@ -485,10 +485,17 @@ site: vdi
 **One line, one token, and an absent line means "any site".** The script's header states every
 resolution rule and is the copy to trust; three of them matter to whoever writes a config:
 
-- **Nothing is reserved.** The only malformed shape the parser recognises is a `site:` line with no
-  token at all, which declares nothing. Every other token is emitted verbatim, `site: any` and
-  `site: none` included — they are ordinary site names, not escapes, so an issue written `site: any`
-  is held for a site called `any`. It is the *missing line* that means "any site".
+- **The token has a grammar, and nothing inside it is reserved.** After folding, a site token is
+  `^[a-z0-9][a-z0-9._-]{0,63}$`. Within that, `site: any` and `site: none` are ordinary site names
+  rather than escapes, so an issue written `site: any` is held for a site called `any` — it is the
+  *missing line* that means "any site". Two shapes are malformed and answer alike: a `site:` line
+  with no token, and one whose token fails the grammar. Neither declares, so both fall through to
+  "any site" — which is why the grammar is deliberately permissive rather than a whitelist.
+- **A consumer never interpolates the token raw.** The grammar already excludes whitespace, quoting
+  and shell metacharacters, so this is defence in depth rather than the only line — but a site name
+  reaches a human through a refusal reason, and issue bodies on a public repo stay editable after
+  `ready` is applied. Treat it as data: quote it, never build a command or a URL by concatenation,
+  and if the grammar is ever widened, revisit every reader before the parse.
 - **The comparison is case-insensitive on both sides.** `queue-snapshot.sh` folds the issue's token
   to lowercase; folding the configured value is the reading skill's half. Write `execution_site`
   lowercase by convention, but a reader must not implement the match as plain equality against the
@@ -500,9 +507,22 @@ resolution rule and is the copy to trust; three of them matter to whoever writes
 **This key fits the config model unusually well.** Config is per-checkout by construction — one
 `.claude/sassy-dog/` tree per clone, never shared — and the site is exactly a per-checkout fact.
 That is why it is configured rather than derived, and it is not the `review_site:` exception
-repeated: the platform *is* derivable and a generator may propose from it (`darwin` → `mac`,
-`win32` → `windows`), but the resolved name is the **user's**, because `vdi` carries a meaning the
-platform string does not.
+repeated: the machine's *kind* is derivable, but the resolved name is the **user's**, because `vdi`
+carries a meaning no platform string does.
+
+**Where a proposal would come from, when one exists.** The source is `uname -s`, not a language
+runtime's platform constant — an agent following this contract runs a shell:
+
+| `uname -s` | Proposed name |
+| --- | --- |
+| `Darwin` | `mac` |
+| `MINGW64_NT-…` / `MSYS_NT-…` / `CYGWIN_NT-…` | `windows` |
+| `Linux` | **no proposal** |
+
+`Linux` gets none on purpose. It is what every cloud and scheduled-routine session reports, and a
+container that exists for one run is not a workstation with a name — proposing `linux` there would
+write a site into a checkout that should answer to none. A Linux user whose machine *is* a
+workstation names it themselves, like everybody else.
 
 **Absent means this checkout answers to no name.** There is then nothing for a `site:` line to be
 compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
@@ -519,16 +539,20 @@ bug — so the rule is: carry the value, propose only into an empty slot, and su
 rewrite if the user disagrees. `setup-config`'s guardrail list is the copy to trust for this, and
 `references/update-mode.md` carries the operational half.
 
-**Nothing reads this key yet, and nothing behaves differently because of it.** #340 landed the
-deterministic substrate only — the parse and this documentation — so that the skills consuming it
-stay small and independently reviewable. The consumers are
-[#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) (`dispatch-ready`'s site filter and
-`take-it`'s refusal before claiming) and
-[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) (`groom-backlog`'s rubric,
-`survey-work`'s plate, and `setup-config`'s interview question for this key). Until those land,
-writing the key is inert and a `site:` line only shows up in the snapshot. **Cross-site dispatch is
-a non-goal** at every stage: the contract only lets a loop on one site step around work that belongs
-to another, and say so.
+**Who reads it.** `dispatch-ready` skips a Ready issue whose `site:` differs from this value and
+`take-it` refuses one before claiming it
+([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)); `groom-backlog` requires the
+declaration before Ready, `survey-work` shows the site on backlog lines, and `setup-config` asks
+for this key ([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). The body half —
+the parse and this contract — landed first and on its own, so that each of those stayed small
+enough to review
+([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)). **Check the skill, not this
+list, for what a given release does:** a reader who takes an out-of-date "nothing reads it yet" at
+face value skips the key on a mac checkout, which turns the site filter off — #322's originating
+bug, reintroduced by its own contract.
+
+**Cross-site dispatch is a non-goal** at every stage: the contract only lets a loop on one site step
+around work that belongs to another, and say so.
 
 ## Per-skill schemas
 

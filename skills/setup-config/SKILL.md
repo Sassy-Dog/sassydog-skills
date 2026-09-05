@@ -194,12 +194,19 @@ user decide. If the key is absent because the config predates it, propose the se
 addition and say so in the preview; until then the reading skills default it to `agent`.
 
 **`execution_site:` is the same kind of fact, for a different reason.** It names the workstation
-this checkout answers to, and nothing derives that: the platform says what kind of machine this is,
-never what the user called it, so re-deriving would overwrite a `vdi` with `windows` on the very
-checkout the name exists for. **Carry an existing value across verbatim.** Where the key is absent,
-a platform-derived name (`darwin` → `mac`, `win32` → `windows`) may be *proposed* in the preview and
-never written silently — the user owns the name. A disagreement is surfaced, never applied.
-`config-contract.md` carries the key's contract; `references/update-mode.md` the operational half.
+this checkout answers to, and nothing derives that: the platform says what *kind* of machine this
+is, never what the user called it, so re-deriving would overwrite a `vdi` with `windows` on the very
+checkout the name exists for. **Carry an existing value across verbatim, and leave an absent key
+absent** — this phase neither derives it nor asks for it. The interview that proposes a name arrives
+with [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343); until then there is no
+question shape and no way to record "declined", so a proposal here would be re-offered on every
+refresh forever.
+
+**A platform that differs from the configured name is NOT a disagreement**, and must not be routed
+into the stop-and-surface rule above. `win32` against `execution_site: vdi` is the ordinary case —
+it is *why* the name is configured rather than derived. Only the user disputing their own value is
+a disagreement, and that is theirs to raise. `config-contract.md` carries the key's contract;
+`references/update-mode.md` the operational half.
 
 **The three `none` answers are carried forward, not re-asked** — but an **absent** one is asked.
 **`sentry: none` is not one of them.** `testflight: none`, `posthog: none` and `mobile: none` each record

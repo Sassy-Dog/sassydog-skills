@@ -118,14 +118,24 @@ reads.
 sibling of the `stacked_prs` rule above: both are keys a refresh must never derive, for different
 reasons — that one because availability is not consent, this one because there is nothing to derive
 from. It records what the user calls the workstation this checkout runs on, and step 3 has nothing
-to re-verify it against: the platform answers what *kind* of machine this is (`darwin`, `win32`),
-never what it was named, so a refresh that "re-derived" would replace `vdi` with `windows` on the
-one checkout the name exists to distinguish. The platform-derived name is a **proposal for an
-ABSENT key only** — offered in the preview like any other addition, never written silently, and
-"leave it unset" is a valid answer. A value the user disputes is a stop and surface, as everywhere
-else. Getting this wrong is silent in the dangerous direction: a missing or overwritten
-`execution_site` turns a site filter OFF rather than on, which is
+to re-verify it against: `uname -s` answers what *kind* of machine this is (`Darwin`, `Linux`,
+`MINGW64_NT-…`), never what it was named, so a refresh that "re-derived" would replace `vdi` with
+`windows` on the one checkout the name exists to distinguish. **An absent key stays absent here.**
+The interview that proposes a name is [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s
+to add; until that section exists there is no question shape and no way to record "declined", so a
+proposal made here would be re-offered on every refresh forever. A platform kind that differs from
+the configured name is not a disagreement — it is why the name is configured; only the user
+disputing their own value is, and that is a stop and surface as everywhere else. Getting this wrong
+is silent in the dangerous direction: a missing or overwritten `execution_site` turns a site filter
+OFF rather than on, which is
 [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
+
+**This paragraph sits below the migrate-mode handoff deliberately, and migrate mode's own rule is
+in `migrate-mode.md`.** Beside its `stacked_prs` sibling it would push the absent-key window above
+from 1727 bytes to 2171 against `test-sentry-verification.sh`'s 2400-byte backstop, and that gate
+asserts the window ends at its stop MARKER rather than at the cap. Nothing here is weakened by the
+move — the rule reads the same either way — but the handoff above no longer covers it, so the
+migrate path carries its own copy rather than inheriting one it never reads.
 
 ## Adopt mode (no marker — legacy hand-written skills)
 
