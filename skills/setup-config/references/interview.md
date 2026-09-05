@@ -144,6 +144,39 @@ State two things plainly before the user answers:
 
 `{{STACK_MAX_DEPTH}}` — layer cap (default **4**). Beyond it the dispatchers fall back to independent PRs.
 
+### 3d. Execution site — what does this checkout answer to? (`execution_site`)
+
+**Asked once, in create, migrate and adopt modes. Skipped on a refresh unless the user raises it.**
+That split is the mechanism, not a convenience: the key names a machine, nothing can re-derive it,
+and a question re-asked on every refresh is a proposal re-offered forever. Create, migrate and adopt
+are one-time transitions, so each repo gets exactly one offer — and a repo that answered "no" then
+stays unasked, which is the only way a decline is recorded at all. `references/update-mode.md` and
+`references/migrate-mode.md` carry each mode's own half.
+
+`references/config-contract.md` documents the key — what it means, what its absence means, how a
+consumer matches it. **Do not restate any of that to the user, and do not write a second description
+of it anywhere.** This question only fills the slot.
+
+**Propose from the platform, and take the mapping from that contract's `uname -s` table.** Run the
+shell, read the table, offer the name it gives. **Never copy the table here** — a second copy is one
+that drifts, and this one would drift toward a language runtime's platform constants, which the
+table exists to rule out. Some platforms have no proposal at all; where the table gives none, ask
+with **no default** rather than inventing one.
+
+**The proposal is a starting point the user renames, and it is never assumed.** The name is theirs:
+`vdi` carries a meaning no platform string does, and the platform can only ever say what *kind* of
+machine this is. So:
+
+| Answer | Written |
+|---|---|
+| A name (the proposal, or their own) | `execution_site: <name>`, into every skill file that reads it — the contract names them |
+| Declined, unanswered, or "just use defaults" | the key is **omitted** |
+
+An omitted key is a legitimate steady state, not an unfinished one: a repo whose work all runs from
+one machine wants exactly that, and nothing renders a blind-spot row for it. **Never write a value
+the user did not say**, and never offer a `none` — the confirmed-absent form does not cover this key
+and the contract says why.
+
 ### 4. Commands (fact confirmation, free-text)
 
 - Pre-flight commands (`{{PREFLIGHT_COMMANDS}}`) — propose from the runner; user edits.
@@ -165,4 +198,4 @@ Anything detection can't know: in-app feedback tables/CLIs, funnel-health surfac
 
 ## Defaults summary (when the user says "just use defaults")
 
-delegation: plugin-backed · take-it: yes (if Issues + Actions) · survey-work: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · tidy-repo: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · **stacked PRs: off** · **confirmed-absent surfaces (§2c): never defaulted — "just use defaults" omits the key, it does not write a `none`** · no project-specific extras.
+delegation: plugin-backed · take-it: yes (if Issues + Actions) · survey-work: read-only · merge: detected value but still confirmed · scoring: repo-health defaults · tidy-repo: core (always rendered), never-discard `.env.local` for web apps · secret bootstrap: only when detection finds a `secret_manager` (Doppler repos get the `doppler secrets download` eval) · **stacked PRs: off** · **confirmed-absent surfaces (§2c): never defaulted — "just use defaults" omits the key, it does not write a `none`** · **`execution_site` (§3d): never defaulted either — the platform proposal is offered, never applied, so "just use defaults" omits the key** · no project-specific extras.

@@ -34,7 +34,10 @@ exactly as written, so the wrong one silently applies another repo's rules: on 2
 shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
 and caught it only by noticing the mismatch themselves.
 
-Frontmatter supplies `gotcha_summary` and the optional `board` and `stacked_prs` blocks. Contract:
+Frontmatter supplies `gotcha_summary`, the optional `board` and `stacked_prs` blocks, and the
+optional `execution_site` — the name this checkout answers to, used by rubric #9 to propose a site
+label rather than invent one. An absent `execution_site` is not a defect: it means this checkout
+answers to no particular name, so rubric #9 asks instead of proposing. Contract:
 `sassy-dog:setup-config` → `references/config-contract.md`.
 
 **If it reads `NO_CONFIG`**, first check for a stranded pre-rename config: if
@@ -167,12 +170,85 @@ An issue is **Ready** only if ALL of these hold:
 | 6 | Right-sized: one coherent PR per issue | Epic → split (§5) |
 | 7 | Dependencies recorded as literal `Depends on #N` lines, one per line | Add them — dispatch-ready enforces ordering from these lines |
 | 8 | Touch-set annotated: a single machine-readable `touches:` line naming the repo-relative paths/globs the issue's PR will edit | Add it (§4) — dispatch-ready reads it to avoid dispatching two file-overlapping issues concurrently |
+| 9 | Execution site declared where it matters: a body naming tools, hosts, credentials or paths that exist on **one workstation only** carries a `site:<name>` label | Apply the label (below) — or park it `operational (site <x>)` when the work is a human-run checklist that produces no PR |
 
 GitHub `user-attachments` URLs are cookie-walled and unreadable from a worktree agent, which is why
 test 4 demands transcription rather than a link.
 
 A dependency being open does NOT block Ready — dispatch-ready sequences at dispatch time. Only
 *unrecorded* dependencies block, because invisible ordering is how parallel agents collide.
+
+### Rubric #9 — the execution site is a LABEL
+
+**Grooming applies the `site:<name>` label; it never writes a `site:` line into the body.** The three
+body contracts beside it — `touches:`, `Depends on #N`, `stack:` — are raw-line parses, and a raw
+line can be *quoted*: an issue documenting this contract, or a template carrying an unfilled
+placeholder, would declare a site by accident. A label cannot be quoted in prose, which is why
+[#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340) put the site on one.
+
+**Resolve a candidate's declaration by RUNNING the resolver, never by paraphrasing its rules.**
+`sassy-dog:github-issues`' `queue-snapshot.sh` owns them, and a paraphrase forks them — one written
+into a skill dropped the `strip()` and answered `" vdi"` where the script answers `"vdi"`, for a
+label its own header calls legal ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)).
+§2's candidate pull already returned each issue's labels; feed them through the emitter, which runs
+no `gh` and touches no network:
+
+```bash
+gh issue view N --json labels --jq '[.labels[].name]' |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+```
+
+Grooming's candidates are **not** a `queue-snapshot.sh` bucket — the buckets are label-scoped
+(`ready`, `in-progress`, `blocked`) and §2's candidates are precisely the issues that carry none of
+them — so this emitter is the route, exactly as it is for `take-it` on an unpromoted issue.
+
+**No label is the right answer for almost every issue.** An unlabelled issue runs anywhere, so add
+one only when the body names something a second checkout genuinely cannot reach — a vendor SDK
+installed on one host, a sibling checkout, network reach behind a VPN, a hardware device. Ordinary
+repo work is not site-held, and a label applied "to be safe" is strictly a loss: it removes the
+issue from every other checkout's queue and nothing reports that it did.
+
+**Never invent the name.** The site name is the user's — `vdi` carries meaning no platform string
+does. Propose this checkout's configured `execution_site` when the tools the body names are the ones
+*this* checkout has, and otherwise ask which site. Apply it with the plain label write, creating the
+label first if the repo lacks it:
+
+```bash
+gh label list --json name --jq '.[].name'            # does it already exist?
+gh label create "site:vdi" --description "Work executable only from the vdi workstation"
+gh issue edit N --add-label "site:vdi"
+```
+
+Two things about that create. **Look first, and never swallow its failure** — `gh label create`
+fails on a label that already exists, and a `|| true` there is precisely the silent no-op
+`scripts/test-label-taxonomy.sh` exists because of. And specify **no colour**: `site:` belongs to
+neither label taxonomy (`scripts/align-labels.sh` and `github-issues`' `issue-claim.sh` own those),
+so hard-coding one here would put a taxonomy value outside its home, and there is nothing for a
+later run to reconcile.
+
+**Several `site:` labels NARROW; they never widen, and they are never a defect to tidy away.** Two
+labels name two machines that may take the issue, and the dispatchers' test is membership —
+`not sites or execution_site.lower() in sites` — so a multi-member declaration is a legal, useful
+answer and passes rubric #9 like any other. **Never remove one to "resolve a conflict"**: that
+strips the issue from a checkout the declaration explicitly named, which is a narrowing nobody
+asked for and nothing reports. The one reading to refuse is the opposite one — several labels are
+not "any site", which is the direction
+[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug ran.
+
+Widen or narrow the set only where the *work* changed, with the user, and say which direction you
+moved it.
+
+### The `parked: operational (site <x>)` verdict
+
+Some site-held work is not a code change at all: a checklist a human runs against live
+infrastructure, yielding no PR. That work is **never Ready**, however completely the rest of the
+rubric is satisfied — dispatch-ready's model is "in flight until MERGED", and a task producing no PR
+gives that loop nothing to converge on, so promoting it strands a dispatch slot indefinitely.
+
+Park it `operational (site <x>)`, keep the `site:<name>` label on it so every plate still shows
+where it belongs, and say in the report that the reason is its shape rather than its content. A
+future body edit does not clear this verdict; only turning the work into something that ships a PR
+does.
 
 ### Stack candidates (ONLY if `stacked_prs:` is configured)
 
@@ -348,7 +424,11 @@ Never a silent strip.
 Every promoted issue carries its `touches:` line from rubric #8.
 
 Final table: issue · verdict (**Ready** / needs-decision / split → children / parked:
-awaiting-user / parked: reason) · what changed.
+awaiting-user / **parked: operational (site `<x>`)** / parked: reason) · what changed.
+
+A `parked: operational (site <x>)` row names the site it belongs to, so the verdict says *where*
+and not only *why*. Never report it as blocked work — it is work that ships without a PR, and a
+reader who mistakes it for a stalled issue goes looking for a branch that will never exist.
 
 **Always add the suspected-complete line** from §2, on every run:
 
@@ -407,6 +487,9 @@ End with the decisions awaiting the user, if any.
 - Never promote with an unresolved decision "because the default is obvious" — the default goes to
   the user first.
 - Never write a `stack:` line unprompted, and never write one at all without a `stacked_prs:` block.
+- Never write a `site:` line into an issue body, never invent a site name, and never delete a
+  `site:` label to reduce a multi-site declaration: rubric #9 applies a label, the name is the
+  user's, and several of them narrow rather than conflict.
 - Ready is a promise to dispatch-ready. When in doubt, park with a reason instead.
 
 Apply any `## extra-rubric` section from config as additional Ready tests.

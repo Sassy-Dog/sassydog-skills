@@ -33,8 +33,8 @@ shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
-`write_policy`, and the optional `sentry`, `board`, `testflight`, `mobile`, `posthog`, and
-`secret_bootstrap` blocks. Contract: `sassy-dog:setup-config` →
+`write_policy`, the optional `execution_site`, and the optional `sentry`, `board`, `testflight`,
+`mobile`, `posthog`, and `secret_bootstrap` blocks. Contract: `sassy-dog:setup-config` →
 `references/config-contract.md`.
 
 **Four of those keys also accept the scalar `none`** — `sentry`, `testflight`, `posthog`, `mobile`
@@ -165,6 +165,33 @@ gh issue list --state open --limit 200 --json number,title,labels,updatedAt
 ```
 
 plus `sassy-dog:github-issues` stale-issue detection.
+
+**Either way, resolve each issue's execution site from the labels the pull already returned.** A
+`site:<name>` label declares a workstation the issue can be worked from
+([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)); no such label means any site.
+**Run the resolver rather than re-deriving its rules** — a paraphrase forks them, which is the
+failure [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) measured when one dropped
+the `strip()`. This backlog read is not a `queue-snapshot.sh` bucket (those are label-scoped to
+`ready`/`in-progress`/`blocked`), so it takes the same emitter `take-it` and the `board:` path do,
+which runs no `gh` and touches no network:
+
+```bash
+gh issue view N --json labels --jq '[.labels[].name]' |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+```
+
+**The test is `not sites or execution_site.lower() in sites`, folded on both sides** — the emitter
+folds the label's value, folding the configured one is this skill's half. Membership **narrows**:
+several labels name several machines that may take the issue, and each of them can, so a
+multi-member declaration is never "any site" and never nothing. §6 owns how it renders; this step
+only resolves it.
+
+With no `execution_site` there is nothing to compare against, so resolve the declaration and stop
+there — never guess which site this checkout is. §6 says what that leaves renderable.
+
+**Never act on it.** This surface stays read-only whatever the `write_policy`: a missing label is
+not filed, a wrong one is not corrected, and a conflict is not resolved. Those are
+`sassy-dog:groom-backlog`'s rubric #9, and the plate's job is to make them visible.
 
 **Either way, render its `tracking-parent-complete` hits** — an open epic whose children (the
 `Part of #<parent>` lines `sassy-dog:groom-backlog` writes at split time) have all closed. Such a
@@ -352,6 +379,7 @@ _Inherited: N alerts across M rules, oldest Dd — debt, not a plate item._
 
 ## 🎯 Backlog priorities
 - **#NNN <title>** — `<label>` — <one-line why>
+- **#NNN <title>** — `<label>` — `site:vdi` `site:mac` (not this checkout) — <one-line why>
 
 _Suspected complete: #NNN (N children, all closed) — finished work still open; close it, don't groom it._
 
@@ -378,8 +406,41 @@ _<N> merged-PR branches lingering locally — residue for `clean it`, not plate 
 ## 👉 Today's recommendations (cross-category top 5)
 1. **<title>** — <category> · <one-line why>
 
-_To ship: `take #<N> #<M>`_
+_To ship: `take #<N> #<M>`_   <!-- only issues this checkout can take; see the site rule below -->
 ```
+
+### Execution site on backlog lines
+
+The site separates *"this checkout can pick it up"* from *"waits for site `<x>`"*, which is the
+whole reason the declaration exists. Four rendering rules, from the value §3B resolved:
+
+- **An issue with no `site:` label renders exactly as it did before this rule existed** — no token,
+  no `(any site)` marker, nothing. Unlabelled is the overwhelming majority, so a token on every line
+  would bury the handful that carry one, and the plate would grow noise proportional to the backlog
+  to say nothing at all.
+- **A declaration this checkout is a member of renders as bare `` `site:<name>` `` tokens**, every
+  declared site listed. It is context, not a warning: the work is takeable here.
+- **A declaration this checkout is not a member of** renders the same tokens plus
+  `(not this checkout)`. Keep the item in its P-bucket, scored and ranked as always — it is real
+  work, it is simply not *this* session's to start. Never demote it for being elsewhere; that would
+  hide the very item the label exists to point at, and on the day somebody sits down at that
+  machine the plate is the thing that tells them what is waiting.
+- **Several `site:` labels list every one of them and mark nothing special.** They **narrow**: each
+  named machine may take the issue, membership decides which of the two rules above applies, and
+  the reading to refuse is "any site" — the direction
+  [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug ran. There is no
+  third rendering for a multi-member declaration, and it is never reported as undispatchable: a
+  checkout it names can dispatch it today.
+
+**Only issues this checkout can take reach the closing `To ship:` line** — an off-site issue named
+there hands the user a `take` that the dispatcher will refuse, and a recommendation the tooling then
+rejects trains a reader to stop trusting the line. When the top 5 is entirely off-site, say so in
+one line instead of emitting an empty command.
+
+With no `execution_site` configured, the middle two rules collapse into one: every declared site
+renders as a bare token and nothing is marked as elsewhere, because this checkout answers to no
+name and there is nothing to be elsewhere *from*. That is the same fail-open the dispatchers take,
+and it is a different question from an issue carrying no label — neither is evidence for the other.
 
 ### Blind spots
 

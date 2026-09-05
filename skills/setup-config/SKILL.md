@@ -255,10 +255,11 @@ user approves** — writing into a product repo is outward-facing and never sile
   live state can name back and is likewise carried verbatim, with an absent one left absent; and
   the three confirmed-absent `none` forms
   (`testflight:`, `posthog:`, `mobile:`), which record a check that already happened.
-  **Nothing proposes an `execution_site:` today** — the platform-derived name becomes a proposal
-  into that empty slot only once
-  [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s interview exists to record a
-  "declined", or it is re-offered on every refresh forever.
+  **An `execution_site:` is proposed in exactly one place — interview §3d, in create, migrate and
+  adopt modes only** ([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). A refresh
+  never offers it, and that is what records a "declined": those three modes run once per repo, so a
+  user who said no is not asked again. Move the question into the refresh path and the proposal is
+  re-offered forever.
   **`sentry: none` is not one of them**: it is re-derived on every refresh, because it is also
   written when the culprit check merely could not run, so freezing it would retire the plate's
   highest-signal surface with no path back (Phase 4, `references/update-mode.md`). A
