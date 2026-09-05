@@ -64,16 +64,24 @@
 #       Retrying is always safe — that is what this script is for.
 #
 # Output (JSON on stdout):
-#   {"action":"filed",          "number":1234, "url":"https://...", "scan_truncated":false}
+#   {"action":"filed",          "number":1234, "url":"https://...", "scan_truncated":false, "search_degraded":false}
 #   {"action":"already-linked", "number":1234, "url":"https://...", "via":"search"}
 #   {"action":"already-linked", "number":1234, "url":"https://...", "via":"recent-scan"}
-#   {"action":"filed-no-board", "number":1234, "url":"https://...", "scan_truncated":false}   (board add failed/skipped on error)
-#   {"action":"would-file",     "marker":"...", "title":"...", "labels":"...", "scan_truncated":false}   (dry-run)
+#   {"action":"filed-no-board", "number":1234, "url":"https://...", "scan_truncated":false, "search_degraded":false}   (board add failed/skipped on error)
+#   {"action":"would-file",     "marker":"...", "title":"...", "labels":"...", "scan_truncated":false, "search_degraded":false}   (dry-run)
 #
 # `via` names WHICH stage answered. It is additive — every existing consumer
 # reads `.action`/`.number` — and it exists so the stages are distinguishable:
 # without it a gate cannot tell a working stage 2 from a search that happened to
 # be warm, which is how this bug survived unmeasured in the first place.
+#
+# `search_degraded` rides the same three FILING outcomes and answers a DIFFERENT
+# question from `scan_truncated`. Truncation says stage 2's window was full, so
+# something recent may be unseen; degradation says stage 1 did not run at all,
+# so anything OLDER than that window is unseen. A filing with
+# `search_degraded:true` is idempotent only against the newest `--recent-scan`
+# issues — pre-#339 semantics — and the caller is the only one who can decide
+# whether that is good enough. Silence made it look verified.
 #
 # `scan_truncated` rides the three FILING outcomes: a stage-2 window that came
 # back full is indistinguishable from one with headroom, so a marker one row
@@ -133,8 +141,36 @@ done
 
 command -v gh >/dev/null || { echo "gh CLI not on PATH" >&2; exit 1; }
 command -v jq >/dev/null || { echo "jq not on PATH" >&2; exit 1; }
-[[ -z "$REPO" ]] && REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)
-[[ -z "$REPO" ]] && { echo "not in a GitHub repo and --repo not given" >&2; exit 1; }
+# SLUG RESOLUTION, SPLIT BY CAUSE. The permanent conditions (not a git repo, no
+# remote) and the transient one (gh reached the network and it failed) BOTH make
+# `gh repo view` exit 1, so they cannot be told apart from its status — and its
+# prose is not something to match on. They are separable locally instead: both
+# permanent cases fail in git, before any request. Checking them here first
+# leaves any remaining `gh repo view` failure genuinely transport, which is what
+# lets this report exit 2 without guessing.
+#
+# The previous form was `[[ -z "$REPO" ]] && REPO=$(gh repo view ...)`. The
+# assignment is the LAST command of that && list, so errexit aborted the script
+# on a transient failure — exit 1, empty stdout, empty stderr, before line 137's
+# own diagnostic could print. That is the same silent-exit-1 shape this header
+# documents for the create, one screen above the fix for it.
+if [[ -z "$REPO" ]]; then
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "not in a git repository and --repo not given" >&2
+    exit 1
+  fi
+  if [[ -z "$(git remote 2>/dev/null)" ]]; then
+    echo "this git repository has no remotes and --repo not given" >&2
+    exit 1
+  fi
+  repo_rc=0
+  # 2>&1 so a failure carries gh's own words; on success this is just the slug.
+  REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1) || repo_rc=$?
+  if [[ "$repo_rc" -ne 0 || -z "$REPO" ]]; then
+    echo "could not resolve the repo slug, so nothing about this run is verified; refusing to file. gh said: $(tr '\n' ' ' <<<"$REPO")" >&2
+    exit 2
+  fi
+fi
 [[ -z "$marker" ]] && { echo "missing --marker" >&2; exit 1; }
 [[ -z "$title"  ]] && { echo "missing --title" >&2; exit 1; }
 [[ -z "$body_file" ]] && { echo "missing --body-file" >&2; exit 1; }
@@ -144,8 +180,20 @@ command -v jq >/dev/null || { echo "jq not on PATH" >&2; exit 1; }
 # Both scratch files are created here under ONE trap. Splitting them re-created
 # the classic bug where a second `trap ... EXIT` silently replaces the first and
 # the earlier file leaks.
-scan_err=$(mktemp)
-body_with_marker=$(mktemp)
+# Each mktemp is checked: under errexit a failing command substitution aborts
+# the script with ITS status, which is 1 — the code reserved for "you called me
+# wrong". A full or unwritable TMPDIR is a transport-class failure, not a
+# calling error. The second one cleans the first by hand because the trap does
+# not exist yet, which is the leak the note above is about.
+scan_err=$(mktemp) || {
+  echo "could not create a scratch file (TMPDIR full or unwritable), so nothing about this run is verified; refusing to file" >&2
+  exit 2
+}
+body_with_marker=$(mktemp) || {
+  rm -f "$scan_err"
+  echo "could not create a scratch file (TMPDIR full or unwritable), so nothing about this run is verified; refusing to file" >&2
+  exit 2
+}
 trap 'rm -f "$scan_err" "$body_with_marker"' EXIT
 
 # THE DELIMITED-FOOTER PREDICATE, DEFINED ONCE AND USED BY BOTH STAGES. Two
@@ -177,10 +225,26 @@ footer_pick='map(select((.body // "") | contains("<!-- " + $m + " -->"))) | sort
 #    the safe direction. The swallowed-child failure is the one being designed
 #    out.
 search_limit=30
+# The fall-through on failure is deliberate and stays: stage 2 is the authority
+# for anything recent, so a degraded search must not stop a filing. What does
+# NOT stay is the silence. `2>/dev/null || echo "[]"` discarded gh's status AND
+# its words, so a rate-limited search — the likely one, since the Search API is
+# throttled far harder than the plain listing stage 2 uses — was indistinguish-
+# able from a search that legitimately found nothing, while the payload went on
+# to assert `scan_truncated:false`. Idempotency then silently narrowed from
+# unbounded-in-age to the newest `--recent-scan` issues, which is pre-#339
+# behaviour, reported as success.
+search_rc=0
 existing=$(gh issue list --repo "$REPO" --state all \
   --search "\"$marker\" in:body" \
   --json number,url,body \
-  --limit "$search_limit" 2>/dev/null || echo "[]")
+  --limit "$search_limit" 2>"$scan_err") || search_rc=$?
+search_degraded=false
+if [[ "$search_rc" -ne 0 ]]; then
+  search_degraded=true
+  existing="[]"
+  echo "stage-1 marker search failed, so idempotency for issues older than the recent scan is UNVERIFIED; continuing to the recent scan. gh said: $(tr '\n' ' ' <"$scan_err")" >&2
+fi
 
 # Tolerant on purpose: stage 1's own `|| echo "[]"` means a degraded search
 # legitimately yields an empty array, and stage 2 below is the authority. The
@@ -239,8 +303,8 @@ fi
 # 3. Dry-run short-circuit. Deliberately AFTER both stages: a preview that says
 #    `would-file` for a marker already filed is a wrong preview.
 if [[ "$dry_run" == "1" ]]; then
-  jq -n --arg m "$marker" --arg t "$title" --arg l "$labels" --argjson tr "$scan_truncated" \
-    '{action:"would-file", marker:$m, title:$t, labels:$l, scan_truncated:$tr}'
+  jq -n --arg m "$marker" --arg t "$title" --arg l "$labels" --argjson tr "$scan_truncated" --argjson sd "$search_degraded" \
+    '{action:"would-file", marker:$m, title:$t, labels:$l, scan_truncated:$tr, search_degraded:$sd}'
   exit 0
 fi
 
@@ -294,8 +358,8 @@ created_number=$(basename "$created_url")
 
 # 7. Optional board add (graphql is the reliable shape for the new item id).
 if [[ -z "$PROJECT_ID" ]]; then
-  jq -n --arg n "$created_number" --arg u "$created_url" --argjson tr "$scan_truncated" \
-    '{action:"filed", number:($n|tonumber), url:$u, scan_truncated:$tr}'
+  jq -n --arg n "$created_number" --arg u "$created_url" --argjson tr "$scan_truncated" --argjson sd "$search_degraded" \
+    '{action:"filed", number:($n|tonumber), url:$u, scan_truncated:$tr, search_degraded:$sd}'
   exit 0
 fi
 
@@ -309,8 +373,8 @@ project_item_id=$(gh api graphql -f query='
   -f contentId="$(gh issue view "$created_number" --repo "$REPO" --json id -q .id)" \
   --jq '.data.addProjectV2ItemById.item.id' 2>&1) || {
     echo "project add failed; issue $created_number filed but unboarded: $project_item_id" >&2
-    jq -n --arg n "$created_number" --arg u "$created_url" --argjson tr "$scan_truncated" \
-      '{action:"filed-no-board", number:($n|tonumber), url:$u, scan_truncated:$tr}'
+    jq -n --arg n "$created_number" --arg u "$created_url" --argjson tr "$scan_truncated" --argjson sd "$search_degraded" \
+      '{action:"filed-no-board", number:($n|tonumber), url:$u, scan_truncated:$tr, search_degraded:$sd}'
     exit 0
   }
 
@@ -324,5 +388,5 @@ if [[ -n "$STATUS_FIELD_ID" && -n "$STATUS_OPTION_ID" ]]; then
     }
 fi
 
-jq -n --arg n "$created_number" --arg u "$created_url" --argjson tr "$scan_truncated" \
-  '{action:"filed", number:($n|tonumber), url:$u, scan_truncated:$tr}'
+jq -n --arg n "$created_number" --arg u "$created_url" --argjson tr "$scan_truncated" --argjson sd "$search_degraded" \
+  '{action:"filed", number:($n|tonumber), url:$u, scan_truncated:$tr, search_degraded:$sd}'

@@ -156,6 +156,19 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 WORK="$(mktemp -d)"
+# FAIL CLOSED, STRUCTURALLY. There is no `set -e` here (see the options line
+# above), so a failed `mktemp -d` leaves $WORK EMPTY and execution continues
+# into `mkdir -p "$WORK/bin"` — that is `mkdir -p /bin`, `cat > /bin/gh`,
+# `chmod +x /bin/gh`. The shim guard further down cannot catch it: with $WORK
+# empty, BOTH of its operands collapse to `/bin/gh` and the comparison passes.
+# Non-root hosts fail the write and the guard fires correctly; as root
+# (devcontainer, docker CI image, `act`, a root self-hosted runner) it succeeds
+# and leaves a fake `gh` on PATH permanently, while `rm -rf ""` cleans nothing.
+# This is the one $TMPDIR failure the guard's own header names as its threat.
+if [ -z "$WORK" ] || [ ! -d "$WORK" ] || [ "$WORK" = "/" ]; then
+    echo "mktemp -d did not produce a usable scratch directory (got '${WORK:-}'); refusing to run" >&2
+    exit 1
+fi
 trap 'rm -rf "$WORK"' EXIT
 
 fail=0
@@ -238,10 +251,27 @@ case "$cmd" in
                     # fixture is about without inventing hits elsewhere, so a row
                     # that passes here would also pass against the real index.
                     phrase="${search#\"}"; phrase="${phrase%%\"*}"
-                    awk -F'\t' -v phrase="$phrase" -v idx="$MOCK_INDEXED" '
+                    rows=$(awk -F'\t' -v phrase="$phrase" -v idx="$MOCK_INDEXED" '
                         BEGIN { while ((getline n < idx) > 0) seen[n] = 1 }
-                        seen[$1] && index($3, phrase) { print }' "$MOCK_ISSUES" \
-                        | emit_rows "$fields"
+                        seen[$1] && index($3, phrase) { print }' "$MOCK_ISSUES")
+                    # STATE AND LIMIT ARE HONOURED HERE TOO. Both were parsed
+                    # above and then read by this arm not at all, so deleting
+                    # `--state all` or `--limit` from stage 1 left all 49
+                    # assertions green while production changed underneath:
+                    # `gh issue list --state` defaults to OPEN, so without it an
+                    # INDEXED marker on a CLOSED issue older than the recent-scan
+                    # window is invisible to BOTH stages and the run re-files a
+                    # duplicate. The script's comment beside stage 2 declares the
+                    # property on both stages; only one of them was pinned.
+                    #
+                    # `awk NF` rather than the direct arm's bare `printf`: a
+                    # search legitimately matching nothing must emit no rows, not
+                    # one blank one. The direct read is never empty by
+                    # construction, which is why only this arm needs it.
+                    if [ "$state" != "all" ]; then
+                        rows=$(printf '%s\n' "$rows" | awk -F'\t' '$2 == "OPEN"')
+                    fi
+                    printf '%s\n' "$rows" | awk 'NF' | head -n "$limit" | emit_rows "$fields"
                     exit 0
                 fi
                 if [ "${MOCK_FAIL_LIST:-0}" = "1" ]; then
@@ -349,18 +379,25 @@ add_issue() {  # <number> <state> <one-line body> <indexed|unindexed>
 # that is what every issue this script filed actually looks like.
 seed_store() {
     : >"$MOCK_ISSUES"; : >"$MOCK_INDEXED"; : >"$MOCK_WRITES"
-    add_issue 1 OPEN   "Old and indexed <!-- deep-marker -->"                       indexed
-    add_issue 2 OPEN   "Old and never indexed <!-- outside-window -->"              unindexed
-    add_issue 3 CLOSED "Closed, never indexed <!-- closed-marker -->"               unindexed
-    add_issue 4 OPEN   "Collision sibling <!-- epic-split: #207/alpha-two -->"      unindexed
-    add_issue 5 OPEN   "Recent and indexed <!-- warm-marker -->"                    indexed
+    # #1 is CLOSED, INDEXED and older than any window used here — so ONLY stage 1
+    # can answer it, and only while stage 1 passes `--state all`. `gh issue list
+    # --state` defaults to OPEN, so dropping that flag makes this marker
+    # invisible to both stages and the run re-files a duplicate. Nothing pinned
+    # that before: the mock parsed `--state` on the search arm and read it on
+    # neither, so the flag was deletable with all 49 assertions green.
+    add_issue 1 CLOSED "Closed, indexed, older than any window <!-- closed-deep-marker -->" indexed
+    add_issue 2 OPEN   "Old and indexed <!-- deep-marker -->"                       indexed
+    add_issue 3 OPEN   "Old and never indexed <!-- outside-window -->"              unindexed
+    add_issue 4 CLOSED "Closed, never indexed <!-- closed-marker -->"               unindexed
+    add_issue 5 OPEN   "Collision sibling <!-- epic-split: #207/alpha-two -->"      unindexed
+    add_issue 6 OPEN   "Recent and indexed <!-- warm-marker -->"                    indexed
     # THE SAME COLLISION ON THE OTHER ROUTE, and the more likely one. #4 is
     # unindexed, so `epic-split: #207/alpha` reaches stage 2 — which is the only
     # reason the first version of this fixture exercised the footer predicate at
     # all. A sibling more than a few minutes old IS indexed, so it is answered by
     # stage 1, and the review that found this flipped exactly this word to prove
     # it. Distinct parent so the two rows cannot mask each other.
-    add_issue 6 OPEN   "Collision sibling, INDEXED <!-- epic-split: #311/beta-two -->" indexed
+    add_issue 7 OPEN   "Collision sibling, INDEXED <!-- epic-split: #311/beta-two -->" indexed
 }
 
 run_file() {  # <script> [args...]
@@ -466,14 +503,14 @@ if [ "$(action_of)" = "filed" ]; then
 else
     bad "'epic-split: #207/alpha' returned '$(action_of)' against an existing 'epic-split: #207/alpha-two' — a real groom-backlog marker shape is being swallowed"
 fi
-if [ "$(number_of)" != "4" ]; then
-    ok "…and it is a new issue (#$(number_of)), not the colliding sibling #4"
+if [ "$(number_of)" != "5" ]; then
+    ok "…and it is a new issue (#$(number_of)), not the colliding sibling #5"
 else
-    bad "the prefix-collision case returned the sibling issue #4 itself"
+    bad "the prefix-collision case returned the sibling issue #5 itself"
 fi
 
 # THE SAME COLLISION VIA STAGE 1, which is the likelier route and was the one
-# left open when the footer predicate shipped on stage 2 alone. #6 is INDEXED,
+# left open when the footer predicate shipped on stage 2 alone. #7 is INDEXED,
 # so the search answers first; the predicate must reject it and let the run fall
 # through to the scan rather than short-circuiting on a sibling.
 seed_store
@@ -481,20 +518,20 @@ file_it --marker "epic-split: #311/beta" --title "Beta" --body-file "$BODY"
 if [ "$(action_of)" = "filed" ]; then
     ok "a prefix collision on an INDEXED sibling also files — stage 1 filters its rows rather than trusting the search"
 else
-    bad "'epic-split: #311/beta' returned '$(action_of)' #$(number_of) via='$(via_of)' against the indexed sibling #6 — a real epic child is being swallowed on the likelier of the two routes"
+    bad "'epic-split: #311/beta' returned '$(action_of)' #$(number_of) via='$(via_of)' against the indexed sibling #7 — a real epic child is being swallowed on the likelier of the two routes"
 fi
-if [ "$(number_of)" != "6" ]; then
-    ok "…and it is a new issue (#$(number_of)), not the indexed sibling #6"
+if [ "$(number_of)" != "7" ]; then
+    ok "…and it is a new issue (#$(number_of)), not the indexed sibling #7"
 else
-    bad "the stage-1 collision case returned the sibling issue #6 itself"
+    bad "the stage-1 collision case returned the sibling issue #7 itself"
 fi
 
 # --- 4. the search stage still carries its own weight ------------------------
-# #1 is INDEXED and OLD. With a window of 2 it is outside the scan entirely, so
+# #2 is INDEXED and OLD. With a window of 2 it is outside the scan entirely, so
 # only the search can find it. This is the half M6 deletes.
 seed_store
 file_it --marker "deep-marker" --title "Deep" --body-file "$BODY" --recent-scan 2
-if [ "$(action_of)" = "already-linked" ] && [ "$(number_of)" = "1" ]; then
+if [ "$(action_of)" = "already-linked" ] && [ "$(number_of)" = "2" ]; then
     ok "a marker older than the scan window is still found — the search stage covers depth the listing cannot"
 else
     bad "an indexed marker outside the scan window returned '$(action_of)' #$(number_of) (rc=$RC) — the search stage has stopped working: $ERR"
@@ -503,6 +540,19 @@ if [ "$(via_of)" = "search" ]; then
     ok "…and it answered via='search', so stage 1 short-circuits before the scan runs"
 else
     bad "the deep marker answered via='$(via_of)' — expected the search stage"
+fi
+
+# THE SAME DEPTH ROUTE ON A **CLOSED** ISSUE. #1 is closed, indexed and outside
+# the window, so stage 1 is the only stage that can answer — and only while it
+# passes `--state all`. Without that flag gh defaults to OPEN, the marker is
+# invisible to BOTH stages, and the run files a duplicate of an issue that
+# already exists. M9 is the mutation; this row is what M9 reddens.
+seed_store
+file_it --marker "closed-deep-marker" --title "ClosedDeep" --body-file "$BODY" --recent-scan 2
+if [ "$(action_of)" = "already-linked" ] && [ "$(number_of)" = "1" ]; then
+    ok "an indexed marker on a CLOSED issue outside the window is still found — stage 1 asks for --state all"
+else
+    bad "a closed, indexed marker outside the scan window returned '$(action_of)' #$(number_of) (rc=$RC) — stage 1 has stopped asking for every state, so it re-files an issue that exists: $ERR"
 fi
 
 # --- 5. the bound is REAL, and is the bound rather than a broken scan --------
@@ -758,6 +808,8 @@ run_scenario() {  # <script> <scenario>
             run_file "$script" --marker "closed-marker" --title "Closed" --body-file "$BODY" ;;
         deep)
             run_file "$script" --marker "deep-marker" --title "Deep" --body-file "$BODY" --recent-scan 2 ;;
+        closed-deep)
+            run_file "$script" --marker "closed-deep-marker" --title "ClosedDeep" --body-file "$BODY" --recent-scan 2 ;;
         *) return 1 ;;
     esac
     return 0
@@ -774,6 +826,7 @@ MUTANTS=(
 "M5 --state all dropped from the scan	recent=\$(gh issue list --repo \"\$REPO\" --state all \\	recent=\$(gh issue list --repo \"\$REPO\" \\	closed	duplicate	an open-only scan re-files every marker whose issue was closed, which is most of a mature backlog"
 "M6 the search stage stops short-circuiting	if [[ -n \"\$search_hit\" ]]; then	if false; then	deep	duplicate	deleting stage 1 as redundant loses every marker older than the scan window — the mirror-image defect"
 "M7 the shared footer predicate relaxed, seen from STAGE 1	footer_pick='map(select((.body // \"\") | contains(\"<!-- \" + \$m + \" -->\"))) | sort_by(.number) | first // empty'	footer_pick='map(select((.body // \"\") | contains(\$m))) | sort_by(.number) | first // empty'	collision-indexed	false-link	the SAME widening reaches stage 1 too; this row is what proves both call sites depend on the one predicate rather than stage 2 alone carrying it"
+"M9 stage 1 stops asking for every state	existing=\$(gh issue list --repo \"\$REPO\" --state all \\	existing=\$(gh issue list --repo \"\$REPO\" \\	closed-deep	duplicate	'gh issue list --state' defaults to OPEN, so an indexed marker on a CLOSED issue outside the scan window goes invisible to BOTH stages and the run re-files an issue that already exists"
 "M8 stage 1 trusts the search result instead of filtering it	search_hit=\$(jq -c --arg m \"\$marker\" \"\$footer_pick\" <<<\"\$existing\" 2>/dev/null || true)	search_hit=\$(jq -c '.[0] // empty' <<<\"\$existing\" 2>/dev/null || true)	collision-indexed	false-link	the exact shape this PR shipped for review: the footer predicate applied to stage 2 while stage 1 short-circuits on a token-subsequence match, swallowing an epic child on the likelier route"
 )
 
@@ -854,7 +907,7 @@ fi
 # exactly one assertion on every path, and each mutant contributes exactly one
 # whether it is applied, run, or refused. A floor cannot catch a deleted case;
 # an equality forces a deliberate bump here instead of a quiet drift.
-EXPECTED_CASES=41
+EXPECTED_CASES=42
 EXPECTED_ASSERTS=$(( ${#MUTANTS[@]} + EXPECTED_CASES ))
 if [ "$asserts" -ne "$EXPECTED_ASSERTS" ]; then
     bad "$asserts assertions ran, expected $EXPECTED_ASSERTS (${#MUTANTS[@]} mutants + $EXPECTED_CASES cases) — a case was added or skipped; if deliberate, bump EXPECTED_CASES"
