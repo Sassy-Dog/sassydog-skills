@@ -461,7 +461,9 @@
 #       the fixture.
 #     - `oneseg` dropped from the failure verdict loop -> 2 red: site 2 of 3
 #       reading `[oneseg: in 0 of the 2 verdict loops]`, plus the assertion
-#       equality at the bottom (413 against 420).
+#       equality at the bottom (a short count against the expected total; the
+#       figures move with every case this file adds, so read them from the run
+#       rather than from here).
 #     - `emptyseg` dropped from the `url_pin_bad` loop -> 1 red, site 3 of 3.
 #     - a fixture DECLARED and placed nowhere (`CWD_NEWFORM` plus its
 #       `make_cwd` call, which is the historical shape) -> 3 red, one per
@@ -965,6 +967,13 @@ BASH_BIN="$(command -v bash)"
 # escapes the pins is a named failure rather than a silent change of subject.
 GIT_HERMETIC_GLOBAL=/dev/null
 GIT_HERMETIC_NOSYSTEM=1
+# STRUCTURALLY UNREASSIGNABLE. A source-text count cannot express "nothing
+# rebinds these": the first attempt grepped `^NAME=` and therefore saw only a
+# bare column-0 duplicate, while an indented line, an `export`, a `local` inside
+# a function, or an assignment inside an `if` all rebound every site with the
+# census still printing ok. `readonly` refuses them all at RUNTIME, whatever the
+# spelling, and with the original value intact.
+readonly GIT_HERMETIC_GLOBAL GIT_HERMETIC_NOSYSTEM
 CWD_SSH="$WORK/cwd-ssh"
 CWD_HTTPS="$WORK/cwd-https"
 CWD_SSHPROTO="$WORK/cwd-sshproto"
@@ -2050,7 +2059,7 @@ fi
 #
 # `badurl` JOINED THIS LOOP WITH THE INVENTORY GUARD (issue #324). Be exact
 # about why, because the first version of this comment was not. This loop is NOT
-# what stops an `insteadOf` rewrite — the hermetic pins are, at all four sites
+# what stops an `insteadOf` rewrite — the hermetic pins are, at every site
 # that read a fixture, and they were all in place before this change and are
 # untouched by it. The loop PROVES the pins bind, over the literal each fixture
 # stored. `badurl` was the one fixture given an origin URL and left out of that
@@ -2061,7 +2070,8 @@ fi
 # `run_probe`'s pin as redundant with this loop, that is the deletion this
 # comment exists to refuse, and the census in the guard below now refuses it too.
 #
-# The set is derived from the `make_cwd` calls rather than from this list, so a
+# The set is derived from the BUILT TREE (`git remote get-url origin` per
+# fixture), with the `make_cwd` read kept only as a cross-check, so a
 # twelfth URL-carrying fixture cannot be added without landing here.
 url_pin_bad=""
 for pin_form in ssh https sshproto badurl hostpath trailing threeseg badchar otherhost emptyseg oneseg; do
@@ -2144,8 +2154,12 @@ fi
 #     already names every non-exempt fixture including `broken` and `bare`, which
 #     have no `make_cwd` call at all. Two derivations that must agree; no count.
 #   * THE FOUR SINGLE-LINE SITES ARE ASSERTED TO HAVE MATCHED EXACTLY ONE LINE,
-#     and their reads are newline-normalised. All four were neither, and
-#     both directions were measured green: a second column-0 `for form in …`
+#     and their reads are newline-normalised. All four were neither. The
+#     directions this was measured in are recorded ONCE, in the header
+#     paragraph that begins "the second column-0 `for form in`" — including
+#     which direction was NOT reproduced and why. Stating it twice is how the
+#     two records came to disagree about the token and about what was measured;
+#     this one cites, it does not restate: a second column-0 `for form in …`
 #     (this file already carries two identical `for site in …` headers, so the
 #     shape is established practice) made `trailing` present in BOTH verdict
 #     loops read as a pass, while `sshproto` — plainly present — read as "in 0 of
@@ -2405,20 +2419,38 @@ fixt_pins_bad=""
 # the developer's real config, still printing the four-sites ok. The reviewing
 # machine's own ~/.gitconfig carries a Sassy-Dog insteadOf, which is why these
 # pins exist at all.
-# EXACTLY ONE ASSIGNMENT EACH. Existence alone is not enough: inserting a
-# second `GIT_HERMETIC_NOSYSTEM=0` after the first left the census printing
-# "4 live pin sites" while every site bound 0 — the later assignment wins and
-# the -x match still found the earlier one.
+# THE VALUES ARE ASSERTED AT RUNTIME, not read out of the source. A source read
+# is shape-bound by construction, and the shape it misses is the one an editor
+# reaches for: `^NAME=` saw a bare column-0 duplicate and NOT an indented line,
+# an `export`, a `local` inside a function, or an assignment inside an `if` —
+# all four rebound every pinned site while the census printed ok, measured. This
+# is the same move the URL derivation made: ask the running program what it has,
+# rather than parsing the text that set it.
+[ "$GIT_HERMETIC_GLOBAL" = "/dev/null" ] || \
+    fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_GLOBAL is '$GIT_HERMETIC_GLOBAL', not /dev/null]"
+[ "$GIT_HERMETIC_NOSYSTEM" = "1" ] || \
+    fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_NOSYSTEM is '$GIT_HERMETIC_NOSYSTEM', not 1]"
+# And the `readonly` that makes a later rebinding fail loudly must still be
+# there: without this, deleting it reddens nothing and the runtime check above
+# only proves nothing rebound them BEFORE this line.
+# Captured, not piped: `readonly -p` is an unbounded writer and `grep -q` exits
+# at its first match, which is the SIGPIPE-under-pipefail shape this repo's own
+# gate refuses (issue #256). It caught this line when it was written.
+fixt_readonly="$(readonly -p 2>/dev/null)"
 for hv in GIT_HERMETIC_GLOBAL GIT_HERMETIC_NOSYSTEM; do
-    hn=$(grep -cE "^$hv=" "$FIXT_SRC")
-    [ "$hn" -eq 1 ] || fixt_pins_bad="$fixt_pins_bad [$hv: $hn assignments, want exactly one — a later one silently overrides]"
+    case "$fixt_readonly" in
+        *"$hv="*) : ;;
+        *) fixt_pins_bad="$fixt_pins_bad [$hv is not readonly — a later assignment of any shape would rebind every site silently]" ;;
+    esac
 done
-if ! grep -qx 'GIT_HERMETIC_GLOBAL=/dev/null' "$FIXT_SRC"; then
-    fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_GLOBAL is no longer /dev/null]"
-fi
-if ! grep -qx 'GIT_HERMETIC_NOSYSTEM=1' "$FIXT_SRC"; then
-    fixt_pins_bad="$fixt_pins_bad [GIT_HERMETIC_NOSYSTEM is no longer 1]"
-fi
+# The source count stays as an ORDERING guard only, widened to the shapes a
+# reader might use and read from the comment-stripped copy. It cannot see
+# `: "${X:=…}"`, `printf -v` or `read`, which is why it is no longer what the
+# guarantee rests on.
+for hv in GIT_HERMETIC_GLOBAL GIT_HERMETIC_NOSYSTEM; do
+    hn=$(grep -cE "^[[:space:]]*(export|local|declare|readonly|typeset)?[[:space:]]*$hv=" "$FIXT_LIVE")
+    [ "$hn" -eq 1 ] || fixt_pins_bad="$fixt_pins_bad [$hv: $hn assignments in source, want exactly one]"
+done
 
 # A COMMENT-STRIPPED COPY. `grep -qF` over the raw region is satisfied by the
 # pin appearing in a comment — and the paragraph beginning "THE PROSE COPIES
@@ -2446,7 +2478,8 @@ for pin_region in $pin_regions; do
         # STRUCTURAL terminator. `git init -q --bare` matched a flag ORDER, not
         # a structure, so reordering it to `git init --bare -q .` — semantically
         # identical — or reflowing the block with backslash continuations left
-        # the sed range UNTERMINATED, running to EOF: measured 3 -> 1183 lines,
+        # the sed range UNTERMINATED, running to EOF — measured on two editions
+        # of this file at 1183 and 2734 lines from a 3-line region,
         # swallowing two unrelated pin occurrences and passing. The `-z` guard
         # below cannot see that, because an unterminated range is not empty, it
         # is maximal; the length bound is what catches it.
@@ -2483,7 +2516,8 @@ done
 # WHAT THIS EQUALITY DOES AND DOES NOT CATCH. It pins MEMBERSHIP — a pin
 # deleted while its region stays reddens, which is the realistic single edit and
 # the one the prose two screens up predicts. It does NOT catch deleting a pin
-# AND its region entry together: 3 and 3 balance. What that can no longer do is
+# AND its region entry together: the count and the regions fall by one each and
+# still balance. What that can no longer do is
 # LIE, because the ok line below names the regions actually walked rather than a
 # frozen four, so the double deletion changes the printed list. Closing it
 # properly needs "sites that read a fixture" derived from the code, which is not
