@@ -356,10 +356,15 @@ awaiting-user / parked: reason) · what changed.
 suspected complete: #283 (8 children, all closed) · #284 (5 children, all closed)
 ```
 
-Write `suspected complete: none` when the detector found none, and
+Write `suspected complete: none` when the detector found none,
 `suspected complete: UNKNOWN (pull truncated at ALL_LIMIT=<n>)` when it could not see the whole
-repo. Those are the only three values, and the line is never omitted — silence reads as "none",
-which is precisely the assertion this detector exists to stop the report making by accident.
+repo, and `suspected complete: UNKNOWN (detector exited 10: <reason>)` when it could not run at
+all — `stale-issues.sh` exits 10 for a missing `gh`, an unresolvable repo, or a failed pull, and
+prints **no sections whatsoever**, so there is nothing to read a `none` out of. Those are the only
+four values, and the line is never omitted — silence reads as "none", and so does picking `none`
+because the run produced nothing to quote, which is precisely the assertion this detector exists
+to stop the report making by accident. An exit 10 is the one case where the *absence* of output is
+the finding.
 
 **Always add the dropped-gotchas line**, on every run that refined at least one body:
 

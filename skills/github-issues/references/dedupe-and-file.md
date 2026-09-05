@@ -52,7 +52,7 @@ gh issue comment <N> --repo <REPO> --body "Signal update: <what changed, with nu
 
 ## Stale-state hygiene
 
-Auto-filed issues rot in two known ways; `scripts/stale-issues.sh` detects both:
+Auto-filed issues rot in several known ways; `scripts/stale-issues.sh` has one detector per shape (`SKILL.md` enumerates all three):
 
-- **shipped-but-still-open** — a merged PR referenced the issue only in a title parenthetical (`(#419)`), which is a hyperlink, NOT a close keyword. Review and close manually, or comment status if half-shipped. (Prevention: `Closes #N` on its own line in the PR body.)
+- **shipped-but-still-open** — a merged PR named the issue without closing it. Two arms, and each hit carries `matched_via`: a **title** parenthetical (`(#419)`), which is a hyperlink and NOT a close keyword; or a **body** reference carrying no closing keyword, which is where the reference usually lives — GitHub appends `(#N)` to the squash-merge *commit* title, not the PR title. A title hit is near-certain; a body hit is a review prompt, since a PR may cite an issue for background. Review and close manually, or comment status if half-shipped. (Prevention: `Closes #N` on its own line in the PR body.)
 - **stub-body** — body under 80 chars / placeholder. Before flagging to a human, **read the comments** (`gh issue view N --comments`): some repos scope issues in a follow-up comment, not the OP.

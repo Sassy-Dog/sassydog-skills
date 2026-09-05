@@ -27,6 +27,7 @@ checkbox that means nothing.
 
 <!--
 Closing an issue needs a literal `Closes #123` on its own line, one per issue.
-A number in the PR title is a hyperlink, NOT a close trigger — that is the usual
-cause of "shipped but still open".
+A number in the PR title is a hyperlink, NOT a close trigger — and neither is a
+bare #123 elsewhere in the body. Naming an issue without the keyword is the
+commonest cause of "shipped but still open".
 -->
