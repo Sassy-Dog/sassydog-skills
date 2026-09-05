@@ -959,7 +959,34 @@
 #      `origin` remote, so the bounded sites are three and 17d measures the
 #      derivation instead, from real cwd fixtures: the `gh` call is gone (a
 #      must-not-exist mock arm and a call-log check), the URL forms parse, and
-#      each failure shape still reaches a verdict. The bound has THREE branches and only one is
+#      each failure shape still reaches a verdict. THAT FIXTURE INVENTORY IS
+#      CHECKED MECHANICALLY (#324), because nine review rounds of prose did not
+#      hold it — three consecutive commits each added a fixture and missed at
+#      least one site, and the paragraph recording those misses was itself a
+#      site missed twice, a miss being SILENT since the fixture is built and
+#      simply never asserted. The set is DERIVED from the `CWD_*` declarations
+#      and required at three hand-maintained sites: the built message, exactly
+#      one of the two verdict loops, and — for each fixture given an origin URL
+#      — the read-back loop that proves the hermetic git pins bind. The
+#      accumulator and the bare-`mkdir` fixture are exempt BY NAME, each
+#      asserted to still resolve. THE EXTRACTION LAYER IS THE PART WITH TEETH,
+#      because every way it under-reads is this same defect one level up — a
+#      reassuring `ok` for a fixture nobody checked — and the first edition of
+#      the guard shipped several such reads, each escape re-measured against
+#      that edition and enumerated where it is fixed — the header carries the
+#      first two rounds, and each later escape is recorded beside the read that
+#      closed it, in the derivation and census blocks. Never counted here: a
+#      number in this file would be a third copy of a list that already lives in
+#      two places, which is the shape that put the escapes there to begin with. So: continuations are joined before
+#      anything is read (a wrapped `make_cwd` already exists in that file); the
+#      declaration read allows indentation and requires a `"$WORK/` value; the
+#      set is cross-checked BOTH ways against the `CWD_MISSING` ledger, a
+#      second derivation rather than a second copy; the four single-line sites
+#      must match EXACTLY one line and are newline-normalised; and the
+#      `SELF_ABS` assignment is asserted to precede the `cd`, since preflight
+#      runs that gate from the repo root where the broken placement resolves
+#      fine — so CI cannot observe the one regression #324 records as the
+#      reason a first attempt was reverted. The bound has THREE branches and only one is
 #      reachable through a prepended shim, so the other two run under CURATED
 #      PATHs; an earlier edition called them impossible to exercise, which was
 #      false and cost the file its only coverage of the `probe` scope — the
