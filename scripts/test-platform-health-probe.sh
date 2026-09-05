@@ -2213,10 +2213,17 @@ function odd_trailing_backslashes(s,   n) {
     }
     print line
 }' "$SELF_ABS" >"$FIXT_SRC"
+# ONE COMMENT-STRIPPED COPY, built once. The source reads below ran over the
+# raw joined file, so a commented-out fixture line still counted — yielding two
+# reds naming causes that do not exist (a declared fixture "missing" from loops
+# it was never in). Commenting a fixture out is how you disable one; it must
+# read as absent, not as broken.
+FIXT_LIVE="$WORK/self-joined-live.sh"
+sed 's/^[[:space:]]*#.*$//' "$FIXT_SRC" >"$FIXT_LIVE"
 fixt_exempt="norepo"
-fixt_all="$(sed -n 's/^[[:space:]]*CWD_\([A-Z][A-Z0-9_]*\)="\$WORK\/.*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
-fixt_acc="$(sed -n 's/.*CWD_MISSING="\$CWD_MISSING \([a-z][a-z0-9]*\)".*/\1/p' "$FIXT_SRC" | tr '\n' ' ')"
-fixt_url="$(sed -n 's/^[[:space:]]*make_cwd  *"\$CWD_\([A-Z][A-Z0-9_]*\)" *"[^"]*".*/\1/p' "$FIXT_SRC" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
+fixt_all="$(sed -n 's/^[[:space:]]*CWD_\([A-Z][A-Z0-9_]*\)="\$WORK\/.*/\1/p' "$FIXT_LIVE" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
+fixt_acc="$(sed -n 's/.*CWD_MISSING="\$CWD_MISSING \([a-z][a-z0-9]*\)".*/\1/p' "$FIXT_LIVE" | tr '\n' ' ')"
+fixt_url="$(sed -n 's/^[[:space:]]*make_cwd  *"\$CWD_\([A-Z][A-Z0-9_]*\)" *"[^"]*".*/\1/p' "$FIXT_LIVE" | tr '[:upper:]' '[:lower:]' | tr '\n' ' ')"
 # THE URL-CARRYING SET IS DERIVED FROM WHAT WAS BUILT, not from source text.
 # The first attempt at a second derivation shared the first read's anchor: both
 # required the literal `"$CWD_` for the first argument, so `"${CWD_HOSTPATH}"`
@@ -2331,6 +2338,25 @@ for fx in $fixt_url_built; do
     case " $fixt_exempt " in *" $fx "*) continue ;; esac
     case " $fixt_pin " in *" $fx "*) ;; *) fixt_pin_bad="$fixt_pin_bad $fx" ;; esac
 done
+# THE REVERSE DIRECTION. Everything above walks declarations -> loops, so a
+# token that appears in a verdict loop WITH an arm but has no CWD_* declaration
+# behind it is required nowhere and checked by nothing — the inventory gap
+# pointing the other way. Exemptions are by name, like the others.
+fixt_loop_exempt="notree nogit"
+fixt_rev_bad=""
+# The exemptions are asserted to be LIVE, the same way CWD_MISSING and
+# CWD_NOREPO are: an exemption naming a token no loop runs any more exempts
+# nothing and hides the next real one behind a stale name.
+for fx in $fixt_loop_exempt; do
+    case " $fixt_succ $fixt_fail " in *" $fx "*) ;;
+        *) fixt_rev_bad="$fixt_rev_bad [$fx: exempted from the reverse check but no verdict loop runs it]" ;;
+    esac
+done
+for fx in $fixt_succ $fixt_fail; do
+    case " $fixt_all " in *" $fx "*) continue ;; esac
+    case " $fixt_loop_exempt " in *" $fx "*) continue ;; esac
+    fixt_rev_bad="$fixt_rev_bad [$fx: run by a verdict loop but declared by no CWD_* fixture]"
+done
 if [ -z "$fixt_msg_bad" ]; then
     ok "  and every declared fixture is named in the built message"
 else
@@ -2341,19 +2367,28 @@ if [ -z "$fixt_loop_bad" ]; then
 else
     bad "  a declared fixture is in neither or both verdict loops (site 2 of 3):$fixt_loop_bad"
 fi
+if [ -z "$fixt_rev_bad" ]; then
+    ok "  and every verdict-loop token resolves to a declared fixture (or a named exemption)"
+else
+    bad "  a verdict loop runs a token no declaration backs, so nothing requires it anywhere:$fixt_rev_bad"
+fi
 if [ -z "$fixt_pin_bad" ]; then
     ok "  and every fixture given an origin URL is read back in the url_pin_bad loop"
 else
     bad "  a URL-carrying fixture is missing from the url_pin_bad read-back (site 3 of 3):$fixt_pin_bad"
 fi
 fixt_order_bad=""
-fixt_n_self="$(grep -c '^SELF_ABS=' "$FIXT_SRC")"
-fixt_n_cd="$(grep -c '^cd "\$REPO_ROOT" || exit 1$' "$FIXT_SRC")"
+# Read from the REAL file, not the joined copy: the message prints LINE
+# NUMBERS, and joined-copy numbers coincide with the source only while no
+# continuation precedes the anchors. They would silently start pointing at the
+# wrong lines in the one message that fires for a regression CI cannot see.
+fixt_n_self="$(grep -c '^SELF_ABS=' "$SELF_ABS")"
+fixt_n_cd="$(grep -c '^cd "\$REPO_ROOT" || exit 1$' "$SELF_ABS")"
 if [ "$fixt_n_self" -ne 1 ] || [ "$fixt_n_cd" -ne 1 ]; then
     fixt_order_bad="the anchors are not unique (SELF_ABS= x$fixt_n_self, cd \"\$REPO_ROOT\" x$fixt_n_cd)"
 else
-    fixt_at_self="$(grep -n '^SELF_ABS=' "$FIXT_SRC" | cut -d: -f1)"
-    fixt_at_cd="$(grep -n '^cd "\$REPO_ROOT" || exit 1$' "$FIXT_SRC" | cut -d: -f1)"
+    fixt_at_self="$(grep -n '^SELF_ABS=' "$SELF_ABS" | cut -d: -f1)"
+    fixt_at_cd="$(grep -n '^cd "\$REPO_ROOT" || exit 1$' "$SELF_ABS" | cut -d: -f1)"
     [ "$fixt_at_self" -lt "$fixt_at_cd" ] || \
         fixt_order_bad="SELF_ABS is assigned at line $fixt_at_self, AFTER the cd at line $fixt_at_cd — every read above resolves against the wrong cwd from any directory but the repo root"
 fi
@@ -2397,7 +2432,7 @@ fi
 # would make the census claim one more site than exists. Renaming PIN_G/PIN_N
 # breaks this deletion visibly rather than silently, because the count then
 # disagrees with the regions walked.
-fixt_live="$(sed 's/^[[:space:]]*#.*$//; /^PIN_[GN]=/d' "$FIXT_SRC")"
+fixt_live="$(sed '/^PIN_[GN]=/d' "$FIXT_LIVE")"
 PIN_G='GIT_CONFIG_GLOBAL="$GIT_HERMETIC_GLOBAL"'
 PIN_N='GIT_CONFIG_NOSYSTEM="$GIT_HERMETIC_NOSYSTEM"'
 fixt_pin_sites=$(grep -cF -- "$PIN_G" <<<"$fixt_live")
@@ -4159,7 +4194,7 @@ fi
 # exactly one whether it is applied or refused). A floor beneath the true count
 # cannot tell "measured everything" from "one case silently stopped running".
 # ONE transcription, used in the arithmetic and in the message.
-EXPECTED_CASES=367
+EXPECTED_CASES=368
 # Mutants that cannot ride the loop above, because each mutates ANOTHER file
 # (M16-M19, M31, M32) or asserts something other than a wrong verdict over the
 # shim's ledgers (M33) or the source census (M34). The number is checked

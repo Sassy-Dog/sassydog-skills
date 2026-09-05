@@ -973,8 +973,11 @@
 #      because every way it under-reads is this same defect one level up — a
 #      reassuring `ok` for a fixture nobody checked — and the first edition of
 #      the guard shipped several such reads, each escape re-measured against
-#      that edition and enumerated in the gate's own header rather than counted
-#      here. So: continuations are joined before
+#      that edition and enumerated where it is fixed — the header carries the
+#      first two rounds, and each later escape is recorded beside the read that
+#      closed it, in the derivation and census blocks. Never counted here: a
+#      number in this file would be a third copy of a list that already lives in
+#      two places, which is the shape that put the escapes there to begin with. So: continuations are joined before
 #      anything is read (a wrapped `make_cwd` already exists in that file); the
 #      declaration read allows indentation and requires a `"$WORK/` value; the
 #      set is cross-checked BOTH ways against the `CWD_MISSING` ledger, a
