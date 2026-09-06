@@ -116,6 +116,32 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-mobile-release-lag.sh
 
 Emits JSON: last green iOS build (run/sha/date), `days_since_ios_success`, `mobile_commits_since`, and the latest run's iOS-leg state (catches a currently-stuck build). Skip this scan entirely for repos with no mobile app.
 
+### Plugin drift (which checkouts run a stale plugin)
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-plugin-drift.sh [<abs-checkout-path>...]
+```
+
+Emits JSON: the `reference` version an update would install, `user_scope`, one row per live
+project pin with `current`, the `behind` subset, `no_entry` for any path you asked about that has
+none, and the `pruned` counts. Read-only, no network, no `gh`.
+
+**A project-scope install pins the version resolved when that checkout was first opened, and
+nothing re-resolves it.** User and project scope drift independently, so `claude plugin update`
+can report success while a repo keeps loading a months-old plugin — and the first symptom is
+usually a feature "not working" in a repo whose config is perfectly correct. Run this before
+treating any per-repo plugin behaviour as evidence.
+
+Two results that are not what they look like:
+
+- **`no_entry` is not clean.** That checkout inherits user scope, which usually means it is
+  missing the `.claude/settings.json` declaration `sassy-dog:setup-config` writes — so it would
+  load no skill at all in a cloud session or scheduled routine. Fixing that is correct, and it
+  converts the repo from accidentally-current to pinned.
+- **`stale_clone_hint: true`** means an installed copy is newer than the marketplace clone, so
+  `claude plugin update` cannot reach the current version yet — `claude plugin marketplace update`
+  has to run first. That command refreshes metadata only and reports success either way.
+
 ## Interpreting results
 
 Read `references/scoring.md` for the default severity thresholds (CI p90 > 25/40 min, flake > 5%, lag rules, skipped-test placement). Callers with their own scoring override it; absent that, apply the defaults and report:
