@@ -134,10 +134,15 @@ treating any per-repo plugin behaviour as evidence.
 
 Two results that are not what they look like:
 
-- **`no_entry` is not clean.** That checkout inherits user scope, which usually means it is
-  missing the `.claude/settings.json` declaration `sassy-dog:setup-config` writes — so it would
-  load no skill at all in a cloud session or scheduled routine. Fixing that is correct, and it
-  converts the repo from accidentally-current to pinned.
+- **`no_entry` is not clean, and it has two causes that look identical here.** Either no session
+  has opened that checkout since the plugin state was recorded — in which case the next one
+  creates an entry pinned to whatever is current — or the repo is missing the
+  `.claude/settings.json` declaration `sassy-dog:setup-config` writes, in which case it would load
+  no skill at all in a cloud session or scheduled routine. **This report cannot tell them apart**:
+  read the repo's `.claude/settings.json` for `enabledPlugins` *and* `extraKnownMarketplaces`
+  before concluding anything. Measured 2026-09-06, all three `no_entry` repos on this machine had
+  a correct tracked declaration and simply had not been opened; assuming the other cause would
+  have manufactured three PRs that changed nothing.
 - **`stale_clone_hint: true`** means an installed copy is newer than the marketplace clone, so
   `claude plugin update` cannot reach the current version yet — `claude plugin marketplace update`
   has to run first. That command refreshes metadata only and reports success either way.
