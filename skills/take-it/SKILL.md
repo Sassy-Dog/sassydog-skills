@@ -29,8 +29,8 @@ shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,
-`review_site`, and the optional `board`, `migrations`, `codegen`, `claim_label`, and `stacked_prs`
-blocks. Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
+`review_site`, and the optional `board`, `migrations`, `codegen`, `claim_label`, `execution_site`
+and `stacked_prs` blocks. Contract: `sassy-dog:setup-config` → `references/config-contract.md`.
 
 `stack_summary` (the repo's tech stack, always present) and `stacked_prs` (stacked pull requests,
 usually absent) are unrelated despite the shared word.
@@ -132,6 +132,53 @@ before calling it a stub**, since scope often lives in a follow-up comment.
 
 For survivors capture title, body, and labels. Map label → conventional-commit prefix: `bug`→`fix`,
 `enhancement`→`feat`, `documentation`→`docs`, else `chore`.
+
+### Site — refuse BEFORE the claim, never after it
+
+`execution_site` in config names the machine this checkout answers to; a `site:<name>` label on the
+issue names the machine the work needs. Where both exist and they disagree, **refuse the issue
+here** — announce `#N requires site <x>`, listing all of `sites` when the issue carries more than
+one — and go no further with it. §4 must not run for that issue: a claim writes an assignee and an
+`in-progress` label, which takes the issue off the queue every OTHER checkout reads while leaving
+it with the one machine that cannot do the work. Discovering the mismatch afterwards costs a spent
+worktree agent and an issue parked under a comment naming the wrong cause
+([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)); refusing before the claim costs
+one line of output.
+
+**Resolve `sites` by RUNNING the resolver, never from the issue body and never by paraphrasing the
+rules here.** `sassy-dog:github-issues`' `queue-snapshot.sh` owns them, and a paraphrase forks
+them — one written in this file dropped the `strip()` and answered `" vdi"` where the script
+answers `"vdi"`, for a label its own header calls legal. Feed it the labels the `gh issue view`
+above already returned:
+
+```bash
+gh issue view <N> --repo "<slug>" --json labels --jq '[.labels[].name]' |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+```
+
+Where a `queue-snapshot.sh` bucket read already covers the issue — `dispatch-ready` §5 dispatches
+through these mechanics, and its own Site filter has run first — reuse that `sites` instead. **Do
+not make the bucket read the only source here**, the way `dispatch-ready` §4 can: the buckets are
+label-scoped (`ready`, `in-progress`, `blocked`), §3 above already skips the latter two, and
+`take #N` on an issue nobody promoted to Ready is the ordinary invocation of this skill — so a
+bucket-only read would leave the commonest path through take-it unfiltered, which is the hole this
+step exists to close.
+
+**The match is `not sites or execution_site.lower() in sites`, and it folds case on BOTH sides.**
+The label's value arrives already folded, so folding the configured one is this skill's half:
+compared raw, a repo configured `execution_site: VDI` refuses the VDI checkout its own work. Three
+consequences, because a filter is only as good as what it lets through:
+
+- **`sites` empty → proceed exactly as today.** No `site:` label is the ordinary case, and a step
+  that holds those issues too is not a filter, it is a stopped queue.
+- **`sites` containing this checkout's site → proceed, however many members it carries.** Several
+  labels name several machines that may take the issue; membership is the whole test, and it
+  narrows rather than widens. Refusing a multi-member declaration outright is the tempting reading
+  and it is wrong — it holds work from a checkout the issue explicitly names.
+- **No `execution_site` configured → this step DOES NOT RUN and every named issue proceeds.**
+  Fail-open, deliberately: an absent key means this repo has not adopted sites. It is **not** the
+  same question as an issue with no label — an unnamed checkout ignores every declaration, a
+  declaration-free issue is taken by every checkout — and neither is evidence for the other.
 
 ## 4. Claim each issue
 

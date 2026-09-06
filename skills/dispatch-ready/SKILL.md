@@ -36,7 +36,7 @@ shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `max_in_flight` and `review_site`, plus the optional `board`, `migrations`,
-`codegen`, `merge_queue`, and `stacked_prs` keys. Contract: `sassy-dog:setup-config` →
+`codegen`, `merge_queue`, `execution_site`, and `stacked_prs` keys. Contract: `sassy-dog:setup-config` →
 `references/config-contract.md`.
 
 **`review_site:` decides WHERE this loop's review gate runs** — `agent`, each dispatched sub-agent
@@ -90,7 +90,8 @@ failing the other way fails open into the bug the exclusion exists to prevent.
 
 **Without a board** — live issue state is the source of truth. Snapshot the queue via
 `sassy-dog:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]`,
-and `blocked[]` with the `touches:` and `Depends on #N` body contracts already parsed. In-flight is
+and `blocked[]` with all three body contracts — `touches:`, `Depends on #N` and `stack:` — already
+parsed, and each issue's `site:<name>` labels already resolved into a `sites` list. In-flight is
 `in_flight[]` entries with `mine: true`.
 
 Either way, in-flight counts whether or not a PR exists yet: a sub-agent mid-implementation has
@@ -258,8 +259,72 @@ Filter, in order:
 | --- | --- |
 | Claimed | Skip if assignee set, or status ≠ Ready / `in-progress` label present — another session got it |
 | Blocked | Skip the `blocked` label |
+| Site | Skip if the issue's `sites` is non-empty and does not contain this checkout's `execution_site` — hold unless `not sites or execution_site.lower() in sites` (below). Does not run at all when no `execution_site` is configured. |
 | Dependencies | Skip while any literal `Depends on #N` references an issue that is not CLOSED — re-eligible automatically once the dep merges. **Exempt: members of a stack this tick is dispatching** (below). |
 | Collision | Skip if the issue's `touches:` set intersects the **effective file set** of anything §2 resolved a PR for — in-flight issues **and blocked issues with an open PR** — same repo-relative path, or a glob on one side matching a path on the other. The effective set is the in-flight issue's open PR's *actual changed files* where it has a PR, and its declared `touches:` where it does not (next section). Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
+
+### Site — the array read, and an unnamed checkout is fail-open
+
+Some work runs only from one machine — the host holding a vendor's multi-GB images, the sibling
+checkout, the network reach — and a wrong dispatch is not recoverable the way a mis-groom is: this
+loop claims the issue, spends a worktree agent that cannot reach those artifacts, records
+`attempt 1 failed`, and on the next tick lands it in `blocked` with a comment naming the wrong
+cause. So a site-mismatched issue is stepped around **before** it is claimed, never discovered
+after an agent has already burned an attempt on it (#341).
+
+**Read `sites` off the §2 snapshot on the boardless path.** `queue-snapshot.sh` has already
+resolved every `site:<name>` label into a sorted list. **Never re-parse the issue body for a site
+and never re-derive the list from raw labels here** — a body line can be quoted in prose, and a
+second resolver is a second answer; that script's header is the copy to trust for the resolution
+rules.
+
+**On the `board:` path, run the resolver — the board snapshot has no `sites`.** `board-snapshot.sh`
+returns `labels` per card and nothing more, so this filter would otherwise have no input on exactly
+the repos that configure a board, and a filter with no input is a **silent fail-open in a repo that
+opted in** — [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s wrong dispatch under
+prose that reads as protected. Feed the card's own labels through the emitter rather than reading
+them yourself:
+
+```bash
+jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+```
+
+One resolver, two callers, one answer. **This filter runs on both paths** — a rule written for one
+is invisible on the other, and the half it omits is the half that goes dark.
+
+**The match is `not sites or execution_site.lower() in sites`, and it folds case on BOTH sides.**
+`queue-snapshot.sh` folds the label's value, so folding the configured one is this skill's half:
+compared raw, a repo configured `execution_site: VDI` holds the VDI loop's own work — the filter
+refusing exactly the checkout it was written for. Write the array form, never a scalar one. A
+scalar is null both for "nothing declared" and for "several declared", so
+`site is None or site == execution_site` resolves a conflict to "any site", which is the direction
+[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug ran.
+
+- **`sites` empty → dispatch, exactly as today.** Most issues carry no `site:` label at all, and a
+  filter that also holds them is not a filter, it is a stopped queue — it satisfies "site-mismatched
+  work is held" while being useless, which is the half a check for the hold alone cannot see.
+- **`sites` containing this checkout's site → dispatch, however many members it carries.** Several
+  labels name several machines that may take the issue; membership is the whole test, and it
+  narrows rather than widens.
+- **No `execution_site` configured → the filter DOES NOT RUN and everything dispatches.**
+  Fail-open, deliberately: an absent key means this repo has not adopted sites, and holding every
+  site-labelled issue in a repo that never opted in breaks drains that work today. **It is not the
+  same question as an issue with no label**, and the two fail in opposite directions on purpose —
+  an unnamed checkout ignores every declaration, a declaration-free issue is taken by every
+  checkout. Neither is evidence for the other.
+
+**A site hold is not a failure.** It costs **no redispatch budget**, triggers **no demotion**, and
+writes no `dispatch-ready: attempt 1 failed` comment: the issue is dispatchable, just not from
+here, and the machine that can take it is not this tick's to find. Treating it as a failure is
+precisely how the issue ends up `blocked` under a comment naming the wrong cause. Report it as
+`#N (requires site <x>)`, listing **all** of `sites` when there is more than one, so the operator
+can see which checkout to run the drain from. Nothing here needs undoing: the issue dispatches
+normally the moment the named checkout ticks. **But §7 does not know that yet** — a site hold joins
+the held set like any other, is not self-resolving, and a Ready column holding nothing else ends
+the loop at DRAIN STALLED two ticks later, telling the operator to resolve a gate this checkout
+cannot. Say so when it happens; the terminal-state half is
+[#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)'s.
 
 ### Collision — an in-flight PR's real files beat the declaration
 
