@@ -145,7 +145,8 @@ R10 R11 R12 R13 R14 R15 R16
 R17 R18 R19 R20 R21 R22 R23
 R24 R25 R26 R27
 R28 R29
-R30 R31 R32 R33 R34 R35"
+R30 R31 R32 R33 R34 R35
+R36 R37 R38 R39 R40"
 
 # Rows no mutant is expected to redden. Empty on purpose: a row nothing can
 # redden is a row that proves nothing.
@@ -231,7 +232,7 @@ else
 fi
 
 want R02 "groom-backlog applies the label and never writes a body line" "$groom_flat" \
-    'never writes a .site:. line into the body'
+    'never writes a .site:. line into the body\.\*\*'
 
 want R03 "groom-backlog keeps the reason a label was chosen over a body line" "$groom_flat" \
     'label cannot be quoted in prose'
@@ -240,7 +241,7 @@ want R04 "groom-backlog runs the resolver instead of paraphrasing it" "$groom_fl
     'queue-snapshot.sh --sites-of' 'never by paraphrasing its rules'
 
 want R05 "groom-backlog never invents the site name" "$groom_flat" \
-    'never invent the name' 'execution_site'
+    'never invent the name' "the site name is the user's"
 
 want R06 "groom-backlog treats several site: labels as narrowing, never a defect" "$groom_flat" \
     'labels NARROW; they never widen' 'never remove one to .resolve a conflict'
@@ -276,7 +277,14 @@ want R13 "an off-site issue is marked, not hidden" "$survey_flat" \
     'renders the same tokens plus .\(not this checkout\)' \
     'never demote it for being elsewhere'
 
+# B1: both original patterns lived in the bullet's LAST sentence, so inverting
+# the narrowing claim itself — "They **widen**: a second label lifts the
+# restriction" — left all 35 rows green. The identical inversion of the twin
+# sentence in groom-backlog reddened R06, which names the claim directly: the
+# decision was shut in one of its two homes and open in the other, which is the
+# "one drifting back alone" failure section 5 exists to prevent.
 want R14 "several site: labels render as narrowing, with no third rendering" "$survey_flat" \
+    'They \*\*narrow\*\*' 'the reading to refuse is .any site.' \
     'no third rendering for a multi-member declaration' 'never reported as undispatchable'
 
 # The rule head, not only its justification: keeping the argument while
@@ -286,7 +294,7 @@ want R15 "the To ship: line names only what this checkout can take" "$survey_fla
     'hands the user a .take. that the dispatcher will refuse'
 
 want R16 "survey-work stays read-only about the label" "$survey_flat" \
-    'never act on it' 'stays read-only whatever the'
+    'never act on it' 'stays read-only whatever the .write_policy.: a missing label is not filed'
 
 # --- 3. setup-config: the interview that fills the key ------------------------
 
@@ -307,7 +315,8 @@ want R20 "§3d asks with no default where the table proposes nothing" "$intervie
     'no proposal at all' 'no default'
 
 want R21 "§3d proposes and never assumes" "$interview_flat" \
-    'never assumed' 'never write a value the user did not say'
+    'never assumed' 'never write a value the user did not say' \
+    'never offer a .none. — the confirmed-absent form'
 
 # Decision 4's own cell. A bare 'omitted' occurs four times in this file, twice
 # in §2c, so it survives rewriting the cell to write a value.
@@ -352,13 +361,26 @@ done
 # one drifting back alone; the proofs are the sentence each file actually
 # carried, plus every inflection an English rewrite reaches for.
 
-RETIRED_SEMANTICS='(match(es|ed|ing)?( by)? no checkout|no checkout match(es)?)'
+# FOURTH WIDENING. Every proof below used to put "match" ADJACENT to "no
+# checkout", so the self-proof above could not expose the gap: a MODAL is the
+# most natural way a later editor restates a retired rule, and "no checkout
+# WILL match" / "no checkout CAN match" both shipped green. So did the
+# quantifier forms — "matches none of the checkouts", "matches neither
+# checkout" — and the `site` spelling of the same claim. The window is bounded
+# to one sentence (`[^.]`) so the alternation cannot reach across a full stop
+# into unrelated prose.
+RETIRED_SEMANTICS='(match(es|ed|ing)?( by)? no (checkout|site)|no (checkout|site)[^.]{0,40}match|match(es)? (none of the checkout|neither checkout))'
 
 reject R28 "groom-backlog does not resurrect the match-no-checkout reading" \
     "$groom_flat" \
     "$RETIRED_SEMANTICS" \
     'Several are a **conflict that matches no checkout**, not "any site"' \
     'several labels match no checkout' \
+    'no checkout will match a two-site declaration' \
+    'no checkout can match them' \
+    'it matches none of the checkouts' \
+    'it matches neither checkout' \
+    'no site matches this declaration' \
     'a two-site issue is matched by no checkout' \
     'matching no checkout, it is parked' \
     'no checkout matches a two-site declaration'
@@ -368,6 +390,11 @@ reject R29 "survey-work does not resurrect the match-no-checkout reading" \
     "$RETIRED_SEMANTICS" \
     'renders as `site: CONFLICT (<a>, <b>)` — matches no checkout' \
     'several labels match no checkout' \
+    'no checkout will match a two-site declaration' \
+    'no checkout can match them' \
+    'it matches none of the checkouts' \
+    'it matches neither checkout' \
+    'no site matches this declaration' \
     'a two-site issue is matched by no checkout' \
     'matching no checkout, it is undispatchable' \
     'no checkout matches a two-site declaration'
@@ -398,14 +425,47 @@ reject R32 "migrate-mode.md no longer claims a decline cannot be recorded" \
 want R33 "setup-config's guardrail names §3d and its three modes" "$setup_flat" \
     'interview §3d' 'create, migrate and adopt modes only'
 
+# The adopt-mode step added by this change QUOTES this sentence, so the bare
+# phrase now occurs twice in the file and inverting the rule left the row green
+# — measured, not guessed. Anchored through the clause only the rule carries.
 want R34 "update-mode refuses to ask on a refresh" "$update_flat" \
-    'do not ask it on a refresh'
+    'do not ask it on a refresh\*\* unless the user'
 
 # The ASK, not the mention. Naming §3d while telling the mode NOT to run it
 # leaves every migrated repo with no offer ever — and that offer is the only
 # mechanism recording a decline.
 want R35 "migrate-mode asks §3d as its one offer" "$migrate_flat" \
     'put \*\*interview §3d\*\* to the user here' 'the one offer this repo gets'
+
+# --- 6b. decisions that had no row at all -------------------------------------
+#
+# Each of these was verified as leaving every other row green when inverted. The
+# fail-open is the safety property of the whole feature on every repo configured
+# before #340, and its failure is INVISIBLE: a plate that silently drops every
+# site-labelled issue looks like an empty backlog.
+
+want R36 "a member declaration renders as bare tokens, not a warning" "$survey_flat" \
+    'renders as bare .{0,6}site:<name>.{0,6} tokens' 'context, not a warning'
+
+want R37 "an unnamed checkout fails OPEN on the plate" "$survey_flat" \
+    'every declared site renders as a bare token and nothing is marked as elsewhere' \
+    'the same fail-open the dispatchers take'
+
+want R38 "grooming labels only what genuinely needs it" "$groom_flat" \
+    'No label is the right answer for almost every issue' 'strictly a loss' \
+    'Never label defensively'
+
+# The folded spelling is what #341 exists for, and these two files are NOT
+# subjects of test-site-filter.sh's veto — correct today, pinned by nothing.
+for pair in "groom-backlog:$groom_flat" "survey-work:$survey_flat"; do
+    name="${pair%%:*}"; body="${pair#*:}"
+    case "$name" in
+        groom-backlog) folded_row=R39 ;;
+        *)             folded_row=R40 ;;
+    esac
+    want "$folded_row" "$name writes the folded membership test" "$body" \
+        'not sites or execution_site\.lower\(\) in sites'
+done
 
 # --- row hygiene --------------------------------------------------------------
 
@@ -427,7 +487,18 @@ fi
 
 echo "7. mutation proofs"
 
+# FAIL CLOSED ON A BAD SCRATCH DIR. `mktemp -d` failing leaves `$WORK` empty
+# under `set -uo pipefail` (no `-e`), which makes `$MDIR` the absolute `/m` —
+# and `reset_mutant` then runs `rm -rf "/m"` plus `mkdir -p`/`cp` FORTY-SIX
+# times while the trap's `rm -rf ""` cleans nothing. This gate both writes and
+# deletes under `$WORK` in a loop, so it needs the guard more than the three
+# siblings that carry it verbatim (test-queue-snapshot-site.sh,
+# test-site-filter.sh, test-file-or-link-issue.sh).
 WORK="$(mktemp -d)"
+if [ -z "$WORK" ] || [ ! -d "$WORK" ] || [ "$WORK" = "/" ]; then
+    echo "mktemp -d did not produce a usable scratch directory (got '${WORK:-}'); refusing to run" >&2
+    exit 1
+fi
 trap 'rm -rf "$WORK"' EXIT
 MDIR="$WORK/m"
 FLIPPED="$WORK/flipped.txt"
@@ -733,6 +804,60 @@ this mode: it is the one offer this repo gets' \
     'So do **not** put interview §3d to the user here; leave the key absent'
 mutate "M42 migrate-mode stops asking while still naming §3d" R35
 
+# B1's two proofs: the narrowing claim inverted, trailing sentence untouched.
+reset_mutant
+edit "$REL_SURVEY" 'They **narrow**: each' 'They **widen**: a second label lifts the restriction, so each'
+mutate "M43 the plate's narrowing claim is inverted, trailing sentence untouched" R14
+
+reset_mutant
+edit "$REL_SURVEY" 'the reading to refuse is "any site"' 'the reading to prefer is "any site"'
+mutate "M44 the plate stops refusing the any-site reading" R14
+
+# 6b's rows
+reset_mutant
+edit "$REL_SURVEY" 'It is context, not a warning: the work is takeable here.' \
+    'Render it as a loud **(BLOCKED)** warning.'
+mutate "M45 a member declaration is rendered as a warning" R36
+
+reset_mutant
+edit "$REL_SURVEY" 'every declared site
+renders as a bare token and nothing is marked as elsewhere' 'every site-labelled issue
+is dropped from the plate'
+mutate "M46 an unnamed checkout fails CLOSED on the plate" R37
+
+reset_mutant
+edit "$REL_GROOM" '**No label is the right answer for almost every issue.**' \
+    '**Label everything to be safe.**'
+mutate "M47 grooming starts labelling defensively" R38
+
+reset_mutant
+edit_all "$REL_GROOM" 'not sites or execution_site.lower() in sites' \
+    'not sites or execution_site in sites'
+mutate "M48 groom-backlog drops the config-side fold" R39
+
+reset_mutant
+edit_all "$REL_SURVEY" 'not sites or execution_site.lower() in sites' \
+    'not sites or execution_site in sites'
+mutate "M49 survey-work drops the config-side fold" R40
+
+# N4's qualification mutants. These ADD a clause around a needle that survives,
+# rather than deleting or inverting one — the class the other 46 cannot reach.
+reset_mutant
+edit "$REL_GROOM" 'it never writes a `site:` line into the body.**' \
+    'it never writes a `site:` line into the body unless the label cannot be created.**'
+mutate "M50 QUALIFIED: the body-line ban grows an exception" R02
+
+reset_mutant
+edit "$REL_SURVEY" 'stays read-only whatever the `write_policy`: a missing label is
+not filed' 'stays read-only whatever the `write_policy` unless it is `gated`, in which case a missing label is
+filed'
+mutate "M51 QUALIFIED: the plate's read-only rule grows a write path" R16
+
+reset_mutant
+edit "$REL_INTERVIEW" 'never offer a `none` — the confirmed-absent form' \
+    'never offer a `none` unless the user asks for one — the confirmed-absent form'
+mutate "M52 QUALIFIED: the none refusal grows an exception" R21
+
 rm -rf "$MDIR"
 
 # --- 8. the derived matrix ----------------------------------------------------
@@ -749,10 +874,10 @@ else
     bad "rows no mutant reddens: '${unpinned% }', declared: '${declared_unpinned% }' — a row nothing can redden proves nothing"
 fi
 
-if [ "$mutants_run" = "42" ]; then
-    ok "every declared mutant ran (42 of 42)"
+if [ "$mutants_run" = "52" ]; then
+    ok "every declared mutant ran (52 of 52)"
 else
-    bad "$mutants_run of 42 mutants ran — the matrix above is measured against a partial set"
+    bad "$mutants_run of 52 mutants ran — the matrix above is measured against a partial set"
 fi
 
 if [ "$fails" -ne 0 ]; then

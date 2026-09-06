@@ -5,8 +5,9 @@ description: >
   sub-agent, then promote them to Ready. The counterpart that feeds dispatch-ready. Use when the user
   says "groom it", "groom the backlog", "refine the backlog", "scope these issues", "make these
   dispatchable", "get the backlog ready", "fill it", or asks to move issues to Ready. Writes:
-  issue-body edits, Ready promotion, and epic-split sub-issues only — never deletes, never closes,
-  never dispatches work. Reads the current repo's settings from `.claude/sassy-dog/groom-backlog.md`.
+  issue-body edits, Ready promotion, epic-split sub-issues, and rubric #9's `site:<name>` label —
+  which it creates in the repo when that label does not yet exist — only; never deletes, never
+  closes, never dispatches work. Reads the current repo's settings from `.claude/sassy-dog/groom-backlog.md`.
 ---
 
 # Groom-Backlog
@@ -50,8 +51,13 @@ Otherwise run boardless (the `ready`-label flow below) and skip the repo-gotchas
 step in §4 — **do not invent gotchas** by reading the repo's CLAUDE.md or CI config; a wrong gotcha
 in an issue body misleads a cold sub-agent that has no way to check it. Say the step was skipped.
 
-Grooming is otherwise safe to run un-configured: its writes are issue-body edits and label changes,
-both reversible. Do not assume a board exists — a board with no config block is OFF.
+Grooming is otherwise safe to run un-configured: its writes are issue-body edits and **issue-scoped**
+label changes, both reversible by re-editing the issue. **One write is not issue-scoped.** Rubric #9
+creates a `site:<name>` label in the *repository* when the repo lacks it, and the only reversal for
+that is `gh label delete` — the operation this repo puts behind a structural gate
+(`scripts/align-labels.sh`'s `migrate_delete_gate()`) precisely because it strips the label from
+every issue carrying it, unrecoverably. So create one deliberately, on an issue that needs it, and
+never as tidying. Do not assume a board exists — a board with no config block is OFF.
 
 ## 2. Collect candidates
 
@@ -195,7 +201,8 @@ which runs no `gh` and touches no network. Re-fetching would cost one API call p
 read a tree that has moved since the pull:
 
 ```bash
-# boardless: the `gh issue list --json ...,labels` result from §2
+# boardless: the `gh issue list --json ...,labels` result from §2.
+# One candidate shown; run it per candidate — the pull holds up to 200.
 jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$CANDIDATES" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 
@@ -203,6 +210,13 @@ jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$CANDIDATES" |
 jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
+
+**A resolver that could not run is UNKNOWN, never "no label".** `--sites-of` exits **10** when
+`python3` is missing and prints nothing on stdout — byte-identical to the `[]` a genuinely
+unlabelled issue produces. **Read the exit status, not the output.** On anything but 0, rubric #9
+was not evaluated for that candidate: say so, and do not promote it on the strength of a check that
+did not happen. Treating the silence as "no label" is the false-clean this whole rubric exists to
+prevent, and it fails in the direction that promotes site-held work to Ready.
 
 Grooming's candidates are **not** a `queue-snapshot.sh` bucket — the buckets are label-scoped
 (`ready`, `in-progress`, `blocked`) and §2's candidates are precisely the issues that carry none of
@@ -212,7 +226,7 @@ them — so this emitter is the route, exactly as it is for `take-it` on an unpr
 one only when the body names something a second checkout genuinely cannot reach — a vendor SDK
 installed on one host, a sibling checkout, network reach behind a VPN, a hardware device. Ordinary
 repo work is not site-held, and a label applied "to be safe" is strictly a loss: it removes the
-issue from every other checkout's queue and nothing reports that it did.
+issue from every other checkout's queue and nothing reports that it did. **Never label defensively.**
 
 **Never invent the name.** The site name is the user's — `vdi` carries meaning no platform string
 does. Propose this checkout's configured `execution_site` when the tools the body names are the ones

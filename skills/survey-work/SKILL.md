@@ -178,7 +178,8 @@ pull already returned** — both forms above carry them, and a re-fetch would co
 issue and read a tree that has moved since the pull:
 
 ```bash
-# boardless: the `gh issue list --json ...,labels` result above
+# boardless: the `gh issue list --json ...,labels` result above.
+# One issue shown; run it per issue — the pull holds up to 200.
 jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$ISSUES" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 
@@ -186,6 +187,14 @@ jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$ISSUES" |
 jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
+
+**A resolver that could not run is UNKNOWN, never "no label".** `--sites-of` exits **10** when
+`python3` is missing and prints nothing on stdout — byte-identical to the `[]` a genuinely
+unlabelled issue produces. **Read the exit status, not the output.** On anything but 0 the site
+column is dark for this run: say `skipped — site resolver unavailable` on the sources line, give it
+a blind-spot row, and render no site tokens at all rather than the unmarked lines an empty answer
+would produce. **The `To ship:` bound below is then unverified too** — say so instead of listing a
+command built from a check that did not run.
 
 **The test is `not sites or execution_site.lower() in sites`, folded on both sides** — the emitter
 folds the label's value, folding the configured one is this skill's half. Membership **narrows**:

@@ -1250,8 +1250,13 @@
 #      three retired "no interview exists yet" sentences are each banned by a
 #      pattern proved against the exact sentence it retired, and the retired
 #      match-no-checkout semantics by a pattern carrying a proof per
-#      INFLECTION — an English rewrite reaches for all of them, and three
-#      successive narrowings of that one ban each shipped green. MUTANT REACH IS
+#      INFLECTION — an English rewrite reaches for all of them, modals and
+#      quantifiers included, and four successive narrowings of that one ban each
+#      shipped green. DO NOT SMOOTH THAT HYPHENATION TO NATURAL ENGLISH: the
+#      un-hyphenated spelling is banned across test-site-filter.sh's whole-text
+#      veto, whose subject list includes THIS FILE, so writing it here turns
+#      preflight red from a different gate under a message that reads as a false
+#      accusation. The hyphen is the only thing keeping this line legal. MUTANT REACH IS
 #      DERIVED, not written down: the gate re-runs ITSELF against each mutated
 #      copy of the subjects (`EXEC_SITE_SRC` / `EXEC_SITE_CHILD`), diffs the
 #      failing-row set against a baseline proved clean first, and the rows NO

@@ -161,6 +161,12 @@ For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>
    same reason (`references/migrate-mode.md`, "Step 2b"). A quiet tree is **not** an answer, and
    `sentry:` is **not** part of this question: its `none` is written by the culprit check in
    `references/detection.md` and it keeps its blind-spot row deliberately.
+   **Step 2c — ask interview §3d for `execution_site`, once.** Adopt mode reaches create mode's
+   interview through step 2, but the nearest `execution_site` prose in *this* file is the refresh
+   rule above — "do not ask it on a refresh" — and an agent walking these numbered steps reads that
+   and stops. Adopt is a one-time transition, not a refresh: it gets the offer, and it is the only
+   one this repo ever gets, because no later refresh re-offers it. Same reason §2c is called out
+   here rather than left to implicit inheritance.
 3. Render config.
 4. **Side-by-side review per skill.** List every hand-written section with no equivalent in the
    config — repo-specific traps, war stories, special recipes. For each the user picks: fold into a
