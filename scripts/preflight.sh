@@ -806,7 +806,11 @@
 #      literal must-exists and the `surface and hold` / `ONE redispatch` vetoes,
 #      which catch a literal DELETION and nothing subtler. That asymmetry is
 #      measured and stated rather than papered over by widening the greps.
-#      Three tracked files, no gh, no network.
+#      Three tracked files — `dispatch-ready/SKILL.md`, `issue-claim.sh` and
+#      `merge-shepherd.sh` — no gh, no network. The members are enumerated
+#      beside the number because the number rotted here once: 369bbef (#297)
+#      added the third subject and left "Two" standing through two later hand
+#      edits, which is CLAUDE.md's bare-count rule collecting its own example.
 #      IT NOW PINS A THIRD TERMINAL STATE (issue #286). DRAIN DEGRADED ends a
 #      loop that is ticking into a void under a platform outage: measured, an
 #      18-tick three-hour run that reported the state accurately, did nothing,
@@ -1876,13 +1880,14 @@ fi
 # and the single stop path. It also pins §2's CONFLICTING demotion (#290) —
 # demote on sight, demote ONCE, the failed-write outcome and the §4
 # carry-forward — without which a conflicted PR holds in-flight open forever and
-# neither terminal state can fire. It pins the FOURTH terminal state too (#342):
+# no terminal state can fire. It pins the FOURTH terminal state too (#342):
 # a Ready column held entirely by §4's Site filter ends the loop at DRAIN
 # DEFERRED, naming the site and taking COMPLETE's stop path, never as a stall the
 # operator is told to resolve — with the discrimination pinned the other way as
 # well, since a held set carrying anything else is STALLED still. Bound in three
 # layers — canon, inventory, consumption — each added after a review defeated the
-# one before it. Three tracked files, no gh, no network.
+# one before it. Three tracked files — `dispatch-ready/SKILL.md`,
+# `issue-claim.sh` and `merge-shepherd.sh` — no gh, no network.
 if bash scripts/test-drain-terminal-states.sh; then
     pass "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
 else
