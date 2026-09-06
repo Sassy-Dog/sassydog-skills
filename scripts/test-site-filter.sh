@@ -84,9 +84,12 @@
 # refuses; the two behavioural rows below check that `--sites-of` REACHES that
 # resolver and reaches nothing else, never what the resolver decides. It also
 # asserts nothing about §7's terminal states beyond the pointer §4 owes an
-# operator: a drain whose only remaining Ready items are site holds still ends
-# STALLED after this, which is a separate child of #322, and
-# `scripts/test-drain-terminal-states.sh` owns that section.
+# operator: a drain whose only remaining Ready items are site holds now ends at
+# DRAIN DEFERRED rather than STALLED (#342), and
+# `scripts/test-drain-terminal-states.sh` owns that state, its discrimination
+# from STALLED and its stop path. R30 reads §4's POINTER at it and nothing more,
+# so the two gates meet at that one sentence and neither transcribes the other's
+# subject.
 #
 # NEEDLES ARE PINNED THROUGH THEIR TERMINATOR, NOT AS BARE SUBSTRINGS. A
 # must-exist row matching `costs no redispatch budget` is satisfied by
@@ -377,8 +380,8 @@ fi
 row_has R25 "$sec4" 'This filter runs on both paths' \
     "§4 says the filter runs on BOTH paths, not just the one it was written for"
 row_has R30 "$sec4" \
-    'ends the loop at DRAIN STALLED two ticks later' \
-    "§4 tells the operator where a site hold ends, since §7 does not know yet"
+    'ends the loop at DRAIN DEFERRED, naming the site rather than telling the operator to resolve a gate this checkout cannot' \
+    "§4 tells the operator where a site hold ends, and §7 now ends it at DRAIN DEFERRED"
 
 # --- 2. take-it refuses BEFORE the claim --------------------------------------
 note "2. take-it"
@@ -735,12 +738,25 @@ mutate "M25: the filter stops claiming both paths" R25
 
 start_mutant
 edit "$REL_DISPATCH" \
-    'a Ready column holding nothing else ends
-the loop at DRAIN STALLED two ticks later, telling the operator to resolve a gate this checkout
-cannot.' \
-    'a Ready column holding nothing else
-resolves on its own.'
+    'so a Ready column
+holding nothing else ends the loop at DRAIN DEFERRED, naming the site rather than telling the
+operator to resolve a gate this checkout cannot' \
+    'so a Ready column
+holding nothing else resolves on its own'
 mutate "M30: §4 stops telling the operator where a site hold ends" R30
+
+# THE QUALIFICATION MUTANT beside the deletion one, the shape this gate's header
+# names: a needle that stops mid-sentence is satisfied by a clause that inverts
+# the rule after it. R30's needle runs to its terminator, so appending "unless"
+# to the pointer has to redden it.
+start_mutant
+edit "$REL_DISPATCH" \
+    'ends the loop at DRAIN DEFERRED, naming the site rather than telling the
+operator to resolve a gate this checkout cannot' \
+    'ends the loop at DRAIN DEFERRED, naming the site unless the drain has been
+running long enough to call it a stall, in which case it tells the operator to resolve a gate this
+checkout cannot'
+mutate "M30q: the pointer is QUALIFIED away while every phrase survives" R30
 
 # --- take-it ------------------------------------------------------------------
 # The MOVE, in two edits. A deletion would redden every take-it row at once and

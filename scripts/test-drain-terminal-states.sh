@@ -93,6 +93,56 @@
 # tick, and both rows answer held — so COMPLETE stays vetoed and the held set
 # stays non-empty across the write, which is the one-set identity below.
 #
+# A FOURTH TERMINAL STATE, AND IT IS NOT A STALLED VARIANT (issue #342, epic
+# #322). #341 gave §4 a Site filter that steps around an issue whose `site:`
+# labels name another machine. That hold reaches §7 like any other, and §7 had
+# nowhere to put it: in-flight zero, Ready non-empty and every remaining Ready
+# item site-held satisfies STALLED's every conjunct, so the loop ended by telling
+# the operator to resolve the gate and restart the drain on a checkout that never
+# could. A site hold is neither self-resolving — this checkout will never satisfy
+# it, so a confirmation clock would count forever — nor a human gate: nobody has
+# to decide anything, the work is already dispatchable, somewhere else. DRAIN
+# DEFERRED names the site and takes COMPLETE's stop path, cron self-cancel
+# included.
+#
+# THE DISCRIMINATION IS THE WHOLE OF IT, and it is where a later "these are the
+# same state" sweep does the damage. DEFERRED is STALLED plus ONE test — the held
+# set holds NOTHING but site holds — so it must be evaluated FIRST or it is
+# unreachable, and a held set carrying one dependency hold, one `blocked` label
+# or one held PR is STALLED with the site holds listed among its reasons. Both
+# directions are pinned, because both are harmful: a site-only set reported as
+# STALLED sends the reader after a blocker that does not exist, and a genuine
+# gate reported as a deferral hides one that does. DEGRADED cannot compete for
+# the state at all — it requires in-flight non-zero and this one requires
+# in-flight zero — so #286's "evaluated first" rule is untouched and needed no
+# widening.
+#
+# NO CONFIRMATION TICK, DELIBERATELY, and that is the asymmetry a later "make the
+# terminal states symmetric" sweep will flatten. STALLED and DEGRADED confirm
+# across two ticks because what they read can change underneath them; a site
+# declaration cannot change what this checkout IS, so a second tick re-reads the
+# same labels against the same `execution_site` and reaches the same answer.
+# COMPLETE takes no confirmation tick for the same reason, which is why DEFERRED
+# is modelled on it rather than on the state it sits beside.
+#
+# THE ENUMERATIONS THAT HAD TO MOVE WITH IT, since CLAUDE.md's rule — a count
+# stated in prose is safe only when its members are enumerated beside it, or when
+# a gate re-derives it — is what makes a fourth state cheap to add and expensive
+# to add badly. §7's heading; its "exactly N states" sentence, whose number this
+# gate re-derives from the `### DRAIN ` headings beside it; the stop path's own
+# heading, which said "both terminal states" while already serving three; the
+# cron self-cancel's per-state report lines; the safety rails' per-state clause;
+# and §4's pointer at the state a site hold ends in — that last one belongs to
+# `scripts/test-site-filter.sh` (row R30) and is deliberately NOT duplicated
+# here, the two gates meeting at that sentence and neither transcribing it.
+#
+# TWO EXISTING ASSERTIONS WERE RESCOPED RATHER THAN LEFT ALONE. #286's
+# "COMPLETE's conjuncts are unchanged" and "STALLED's conjuncts are unchanged"
+# both read `sec7_flat`, and DEFERRED's own first conjunct spells STALLED's
+# opening words verbatim — so after this change the second could be satisfied by
+# the NEW section while STALLED's own opening said anything at all. They now read
+# `complete_flat` and `opening_flat`, the windows they were always about.
+#
 # HOW THIS GATE IS BOUND, AND WHY IT IS BOUND IN THREE LAYERS. Its first edition
 # asserted presence only, and a review measured meaning-inverting rewrites
 # passing it at exit 0 — writing the bug back as `Ready **non-empty**`, which a
@@ -266,7 +316,7 @@
 # NO INVENTORY NUMBER IS TRANSCRIBED. The assertion count is PRINTED by the run;
 # the section inventory is enumerated beside its own counts, which is the form
 # CLAUDE.md sanctions. Each mutation battery lives in the PR that added the
-# section it proves (issues #282 and #290).
+# section it proves (issues #282, #290 and #342).
 #
 # Three tracked files. No gh, no network, no repo mutation.
 #
@@ -298,9 +348,9 @@ bad() { asserts=$((asserts + 1)); echo "  FAIL  $1" >&2; fails=$((fails + 1)); }
 # transcribed. A section that never runs, or that runs fewer assertions than it
 # declares, FAILS — which is what a bare numeric floor could not do (measured
 # twice: a whole section deleted, and 14 assertions deleted from the largest).
-SECTIONS=(windows:43 canon7:27 conjunct:7 enumeration:13 conflicting:17
+SECTIONS=(windows:45 canon7:27 conjunct:7 enumeration:13 conflicting:17
           discriminator:17 nonempty:3 carveouts:2 complete:5 record:3
-          stoppath:8 premise:7 degraded:21)
+          stoppath:8 premise:7 degraded:21 deferred:22)
 # The registry block's own minimum is deliberately NOT a member of SECTIONS.
 # Measured: while it was one, deleting the block AND its entry shrank the floor
 # by exactly what the deletion removed, so two edits retired layer 3 and every
@@ -584,8 +634,8 @@ redispatch_bullet	- **Failed or red PRs** → surface in the tick report with th
 conflicting_bullet	- **`CONFLICTING` PRs** → never auto-rebase; **demote on sight.** Surface it in the tick report naming the PR *and the conflict*: §6's `holds:` line classifies by §7's table, which answers row 1 (`blocked`) once this bullet has written, so the word `CONFLICTING` reaches the operator only if this bullet puts it there. Demote the issue in the same tick — via the board plus a `blocked` label, or `issue-claim.sh block N --comment "dispatch-ready: PR #<pr> is CONFLICTING — needs a rebase this loop may not perform, then clear the blocked label to resume the drain"`, that subcommand requiring a comment — so a human resolves the conflict. Name the label in it: `promote` never strips `blocked`, so a rebase alone no longer returns the issue to the queue. **Demote ONCE**: skip an issue that already carries `blocked` and write nothing, leaving it to the blocked-PR bullet above. That is an idempotency predicate, not an attempt counter — it asks whether the demotion has been *written*, never how many times the PR has failed — and without it this bullet re-fires every tick against a PR that stays `CONFLICTING` until a human rebases, posting a fresh comment each time, since `issue-claim.sh` makes the label edits idempotent and the comment not. The Guardrails' **idempotent ticks** rule forbids exactly that. **If the demotion write fails**, say so in the tick report and treat the issue as still in-flight this tick: a tick that believes it demoted and did not is #282 again wearing this fix. **Read that from live state, never from the exit code alone** — `issue-claim.sh` reports `ok` and exits 0 when the label edit lands and only the *comment* fails, saying so on stderr, so a demotion can be real while the reason nobody posted is not. `Demote ONCE` then never retries it, which is the trade: re-comment nothing, and report the missing reason instead. **No redispatch, and no attempt counter** — this is deliberately NOT the shape the failed-check bullet above has, and aligning the two is the tidy to refuse: a sub-agent sent to rebase the branch IS this loop advancing that PR, which §7's discriminator table forbids for `CONFLICTING` in as many words, so that option costs a §7 row as well and re-opens a decision already settled there. `take-it` keeps the bare surface-and-hold form for the mirror-image reason and must not be aligned to this one: it is a bounded batch with no §7 and no forever-tick, so a hold there ends when the batch does. **A bare surface-and-hold is what this replaces, and it was the defect**: nothing cleared the claim, so the issue stayed `in-progress`, in-flight never reached zero, and with COMPLETE vetoed by the open PR and STALLED forbidden by in-flight, the loop ticked forever — #282's class one bullet over, and not covered by it (#290). No other route reaches a demotion either: a conflicted PR stops CI firing at all, `sassy-dog:pr-shepherd` recording that `no checks reported` reads identically to `CI hasn't started`, so the failed-check bullet's counter never starts. **A stacked upper layer demotes like any other**, and that cost is accepted rather than carved out: a layer goes `CONFLICTING` the moment the layer below squash-merges, which `sassy-dog:pr-shepherd`'s stacked-PR reference calls the expected shape rather than a fault — but this loop may not rebase it either, so it is a human gate like the rest. Say which it is in the comment. **The demotion changes which §7 row matches, never whether the PR is enumerated** — the first bullet above already resolved it from the in-flight branch this tick, and both rows answer held, `CONFLICTING` (row 2) before and `blocked` (row 1) after — so COMPLETE stays vetoed and the held set stays non-empty across the write. **Carry that PR into §4's collision sources and the migration slot for this tick**, from the issue → open-PR mapping the first bullet already keeps: §4 draws its blocked half from the blocked-PR bullet's enumeration, taken *before* this write, so a PR demoted here sits in neither half until the next tick — while §3 frees its slot in this one, which is exactly the state where §4 would dispatch a Ready issue into a still-open human-gated PR. From the next tick on the blocked-PR bullet enumerates it and the hand-off bullet's own `blocked` predicate withholds it from `sassy-dog:pr-shepherd`; on the demotion tick that predicate reads state not yet written, and what withholds it instead is `merge-shepherd.sh` refusing a `CONFLICTING` PR ahead of every other check. **Never park it back in Ready**: Ready must stay synonymous with dispatchable.
 collision_row	| Collision | Skip if the issue's `touches:` set intersects the **effective file set** of anything §2 resolved a PR for — in-flight issues **and blocked issues with an open PR** — same repo-relative path, or a glob on one side matching a path on the other. The effective set is the in-flight issue's open PR's *actual changed files* where it has a PR, and its declared `touches:` where it does not (next section). Defer to a later tick; re-eligible once the overlapping issue merges. An issue with **no** `touches:` line intersects nothing, but is flagged `unannotated` in the tick report so the coupling gap is visible rather than silently risky. **Exempt: overlap between members of the same stack** (below). |
 collision_blocked	**A blocked issue's open PR counts here even though it is not in-flight.** §3 excludes it from in-flight so the terminal states can be reached; that exclusion must not also remove its files from this filter, or the loop dispatches a Ready issue straight into a still-open human-gated PR — the class §4's own 2026-08-24 incident records. §2 resolved that PR one bullet above; reuse it. The same applies to the migration slot below: a blocked migration PR still holds it.
-b001	## 7. Terminal states — drain complete, drain stalled, drain degraded
-b002	A drain loop ends itself in exactly three states. All must be **confirmed from live GitHub state read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave the loop alone, write no stall or degraded record, and let the next tick re-check.
+b001	## 7. Terminal states — drain complete, drain deferred, drain stalled, drain degraded
+b002	A drain loop ends itself in exactly four states. All must be **confirmed from live GitHub state read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave the loop alone, write no stall or degraded record, and let the next tick re-check.
 b003	### DRAIN DEGRADED
 b004	**Evaluated BEFORE COMPLETE and STALLED, and that order is the rule rather than a presentation choice.** §7 already refuses to act on a tick whose live state could not be verified — *the tick proves nothing*. A degraded platform is that same condition arriving **without an error**: the reads succeed, return incomplete data, and COMPLETE and STALLED consume them as fact. Measured 2026-08-26 — PR #283's required `ci` never fired during an outage, two consecutive ticks reported the state accurately and did nothing, and the coordinator then proposed closing and reopening the PR, which during an outage could leave it worse than doing nothing. Evaluating this state after the other two lets a degraded read produce a confident terminal verdict first.
 b005	This state **consumes** `pr-shepherd`'s probe and never re-derives platform health itself:
@@ -600,50 +650,60 @@ b013	Any tick that dispatches, merges, or reads a `healthy` verdict deletes a le
 b014	### DRAIN COMPLETE
 b015	Ready empty AND in-flight zero AND nothing still claimed AND **no open PR this loop tracks** → announce loudly and take the stop path below immediately — an empty queue needs no confirmation tick. **"Nothing still claimed" means no in-flight issue per §3 and no active FOREIGN claim** — an item §4's Claimed filter skipped because another session holds it. It is not implied by in-flight zero, which counts `mine: true` only. It deliberately does NOT mean "no assignee anywhere": `issue-claim.sh block` leaves the assignee on purpose and only `promote` clears it, so a blocked issue's leftover assignee is residue rather than a claim — reading it as one would make COMPLETE unreachable on any repo that has ever blocked an issue, which is this bug wearing the other face:
 b016	**COMPLETE is unchanged, veto included** — the fourth conjunct above IS the veto, stated where the instruction is rather than three paragraphs below it. An open PR this loop tracks still means the drain is not complete, in-flight until actually MERGED per §3, exactly as the safety rails restate it. A veto a reader reaches only after "announce loudly and take the stop path immediately" is the corrective §2 warns about: one that never runs. In #282's own state both of the old conjuncts were true, so the rule as written told the loop to self-cancel. What #282 changed is only where that veto leads. A PR this loop may not advance used to veto COMPLETE and reach no other state either; it now joins STALLED's held set, and the veto ranges over exactly the set that held set is drawn from.
-b017	### DRAIN STALLED
-b018	In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance**, over a **non-empty** held set — every Ready item held by a §4 filter, and every open PR held by the discriminator below. All four conjuncts are stated here rather than corrected further down, for the reason COMPLETE's condition now states all of its own. Nothing this loop controls can change GitHub state before the next tick: no PRs it may merge, no agents working, and dependency holds only resolve when a dep closes — with nothing in flight, only external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone must never keep it alive.
-b019	**The third conjunct is "nothing to advance", and it replaced "Ready non-empty"** — that difference is the whole of #282. Ready empty, in-flight zero and an open unmerged PR was covered by NEITHER terminal state: COMPLETE is vetoed by the open PR, and STALLED could not fire on an empty queue. The loop ticked forever, reporting the state accurately and doing nothing (observed 2026-08-26 on #273 / PR #279; cancelled by hand). The action that creates the state is the action that hides it — `issue-claim.sh block` strips `ready` and `in-progress` together, so recording "a human must decide this" is precisely what removes the issue from the one set the old conjunct consulted.
-b020	**Deleting that conjunct outright would have been the wrong fix**, and re-deriving it that way is the tempting simplification here: an open PR is not automatically a human gate. One whose checks are still running or red can advance on its own, and firing STALLED there cancels a loop that was about to make progress.
-b021	**The held set must be non-empty.** Nothing held, nothing in flight and no open PR is COMPLETE, which fires first and needs no confirmation tick. "Nothing to advance" satisfied vacuously — by a queue that simply finished — must never announce STALLED.
-b022	#### The discriminator — may this loop advance it?
-b023	**"Every open PR this tick sees" is the union §2 resolves** — open PRs on in-flight branches, and open PRs on blocked issues. Both halves are load-bearing: a PR nobody enumerated cannot be held, and the second half is precisely the one #282's own state consists of. Their state comes from `sassy-dog:pr-shepherd`'s `poll-prs.sh --once <PR>…`, which returns `mergeable`, `mergeStateStatus` and the check counts in one pass; the judgement below stays here, the way §4 keeps its intersection judgement while borrowing `gh pr view`. **Both halves of that invocation are load-bearing.** Without `--once` it is watch mode, which blocks for up to an hour — the "a tick that waits is a loop that stopped" rule two sections up. Without the explicit PR numbers `--once` falls back to whatever fifty open PRs `gh pr list` returns first — no sort is specified, so a long-lived held PR, which is exactly #282's shape, is as likely to fall outside the fifty as inside. That is both the widening the paragraph above forbids and a silently truncated read of it.
-b024	**That union is also the set COMPLETE's veto ranges over, and the identity is the invariant.** A PR that can veto COMPLETE but can never enter the held set gives Ready empty, in-flight zero and a held set that is empty — COMPLETE vetoed, STALLED forbidden, ticking forever. That is #282 exactly, one shape over, and it is what an unqualified "any open PR vetoes COMPLETE" reading produces the moment a Dependabot PR, a hand-opened PR with no issue, or another session's PR is sitting there. So the veto is scoped to this union and never to every open PR in the repo. Widen one half without the other and the forever-tick comes back; narrow one without the other and the loop self-cancels on work it is still holding.
-b025	**The blocked half is deliberately REPO-WIDE, and that is a decision rather than an oversight.** `queue-snapshot.sh` returns blocked issues as bare numbers — open, `blocked`-labelled, no assignee and no labels — so a tick genuinely cannot tell an issue this loop demoted from one a human blocked by hand, and `issue-claim.sh block` leaves the assignee rather than clearing it. Rather than filter on a signal neither section can read, take them all: over-including ends the loop LOUDLY, naming the PR and the gate holding it, and a human who disagrees restarts the drain. Under-including is the failure this whole section exists to close. The exclusion that matters is untouched — a Dependabot PR, or a hand-opened PR whose issue is neither in-flight nor blocked, is in neither half of the union and vetoes nothing.
-b026	Ask it of every one of them, take the **first matching row**, and carry the answer per PR into the held set:
-b027	| Open PR this tick | May this loop advance it? | Effect | | --- | --- | --- | | Its issue carries `blocked` | **No** — §2 already routed it to a human | held: joins the held set | | `CONFLICTING` | **No** — §2 never auto-rebases; a human resolves the conflict | held: joins the held set | | Held by a §2 review outcome — a Blocking finding, a `NO REPORT`, or a held `SKIPPED` — with its ONE §2 redispatch spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set | | Checks still running, and not `CONFLICTING` | **Yes** — a later tick merges it once it goes green | keeps the loop alive | | Checks red, its issue not `blocked`, and its ONE §2 redispatch unspent | **Yes** — that redispatch is still available | keeps the loop alive | | Anything else this loop is not permitted to merge this tick | **No** — held is the default | held: joins the held set |
-b028	**Rows 2 to 6 cannot fire at the moment STALLED is decided, and that is by construction rather than by accident.** STALLED's first conjunct is in-flight zero, which empties the branch half of the union — so every PR still enumerable carries `blocked`, and row 1 matches it first. The argument is exhaustive over the union, so it reaches the default row too: at that instant nothing falls through to it. This is the same shape as the self-resolving carve-out below, and it is stated for the same reason: a reader who works it out later will otherwise read the rows below row 1 as live guarantees, or delete them as dead prose. They are neither. They classify held-versus-advanceable for the two OTHER consumers of this table — §6's `holds:` line, which renders on every tick including ticks with work in flight, and the safety rails' "an open PR this loop may still advance" — and they are what stops a later widening of §2's enumeration from silently answering "alive" for a shape nobody classified. Delete them and that widening becomes a silent #282; treat them as reachable at STALLED time and the reasoning above them is wrong.
-b029	**The last row is a default, not a catch-all to delete.** §2 holds a PR for more reasons than the rows above enumerate and will not stay exhaustive, and a table that silently answers "alive" for a shape it does not know re-creates #282 one shape at a time. Held is the right default *here* because it is the answer §2 already gives: a PR this loop may not merge is a PR it cannot advance. The two defaults are not mirror images: held ends the loop and names the PR wherever it fires, alive ticks forever and reports nothing. (Which of them fires at STALLED-decision time is a separate question, answered by the paragraph above — there, row 1 has already matched.)
-b030	**`CONFLICTING` needs its own row, above the checks rows, and the ordering is the point.** A conflicted PR stops CI firing at all, and `no checks reported` is indistinguishable from `CI hasn't started` — `sassy-dog:pr-shepherd` records exactly that. Without the row a conflicted PR matches "checks still running" and is answered with something that can never happen: §6's `holds:` line would report it as advancing on every tick, and the rails would read it as a PR this loop may still advance. It is NOT what lets a stalled queue confirm — at STALLED-decision time the paragraph above applies and row 1 has already matched — and saying so here would contradict it.
-b031	**The redispatch budget is the hinge on both failure rows**, so read this before "simplifying" the rows into fewer. §2 grants exactly ONE redispatch per issue, taken on a later tick; while it is unspent this loop still has an action of its own, and a state it can still act on is not a stall. Once it is spent §2 demotes to `blocked`, which is why the label is the usual way a held PR presents — and why the review-outcome row is not redundant beside it: the label is a write this loop performs, the finding is a fact it reads, and a demotion not yet written must never read as advanceable. It is also why the red-checks row asks for the budget and not for the label alone: an unspent budget is what makes a red PR advanceable, while a spent one whose demotion has not been written yet matches no row above and falls to the default. Unknown is not clear.
-b032	**Read the review outcome from the PR body**, exactly as §2 reads it — take-it's step 6 requires the sub-agent to have written the verbatim line. This loop reads no RESULT lines, and a later tick is a different session from the one that dispatched. **Read the redispatch budget from the issue, not from the PR**: §2 spends it by commenting `dispatch-ready: attempt 1 failed — <cause>` on the issue, so that comment is the record of whether it is spent, and a tick that never reads it cannot answer either failure row. No such comment means the budget is unspent.
-b033	**A gate that could not be read is not a hold**, and this is not in tension with "unknown is not clear" two paragraphs up — the two answer different questions. An unknown *state that was read* (a shape no row names) is held: the loop has no action for it. State that *could not be read at all* is not a fact about the PR, it is a failed tick, and it falls under this section's opening rule: live state was not verified, so the tick proves nothing — leave the loop alone and write no stall record.
-b034	Two carve-outs keep the state precise:
-b035	- **Self-resolving holds can never trip it — but a hold against a BLOCKED PR is not one.** A collision or migration hold against in-flight work resolves when that work merges, and requires in-flight > 0, so the in-flight = 0 conjunct excludes it by construction. Since §4 now intersects against blocked issues' open PRs too, the same filters can also hold on a PR no one may advance: that hold survives in-flight = 0, and it is a human gate like any other, so it belongs in the held set rather than keeping the loop alive. - **A foreign claim is not a human gate.** An item skipped by the Claimed filter is another session's in-flight (`mine: false`) and resolves when that session merges, no human needed. A tick whose holds include an active foreign claim is idle, not stalled — keep looping.
-b036	**Both carve-outs survive the new conjunct unchanged**, and PR rows weaken neither: a self-resolving hold still requires in-flight > 0, and another session's open PR is that session's in-flight, resolving when it merges. A foreign claim is therefore not a human gate, and the union above cannot turn one into a PR row either — a foreign in-flight issue is `mine: false` and not blocked, so neither half of the union reaches it. The safety rails carry the same rule for the tick as a whole.
-b037	**Confirm across two consecutive ticks before stopping** — a single stalled tick may be racing another session that is about to close a dependency, unblock an issue, or merge a PR. Ticks share no memory, so persist the observation next to the §5 batch manifest, in `.git/dispatch-ready-stall.json`: the held set — held issue numbers AND held PR numbers — with each one's hold root (the open `Depends on #N` it chains to, the `blocked` label, the decision gate, the Blocking finding a held PR carries).
-b038	**"Matches exactly" compares the identifiers and each one's hold ROOT, never the rendered sentence.** Two honest ticks word the same hold differently, and a comparison over free text never converges; a comparison over identifiers alone confirms a stall across two genuinely different states, since a PR whose gate changed between ticks is still the same number. A record written before this section grew PR rows carries issue numbers only: it cannot match a hold-set containing a PR, so it is discarded and rewritten, which costs one extra tick and never a false confirmation.
-b039	**The record is written from the held set, never from `ready[]`**, which is what makes it reachable with Ready empty. Before #282 it was written only inside a branch that required Ready non-empty, so in the uncovered state the two-tick clock never started and there was nothing to confirm. A hold-set of nothing but PRs starts that clock exactly like any other.
-b040	- **No record, or the recorded hold-set differs from this tick's** → write this tick's hold-set and finish normally, appending to the tick report: `stall: suspected — nothing in flight and nothing this loop may advance; an identical hold-set next tick ends the loop`. - **Record matches this tick's hold-set exactly** → STALLED is confirmed. Delete the record and announce loudly, naming the reason **per held item** so the human knows exactly what unlocks the queue — PR rows alongside issue rows, each naming the PR and the gate holding it:
-b041	Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one. A held set of nothing but PRs takes that same path: it is a terminal state like any other, and the cron self-cancel below is not optional on it.
-b042	Any tick that dispatches, merges, observes in-flight work, or sees an open PR it may still advance deletes a leftover `.git/dispatch-ready-stall.json`: progress resets the confirmation clock. **A tick that does both** — merges the last in-flight PR and still ends holding something — deletes the record first and then writes this tick's hold-set: progress wins, and the new hold-set starts a fresh two-tick count rather than inheriting the old one's.
-b043	### Stop path — both terminal states
-b044	Stop the loop yourself, according to how this tick was invoked:
-b045	| Mode | Recognize it by | Stop path | | --- | --- | --- | | **Self-paced loop** (ScheduleWakeup) | This tick was woken by a wake-up the previous tick scheduled | Do not schedule another wake-up — the loop ends here | | **Cron / fixed interval** (CronCreate-backed) | A cron job fires the skill on a schedule | **Self-cancel the cron** — see below. Do not merely advise the user to cancel; act | | **Manual invocation** | No loop context | Nothing to cancel — announce and finish. A stalled manual tick announces STALLED immediately: the two-tick confirmation gates loop cancellation, and there is no loop |
-b046	**Cron self-cancel.** Find the loop's job id yourself: run `CronList` and select the job whose prompt is this dispatch-ready invocation.
-b047	- **Exactly one match** → `CronDelete <id>`, then append to the report — after COMPLETE: `Loop <id> cancelled — run groom-backlog to refill Ready and start a new drain when there's more to ship.`; after STALLED: `Loop <id> cancelled — resolve the gate(s), then restart the drain.` - **Zero, multiple, or ambiguous matches** → delete NOTHING. Announce the terminal state, list the candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is worse than a few extra no-op ticks.
-b048	Safety rails: self-cancel ONLY on a terminal state confirmed above. For DEGRADED, a single degraded tick, a `healthy` verdict, an `unknown` verdict, a `no verdict` run, a red check, a genuinely pending check or an active foreign claim all mean the loop may still make progress — stay alive. For COMPLETE, anything still claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over the same set, or the state they disagree about ticks forever. For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may still make progress — stay alive. An API-failure tick never self-cancels and never counts toward stall confirmation. Ticks that fire between confirmation and cancellation are no-ops, not errors: each re-runs this section and retries.
+b017	### DRAIN DEFERRED
+b018	**Evaluated BEFORE STALLED, and the order is the rule rather than a presentation choice.** Every conjunct STALLED tests is satisfied here too — in-flight zero, nothing this loop may advance, a non-empty held set — so this state is STALLED plus one further test, and evaluating STALLED first leaves it unreachable. DEGRADED cannot compete for it: that state requires in-flight non-zero and this one requires in-flight zero, so the two are disjoint by construction and the order between them decides nothing.
+b019	Four conjuncts, and the fourth is the one that separates this state from STALLED:
+b020	1. **In-flight zero AND dispatched zero this tick** — STALLED's own first two, unchanged. 2. **Ready is non-empty.** An empty Ready column is COMPLETE, which fires ahead of both. 3. **Every remaining Ready item is held by §4's Site filter** — its `sites` is non-empty and does not contain this checkout's `execution_site`. 4. **The held set holds nothing else.** No held PR, no dependency hold, no `blocked` label, no collision or migration hold, and no active foreign claim. One hold of any other kind and the state is STALLED, with the site holds listed among its reasons.
+b021	**A site hold is neither self-resolving nor a human gate for THIS loop, which is why it is a state of its own rather than a STALLED variant.** It is not self-resolving: this checkout will never satisfy it, so a confirmation clock would count forever. It is not a human gate either — nobody has to decide anything, and the issue is already dispatchable, from a machine that is not this one. So reporting it as STALLED is not merely imprecise: it sends the reader hunting for a blocker that does not exist, and then tells them to resolve the gate and restart the drain on a checkout that cannot. **Never report this state as STALLED.**
+b022	**No confirmation tick, exactly as COMPLETE takes none.** STALLED and DEGRADED confirm across two ticks because what they read can change underneath them — a racing session closes a dependency, a flaky call clears. A site declaration cannot change what this checkout IS: a second tick re-reads the same `sites` against the same `execution_site` and reaches the same answer. Write no stall record and no degraded record from here — both clocks belong to states that are still moving.
+b023	Announce loudly, naming the site each remaining item requires — **all** of an item's `sites` when it declares more than one, so the operator can see which checkout to run the drain from:
+b024	Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one, and the cron self-cancel is not optional on it. Nothing here is a failure and nothing needs undoing: no redispatch budget is spent, no issue is demoted, and every deferred item dispatches normally the moment the checkout it names ticks (§4).
+b025	### DRAIN STALLED
+b026	In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance**, over a **non-empty** held set — every Ready item held by a §4 filter, and every open PR held by the discriminator below. All four conjuncts are stated here rather than corrected further down, for the reason COMPLETE's condition now states all of its own. Nothing this loop controls can change GitHub state before the next tick: no PRs it may merge, no agents working, and dependency holds only resolve when a dep closes — with nothing in flight, only external or human action closes one. The loop is stalled, not idle; "Ready isn't empty" alone must never keep it alive.
+b027	**The third conjunct is "nothing to advance", and it replaced "Ready non-empty"** — that difference is the whole of #282. Ready empty, in-flight zero and an open unmerged PR was covered by NEITHER terminal state: COMPLETE is vetoed by the open PR, and STALLED could not fire on an empty queue. The loop ticked forever, reporting the state accurately and doing nothing (observed 2026-08-26 on #273 / PR #279; cancelled by hand). The action that creates the state is the action that hides it — `issue-claim.sh block` strips `ready` and `in-progress` together, so recording "a human must decide this" is precisely what removes the issue from the one set the old conjunct consulted.
+b028	**Deleting that conjunct outright would have been the wrong fix**, and re-deriving it that way is the tempting simplification here: an open PR is not automatically a human gate. One whose checks are still running or red can advance on its own, and firing STALLED there cancels a loop that was about to make progress.
+b029	**The held set must be non-empty.** Nothing held, nothing in flight and no open PR is COMPLETE, which fires first and needs no confirmation tick. "Nothing to advance" satisfied vacuously — by a queue that simply finished — must never announce STALLED.
+b030	**A held set of nothing but site holds is DEFERRED, not STALLED**, and that state is evaluated first. STALLED's conjuncts match it exactly, so the discrimination is one extra test rather than a different one: does the held set contain anything a human could clear? A dependency hold, a `blocked` label, a held PR, a collision or migration hold — any one of them and this is STALLED, with the site holds listed among its reasons. Nothing but site holds, and the loop is on the wrong machine rather than blocked, which is a different sentence to print and a different thing to do about it.
+b031	#### The discriminator — may this loop advance it?
+b032	**"Every open PR this tick sees" is the union §2 resolves** — open PRs on in-flight branches, and open PRs on blocked issues. Both halves are load-bearing: a PR nobody enumerated cannot be held, and the second half is precisely the one #282's own state consists of. Their state comes from `sassy-dog:pr-shepherd`'s `poll-prs.sh --once <PR>…`, which returns `mergeable`, `mergeStateStatus` and the check counts in one pass; the judgement below stays here, the way §4 keeps its intersection judgement while borrowing `gh pr view`. **Both halves of that invocation are load-bearing.** Without `--once` it is watch mode, which blocks for up to an hour — the "a tick that waits is a loop that stopped" rule two sections up. Without the explicit PR numbers `--once` falls back to whatever fifty open PRs `gh pr list` returns first — no sort is specified, so a long-lived held PR, which is exactly #282's shape, is as likely to fall outside the fifty as inside. That is both the widening the paragraph above forbids and a silently truncated read of it.
+b033	**That union is also the set COMPLETE's veto ranges over, and the identity is the invariant.** A PR that can veto COMPLETE but can never enter the held set gives Ready empty, in-flight zero and a held set that is empty — COMPLETE vetoed, STALLED forbidden, ticking forever. That is #282 exactly, one shape over, and it is what an unqualified "any open PR vetoes COMPLETE" reading produces the moment a Dependabot PR, a hand-opened PR with no issue, or another session's PR is sitting there. So the veto is scoped to this union and never to every open PR in the repo. Widen one half without the other and the forever-tick comes back; narrow one without the other and the loop self-cancels on work it is still holding.
+b034	**The blocked half is deliberately REPO-WIDE, and that is a decision rather than an oversight.** `queue-snapshot.sh` returns blocked issues as bare numbers — open, `blocked`-labelled, no assignee and no labels — so a tick genuinely cannot tell an issue this loop demoted from one a human blocked by hand, and `issue-claim.sh block` leaves the assignee rather than clearing it. Rather than filter on a signal neither section can read, take them all: over-including ends the loop LOUDLY, naming the PR and the gate holding it, and a human who disagrees restarts the drain. Under-including is the failure this whole section exists to close. The exclusion that matters is untouched — a Dependabot PR, or a hand-opened PR whose issue is neither in-flight nor blocked, is in neither half of the union and vetoes nothing.
+b035	Ask it of every one of them, take the **first matching row**, and carry the answer per PR into the held set:
+b036	| Open PR this tick | May this loop advance it? | Effect | | --- | --- | --- | | Its issue carries `blocked` | **No** — §2 already routed it to a human | held: joins the held set | | `CONFLICTING` | **No** — §2 never auto-rebases; a human resolves the conflict | held: joins the held set | | Held by a §2 review outcome — a Blocking finding, a `NO REPORT`, or a held `SKIPPED` — with its ONE §2 redispatch spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set | | Checks still running, and not `CONFLICTING` | **Yes** — a later tick merges it once it goes green | keeps the loop alive | | Checks red, its issue not `blocked`, and its ONE §2 redispatch unspent | **Yes** — that redispatch is still available | keeps the loop alive | | Anything else this loop is not permitted to merge this tick | **No** — held is the default | held: joins the held set |
+b037	**Rows 2 to 6 cannot fire at the moment STALLED is decided, and that is by construction rather than by accident.** STALLED's first conjunct is in-flight zero, which empties the branch half of the union — so every PR still enumerable carries `blocked`, and row 1 matches it first. The argument is exhaustive over the union, so it reaches the default row too: at that instant nothing falls through to it. This is the same shape as the self-resolving carve-out below, and it is stated for the same reason: a reader who works it out later will otherwise read the rows below row 1 as live guarantees, or delete them as dead prose. They are neither. They classify held-versus-advanceable for the two OTHER consumers of this table — §6's `holds:` line, which renders on every tick including ticks with work in flight, and the safety rails' "an open PR this loop may still advance" — and they are what stops a later widening of §2's enumeration from silently answering "alive" for a shape nobody classified. Delete them and that widening becomes a silent #282; treat them as reachable at STALLED time and the reasoning above them is wrong.
+b038	**The last row is a default, not a catch-all to delete.** §2 holds a PR for more reasons than the rows above enumerate and will not stay exhaustive, and a table that silently answers "alive" for a shape it does not know re-creates #282 one shape at a time. Held is the right default *here* because it is the answer §2 already gives: a PR this loop may not merge is a PR it cannot advance. The two defaults are not mirror images: held ends the loop and names the PR wherever it fires, alive ticks forever and reports nothing. (Which of them fires at STALLED-decision time is a separate question, answered by the paragraph above — there, row 1 has already matched.)
+b039	**`CONFLICTING` needs its own row, above the checks rows, and the ordering is the point.** A conflicted PR stops CI firing at all, and `no checks reported` is indistinguishable from `CI hasn't started` — `sassy-dog:pr-shepherd` records exactly that. Without the row a conflicted PR matches "checks still running" and is answered with something that can never happen: §6's `holds:` line would report it as advancing on every tick, and the rails would read it as a PR this loop may still advance. It is NOT what lets a stalled queue confirm — at STALLED-decision time the paragraph above applies and row 1 has already matched — and saying so here would contradict it.
+b040	**The redispatch budget is the hinge on both failure rows**, so read this before "simplifying" the rows into fewer. §2 grants exactly ONE redispatch per issue, taken on a later tick; while it is unspent this loop still has an action of its own, and a state it can still act on is not a stall. Once it is spent §2 demotes to `blocked`, which is why the label is the usual way a held PR presents — and why the review-outcome row is not redundant beside it: the label is a write this loop performs, the finding is a fact it reads, and a demotion not yet written must never read as advanceable. It is also why the red-checks row asks for the budget and not for the label alone: an unspent budget is what makes a red PR advanceable, while a spent one whose demotion has not been written yet matches no row above and falls to the default. Unknown is not clear.
+b041	**Read the review outcome from the PR body**, exactly as §2 reads it — take-it's step 6 requires the sub-agent to have written the verbatim line. This loop reads no RESULT lines, and a later tick is a different session from the one that dispatched. **Read the redispatch budget from the issue, not from the PR**: §2 spends it by commenting `dispatch-ready: attempt 1 failed — <cause>` on the issue, so that comment is the record of whether it is spent, and a tick that never reads it cannot answer either failure row. No such comment means the budget is unspent.
+b042	**A gate that could not be read is not a hold**, and this is not in tension with "unknown is not clear" two paragraphs up — the two answer different questions. An unknown *state that was read* (a shape no row names) is held: the loop has no action for it. State that *could not be read at all* is not a fact about the PR, it is a failed tick, and it falls under this section's opening rule: live state was not verified, so the tick proves nothing — leave the loop alone and write no stall record.
+b043	Two carve-outs keep the state precise:
+b044	- **Self-resolving holds can never trip it — but a hold against a BLOCKED PR is not one.** A collision or migration hold against in-flight work resolves when that work merges, and requires in-flight > 0, so the in-flight = 0 conjunct excludes it by construction. Since §4 now intersects against blocked issues' open PRs too, the same filters can also hold on a PR no one may advance: that hold survives in-flight = 0, and it is a human gate like any other, so it belongs in the held set rather than keeping the loop alive. - **A foreign claim is not a human gate.** An item skipped by the Claimed filter is another session's in-flight (`mine: false`) and resolves when that session merges, no human needed. A tick whose holds include an active foreign claim is idle, not stalled — keep looping.
+b045	**Both carve-outs survive the new conjunct unchanged**, and PR rows weaken neither: a self-resolving hold still requires in-flight > 0, and another session's open PR is that session's in-flight, resolving when it merges. A foreign claim is therefore not a human gate, and the union above cannot turn one into a PR row either — a foreign in-flight issue is `mine: false` and not blocked, so neither half of the union reaches it. The safety rails carry the same rule for the tick as a whole.
+b046	**Confirm across two consecutive ticks before stopping** — a single stalled tick may be racing another session that is about to close a dependency, unblock an issue, or merge a PR. Ticks share no memory, so persist the observation next to the §5 batch manifest, in `.git/dispatch-ready-stall.json`: the held set — held issue numbers AND held PR numbers — with each one's hold root (the open `Depends on #N` it chains to, the `blocked` label, the decision gate, the Blocking finding a held PR carries).
+b047	**"Matches exactly" compares the identifiers and each one's hold ROOT, never the rendered sentence.** Two honest ticks word the same hold differently, and a comparison over free text never converges; a comparison over identifiers alone confirms a stall across two genuinely different states, since a PR whose gate changed between ticks is still the same number. A record written before this section grew PR rows carries issue numbers only: it cannot match a hold-set containing a PR, so it is discarded and rewritten, which costs one extra tick and never a false confirmation.
+b048	**The record is written from the held set, never from `ready[]`**, which is what makes it reachable with Ready empty. Before #282 it was written only inside a branch that required Ready non-empty, so in the uncovered state the two-tick clock never started and there was nothing to confirm. A hold-set of nothing but PRs starts that clock exactly like any other.
+b049	- **No record, or the recorded hold-set differs from this tick's** → write this tick's hold-set and finish normally, appending to the tick report: `stall: suspected — nothing in flight and nothing this loop may advance; an identical hold-set next tick ends the loop`. - **Record matches this tick's hold-set exactly** → STALLED is confirmed. Delete the record and announce loudly, naming the reason **per held item** so the human knows exactly what unlocks the queue — PR rows alongside issue rows, each naming the PR and the gate holding it:
+b050	Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one. A held set of nothing but PRs takes that same path: it is a terminal state like any other, and the cron self-cancel below is not optional on it.
+b051	Any tick that dispatches, merges, observes in-flight work, or sees an open PR it may still advance deletes a leftover `.git/dispatch-ready-stall.json`: progress resets the confirmation clock. **A tick that does both** — merges the last in-flight PR and still ends holding something — deletes the record first and then writes this tick's hold-set: progress wins, and the new hold-set starts a fresh two-tick count rather than inheriting the old one's.
+b052	### Stop path — every terminal state
+b053	Stop the loop yourself, according to how this tick was invoked:
+b054	| Mode | Recognize it by | Stop path | | --- | --- | --- | | **Self-paced loop** (ScheduleWakeup) | This tick was woken by a wake-up the previous tick scheduled | Do not schedule another wake-up — the loop ends here | | **Cron / fixed interval** (CronCreate-backed) | A cron job fires the skill on a schedule | **Self-cancel the cron** — see below. Do not merely advise the user to cancel; act | | **Manual invocation** | No loop context | Nothing to cancel — announce and finish. A stalled manual tick announces STALLED immediately: the two-tick confirmation gates loop cancellation, and there is no loop |
+b055	**Cron self-cancel.** Find the loop's job id yourself: run `CronList` and select the job whose prompt is this dispatch-ready invocation.
+b056	- **Exactly one match** → `CronDelete <id>`, then append to the report — after COMPLETE: `Loop <id> cancelled — run groom-backlog to refill Ready and start a new drain when there's more to ship.`; after DEFERRED: `Loop <id> cancelled — run the drain from a checkout those items name.`; after STALLED: `Loop <id> cancelled — resolve the gate(s), then restart the drain.` - **Zero, multiple, or ambiguous matches** → delete NOTHING. Announce the terminal state, list the candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is worse than a few extra no-op ticks.
+b057	Safety rails: self-cancel ONLY on a terminal state confirmed above. For DEGRADED, a single degraded tick, a `healthy` verdict, an `unknown` verdict, a `no verdict` run, a red check, a genuinely pending check or an active foreign claim all mean the loop may still make progress — stay alive. For COMPLETE, anything still claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over the same set, or the state they disagree about ticks forever. For DEFERRED, one Ready item this checkout may take, one hold of any other kind, any dispatch, any in-flight work or an active foreign claim means this is not that state — fall through to the state that fits and stay alive. For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may still make progress — stay alive. An API-failure tick never self-cancels and never counts toward stall confirmation. Ticks that fire between confirmation and cancellation are no-ops, not errors: each re-runs this section and retries.
 f001	bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/probe-platform-health.sh --pr "$PR" --repo "$REPO"
 f002	DRAIN DEGRADED — the platform is degraded and nothing in flight can progress: probe: degraded (attributed) — Actions: major_outage in flight: #N (PR #N — required check `ci` has no run for the head) Loop <id> cancelled — the platform recovers on its own; restart the drain once it has.
 f003	DRAIN COMPLETE — Ready is empty and nothing is in flight.
-f004	DRAIN STALLED — nothing dispatchable, nothing in flight, and nothing this loop may advance: #N #N #N #N #N → chain to #N (parked in Backlog: awaiting planning session) #N → blocked label (dispatch-ready: 2 failed attempts — CI check needs a human call) PR #N (#N) → open, issue blocked (3 Blocking review findings, redispatch spent) Loop <id> cancelled — resolve the gate(s), then restart the drain.
+f004	DRAIN DEFERRED — remaining Ready items require site <x> #N #N → requires site vdi #N → requires site vdi or bench Loop <id> cancelled — run the drain from a checkout those items name; nothing here needs undoing.
+f005	DRAIN STALLED — nothing dispatchable, nothing in flight, and nothing this loop may advance: #N #N #N #N #N → chain to #N (parked in Backlog: awaiting planning session) #N → blocked label (dispatch-ready: 2 failed attempts — CI check needs a human call) PR #N (#N) → open, issue blocked (3 Blocking review findings, redispatch spent) Loop <id> cancelled — resolve the gate(s), then restart the drain.
 c001	## 3. Compute capacity
 c002	In-flight is the set of issues claimed by this loop — assignee @me plus board status or the `in-progress` label — **and not carrying `blocked`**. That last clause is stated here because this is the file's only "in-flight is" sentence, and §2's board path, §4's filters and §7's first conjunct all read it: `issue-claim.sh block` writes labels and never moves a card, so without it a demoted issue stays in-flight on a board repo permanently and neither terminal state can ever fire. Do NOT resolve the resulting asymmetry with §4's Claimed filter by aligning the two — §4 skips on a disjunction on purpose, and `issue-claim.sh` documents why. **Capacity = `max_in_flight` − in-flight.**
 c003	A green PR sitting in the merge queue still counts as in-flight until it is actually MERGED. Compute capacity from post-reconcile live state and accept that a queue-pending slot frees up next tick, not this one. Capacity ≤ 0 → emit the tick report and stop; the next tick tops up.
 g001	DRAIN TICK — in-flight 3/5 | merged this tick: #N | dispatched: #N #N | Ready remaining: 4 holds: #N (Depends on #N, still open) · #N (migration slot busy) · #N (overlaps in-flight #N) · PR #N (open, #N blocked) collision sources: #N pr · #N declared (no PR yet) · #N declared (PR read failed — narrower check) stacks: #N → #N → #N dispatched as 1 layer-stack (1 slot, 3 PRs) unannotated (dispatched without a touches set — coupling unchecked): #N review: #N BLOCKING (unvalidated path join in scripts/render.sh) — redispatch 1 of 1
-sec7_openers	## 7. Terminal states — drain ~ A drain loop ends itself in ~ ### DRAIN DEGRADED ~ **Evaluated BEFORE COMPLETE and STALLED, and ~ This state **consumes** `pr-shepherd`'s probe and ~ ```bash ~ ``` ~ Run it against **ONE** in-flight PR, ~ Three conjuncts, and each excludes a ~ 1. **In-flight is non-zero and nothing ~ **Report WHY an `unknown` could not ~ **Two-tick confirmation, the same shape as ~ - **No record** → write this ~ ```text ~ ``` ~ Then take the **same stop path ~ Any tick that dispatches, merges, or ~ ### DRAIN COMPLETE ~ Ready empty AND in-flight zero AND ~ ```text ~ ``` ~ **COMPLETE is unchanged, veto included** — ~ ### DRAIN STALLED ~ In-flight zero AND dispatched zero this ~ **The third conjunct is "nothing to ~ **Deleting that conjunct outright would have ~ **The held set must be non-empty.** ~ #### The discriminator — may this ~ **"Every open PR this tick sees" ~ **That union is also the set ~ **The blocked half is deliberately REPO-WIDE, ~ Ask it of every one of ~ | Open PR this tick | ~ **Rows 2 to 6 cannot fire ~ **The last row is a default, ~ **`CONFLICTING` needs its own row, above ~ **The redispatch budget is the hinge ~ **Read the review outcome from the ~ **A gate that could not be ~ Two carve-outs keep the state precise: ~ - **Self-resolving holds can never trip ~ **Both carve-outs survive the new conjunct ~ **Confirm across two consecutive ticks before ~ **"Matches exactly" compares the identifiers and ~ **The record is written from the ~ - **No record, or the recorded ~ ```text ~ ``` ~ Then take the **same stop path ~ Any tick that dispatches, merges, observes ~ ### Stop path — both terminal ~ Stop the loop yourself, according to ~ | Mode | Recognize it by ~ **Cron self-cancel.** Find the loop's job ~ - **Exactly one match** → `CronDelete ~ Safety rails: self-cancel ONLY on a
+sec7_openers	## 7. Terminal states — drain ~ A drain loop ends itself in ~ ### DRAIN DEGRADED ~ **Evaluated BEFORE COMPLETE and STALLED, and ~ This state **consumes** `pr-shepherd`'s probe and ~ ```bash ~ ``` ~ Run it against **ONE** in-flight PR, ~ Three conjuncts, and each excludes a ~ 1. **In-flight is non-zero and nothing ~ **Report WHY an `unknown` could not ~ **Two-tick confirmation, the same shape as ~ - **No record** → write this ~ ```text ~ ``` ~ Then take the **same stop path ~ Any tick that dispatches, merges, or ~ ### DRAIN COMPLETE ~ Ready empty AND in-flight zero AND ~ ```text ~ ``` ~ **COMPLETE is unchanged, veto included** — ~ ### DRAIN DEFERRED ~ **Evaluated BEFORE STALLED, and the order ~ Four conjuncts, and the fourth is ~ 1. **In-flight zero AND dispatched zero ~ **A site hold is neither self-resolving ~ **No confirmation tick, exactly as COMPLETE ~ Announce loudly, naming the site each ~ ```text ~ ``` ~ Then take the **same stop path ~ ### DRAIN STALLED ~ In-flight zero AND dispatched zero this ~ **The third conjunct is "nothing to ~ **Deleting that conjunct outright would have ~ **The held set must be non-empty.** ~ **A held set of nothing but ~ #### The discriminator — may this ~ **"Every open PR this tick sees" ~ **That union is also the set ~ **The blocked half is deliberately REPO-WIDE, ~ Ask it of every one of ~ | Open PR this tick | ~ **Rows 2 to 6 cannot fire ~ **The last row is a default, ~ **`CONFLICTING` needs its own row, above ~ **The redispatch budget is the hinge ~ **Read the review outcome from the ~ **A gate that could not be ~ Two carve-outs keep the state precise: ~ - **Self-resolving holds can never trip ~ **Both carve-outs survive the new conjunct ~ **Confirm across two consecutive ticks before ~ **"Matches exactly" compares the identifiers and ~ **The record is written from the ~ - **No record, or the recorded ~ ```text ~ ``` ~ Then take the **same stop path ~ Any tick that dispatches, merges, observes ~ ### Stop path — every terminal ~ Stop the loop yourself, according to ~ | Mode | Recognize it by ~ **Cron self-cancel.** Find the loop's job ~ - **Exactly one match** → `CronDelete ~ Safety rails: self-cancel ONLY on a
 sec7_bullets	0:- **No record** → write this ~ 0:- **Record present** → DEGRADED is ~ 0:- **Self-resolving holds can never trip ~ 0:- **A foreign claim is not ~ 0:- **No record, or the recorded ~ 0:- **Record matches this tick's hold-set ~ 0:- **Exactly one match** → `CronDelete ~ 0:- **Zero, multiple, or ambiguous matches**
 sec7_tablerows	0:| Open PR this tick | ~ 0:| --- | --- | --- ~ 0:| Its issue carries `blocked` | ~ 0:| `CONFLICTING` | **No** — §2 ~ 0:| Held by a §2 review ~ 0:| Checks still running, and not ~ 0:| Checks red, its issue not ~ 0:| Anything else this loop is ~ 0:| Mode | Recognize it by ~ 0:| --- | --- | --- ~ 0:| **Self-paced loop** (ScheduleWakeup) | This ~ 0:| **Cron / fixed interval** (CronCreate-backed) ~ 0:| **Manual invocation** | No loop
-sec7_headings	## 7. Terminal states — drain complete, drain stalled, drain degraded ~ ### DRAIN DEGRADED ~ ### DRAIN COMPLETE ~ ### DRAIN STALLED ~ #### The discriminator — may this loop advance it? ~ ### Stop path — both terminal states
+sec7_headings	## 7. Terminal states — drain complete, drain deferred, drain stalled, drain degraded ~ ### DRAIN DEGRADED ~ ### DRAIN COMPLETE ~ ### DRAIN DEFERRED ~ ### DRAIN STALLED ~ #### The discriminator — may this loop advance it? ~ ### Stop path — every terminal state
 sec2_openers	## 2. Reconcile in-flight (always first) ~ Find work this loop already started. ~ **With `board:`** — the board snapshot ~ **Without a board** — live issue ~ Either way, in-flight counts whether or ~ - **Open PRs from those branches**
 sec2_bullets	0:- **Open PRs from those branches** ~ 0:- **Open PRs on blocked issues** ~ 0:- **Failed or red PRs** → ~ 0:- **Open PRs not yet reviewed, ~ 0:- **A review dispatched that never ~ 0:- **PRs carrying a Blocking review ~ 0:- **`CONFLICTING` PRs** → never auto-rebase;
 sec2_tablerows	
@@ -691,6 +751,7 @@ sec2="$(raw_region "$SKILL" '## 2. Reconcile in-flight' '## 3. Compute capacity'
 sec6="$(raw_region "$SKILL" '## 6. Tick report' '## 7. Terminal states')"
 sec7="$(raw_region "$SKILL" '## 7. Terminal states' '## Guardrails')"
 complete_raw="$(raw_region "$SKILL" '### DRAIN COMPLETE' '### ')"
+deferred_raw="$(raw_region "$SKILL" '### DRAIN DEFERRED' '### DRAIN STALLED')"
 stalled_raw="$(raw_region "$SKILL" '### DRAIN STALLED' '### ')"
 gate_raw="$(raw_region "$SKILL" '### DRAIN STALLED' '#### ')"
 disc_raw="$(raw_region "$SKILL" '#### The discriminator' 'Two carve-outs keep the state precise:')"
@@ -723,7 +784,7 @@ shepherd_open="$(raw_region "$SHEPHERD" '  # OPEN:' '}')"
 # explicit stop makes an appended paragraph part of the compared text.
 conflicting_raw="$(raw_region "$SKILL" '- **`CONFLICTING` PRs**' '## 3. Compute capacity')"
 
-for w in sec2 sec3 sec4 sec6 sec7 guard complete_raw stalled_raw gate_raw disc_raw opening_raw \
+for w in sec2 sec3 sec4 sec6 sec7 guard complete_raw deferred_raw stalled_raw gate_raw disc_raw opening_raw \
          record_raw announce_raw rails_raw carvelist_raw claim_block claim_require \
          shepherd_open conflicting_raw; do
     if [ -n "${!w}" ]; then
@@ -738,6 +799,7 @@ sec2_flat="$(flat "$sec2")"
 sec6_flat="$(flat "$sec6")"
 sec7_flat="$(flat "$sec7")"
 complete_flat="$(flat "$complete_raw")"
+deferred_flat="$(flat "$deferred_raw")"
 stalled_flat="$(flat "$stalled_raw")"
 gate_flat="$(flat "$gate_raw")"
 disc_flat="$(flat "$disc_raw")"
@@ -759,6 +821,11 @@ assert_absent "$disc_flat" 'Self-resolving holds' \
     "discriminator window stops before the carve-outs"
 assert_absent "$stalled_flat" 'Stop the loop yourself' \
     "STALLED window stops before the stop path"
+# DEFERRED's stop is the STALLED HEADING, and a heading is what somebody renames.
+# Its body is what survives a rename, so that is what proves the bound — the same
+# reasoning `sec7`'s own stop check carries.
+assert_absent "$deferred_flat" 'The held set must be non-empty' \
+    "DEFERRED window stops before the STALLED gate, whatever that heading is called"
 assert_absent "$opening_flat" 'The third conjunct' \
     "STALLED opening window is one paragraph, not the rationale below it"
 assert_absent "$record_flat" 'DRAIN STALLED —' \
@@ -1337,25 +1404,146 @@ assert_in "$deg_flat" 'unknown` verdict [*][*]leaves the record alone[*][*]' \
 # COMPLETE and STALLED are untouched (acceptance 5). Their conjunct sentences
 # are pinned by canon above; this asserts the CONJUNCTS themselves still read
 # as they did, which is the half a reader checks.
-assert_in "$sec7_flat" 'Ready empty AND in-flight zero AND nothing still claimed' \
+# SCOPED TO THEIR OWN WINDOWS, not to `sec7_flat`, since #342: DEFERRED's first
+# conjunct spells STALLED's opening words verbatim, so a section-wide read of the
+# second would be satisfied by the new section while STALLED's own opening said
+# anything at all.
+assert_in "$complete_flat" 'Ready empty AND in-flight zero AND nothing still claimed' \
     "COMPLETE's conjuncts are unchanged"
-assert_in "$sec7_flat" 'In-flight zero AND dispatched zero this tick' \
+assert_in "$opening_flat" 'In-flight zero AND dispatched zero this tick' \
     "STALLED's conjuncts are unchanged"
 
-# --- 8. structure: three terminal states, one stop path, and the inventories --
+# --- 7c. DRAIN DEFERRED (issue #342) ------------------------------------------
+# THE STATE #341 MADE REACHABLE. A `site:` label that names another machine holds
+# a Ready item here, and that hold reaches §7 like any other — but it is neither
+# self-resolving nor a human gate, so both of the states it could have landed in
+# are wrong about it. STALLED is the one it landed in, and its announcement tells
+# the operator to resolve a gate this checkout cannot.
+#
+# THE ROWS BELOW ARE IN TWO HALVES, and the second is the one a "these are the
+# same state" sweep deletes: the DEFERRED half (this state exists, names the
+# site, takes COMPLETE's stop path and is never STALLED) and the DISCRIMINATION
+# half (a held set carrying anything else is STILL STALLED). A gate that pins
+# only the first is satisfied by a §7 that answers DEFERRED for every stall.
+#
+# NEEDLES ARE PINNED THROUGH THEIR TERMINATOR, the lesson test-site-filter.sh's
+# header records: a needle that stops mid-sentence is satisfied by a qualifying
+# clause that inverts the rule, and the deletion mutant cannot see it because the
+# phrase it deletes is still there.
+section deferred "a site-held Ready column ends the loop by name, and never as a stall"
+
+# ORDER is the decision, not presentation: DEFERRED is STALLED plus one test, so
+# evaluating STALLED first leaves it unreachable. Pinned two ways — the prose
+# rule and the physical position of the heading — because either alone drifts
+# away from the other, which is #286's own reasoning one state over.
+assert_in "$deferred_flat" 'Evaluated BEFORE STALLED' \
+    "DEFERRED is evaluated before STALLED, and says so"
+def_line="$(grep -n '^### DRAIN DEFERRED' "$SKILL" | cut -d: -f1)"
+cmp2_line="$(grep -n '^### DRAIN COMPLETE' "$SKILL" | cut -d: -f1)"
+stl_line="$(grep -n '^### DRAIN STALLED' "$SKILL" | cut -d: -f1)"
+if [ -n "$def_line" ] && [ -n "$cmp2_line" ] && [ -n "$stl_line" ] &&
+   [ "$cmp2_line" -lt "$def_line" ] && [ "$def_line" -lt "$stl_line" ]; then
+    ok "and it physically sits between COMPLETE and STALLED, so a reader meets it first"
+else
+    bad "DRAIN DEFERRED is not between COMPLETE and STALLED (cmp=$cmp2_line def=$def_line stl=$stl_line)"
+fi
+# DEGRADED needs no ordering against this one, and saying why is what stops a
+# later sweep widening #286's "evaluated first" rule to cover a state it cannot
+# reach: the two disagree on in-flight, so they are disjoint by construction.
+assert_has "$deferred_flat" \
+    'DEGRADED cannot compete for it: that state requires in-flight non-zero and this one requires in-flight zero' \
+    "and the disjointness from DEGRADED is stated rather than left to be re-derived"
+
+# THE FOUR CONJUNCTS, each through its terminator. The fourth is the whole state.
+assert_has "$deferred_flat" \
+    '**Ready is non-empty.** An empty Ready column is COMPLETE, which fires ahead of both.' \
+    "DEFERRED requires a non-empty Ready column, so it can never take COMPLETE's state"
+assert_has "$deferred_flat" \
+    "**Every remaining Ready item is held by §4's Site filter**" \
+    "every remaining Ready item must be site-held — one dispatchable item and this is not the state"
+assert_has "$deferred_flat" \
+    '**The held set holds nothing else.** No held PR, no dependency hold, no `blocked` label, no collision or migration hold, and no active foreign claim.' \
+    "the held set must hold nothing but site holds (the fourth conjunct)"
+assert_has "$deferred_flat" \
+    'One hold of any other kind and the state is STALLED, with the site holds listed among its reasons.' \
+    "and one hold of any other kind hands the tick back to STALLED — the discrimination half"
+
+# WHY IT IS ITS OWN STATE. Both halves of the reason are pinned: a later sweep
+# that folds this back into STALLED has to delete a sentence saying it cannot.
+assert_has "$deferred_flat" \
+    'A site hold is neither self-resolving nor a human gate for THIS loop' \
+    "the state names both reasons it is not a STALLED variant"
+assert_has "$deferred_flat" \
+    'It is not self-resolving: this checkout will never satisfy it, so a confirmation clock would count forever.' \
+    "and says why it is not self-resolving, which is also why it takes no confirmation tick"
+assert_has "$deferred_flat" '**Never report this state as STALLED.**' \
+    "reporting it as STALLED is refused in as many words"
+# The measured harm is STALLED's own cancel line arriving here — an operator told
+# to resolve a gate on a checkout that cannot. The DEFERRED window may describe
+# that harm; it may not instruct it. This is a LITERAL check against STALLED's
+# wording, not a polarity judgement.
+assert_absent "$deferred_flat" 'resolve the gate\(s\), then restart the drain' \
+    "DEFERRED never issues STALLED's cancel instruction"
+assert_absent "$deferred_flat" 'dispatch-ready-stall\.json' \
+    "and never writes the stall record — that clock belongs to a state that can still change"
+
+# NO CONFIRMATION TICK, modelled on COMPLETE rather than on the state beside it.
+assert_has "$deferred_flat" '**No confirmation tick, exactly as COMPLETE takes none.**' \
+    "DEFERRED announces on the tick that reaches it, as COMPLETE does"
+assert_has "$deferred_flat" \
+    'A site declaration cannot change what this checkout IS' \
+    "and states why a second tick would measure nothing new"
+
+# THE ANNOUNCEMENT the loop prints, verbatim, and the site it must name.
+assert_wline "$deferred_raw" '^DRAIN DEFERRED — remaining Ready items require site <x>$' \
+    "the verbatim DEFERRED announcement is present (acceptance 1)"
+assert_has "$deferred_flat" \
+    'naming the site each remaining item requires — **all** of an item'"'"'s `sites` when it declares more than one' \
+    "and it names every site an item declares, so the operator knows which checkout to run"
+
+# ONE stop path, and the cron self-cancel is part of it (acceptance 2). A second
+# cancel implementation is the defect, not the feature — #286's rule, reused.
+assert_in "$deferred_flat" 'same stop path as DRAIN COMPLETE' \
+    "it reaches the EXISTING stop path — one path, never a parallel one"
+if printf '%s' "$deferred_flat" | grep -qi 'CronDelete'; then
+    bad "DEFERRED carries its own cron-cancel logic — that is a parallel stop path"
+else
+    ok "and carries no cancel logic of its own"
+fi
+assert_has "$sec7_flat" \
+    'after DEFERRED: `Loop <id> cancelled — run the drain from a checkout those items name.`' \
+    "the stop path's cron branch carries DEFERRED's own report line"
+
+# THE DISCRIMINATION HALF, from STALLED's side. Written only here, it would be a
+# rule the state it constrains never states; written only there, DEFERRED would
+# be a state nothing routes to. Both windows carry it.
+assert_in "$gate_flat" 'A held set of nothing but site holds is DEFERRED, not STALLED' \
+    "STALLED hands a site-only held set to DEFERRED, and says so in its own window"
+assert_has "$gate_flat" \
+    'A dependency hold, a `blocked` label, a held PR, a collision or migration hold — any one of them and this is STALLED, with the site holds listed among its reasons.' \
+    "and STALLED keeps every other held set, site holds included among its reasons"
+
+# The rails are the file's last word on self-cancelling, and they enumerate per
+# state. A state missing from them is a state the rails silently permit.
+assert_has "$rails_flat" \
+    'For DEFERRED, one Ready item this checkout may take, one hold of any other kind, any dispatch, any in-flight work or an active foreign claim means this is not that state — fall through to the state that fits and stay alive.' \
+    "the safety rails carry DEFERRED's own clause, and it ENDS in stay-alive"
+
+
+# --- 8. structure: four terminal states, one stop path, and the inventories ---
 section stoppath "the shape of section 7 is itself canonical"
 
-# #282 added coverage, not a state; #286 adds the THIRD state deliberately. The
-# assertion is rewritten rather than deleted, because its job was never "two" —
-# it was that the count cannot move without somebody saying so. It is now tied
-# to the headings, so a fourth state, or a lost one, fails HERE as well as in
-# the heading inventory: a prose count and a structural count that can disagree
-# is exactly the free-floating number this repo keeps being bitten by.
-assert_in "$sec7_flat" 'A drain loop ends itself in exactly three states' \
-    "the prose states the terminal-state count, and #286 made it three"
+# #282 added coverage, not a state; #286 added the third deliberately and #342
+# the fourth. The assertion is rewritten rather than deleted, because its job was
+# never "two" — it was that the count cannot move without somebody saying so. It
+# is tied to the headings, so a fifth state, or a lost one, fails HERE as well as
+# in the heading inventory: a prose count and a structural count that can
+# disagree is exactly the free-floating number this repo keeps being bitten by.
+assert_in "$sec7_flat" 'A drain loop ends itself in exactly four states' \
+    "the prose states the terminal-state count, and #342 made it four"
 n_drain_headings="$(printf '%s\n' "$sec7" | grep -c '^### DRAIN ')"
-assert_eq "$n_drain_headings" "3" \
-    "and §7 holds exactly three DRAIN headings, so prose and structure agree"
+assert_eq "$n_drain_headings" "4" \
+    "and §7 holds exactly four DRAIN headings, so prose and structure agree"
 
 # LAYER 2. An inserted paragraph writes #282's bug back four lines under the
 # canon forbidding it and every equality check still passes — measured. These

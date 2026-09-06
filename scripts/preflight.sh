@@ -806,7 +806,7 @@
 #      literal must-exists and the `surface and hold` / `ONE redispatch` vetoes,
 #      which catch a literal DELETION and nothing subtler. That asymmetry is
 #      measured and stated rather than papered over by widening the greps.
-#      Two tracked files, no gh, no network.
+#      Three tracked files, no gh, no network.
 #      IT NOW PINS A THIRD TERMINAL STATE (issue #286). DRAIN DEGRADED ends a
 #      loop that is ticking into a void under a platform outage: measured, an
 #      18-tick three-hour run that reported the state accurately, did nothing,
@@ -818,6 +818,26 @@
 #      NOT degraded and is the collapse a later sweep will make: it means the
 #      probe could not measure, which is precisely the state that must not stop
 #      a loop. COMPLETE and STALLED are untouched.
+#      AND A FOURTH (issue #342, epic #322). #341's Site filter steps around a
+#      Ready item whose `site:` labels name another machine, and that hold
+#      reached §7 with nowhere to go: in-flight zero, Ready non-empty and every
+#      remaining item site-held satisfies STALLED's every conjunct, so the loop
+#      ended telling the operator to resolve a gate this checkout cannot. A site
+#      hold is neither self-resolving — this checkout will never satisfy it —
+#      nor a human gate, so DRAIN DEFERRED names the site and takes COMPLETE's
+#      stop path, cron self-cancel included, and is NEVER reported as STALLED.
+#      THE DISCRIMINATION IS THE WHOLE OF IT and is pinned in BOTH directions:
+#      DEFERRED is STALLED plus one test — the held set holds nothing but site
+#      holds — so it is evaluated FIRST or it is unreachable, while a held set
+#      carrying one dependency hold, one `blocked` label or one held PR is still
+#      STALLED with the site holds listed among its reasons. It takes NO
+#      confirmation tick, modelled on COMPLETE rather than on the state beside
+#      it: a site declaration cannot change what this checkout IS, so a second
+#      tick reaches the same answer. DEGRADED cannot compete for the state at
+#      all — it requires in-flight non-zero — so #286's evaluated-first rule
+#      needed no widening. §4's POINTER at the new state belongs to the site
+#      filter gate below (`test-site-filter.sh` row R30, deletion- AND
+#      qualification-mutated there) and is deliberately not duplicated here.
 #  33. audit lost-reviewer tests (scripts/test-audit-lost-reviewer.sh) — the
 #      nine `*-reviewer` agents serve TWO orchestrators and only one of them
 #      scored a reviewer that came back with nothing. `pr-review-orchestrator`
@@ -1856,9 +1876,13 @@ fi
 # and the single stop path. It also pins §2's CONFLICTING demotion (#290) —
 # demote on sight, demote ONCE, the failed-write outcome and the §4
 # carry-forward — without which a conflicted PR holds in-flight open forever and
-# neither terminal state can fire. Bound in three layers — canon, inventory,
-# consumption — each added after a review defeated the one before it. Two
-# tracked files, no gh, no network.
+# neither terminal state can fire. It pins the FOURTH terminal state too (#342):
+# a Ready column held entirely by §4's Site filter ends the loop at DRAIN
+# DEFERRED, naming the site and taking COMPLETE's stop path, never as a stall the
+# operator is told to resolve — with the discrimination pinned the other way as
+# well, since a held set carrying anything else is STALLED still. Bound in three
+# layers — canon, inventory, consumption — each added after a review defeated the
+# one before it. Three tracked files, no gh, no network.
 if bash scripts/test-drain-terminal-states.sh; then
     pass "drain terminal-state tests (scripts/test-drain-terminal-states.sh)"
 else

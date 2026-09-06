@@ -320,11 +320,12 @@ here, and the machine that can take it is not this tick's to find. Treating it a
 precisely how the issue ends up `blocked` under a comment naming the wrong cause. Report it as
 `#N (requires site <x>)`, listing **all** of `sites` when there is more than one, so the operator
 can see which checkout to run the drain from. Nothing here needs undoing: the issue dispatches
-normally the moment the named checkout ticks. **But §7 does not know that yet** — a site hold joins
-the held set like any other, is not self-resolving, and a Ready column holding nothing else ends
-the loop at DRAIN STALLED two ticks later, telling the operator to resolve a gate this checkout
-cannot. Say so when it happens; the terminal-state half is
-[#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)'s.
+normally the moment the named checkout ticks. **§7 reads that hold as a terminal state of its
+own** — a site hold joins the held set like any other and is not self-resolving, so a Ready column
+holding nothing else ends the loop at DRAIN DEFERRED, naming the site rather than telling the
+operator to resolve a gate this checkout cannot
+([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)). Held alongside anything else it
+is STALLED, and the site holds are listed among that announcement's reasons.
 
 ### Collision — an in-flight PR's real files beat the declaration
 
@@ -530,9 +531,9 @@ drop a `declared (PR read failed)` entry — a degraded check is an outcome too.
 declared but the repo is not enabled for the preview, say so once rather than every tick:
 `stacks: #1720→#1722 declared but stacks unavailable in this repo — sequencing by dependency instead`.
 
-## 7. Terminal states — drain complete, drain stalled, drain degraded
+## 7. Terminal states — drain complete, drain deferred, drain stalled, drain degraded
 
-A drain loop ends itself in exactly three states. All must be **confirmed from live GitHub state
+A drain loop ends itself in exactly four states. All must be **confirmed from live GitHub state
 read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live
 state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave
 the loop alone, write no stall or degraded record, and let the next tick re-check.
@@ -638,6 +639,54 @@ What #282 changed is only where that veto leads. A PR this loop may not advance 
 and reach no other state either; it now joins STALLED's held set, and the veto ranges over exactly
 the set that held set is drawn from.
 
+### DRAIN DEFERRED
+
+**Evaluated BEFORE STALLED, and the order is the rule rather than a presentation choice.** Every
+conjunct STALLED tests is satisfied here too — in-flight zero, nothing this loop may advance, a
+non-empty held set — so this state is STALLED plus one further test, and evaluating STALLED first
+leaves it unreachable. DEGRADED cannot compete for it: that state requires in-flight non-zero and
+this one requires in-flight zero, so the two are disjoint by construction and the order between
+them decides nothing.
+
+Four conjuncts, and the fourth is the one that separates this state from STALLED:
+
+1. **In-flight zero AND dispatched zero this tick** — STALLED's own first two, unchanged.
+2. **Ready is non-empty.** An empty Ready column is COMPLETE, which fires ahead of both.
+3. **Every remaining Ready item is held by §4's Site filter** — its `sites` is non-empty and does
+   not contain this checkout's `execution_site`.
+4. **The held set holds nothing else.** No held PR, no dependency hold, no `blocked` label, no
+   collision or migration hold, and no active foreign claim. One hold of any other kind and the
+   state is STALLED, with the site holds listed among its reasons.
+
+**A site hold is neither self-resolving nor a human gate for THIS loop, which is why it is a state
+of its own rather than a STALLED variant.** It is not self-resolving: this checkout will never
+satisfy it, so a confirmation clock would count forever. It is not a human gate either — nobody
+has to decide anything, and the issue is already dispatchable, from a machine that is not this
+one. So reporting it as STALLED is not merely imprecise: it sends the reader hunting for a blocker
+that does not exist, and then tells them to resolve the gate and restart the drain on a checkout
+that cannot. **Never report this state as STALLED.**
+
+**No confirmation tick, exactly as COMPLETE takes none.** STALLED and DEGRADED confirm across two
+ticks because what they read can change underneath them — a racing session closes a dependency, a
+flaky call clears. A site declaration cannot change what this checkout IS: a second tick re-reads
+the same `sites` against the same `execution_site` and reaches the same answer. Write no stall
+record and no degraded record from here — both clocks belong to states that are still moving.
+
+Announce loudly, naming the site each remaining item requires — **all** of an item's `sites` when
+it declares more than one, so the operator can see which checkout to run the drain from:
+
+```text
+DRAIN DEFERRED — remaining Ready items require site <x>
+  #1731 #1734 → requires site vdi
+  #1736 → requires site vdi or bench
+Loop <id> cancelled — run the drain from a checkout those items name; nothing here needs undoing.
+```
+
+Then take the **same stop path as DRAIN COMPLETE** below — one path, never a parallel one, and the
+cron self-cancel is not optional on it. Nothing here is a failure and nothing needs undoing: no
+redispatch budget is spent, no issue is demoted, and every deferred item dispatches normally the
+moment the checkout it names ticks (§4).
+
 ### DRAIN STALLED
 
 In-flight zero AND dispatched zero this tick AND **nothing this loop is permitted to advance**,
@@ -666,6 +715,14 @@ about to make progress.
 **The held set must be non-empty.** Nothing held, nothing in flight and no open PR is COMPLETE,
 which fires first and needs no confirmation tick. "Nothing to advance" satisfied vacuously — by a
 queue that simply finished — must never announce STALLED.
+
+**A held set of nothing but site holds is DEFERRED, not STALLED**, and that state is evaluated
+first. STALLED's conjuncts match it exactly, so the discrimination is one extra test rather than a
+different one: does the held set contain anything a human could clear? A dependency hold, a
+`blocked` label, a held PR, a collision or migration hold — any one of them and this is STALLED,
+with the site holds listed among its reasons. Nothing but site holds, and the loop is on the wrong
+machine rather than blocked, which is a different sentence to print and a different thing to do
+about it.
 
 #### The discriminator — may this loop advance it?
 
@@ -828,7 +885,7 @@ tick that does both** — merges the last in-flight PR and still ends holding so
 record first and then writes this tick's hold-set: progress wins, and the new hold-set starts a
 fresh two-tick count rather than inheriting the old one's.
 
-### Stop path — both terminal states
+### Stop path — every terminal state
 
 Stop the loop yourself, according to how this tick was invoked:
 
@@ -843,7 +900,8 @@ prompt is this dispatch-ready invocation.
 
 - **Exactly one match** → `CronDelete <id>`, then append to the report — after COMPLETE: `Loop
   <id> cancelled — run groom-backlog to refill Ready and start a new drain when there's more to
-  ship.`; after STALLED: `Loop <id> cancelled — resolve the gate(s), then restart the drain.`
+  ship.`; after DEFERRED: `Loop <id> cancelled — run the drain from a checkout those items
+  name.`; after STALLED: `Loop <id> cancelled — resolve the gate(s), then restart the drain.`
 - **Zero, multiple, or ambiguous matches** → delete NOTHING. Announce the terminal state, list
   the candidate ids, and tell the user to `CronDelete` the right one. Deleting the wrong job is
   worse than a few extra no-op ticks.
@@ -855,6 +913,9 @@ or an active foreign claim all mean the loop may still make progress — stay al
 claimed or an open PR this loop tracks — the union §7's discriminator ranges over, in-flight until
 actually MERGED per §3 — means the drain is not complete; the veto and the held set must range over
 the same set, or the state they disagree about ticks forever.
+For DEFERRED, one Ready item this checkout may take, one hold of any other kind, any dispatch, any
+in-flight work or an active foreign claim means this is not that state — fall through to the state
+that fits and stay alive.
 For STALLED, any dispatch, any in-flight work (mine or foreign), an open PR this loop may still
 advance, an empty held set, or a hold-set that changed since the recorded tick means the loop may
 still make progress — stay alive. An API-failure tick never self-cancels and never counts toward
