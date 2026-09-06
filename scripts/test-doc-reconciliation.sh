@@ -191,6 +191,34 @@ else
     bad "dispatch-ready lost the reason its sub-agents need the rule"
 fi
 
+# --- 6. CLAUDE.md's gate count is DERIVED, not asserted -----------------------
+#
+# This repo's own convention: "a count stated in prose is safe only when its
+# members are enumerated beside it, or when a gate re-derives it." CLAUDE.md
+# spells the number of `scripts/test-*.sh` gates and nothing re-derived it —
+# equally bare at 30, 31 and 33, correct each time and unenforced every time
+# (issue #348). It belongs HERE rather than in preflight, because a doc claim
+# going stale against the repo is exactly what this gate is for.
+#
+# THREE sources, all required to agree, because each catches a different slip:
+# a gate file added but never wired runs nowhere; a gate wired but deleted fails
+# the run; and either one leaves the sentence wrong.
+n_files="$(git -C "$REPO_ROOT" ls-files 'scripts/test-*.sh' | grep -c .)"
+# `if` OR `elif`: test-template-actionlint.sh is reached through an `elif`,
+# because preflight skips the actionlint pair in CI (the pinned binary reaches
+# only LATER steps) and runs it locally. An `^if`-only pattern reported 32 of 33
+# on this check's very first run.
+n_wired="$(grep -cE '^(el)?if bash scripts/test-[a-z0-9-]+\.sh' "$REPO_ROOT/scripts/preflight.sh")"
+n_said="$(grep -oE 'the [0-9]+ `scripts/test-\*\.sh` gates' "$REPO_ROOT/CLAUDE.md" | grep -oE '[0-9]+' | head -1)"
+
+if [ -z "$n_said" ]; then
+    bad "CLAUDE.md no longer spells a gate count in the form this gate re-derives — restore it, or this check silently covers nothing"
+elif [ "$n_files" = "$n_wired" ] && [ "$n_wired" = "$n_said" ]; then
+    ok "CLAUDE.md's gate count is re-derived: $n_said tracked = $n_wired wired = $n_said stated"
+else
+    bad "gate count disagrees — $n_files tracked scripts/test-*.sh, $n_wired wired into preflight, CLAUDE.md says $n_said"
+fi
+
 if [ "$fails" -ne 0 ]; then
     echo "test-doc-reconciliation: FAILED ($fails)" >&2
     exit 1

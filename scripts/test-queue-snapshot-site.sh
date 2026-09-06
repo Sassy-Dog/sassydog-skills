@@ -53,11 +53,22 @@
 #
 # Network-free: a PATH-shimmed mock `gh`. `REPO=<owner/name>` in the
 # environment suppresses queue-snapshot's `gh repo view` lookup (it runs that
-# only when REPO is EMPTY). Three things make "no network" structural rather
-# than intended: the shim's resolution is verified immediately after `chmod`
-# and EXITS if PATH did not pick it up, the slug uses the RFC 2606 `.invalid`
-# TLD because `mock-org` is a REAL GitHub organization, and the mock HONOURS
-# `--json`, so dropping `labels` from the pull reddens rather than passing.
+# only when REPO is EMPTY). ONE thing makes "no network" structural: the shim's
+# resolution is verified immediately after `chmod` and EXITS if PATH did not
+# pick it up. Two others were credited with it and neither can carry it
+# (issue #348):
+#
+#   - the RFC 2606 `.invalid` TLD in the slug buys TARGET ISOLATION, not
+#     network-freedom. `mock-org` is a real GitHub organization, and a login
+#     cannot contain a `.`, so no read here can name a real account. It cannot
+#     stop a call: `queue-snapshot.sh` runs `gh api user` with no slug at all,
+#     and a two-part `owner/repo` resolves on github.com whatever its TLD.
+#   - the mock HONOURING `--json` is a FIDELITY property — dropping `labels`
+#     from the pull reddens rather than passing — which says nothing about
+#     whether a real `gh` could be reached.
+#
+# Both are worth keeping and neither is a second guard. If the shim check is
+# ever weakened, this run reaches the network with nothing else to stop it.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-queue-snapshot-site.sh
@@ -208,6 +219,11 @@ ready = [
     # 111 — THE REASON FOR THE MOVE. A body that quotes the old body contract,
     # fenced and in prose, declares nothing at all.
     issue(111, "prose only", ["ready"], PROSE),
+    # 114 — the value is everything after the FIRST colon, which the header
+    # states and nothing used to test: on every other row here a
+    # `split(":")[-1]` variant is indistinguishable from the slice (issue #348).
+    # A second colon is the only thing that tells them apart.
+    issue(114, "value containing a colon", ["ready", "site:vdi:2"]),
 ]
 
 in_progress = [
@@ -222,7 +238,7 @@ for name, payload in (("ready", ready), ("in-progress", in_progress), ("blocked"
         json.dump(payload, fh)
 PY
 
-READY_N=12
+READY_N=13
 
 # --- runner -------------------------------------------------------------------
 OUT="$WORK/out.json"
@@ -356,6 +372,7 @@ fi
 # --- 8. the body declares nothing — the reason for the move -------------------
 echo "8. a prose site: line in the body declares nothing" >&2
 expect_sites "a body quoting the old contract, fenced and in prose, declares nothing" ready 111 '[]'
+expect_sites "the value is everything after the FIRST colon, not the last" ready 114 '["vdi:2"]'
 
 # --- 9. mutation proofs, and the matrix derived from them ---------------------
 # `mutant` diffs each mutant's answers against the shipped baseline and records
@@ -393,8 +410,13 @@ else
     bad "the baseline holds $(grep -c . "$BASELINE") rows, expected $BASELINE_N — every flip set below would be measured against the wrong thing"
 fi
 
-mutant() { # <label> <named-row> <from> <to>
-    local label="$1" named="$2" flips
+# <named-rows> is a SPACE-SEPARATED list, not one row. It began as a single id,
+# which left four rows reachable only by blanket mutants — M1/M7/M10 flip every
+# declared row, M11 every undeclared one — so nothing NAMED them and the derived
+# matrix still read clean (issue #348). Naming is what turns "some mutant
+# happened to flip this" into "this decision is load-bearing".
+mutant() { # <label> <named-rows> <from> <to>
+    local label="$1" named="$2" flips miss row
     if ! python3 - "$SNAP" "$MUT" "$3" "$4" <<'PY'
 import io, sys
 src, dst, frm, to = sys.argv[1:5]
@@ -423,10 +445,18 @@ PY
     # row numbers in the same order, so a changed value is a line unique to one.
     flips="$(comm -13 "$BASELINE" "$WORK/mutant.tsv" | cut -f1 | tr '\n' ' ')"
     printf '%s\n' $flips >>"$FLIPPED"
-    case " $flips " in
-        *" $named "*) ok "$label reddens row $named as declared (flips: ${flips% })" ;;
-        *) bad "$label does NOT redden row $named — it flips '${flips% }'. Either the roster names the wrong row or the decision has stopped being load-bearing" ;;
-    esac
+    miss=""
+    for row in $named; do
+        case " $flips " in
+            *" $row "*) ;;
+            *) miss="$miss $row" ;;
+        esac
+    done
+    if [ -z "$miss" ]; then
+        ok "$label reddens row(s) $named as declared (flips: ${flips% })"
+    else
+        bad "$label does NOT redden row(s)$miss — it flips '${flips% }'. Either the roster names the wrong row or the decision has stopped being load-bearing"
+    fi
     return 0
 }
 
@@ -443,11 +473,16 @@ if mutant "M3: without the key fold SITE:vdi stops declaring" 103 \
     '        if name[:len(SITE_PREFIX)].lower() == SITE_PREFIX:' \
     '        if name[:len(SITE_PREFIX)] == SITE_PREFIX:'; then :; fi
 
-if mutant "M4: without the value fold site:VDI declares a different site" 112 \
+# 106 is named here too: `site:vdi` + `Site:VDI` is ONE declaration only because
+# both values fold. Without the fold it is two — the same edit, seen from the
+# deduplication side.
+if mutant "M4: without the value fold site:VDI declares a different site" "112 106" \
     '            value = name[len(SITE_PREFIX):].strip().lower()' \
     '            value = name[len(SITE_PREFIX):].strip()'; then :; fi
 
-if mutant "M5: without the empty-value filter a bare site: names a site" 109 \
+# 110 too: an empty value beside a real one stays ONE declaration only because
+# the empty one is filtered out. Without it the row reads as a conflict.
+if mutant "M5: without the empty-value filter a bare site: names a site" "109 110" \
     '            if value:' \
     '            if True:'; then :; fi
 
@@ -464,6 +499,29 @@ if mutant "M7: dropping labels from the pull darkens every site" 101 \
 if mutant "M8: dropping the colon lets site-vdi declare" 113 \
     '        if name[:len(SITE_PREFIX)].lower() == SITE_PREFIX:' \
     '        if name.lower().startswith("site"):'; then :; fi
+
+# THE THREE ROWS NO MUTANT NAMED (issue #348). All three decisions were live —
+# dropping `.strip()` or re-adding a body parse both redden — so this was
+# exposure rather than vacuity. The decay was demonstrated, though: removing
+# 104's padding, or 111's PROSE body, left the gate green at 50/11.
+if mutant "M12: dropping .strip() lets a padded value declare a different site" 104 \
+    '            value = name[len(SITE_PREFIX):].strip().lower()' \
+    '            value = name[len(SITE_PREFIX):].lower()'; then :; fi
+
+# Row 111 is the one the header calls THE REASON FOR THE MOVE, and nothing named
+# it. This restores exactly what the move removed — a body scan — which the
+# PROSE fixture (a fenced block and a sentence, both quoting the old contract)
+# is then read as a declaration by. It mutates the CALLER, because sites_of
+# never sees a body.
+if mutant "M13: a body site: scan returns, reading quoted prose as a declaration" 111 \
+    '        "sites": sites_of(labels),' \
+    '        "sites": sorted(set(sites_of(labels)) | {m.lower() for m in re.findall(r"site:\s*([A-Za-z0-9._-]+)", issue.get("body") or "")}),'; then :; fi
+
+# The value slice against the split it is indistinguishable from on every other
+# row: `site:vdi:2` is the only fixture that separates them.
+if mutant "M14: the value is taken after the LAST colon rather than the first" 114 \
+    '            value = name[len(SITE_PREFIX):].strip().lower()' \
+    '            value = name.split(":")[-1].strip().lower()'; then :; fi
 
 # N6: nothing mutated the ordering, so row 105's sorted expectation was free.
 # `sorted(..., reverse=True)` rather than `list(found)` — a set's iteration

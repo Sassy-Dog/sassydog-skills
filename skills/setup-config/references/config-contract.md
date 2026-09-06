@@ -537,13 +537,17 @@ workstation names it themselves, like everybody else.
 compared against, which is presence-is-the-toggle behaving as it does everywhere else. A repo whose
 work all runs from one machine should simply omit it.
 
-**A refresh neither re-derives this key nor fills it in — `setup-config`'s guardrail list owns that
-rule and is the copy to trust.** `update-mode.md` and `migrate-mode.md` carry the operational side
-for their own modes, because a mode reads its own file and inherits nothing, and `interview.md` §3d
-carries the question's own half — which modes ask it, and why a refresh is not one of them
-([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). Nothing beyond those three
-restates it, here included: the rule was written out in five places once, and the copy that drifted
-was found by a reviewer rather than by anything that fails.
+**How a refresh treats this key is `setup-config`'s guardrail list, which owns that rule and is the
+copy to trust** — deliberately a pointer rather than a restatement, because the rule was written out
+in five places once and the copy that drifted was found by a reviewer rather than by anything that
+fails. `update-mode.md` and `migrate-mode.md` carry the operational side for their own modes, since
+a mode reads its own file and inherits nothing; `interview.md` §3d carries the question's own half —
+which modes ask it, and why a refresh is not one of them
+([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). **Do not read that as a closed
+set.** It was asserted as one, and was wrong on landing: `interview.md` states §3d's refresh
+semantics from *outside* §3d as well. A count with nothing re-deriving it is what this repo's own
+convention warns about, and a "nothing else restates it" clause is that shape at its worst — it
+reads as verified and is checked by nothing.
 
 **Who reads it, by the change that adds the reader.** The label read and this contract landed first
 and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that each consumer
