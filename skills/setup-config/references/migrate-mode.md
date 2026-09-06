@@ -172,6 +172,14 @@ so it is never defaulted or inferred. And `sentry:` is **not** part of this ques
 written by the culprit check in `references/detection.md`, and it keeps its blind-spot row
 deliberately (`references/config-contract.md`, "The one exception").
 
+## Step 2c — ask §3d for `execution_site`, once
+
+The same shape as Step 2b and for the same reason: a legacy generated skill cannot express an
+execution site either, so extraction never produces one. The full rule is
+**`execution_site` on a migration** at the end of this file — read it here rather than walking past
+it, because it is an offer this mode makes exactly once and a walk of Steps 1-6 is what an agent
+follows.
+
 ## Step 3 — the renames: legacy names map to current names
 
 Four of the six skills have been renamed since the generated era (`fill-it` twice, via `groom-it`).
@@ -263,11 +271,20 @@ francisco, mission-control, platform, qr-ninja, quickshot, sassydog-web, tailore
 `velovate/velovate-app`, `devcanopy/devcanopy`. `lupita/lupita` is excluded — legacy prefixed
 skills, no markers, and the product is being sunset.
 
-## `execution_site` on a migration
+## `execution_site` on a migration — ask §3d, once
 
-A legacy generated skill has no way to express an execution site, so an extracted config never
-carries `execution_site` and a migration must **leave it absent** — the same answer update mode
-gives (`update-mode.md`). Do not propose a platform-derived name: the interview that offers one is
-[#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s, and until it exists there is no
-way to record that the user declined. This rule is stated here as well as in `update-mode.md`
-because migrate mode reads this file, and a rule stated only there is a rule this path never reads.
+A legacy generated skill has no way to express an execution site, so **extraction can never produce
+one** and every migrated config would otherwise arrive with `execution_site` absent — the same shape
+as Step 2b's three keys, for the same reason. So put **interview §3d** to the user here, as part of
+this mode: it is the one offer this repo gets, because a refresh deliberately never repeats it
+(`update-mode.md`).
+
+Two things not to shortcut. **The platform proposes; the user names.** Take the proposal from
+`references/config-contract.md`'s `uname -s` table, never from a language runtime's platform
+constant, and never write a name the user did not say — a declined question leaves the key absent,
+which is a legitimate answer and the one every repo already has. And a migration **never carries a
+name across from anywhere else**: there is nothing in a legacy skill to carry, and a sibling repo's
+config is a different clone on a possibly different machine.
+
+This rule is stated here as well as in `update-mode.md` because migrate mode reads this file, and a
+rule stated only there is a rule this path never reads.

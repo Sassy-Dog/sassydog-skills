@@ -1248,6 +1248,48 @@
 #      own stop line by construction and the guard grepped the window for it.
 #      Source-level plus the two emitter rows; seven tracked files, copies only,
 #      no `gh`, no network.
+#  41. execution-site surface tests (scripts/test-execution-site-surface.sh) —
+#      the HUMAN half of the execution-site contract (issue #343, epic #322),
+#      where gate 39 covers the parser and gate 40 the two dispatchers. Four
+#      decisions that read like drift to a later alignment sweep: grooming
+#      APPLIES the `site:<name>` label and never writes a `site:` body line,
+#      though it sits beside three body contracts it does write; an unlabelled
+#      issue renders on the plate exactly as it did before, because a token on
+#      every line is noise proportional to the backlog; several `site:` labels
+#      NARROW rather than widen — every named checkout may take the issue, so
+#      neither surface refuses a multi-member declaration nor tidies it down to
+#      one, and neither resolves it to "any site", which is the direction
+#      #322's originating bug ran; and the interview PROPOSES a name and never
+#      assumes one, so an unanswered question leaves the key absent. NEITHER
+#      SURFACE RESOLVES LABELS ITSELF: both run `queue-snapshot.sh --sites-of`,
+#      because their reads are not buckets — the plate lists open issues and
+#      grooming lists candidates — and a paraphrase forks the rules, which is
+#      the failure #341 measured when one dropped the `strip()`. The `uname -s`
+#      table has exactly one home and its tokens are asserted ABSENT from the
+#      three consumer files — an earlier draft of #343 wrote `darwin` / `win32`,
+#      a language runtime's constants no `uname -s` emits — and that ban is
+#      CASE-INSENSITIVE, because a case-sensitive one catches a faithful copy
+#      and admits the lowercase form this repo actually wrote. The same pattern
+#      is first pointed at the table's home so it cannot pass vacuously. The
+#      three retired "no interview exists yet" sentences are each banned by a
+#      pattern proved against the exact sentence it retired, and the retired
+#      match-no-checkout semantics by a pattern carrying a proof per
+#      INFLECTION — an English rewrite reaches for all of them, modals and
+#      quantifiers included, and four successive narrowings of that one ban each
+#      shipped green. DO NOT SMOOTH THAT HYPHENATION TO NATURAL ENGLISH: the
+#      un-hyphenated spelling is banned across test-site-filter.sh's whole-text
+#      veto, whose subject list includes THIS FILE, so writing it here turns
+#      preflight red from a different gate under a message that reads as a false
+#      accusation. The hyphen is the only thing keeping this line legal. MUTANT REACH IS
+#      DERIVED, not written down: the gate re-runs ITSELF against each mutated
+#      copy of the subjects (`EXEC_SITE_SRC` / `EXEC_SITE_CHILD`), diffs the
+#      failing-row set against a baseline proved clean first, and the rows NO
+#      mutant reddens are derived and compared to a declared set that is empty.
+#      That replaced a header-only mutation claim, which was false as a standing
+#      property the moment a row was re-anchored — the same shape
+#      test-queue-snapshot-site.sh paid three review rounds for. Copies only;
+#      source-level and flattened; seven tracked
+#      files, no `gh`, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -2030,6 +2072,23 @@ if bash scripts/test-site-filter.sh; then
     pass "site filter tests (scripts/test-site-filter.sh)"
 else
     failed "site filter tests (scripts/test-site-filter.sh)"
+fi
+
+# --- 41. execution-site surface tests ------------------------------------------
+# The human half of the same contract: grooming applies the label and never a
+# body line, an unlabelled issue renders on the plate exactly as before, several
+# labels narrow rather than widen — every named checkout may take the issue, so
+# neither surface refuses one nor reads it as "any site" — and the interview
+# proposes a platform-derived name it never assumes. Both surfaces run
+# `queue-snapshot.sh --sites-of` rather than paraphrasing the resolution rules,
+# and the `uname -s` table stays in its one home under a case-insensitive ban.
+# Mutant reach is derived from a baseline diff of the gate re-run against
+# mutated copies; the rows no mutant reddens must be the empty declared set.
+# Copies only, no repo, no network.
+if bash scripts/test-execution-site-surface.sh; then
+    pass "execution-site surface tests (scripts/test-execution-site-surface.sh)"
+else
+    failed "execution-site surface tests (scripts/test-execution-site-surface.sh)"
 fi
 
 # ------------------------------------------------------------------------------

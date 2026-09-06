@@ -121,9 +121,11 @@ from. It records what the user calls the workstation this checkout runs on, and 
 to re-verify it against: `uname -s` answers what *kind* of machine this is (`Darwin`, `Linux`,
 `MINGW64_NT-…`), never what it was named, so a refresh that "re-derived" would replace `vdi` with
 `windows` on the one checkout the name exists to distinguish. **An absent key stays absent here.**
-The interview that proposes a name is [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)'s
-to add; until that section exists there is no question shape and no way to record "declined", so a
-proposal made here would be re-offered on every refresh forever. A platform kind that differs from
+The interview that proposes a name is `references/interview.md` §3d, and it is confined to the
+three one-time modes — create, migrate and adopt. **Do not ask it on a refresh** unless the user
+raises the key themselves: this mode runs again and again, so a proposal offered here is a proposal
+re-offered forever. An absent key surviving a refresh untouched is how a decline stays declined.
+A platform kind that differs from
 the configured name is not a disagreement — it is why the name is configured; only the user
 disputing their own value is, and that is a stop and surface as everywhere else. Getting this wrong
 is silent in the dangerous direction: a missing or overwritten `execution_site` turns a site filter
@@ -159,6 +161,12 @@ For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>
    same reason (`references/migrate-mode.md`, "Step 2b"). A quiet tree is **not** an answer, and
    `sentry:` is **not** part of this question: its `none` is written by the culprit check in
    `references/detection.md` and it keeps its blind-spot row deliberately.
+   **Step 2c — ask interview §3d for `execution_site`, once.** Adopt mode reaches create mode's
+   interview through step 2, but the nearest `execution_site` prose in *this* file is the refresh
+   rule above — "do not ask it on a refresh" — and an agent walking these numbered steps reads that
+   and stops. Adopt is a one-time transition, not a refresh: it gets the offer, and it is the only
+   one this repo ever gets, because no later refresh re-offers it. Same reason §2c is called out
+   here rather than left to implicit inheritance.
 3. Render config.
 4. **Side-by-side review per skill.** List every hand-written section with no equivalent in the
    config — repo-specific traps, war stories, special recipes. For each the user picks: fold into a

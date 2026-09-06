@@ -539,9 +539,11 @@ work all runs from one machine should simply omit it.
 
 **A refresh neither re-derives this key nor fills it in — `setup-config`'s guardrail list owns that
 rule and is the copy to trust.** `update-mode.md` and `migrate-mode.md` carry the operational side
-for their own modes, because a mode reads its own file and inherits nothing. Nothing else restates
-it, here included: the rule was written out in five places once, and the copy that drifted was found
-by a reviewer rather than by anything that fails.
+for their own modes, because a mode reads its own file and inherits nothing, and `interview.md` §3d
+carries the question's own half — which modes ask it, and why a refresh is not one of them
+([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). Nothing beyond those three
+restates it, here included: the rule was written out in five places once, and the copy that drifted
+was found by a reviewer rather than by anything that fails.
 
 **Who reads it, by the change that adds the reader.** The label read and this contract landed first
 and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that each consumer
