@@ -125,6 +125,15 @@ The interview that proposes a name is `references/interview.md` §3d, and it is 
 three one-time modes — create, migrate and adopt. **Do not ask it on a refresh** unless the user
 raises the key themselves: this mode runs again and again, so a proposal offered here is a proposal
 re-offered forever. An absent key surviving a refresh untouched is how a decline stays declined.
+
+**Absent does not yet mean declined anywhere, and will not for most repos.** Every config written
+before [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) is missing this key because
+nobody was ever asked, not because anybody said no — and since only create, migrate and adopt ask,
+a repo already on config reaches the question only if it passes through one of those again. The two
+cases are indistinguishable in the file and both read as absent, which is safe: absent is fail-open,
+so every unasked repo behaves exactly as it did before the key existed. Do not report an absent key
+as a recorded decline; report it as unasked unless this repo's own history shows the offer was
+made.
 A platform kind that differs from
 the configured name is not a disagreement — it is why the name is configured; only the user
 disputing their own value is, and that is a stop and surface as everywhere else. Getting this wrong

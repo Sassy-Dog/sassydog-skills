@@ -663,7 +663,7 @@ collision_blocked	**A blocked issue's open PR counts here even though it is not 
 b001	## 7. Terminal states — drain complete, drain deferred, drain stalled, drain degraded
 b002	A drain loop ends itself in exactly four states. All must be **confirmed from live GitHub state read this tick** — the §2 reconcile plus the §4 read, never a stale or transient one. If live state could not be verified this tick — an API failure mid-tick — the tick proves nothing: leave the loop alone, write no stall or degraded record, and let the next tick re-check.
 b003	### DRAIN DEGRADED
-b004	**Evaluated BEFORE COMPLETE and STALLED, and that order is the rule rather than a presentation choice.** §7 already refuses to act on a tick whose live state could not be verified — *the tick proves nothing*. A degraded platform is that same condition arriving **without an error**: the reads succeed, return incomplete data, and COMPLETE and STALLED consume them as fact. Measured 2026-08-26 — PR #283's required `ci` never fired during an outage, two consecutive ticks reported the state accurately and did nothing, and the coordinator then proposed closing and reopening the PR, which during an outage could leave it worse than doing nothing. Evaluating this state after the ones below it lets a degraded read produce a confident terminal verdict first.
+b004	**Evaluated BEFORE COMPLETE and STALLED, and that order is the rule rather than a presentation choice.** §7 already refuses to act on a tick whose live state could not be verified — *the tick proves nothing*. A degraded platform is that same condition arriving **without an error**: the reads succeed, return incomplete data, and COMPLETE and STALLED consume them as fact. Measured 2026-08-26 — PR #283's required `ci` never fired during an outage, two consecutive ticks reported the state accurately and did nothing, and the coordinator then proposed closing and reopening the PR, which during an outage could leave it worse than doing nothing. Evaluating this state after COMPLETE or STALLED lets a degraded read produce a confident terminal verdict first.
 b005	This state **consumes** `pr-shepherd`'s probe and never re-derives platform health itself:
 b006	Run it against **ONE** in-flight PR, not each: the verdict is about the platform, not the PR, and a per-PR fan-out multiplies calls into a service already struggling.
 b007	Three conjuncts, and each excludes a normal state the loop already handles:
@@ -721,7 +721,7 @@ b058	Safety rails: self-cancel ONLY on a terminal state confirmed above. For DEG
 f001	bash ${CLAUDE_PLUGIN_ROOT}/skills/pr-shepherd/scripts/probe-platform-health.sh --pr "$PR" --repo "$REPO"
 f002	DRAIN DEGRADED — the platform is degraded and nothing in flight can progress: probe: degraded (attributed) — Actions: major_outage in flight: #N (PR #N — required check `ci` has no run for the head) Loop <id> cancelled — the platform recovers on its own; restart the drain once it has.
 f003	DRAIN COMPLETE — Ready is empty and nothing is in flight.
-f004	DRAIN DEFERRED — remaining Ready items require site <x> #N #N → requires site vdi #N → requires site vdi or bench Loop <id> cancelled — run the drain from a checkout those items name.
+f004	DRAIN DEFERRED — remaining Ready items require a site this checkout does not hold #N #N → requires site vdi #N → requires site vdi or bench Loop <id> cancelled — run the drain from a checkout those items name.
 f005	DRAIN STALLED — nothing dispatchable, nothing in flight, and nothing this loop may advance: #N #N #N #N #N → chain to #N (parked in Backlog: awaiting planning session) #N → blocked label (dispatch-ready: 2 failed attempts — CI check needs a human call) PR #N (#N) → open, issue blocked (3 Blocking review findings, redispatch spent) Loop <id> cancelled — resolve the gate(s), then restart the drain.
 c001	## 3. Compute capacity
 c002	In-flight is the set of issues claimed by this loop — assignee @me plus board status or the `in-progress` label — **and not carrying `blocked`**. That last clause is stated here because this is the file's only "in-flight is" sentence, and §2's board path, §4's filters and §7's first conjunct all read it: `issue-claim.sh block` writes labels and never moves a card, so without it a demoted issue stays in-flight on a board repo permanently and no terminal state can ever fire. Do NOT resolve the resulting asymmetry with §4's Claimed filter by aligning the two — §4 skips on a disjunction on purpose, and `issue-claim.sh` documents why. **Capacity = `max_in_flight` − in-flight.**
@@ -1562,7 +1562,7 @@ assert_has "$deferred_flat" \
     "and states why a second tick would measure nothing new"
 
 # THE ANNOUNCEMENT the loop prints, verbatim, and the site it must name.
-assert_wline "$deferred_raw" '^DRAIN DEFERRED — remaining Ready items require site <x>$' \
+assert_wline "$deferred_raw" '^DRAIN DEFERRED — remaining Ready items require a site this checkout does not hold$' \
     "the verbatim DEFERRED announcement is present (acceptance 1)"
 assert_has "$deferred_flat" \
     'naming the site each remaining item requires — **all** of an item'"'"'s `sites` when it declares more than one, so the operator can see which checkout to run the drain from:' \

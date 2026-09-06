@@ -201,19 +201,28 @@ which runs no `gh` and touches no network. Re-fetching would cost one API call p
 read a tree that has moved since the pull:
 
 ```bash
+# Capture in the SAME Bash call as the read below — shell state does not survive between
+# calls, and empty stdin makes `--sites-of` exit 64 rather than print `[]`.
+
 # boardless: the `gh issue list --json ...,labels` result from §2.
+CANDIDATES=$(gh issue list --state open --limit 200 --json number,title,labels,assignees)
+
 # One candidate shown; run it per candidate — the pull holds up to 200.
 jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$CANDIDATES" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 
 # board mode: `board-snapshot.sh` already carries each card's labels
+BOARD_SNAPSHOT=$(bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/board-snapshot.sh \
+  --number <board.number> --owner <board.owner>)
 jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
 
 **A resolver that could not run is UNKNOWN, never "no label".** `--sites-of` exits **10** when
-`python3` is missing and prints nothing on stdout — byte-identical to the `[]` a genuinely
-unlabelled issue produces. **Read the exit status, not the output.** On anything but 0, rubric #9
+`python3` is missing and prints **nothing** on stdout, while a genuinely unlabelled issue prints
+`[]` and exits 0. Do not lean on that difference: empty stdout is also what a `jq` failure or
+unbound input produces, and those exit **64**. Only the exit status separates the three
+reliably. **Read the exit status, not the output.** On anything but 0, rubric #9
 was not evaluated for that candidate: say so, and do not promote it on the strength of a check that
 did not happen. Treating the silence as "no label" is the false-clean this whole rubric exists to
 prevent, and it fails in the direction that promotes site-held work to Ready.
@@ -234,17 +243,27 @@ does. Propose this checkout's configured `execution_site` when the tools the bod
 label first if the repo lacks it:
 
 ```bash
-gh label list --limit 200 --json name --jq '.[].name'   # does it already exist?
+# Exact read, not a listing — 0 means it exists, 404 means it does not.
+gh api "repos/<owner>/<repo>/labels/site:vdi" --silent
 gh label create "site:vdi" --description "Work executable only from the vdi workstation"
 gh issue edit N --add-label "site:vdi"
 ```
 
-Two things about that create. **Look first, raise the limit, and never swallow the failure.**
-`gh label list` defaults to **30**, and `site:` sorts late in an alphabetical list a mature repo
-fills past that — a truncated read reports a present label as absent with exit 0, and the create
-that follows then hard-fails with "already exists". `gh label create` fails on an existing label,
-and a `|| true` there is precisely the silent no-op `scripts/test-label-taxonomy.sh` exists because
-of, so neither half of this pair is optional.
+Three things about that create. **Ask about the one label, never a listing.** `gh label list`
+defaults to **30** and sorts by *creation* order, so a freshly created `site:` label is exactly the
+one a truncated read misses — reported absent with exit 0, after which the create hard-fails with
+"already exists". Raising `--limit` only moves the edge. The exact read has no edge, and it is the
+shape `github-issues`' `issue-claim.sh` already uses.
+
+**An "already exists" failure is a branch, not an error.** The label is there, which is all this
+step wanted: skip the create and go straight to `gh issue edit`. What must never appear is
+`|| true`, which is precisely the silent no-op `scripts/test-label-taxonomy.sh` exists because of —
+it swallows every *other* failure too.
+
+**Never pass `--force`.** `gh label create` advertises it for the already-exists case, and with no
+`--color` given it rewrites the existing label's colour **repo-wide** — a taxonomy mutation this
+step has no business making, reached by trying to be tidy about an error that was already the
+answer.
 
 And **pass no `--color`**: `gh label create` then assigns a random one, so the label does carry a
 colour — it is simply not a *chosen* one, and two repos will differ. That inconsistency is the
