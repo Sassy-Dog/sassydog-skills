@@ -14,7 +14,7 @@
 # So the mismatch is stepped around BEFORE the claim, never discovered after an
 # agent has burned an attempt on it.
 #
-# THE FOUR DECISIONS PINNED HERE, each of which reads to a later sweep like
+# THE FIVE DECISIONS PINNED HERE, each of which reads to a later sweep like
 # something to tidy:
 #
 #   1. THE MATCH IS THE ARRAY FORM, FOLDED ON BOTH SIDES:
@@ -27,18 +27,21 @@
 #      folds the label's value, and folding the configured value is the reading
 #      skill's half. Written as raw equality, a repo configured
 #      `execution_site: VDI` holds the VDI loop's own work — the filter
-#      refusing precisely the checkout it was written for. EVERY copy of the
-#      form is held to one spelling, and the copies are the `SUBJECTS` list
-#      below. Before #341 the three that existed disagreed —
-#      `queue-snapshot.sh`'s header and `config-contract.md` unfolded,
-#      `github-issues/SKILL.md` folded — which is how a two-sided rule rots
-#      into a one-sided one with nothing failing.
+#      refusing precisely the checkout it was written for. EVERY subject is held
+#      to one spelling, and the subjects are the `SUBJECTS` list below. Before
+#      #341 the three that existed disagreed — `queue-snapshot.sh`'s header and
+#      `config-contract.md` unfolded, `github-issues/SKILL.md` folded — which is
+#      how a two-sided rule rots into a one-sided one with nothing failing.
 #
 #   2. THE DISCRIMINATION HALF IS LOAD-BEARING. A filter that holds everything
 #      satisfies "site-mismatched work is held" and is useless. So `sites == []`
-#      dispatching exactly as today, and a `sites` CONTAINING this checkout's
-#      site dispatching however many members it carries, are pinned as their own
-#      rows in both consumers. Membership narrows; it never widens.
+#      proceeding exactly as today, and a `sites` CONTAINING this checkout's
+#      site proceeding however many members it carries, are pinned as their own
+#      rows in BOTH consumers. Membership narrows; it never widens. take-it's
+#      membership bullet is the one a reader adds LAST and the one whose absence
+#      is quietest: with only the empty-case bullet beside it, "several labels
+#      are a conflict, so refuse" reads as the obvious completion and
+#      contradicts the folded membership match stated two paragraphs above it.
 #
 #   3. AN UNNAMED CHECKOUT IS FAIL-OPEN, AND IT IS A DIFFERENT QUESTION FROM AN
 #      UNLABELLED ISSUE. With no `execution_site` configured the filter does not
@@ -61,14 +64,37 @@
 #      prose alone, so it is checked as a line-number comparison against the
 #      claim step's own heading.
 #
+#   5. ONE RESOLVER, AND EVERY CONSUMER RUNS IT. `queue-snapshot.sh`'s buckets
+#      are LABEL-SCOPED, so two legitimate callers hold labels the buckets never
+#      saw: dispatch-ready's `board:` path, whose `board-snapshot.sh` emits
+#      `labels` and no `sites` at all, and take-it on an issue nobody promoted to
+#      Ready. Left with a ban on re-deriving and no emitter to call, each writes
+#      its own resolver or skips the filter — and skipping it is a SILENT
+#      FAIL-OPEN in a repo that explicitly opted in, which is #322's bug under
+#      prose that reads as protected. `--sites-of` is the answer, and it is the
+#      `taxonomy`-emitter shape CLAUDE.md already requires of a consumer applied
+#      to a resolver: rows here run it rather than describing it, because the
+#      paraphrase that preceded it dropped `.strip()` and answered `" vdi"` for
+#      a label the header calls legal.
+#
 # WHAT THIS GATE DELIBERATELY DOES NOT DO. It does not re-check #340's
 # resolution rules (prefix, colon, folding, empty value, conflict) — those are
 # `scripts/test-queue-snapshot-site.sh`'s, measured against the emitter with a
 # mock `gh`. Duplicating them here would be the third-copy shape this repo
-# refuses. It also asserts nothing about §7's terminal states: a drain whose
-# only remaining Ready items are site holds still reports STALLED after this,
-# which is a separate child of #322 and `scripts/test-drain-terminal-states.sh`
-# owns that section.
+# refuses; the two behavioural rows below check that `--sites-of` REACHES that
+# resolver and reaches nothing else, never what the resolver decides. It also
+# asserts nothing about §7's terminal states beyond the pointer §4 owes an
+# operator: a drain whose only remaining Ready items are site holds still ends
+# STALLED after this, which is a separate child of #322, and
+# `scripts/test-drain-terminal-states.sh` owns that section.
+#
+# NEEDLES ARE PINNED THROUGH THEIR TERMINATOR, NOT AS BARE SUBSTRINGS. A
+# must-exist row matching `costs no redispatch budget` is satisfied by
+# `costs no redispatch budget ON THE FIRST HOLD AND ONE ATTEMPT ON EVERY LATER
+# ONE` — measured, that inversion passed every row while decision 4 was gone.
+# Deletion mutants cannot see it either, because the phrase they delete is still
+# there. So the rows carrying a decision match the whole clause up to its
+# terminator, and each has a QUALIFICATION mutant beside its deletion one.
 #
 # THE MUTANTS' REACH IS DERIVED, NEVER WRITTEN DOWN. This is the lesson
 # test-queue-snapshot-site.sh paid for three review rounds running: a
@@ -79,6 +105,14 @@
 # flip set — that the row a mutant names is a MEMBER of it, and that the rows
 # NO mutant flips are exactly the declared `UNPINNED_ROWS`. A row nothing can
 # redden proves nothing, and this makes that state impossible to add quietly.
+#
+# A VETO NEEDS A MUTANT THAT ONLY IT CAN CATCH. The two whole-subject vetoes
+# were reachable at first only as COLLATERAL of mutants that wrote the offending
+# text inside a window some must-exist row already covered — so narrowing either
+# veto's haystack back to one window left the gate green with an empty unpinned
+# set. Each now has a mutant writing the text OUTSIDE every window a `row_has`
+# reads, which is the only edit that distinguishes a whole-subject veto from a
+# windowed one.
 #
 # HOW THE SELF-RUN IS BOUND, because a child that measured the wrong tree would
 # report an empty flip set for every mutant and the roster would fail loudly
@@ -92,7 +126,16 @@
 # read the tracked file, and here the child reads the copies by construction.
 # Nothing under the tracked tree is written at any point.
 #
-# Source-level, five tracked files, no `gh` and no network.
+# THE WINDOW GUARD IS A SEPARATE READ FROM THE WINDOW. `raw_region` stops
+# BEFORE printing its stop line, so grepping the window for that stop line can
+# never fail — the first edition did exactly that and called it an overrun
+# guard. Reproduced: renaming `## 5. Dispatch` grew §4 to EOF and the run still
+# exited 0 with every row green. The stop is now proved present in the FILE
+# after the start line, and a guard mutant renames one and requires the child to
+# abort loudly rather than to flip a row.
+#
+# Source-level plus two behavioural rows against `--sites-of`; seven tracked
+# files (the `SUBJECTS` list), copies only, no `gh` and no network.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-site-filter.sh
@@ -109,7 +152,7 @@ cd "$REPO_ROOT" || exit 1
 command -v python3 >/dev/null 2>&1 || { echo "test-site-filter: python3 is required" >&2; exit 1; }
 
 # The subject tree. Only the mutation section ever sets this, and it sets it to
-# a directory holding copies of the five files below.
+# a directory holding copies of the subjects below.
 SRC="${SITE_FILTER_SRC:-$REPO_ROOT}"
 CHILD="${SITE_FILTER_CHILD:-0}"
 
@@ -118,7 +161,13 @@ REL_TAKE="skills/take-it/SKILL.md"
 REL_SNAP="skills/github-issues/scripts/queue-snapshot.sh"
 REL_GHISSUES="skills/github-issues/SKILL.md"
 REL_CONTRACT="skills/setup-config/references/config-contract.md"
-SUBJECTS="$REL_DISPATCH $REL_TAKE $REL_SNAP $REL_GHISSUES $REL_CONTRACT"
+# CLAUDE.md and preflight.sh carry the match form in their gate descriptions, so
+# they are subjects of the VETO rows even though no must-exist row reads them: a
+# whole-text veto costs nothing to widen, and "every subject spells one form" is
+# only true if the places that describe the rule are subjects too.
+REL_CLAUDEMD="CLAUDE.md"
+REL_PREFLIGHT="scripts/preflight.sh"
+SUBJECTS="$REL_DISPATCH $REL_TAKE $REL_SNAP $REL_GHISSUES $REL_CONTRACT $REL_CLAUDEMD $REL_PREFLIGHT"
 
 D="$SRC/$REL_DISPATCH"
 T="$SRC/$REL_TAKE"
@@ -126,8 +175,8 @@ Q="$SRC/$REL_SNAP"
 G="$SRC/$REL_GHISSUES"
 C="$SRC/$REL_CONTRACT"
 
-for f in "$D" "$T" "$Q" "$G" "$C"; do
-    [ -r "$f" ] || { echo "test-site-filter: missing subject $f" >&2; exit 1; }
+for rel in $SUBJECTS; do
+    [ -r "$SRC/$rel" ] || { echo "test-site-filter: missing subject $SRC/$rel" >&2; exit 1; }
 done
 
 # --- rows ---------------------------------------------------------------------
@@ -135,8 +184,9 @@ done
 # The consumption check at the bottom compares this list to what actually ran,
 # so deleting an assertion fails even if its row id goes with it, and the
 # mutation matrix derives its "no mutant reaches this" set from the same list.
-ROW_IDS="R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 \
-R13 R14 R15 R16 R17 R18 R19 R20 R21 R22 R23"
+ROW_IDS="R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 \
+R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 \
+R21 R22 R23 R24 R25 R26 R27 R28 R29 R30"
 
 fail=0
 asserts=0
@@ -159,6 +209,19 @@ row_absent() { # <id> <haystack> <needle> <label>
 }
 note() { [ "$CHILD" = "1" ] || echo "$1" >&2; }
 
+# --- scratch ------------------------------------------------------------------
+# FAIL CLOSED, STRUCTURALLY. There is no `set -e` here, so an empty $WORK would
+# carry on into `mkdir -p "$WORK/bin"` — that is `mkdir -p /bin`, `cat > /bin/gh`
+# on a root host (devcontainer, `act`, a root self-hosted runner), leaving a fake
+# `gh` on PATH permanently while `rm -rf ""` cleans nothing. Same guard, same
+# reason, as test-queue-snapshot-site.sh.
+WORK="$(mktemp -d)"
+if [ -z "$WORK" ] || [ ! -d "$WORK" ] || [ "$WORK" = "/" ]; then
+    echo "mktemp -d did not produce a usable scratch directory (got '${WORK:-}'); refusing to run" >&2
+    exit 1
+fi
+trap 'rm -rf "$WORK"' EXIT
+
 # --- text helpers -------------------------------------------------------------
 # raw_region <file> <start-prefix> <stop-prefix> — the lines from the first line
 # STARTING WITH <start-prefix> up to (not including) the next line starting with
@@ -170,6 +233,18 @@ raw_region() {
         f && index($0, stop) == 1 { exit }
         f { print }' "$1"
 }
+# stop_present <file> <start-prefix> <stop-prefix> — is the stop line actually
+# THERE, after the start line? This is the overrun guard, and it has to be its
+# own read of the FILE: `raw_region` exits before printing the stop, so the stop
+# is by construction absent from the window and grepping the window for it can
+# never fail. Measured — renaming `## 5. Dispatch` grew §4 to EOF with every row
+# still green and no complaint.
+stop_present() {
+    awk -v s="$2" -v stop="$3" '
+        !f && index($0, s) == 1 { f = 1; next }
+        f && index($0, stop) == 1 { found = 1; exit }
+        END { exit(found ? 0 : 1) }' "$1"
+}
 # plain <text> — one line, blockquote markers, `*` emphasis and code ticks
 # removed. BOTH normalisations are load-bearing and both have already produced
 # false passes in this repo: prose here hard-wraps, so a needle spanning a wrap
@@ -179,8 +254,8 @@ raw_region() {
 # oversight: every needle in this file spells `execution_site` or
 # `not sites or execution_site.lower() in sites`, and stripping `_` folds those
 # to `executionsite` — measured, it reddened seven rows against a correct tree.
-# Underscore emphasis appears in neither subject; `*` is what this repo bolds
-# with, and that arm is the one the veto rows need.
+# Underscore emphasis appears in no subject; `*` is what this repo bolds with,
+# and that arm is the one the veto rows need.
 plain() {
     sed -E 's/^[[:space:]]*(> ?)+//; s/^[[:space:]]+//' <<<"$1" \
         | tr '\n' ' ' | tr -s ' ' | tr -d '*`' | sed -E 's/^ +//; s/ +$//'
@@ -196,25 +271,30 @@ hdr_plain() {
 }
 
 # --- windows, proved non-empty AND proved to stop where they claim ------------
-# A window that silently ran to EOF would make every line-scoped check below
-# measure the whole file, which is the shape that let an earlier gate in this
-# repo pass while its subject was inverted two sections away.
+# A window that silently ran to EOF would make every check below measure the
+# whole file, which is the shape that let an earlier gate in this repo pass
+# while its subject was inverted two sections away.
+window_ok=1
+check_window() { # <name> <file> <start> <stop>
+    local body
+    body="$(raw_region "$2" "$3" "$4")"
+    [ -n "$body" ] || { echo "test-site-filter: window $1 is EMPTY — '$3' not found in $2" >&2; window_ok=0; }
+    stop_present "$2" "$3" "$4" || {
+        echo "test-site-filter: window $1 has no stop line — '$4' does not follow '$3' in $2, so the window runs to EOF" >&2
+        window_ok=0
+    }
+}
+check_window sec4  "$D" '## 4. Select from Ready'    '## 5. Dispatch'
+check_window sec2  "$D" '## 2. Reconcile in-flight'  '## 3. Compute capacity'
+check_window sec3t "$T" '## 3. Pre-flight per issue' '## 4. Claim each issue'
+if [ "$window_ok" != "1" ]; then
+    echo "test-site-filter: a section window is unusable — every check below would measure the wrong text" >&2
+    exit 1
+fi
+
 sec4_raw="$(raw_region "$D" '## 4. Select from Ready' '## 5. Dispatch')"
 sec2_raw="$(raw_region "$D" '## 2. Reconcile in-flight' '## 3. Compute capacity')"
 sec3t_raw="$(raw_region "$T" '## 3. Pre-flight per issue' '## 4. Claim each issue')"
-
-window_ok=1
-for pair in "sec4:$sec4_raw" "sec2:$sec2_raw" "sec3t:$sec3t_raw"; do
-    body="${pair#*:}"
-    [ -n "$body" ] || { echo "test-site-filter: window ${pair%%:*} is EMPTY" >&2; window_ok=0; }
-done
-grep -qF -- '## 5. Dispatch' <<<"$sec4_raw" && window_ok=0
-grep -qF -- '## 3. Compute capacity' <<<"$sec2_raw" && window_ok=0
-grep -qF -- '## 4. Claim each issue' <<<"$sec3t_raw" && window_ok=0
-if [ "$window_ok" != "1" ]; then
-    echo "test-site-filter: a section window is empty or overran its stop — every check below would measure the wrong text" >&2
-    exit 1
-fi
 
 sec4="$(plain "$sec4_raw")"
 sec2="$(plain "$sec2_raw")"
@@ -230,13 +310,12 @@ ghissues="$(plain "$(cat "$G")")"
 # rows use. A window is the right scope for "§4 says X" and the wrong one for
 # "no copy says Y": the unfolded spelling written into §7, or into
 # queue-snapshot's python region rather than its header, is the same defect
-# somewhere the windows cannot see. Widening a must-not-exist check costs
-# nothing but a louder red.
-all_copies="$(plain "$(cat "$D")")
-$(plain "$(cat "$T")")
-$(plain "$(cat "$Q")")
-$contract
-$ghissues"
+# somewhere the windows cannot see.
+all_copies=""
+for rel in $SUBJECTS; do
+    all_copies="$all_copies
+$(plain "$(cat "$SRC/$rel")")"
+done
 
 note "site filter consumers (issue #341) — subjects under $SRC"
 
@@ -254,7 +333,11 @@ fi
 row_has R02 "$sec4" \
     'The match is not sites or execution_site.lower() in sites, and it folds case on BOTH sides.' \
     "§4 states the array match, folded on both sides"
-row_has R03 "$sec4" 'sites empty → dispatch, exactly as today.' \
+# Pinned through the clause's end, not as the bare phrase: "dispatch, exactly as
+# today WHEN THE REPO HAS OPTED OUT" satisfies a substring check while deleting
+# the discrimination half.
+row_has R03 "$sec4" \
+    'sites empty → dispatch, exactly as today. Most issues carry no site: label at all, and a filter that also holds them is not a filter, it is a stopped queue' \
     "§4 keeps the discrimination half: an unlabelled issue dispatches as today"
 row_has R04 "$sec4" \
     "sites containing this checkout's site → dispatch, however many members it carries." \
@@ -262,21 +345,40 @@ row_has R04 "$sec4" \
 row_has R05 "$sec4" \
     'No execution_site configured → the filter DOES NOT RUN and everything dispatches.' \
     "§4 is fail-open in an unnamed checkout"
-row_has R06 "$sec4" 'It is not the same question as an issue with no label' \
+row_has R06 "$sec4" \
+    'It is not the same question as an issue with no label, and the two fail in opposite directions on purpose' \
     "§4 keeps the two fail-open directions apart"
-row_has R07 "$sec4" 'It costs no redispatch budget' \
-    "§4's site hold costs no redispatch budget"
-row_has R08 "$sec4" 'triggers no demotion' \
-    "§4's site hold never demotes"
+# The whole clause, through its terminator. A qualifier inserted anywhere inside
+# it — "no redispatch budget ON THE FIRST HOLD" — breaks the match, which a
+# substring check on either half cannot do.
+row_has R07 "$sec4" \
+    'It costs no redispatch budget, triggers no demotion, and writes no dispatch-ready: attempt 1 failed comment:' \
+    "§4's site hold spends no budget and never demotes, unqualified"
+row_has R08 "$sec4" 'A site hold is not a failure.' \
+    "§4 states outright that a site hold is not a failure"
 row_has R09 "$sec4" \
     'Report it as #N (requires site <x>), listing all of sites when there is more than one' \
     "§4 reports the hold naming every site the issue declares"
-if grep -qF -- 'Read sites off the §2 snapshot.' <<<"$sec4" &&
+if grep -qF -- 'Read sites off the §2 snapshot on the boardless path.' <<<"$sec4" &&
    grep -qF -- 'Never re-parse the issue body for a site' <<<"$sec4"; then
     row R10 0 "§4 reads sites off the snapshot and never re-parses the body"
 else
     row R10 1 "§4 no longer sources sites from the snapshot, or has dropped the body-parse ban"
 fi
+# THE BOARD PATH. `board-snapshot.sh` emits labels and no `sites`, so a filter
+# told only to read the snapshot has no input at all on a board repo — a silent
+# fail-open in a repo that opted in, under prose that reads as protected.
+if grep -qF -- 'On the board: path, run the resolver — the board snapshot has no sites.' <<<"$sec4" &&
+   grep -qF -- 'queue-snapshot.sh --sites-of' <<<"$sec4"; then
+    row R24 0 "§4 gives the board path an input: it runs the --sites-of emitter"
+else
+    row R24 1 "§4's board path has no site input — board repos fail open silently"
+fi
+row_has R25 "$sec4" 'This filter runs on both paths' \
+    "§4 says the filter runs on BOTH paths, not just the one it was written for"
+row_has R30 "$sec4" \
+    'ends the loop at DRAIN STALLED two ticks later' \
+    "§4 tells the operator where a site hold ends, since §7 does not know yet"
 
 # --- 2. take-it refuses BEFORE the claim --------------------------------------
 note "2. take-it"
@@ -292,9 +394,10 @@ else
     row R11 1 "take-it's site refusal does not precede the claim step (site='${t_site_line:-none}' claim='${t_claim_line:-none}')"
 fi
 row_has R12 "$sec3t" \
-    'announce #N requires site <x>, listing all of sites when the issue carries more than one' \
-    "take-it names the refusal line and every declared site"
-row_has R13 "$sec3t" 'a claim writes an assignee and an in-progress label' \
+    'announce #N requires site <x>, listing all of sites when the issue carries more than one — and go no further with it.' \
+    "take-it names the refusal line, every declared site, and stops there"
+row_has R13 "$sec3t" \
+    'a claim writes an assignee and an in-progress label, which takes the issue off the queue every OTHER checkout reads while leaving it with the one machine that cannot do the work.' \
     "take-it states what the claim would write — the reason the refusal precedes it"
 row_has R14 "$sec3t" \
     'The match is not sites or execution_site.lower() in sites, and it folds case on BOTH sides.' \
@@ -302,11 +405,59 @@ row_has R14 "$sec3t" \
 row_has R15 "$sec3t" \
     'No execution_site configured → this step DOES NOT RUN and every named issue proceeds.' \
     "take-it is fail-open in an unnamed checkout"
-row_has R16 "$sec3t" 'sites empty → proceed exactly as today.' \
+row_has R16 "$sec3t" \
+    'sites empty → proceed exactly as today. No site: label is the ordinary case, and a step that holds those issues too is not a filter, it is a stopped queue.' \
     "take-it keeps the discrimination half: an unlabelled issue proceeds as today"
+row_has R29 "$sec3t" \
+    "sites containing this checkout's site → proceed, however many members it carries." \
+    "take-it proceeds on membership too — the half whose absence reads as 'refuse a conflict'"
+# The paraphrase this replaced dropped `.strip()`, so `site: VDI` resolved to
+# " vdi" here and "vdi" in the script: two answers for one label.
+if grep -qF -- 'never by paraphrasing the rules here' <<<"$sec3t" &&
+   grep -qF -- 'queue-snapshot.sh --sites-of' <<<"$sec3t"; then
+    row R28 0 "take-it runs the resolver rather than paraphrasing its rules"
+else
+    row R28 1 "take-it paraphrases the resolution rules instead of running the emitter"
+fi
 
-# --- 3. the four copies spell ONE form ----------------------------------------
-note "3. the match form, across every copy"
+# --- 3. the emitter, run rather than described --------------------------------
+note "3. --sites-of"
+
+BIN="$WORK/bin"
+mkdir -p "$BIN"
+# A `gh` that cannot succeed and says so. `--sites-of` resolves labels the caller
+# already holds, so reaching gh at all is the regression: it would make a
+# board-path or take-it site read cost a network round trip per issue, and this
+# file's header claims no network.
+cat >"$BIN/gh" <<'MOCK'
+#!/usr/bin/env bash
+echo "MOCK GH CALLED: $*" >&2
+exit 1
+MOCK
+chmod +x "$BIN/gh"
+if [ "$(PATH="$BIN:$PATH" command -v gh)" != "$BIN/gh" ]; then
+    echo "test-site-filter: the mock gh shim did not install at $BIN/gh — refusing to run the emitter rows, because a real gh would answer them" >&2
+    exit 1
+fi
+sites_of() { # <json-array-of-labels> — stdout of the emitter under test
+    printf '%s' "$1" | PATH="$BIN:$PATH" bash "$Q" --sites-of 2>"$WORK/emit.err"
+}
+one="$(sites_of '["Site: VDI","ready","offsite:x","site:"]')"
+two="$(sites_of '["site:mac","site:vdi"]')"
+none="$(sites_of '["ready","bug"]')"
+if [ "$one" = '["vdi"]' ] && [ "$two" = '["mac", "vdi"]' ] && [ "$none" = '[]' ]; then
+    row R26 0 "--sites-of resolves labels through the same sites_of the buckets use"
+else
+    row R26 1 "--sites-of did not resolve through sites_of (got '$one' / '$two' / '$none')"
+fi
+if [ -n "$one" ] && ! grep -qF -- 'MOCK GH CALLED' "$WORK/emit.err"; then
+    row R27 0 "--sites-of answers without reaching gh — no repo, no network"
+else
+    row R27 1 "--sites-of reached gh, or produced nothing: $(tr '\n' ' ' <"$WORK/emit.err")"
+fi
+
+# --- 4. the match form, across every subject ----------------------------------
+note "4. the match form"
 
 row_has R17 "$qhdr" 'THE READER FOLDS THE CONFIG SIDE' \
     "queue-snapshot's header says the fold on the config side is the reader's"
@@ -317,18 +468,18 @@ row_has R19 "$contract" 'so write it not sites or execution_site.lower() in site
     "the config contract writes the folded form"
 row_has R20 "$ghissues" 'Match it as not sites or execution_site.lower() in sites' \
     "github-issues' SKILL.md writes the folded form"
-# The veto that made #341 necessary: the same rule spelled two ways in four
-# files, and the unfolded spelling is the one that holds a VDI loop's own work.
+# The veto that made #341 necessary: the same rule spelled two ways, and the
+# unfolded spelling is the one that holds a VDI loop's own work.
 row_absent R21 "$all_copies" 'not sites or execution_site in sites' \
-    "no copy writes the unfolded form"
+    "no subject writes the unfolded form, anywhere in its text"
 # Falsified by the membership match this ships: `sites` of [mac, vdi] matches
 # BOTH a mac and a vdi checkout. The declaration is a conflict the snapshot does
 # not resolve, not one nothing can satisfy.
 row_absent R22 "$all_copies" 'matches no checkout' \
-    "no copy claims a conflicting declaration matches no checkout"
+    "no subject claims a conflicting declaration matches no checkout"
 
-# --- 4. the doc claim this change falsified -----------------------------------
-note "4. doc reconciliation"
+# --- 5. the doc claim this change falsified -----------------------------------
+note "5. doc reconciliation"
 
 if grep -qF -- 'all three body contracts — touches:, Depends on #N and stack: — already' <<<"$sec2" &&
    grep -qF -- 'resolved into a sites list' <<<"$sec2"; then
@@ -358,20 +509,9 @@ if [ "$CHILD" = "1" ]; then
     exit "$fail"
 fi
 
-# --- 5. mutation proofs, and the matrix derived from them ---------------------
-echo "5. mutation proofs" >&2
+# --- 6. mutation proofs, and the matrix derived from them ---------------------
+echo "6. mutation proofs" >&2
 
-WORK="$(mktemp -d)"
-# FAIL CLOSED, STRUCTURALLY. There is no `set -e` here, so an empty $WORK would
-# carry on into `mkdir -p "$WORK/m/..."` — that is `mkdir -p /skills/...`, which
-# a non-root host refuses loudly and a root container (devcontainer, `act`, a
-# root self-hosted runner) performs, leaving a tree behind while `rm -rf ""`
-# cleans nothing. Same guard, same reason, as test-queue-snapshot-site.sh.
-if [ -z "$WORK" ] || [ ! -d "$WORK" ] || [ "$WORK" = "/" ]; then
-    echo "mktemp -d did not produce a usable scratch directory (got '${WORK:-}'); refusing to run" >&2
-    exit 1
-fi
-trap 'rm -rf "$WORK"' EXIT
 MDIR="$WORK/m"
 
 run_self() { # <src-dir> <out-file>
@@ -382,7 +522,7 @@ fails_in() { # <out-file> — the failing row ids, one per line, sorted
 }
 # `+`, never a literal pair of spaces: `ok` and `FAIL` are padded to the same
 # column, so a two-space pattern counts the FAILING rows only — measured, that
-# made every mutant below report "emitted 8 of 23 rows" and prove nothing while
+# made every mutant report "emitted 8 of 23 rows" and prove nothing while
 # looking like a subject regression.
 rows_in() { # <out-file> — how many rows the run emitted
     grep -cE '^  (ok|FAIL) +R[0-9]+' "$1"
@@ -434,25 +574,35 @@ PY
 }
 
 mutants_run=0
+MUTANT_LABELS="$WORK/mutants.txt"
+: >"$MUTANT_LABELS"
 FLIPPED="$WORK/flipped.txt"
 : >"$FLIPPED"
 
-verify_mutant() { # <label> <named-row>
-    local label="$1" named="$2" out="$WORK/mut.out" flips
+start_mutant() { EDIT_OK=1; reset_mutant; }
+
+staged_ok() { # <label> — the edits applied, and the tree really did change
+    local label="$1" rel changed=0
     if [ "$EDIT_OK" != "1" ]; then
         fail=1; asserts=$((asserts + 1))
         echo "  FAIL  $label — a mutation target did not match exactly once (stale mutant)"
-        return
+        return 1
     fi
-    local rel changed=0
     for rel in $SUBJECTS; do
         cmp -s "$REPO_ROOT/$rel" "$MDIR/$rel" || changed=1
     done
     if [ "$changed" = "0" ]; then
         fail=1; asserts=$((asserts + 1))
         echo "  FAIL  $label — the mutant tree is identical to the source"
-        return
+        return 1
     fi
+    return 0
+}
+
+mutate() { # <label> <named-row>; the caller has already staged the edits
+    local label="$1" named="$2" out="$WORK/mut.out" flips
+    printf '%s\n' "$label" >>"$MUTANT_LABELS"
+    staged_ok "$label" || return
     run_self "$MDIR" "$out"
     if [ "$(rows_in "$out")" != "$DECLARED_ROWS" ]; then
         fail=1; asserts=$((asserts + 1))
@@ -470,11 +620,25 @@ verify_mutant() { # <label> <named-row>
     esac
 }
 
-mutate() { # <label> <named-row>; the caller has already staged the edits
-    verify_mutant "$1" "$2"
+# A guard mutant breaks the gate's own PRECONDITIONS rather than a decision, so
+# it is verified the other way round: the child must ABORT, emitting no rows and
+# saying why. Counted separately from `mutate`, since a run that emits no rows is
+# a failure there.
+guards_run=0
+guard_mutate() { # <label> <expected-stderr-needle>
+    local label="$1" needle="$2" out="$WORK/guard.out" n
+    staged_ok "$label" || return
+    run_self "$MDIR" "$out"
+    n="$(rows_in "$out")"
+    asserts=$((asserts + 1))
+    if [ "$n" = "0" ] && grep -qF -- "$needle" "$out"; then
+        guards_run=$((guards_run + 1))
+        echo "  ok    $label aborts the run loudly, emitting no verdict at all"
+    else
+        fail=1
+        echo "  FAIL  $label did not abort: $n rows emitted, guard message '$needle' $(grep -qF -- "$needle" "$out" && echo present || echo absent)"
+    fi
 }
-
-start_mutant() { EDIT_OK=1; reset_mutant; }
 
 # --- dispatch-ready §4 --------------------------------------------------------
 start_mutant
@@ -496,6 +660,12 @@ edit "$REL_DISPATCH" \
     '- **`sites` empty → dispatch, exactly as today.**' \
     '- **`sites` empty → hold, like any other undeclared fact.**'
 mutate "M03: §4 holds unlabelled issues too — the filter that filters everything" R03
+
+start_mutant
+edit "$REL_DISPATCH" \
+    '- **`sites` empty → dispatch, exactly as today.** Most issues' \
+    '- **`sites` empty → dispatch, exactly as today** unless the repo has adopted sites, in which case hold. Most issues'
+mutate "M03q: the discrimination half is QUALIFIED away rather than deleted" R03
 
 start_mutant
 edit "$REL_DISPATCH" \
@@ -528,8 +698,14 @@ mutate "M07: a site hold starts spending the redispatch budget" R07
 start_mutant
 edit "$REL_DISPATCH" \
     'It costs **no redispatch budget**, triggers **no demotion**, and' \
-    'It costs **no redispatch budget** and'
-mutate "M08: a site hold starts demoting" R08
+    'It costs **no redispatch budget** on the first hold and one attempt on every later one, triggers **no demotion** until the third hold, and'
+mutate "M07q: decision 4 is QUALIFIED away while every phrase survives" R07
+
+start_mutant
+edit "$REL_DISPATCH" \
+    '**A site hold is not a failure.**' \
+    '**A site hold is a failed attempt like any other.**'
+mutate "M08: §4 stops calling a site hold something other than a failure" R08
 
 start_mutant
 edit "$REL_DISPATCH" \
@@ -541,9 +717,30 @@ mutate "M09: §4 stops naming the site(s) in the hold" R09
 
 start_mutant
 edit "$REL_DISPATCH" \
-    '**Read `sites` off the §2 snapshot.**' \
+    '**Read `sites` off the §2 snapshot on the boardless path.**' \
     '**Resolve `sites` yourself from the issue.**'
 mutate "M10: §4 stops sourcing sites from the snapshot" R10
+
+start_mutant
+edit "$REL_DISPATCH" \
+    '**On the `board:` path, run the resolver — the board snapshot has no `sites`.**' \
+    '**On the `board:` path the same snapshot answers.**'
+mutate "M24: the board path loses its site input — the silent fail-open" R24
+
+start_mutant
+edit "$REL_DISPATCH" \
+    'One resolver, two callers, one answer. **This filter runs on both paths**' \
+    'One resolver, two callers, one answer. **This filter runs on the boardless path**'
+mutate "M25: the filter stops claiming both paths" R25
+
+start_mutant
+edit "$REL_DISPATCH" \
+    'a Ready column holding nothing else ends
+the loop at DRAIN STALLED two ticks later, telling the operator to resolve a gate this checkout
+cannot.' \
+    'a Ready column holding nothing else
+resolves on its own.'
+mutate "M30: §4 stops telling the operator where a site hold ends" R30
 
 # --- take-it ------------------------------------------------------------------
 # The MOVE, in two edits. A deletion would redden every take-it row at once and
@@ -574,10 +771,24 @@ mutate "M12: take-it stops naming the site(s) it refuses on" R12
 
 start_mutant
 edit "$REL_TAKE" \
+    'one — and go no further with it.' \
+    'one — and dispatch it anyway if the batch is otherwise empty.'
+mutate "M12q: the refusal is QUALIFIED into an advisory while its phrase survives" R12
+
+start_mutant
+edit "$REL_TAKE" \
     '§4 must not run for that issue: a claim writes an assignee and an
 `in-progress` label, which takes' \
     '§4 must not run for that issue, which takes'
 mutate "M13: take-it drops what the claim would write" R13
+
+start_mutant
+edit "$REL_TAKE" \
+    'a claim writes an assignee and an
+`in-progress` label, which takes the issue off the queue' \
+    'a claim writes an assignee and, on repos that use it, an
+`in-progress` label, which takes the issue off the queue'
+mutate "M13q: the claim's cost is QUALIFIED while every phrase survives" R13
 
 start_mutant
 edit "$REL_TAKE" \
@@ -597,6 +808,35 @@ edit "$REL_TAKE" \
     '- **`sites` empty → refuse, like any other unresolved declaration.**'
 mutate "M16: take-it refuses unlabelled issues too" R16
 
+start_mutant
+edit "$REL_TAKE" \
+    '- **`sites` containing this checkout'"'"'s site → proceed, however many members it carries.**' \
+    '- **Several `site:` labels are a conflict — refuse; a conflict is nobody'"'"'s to take.**'
+mutate "M29: take-it refuses a multi-member declaration that NAMES this checkout" R29
+
+start_mutant
+edit "$REL_TAKE" \
+    'never by paraphrasing the
+rules here.**' \
+    'and the rules are: prefix including the colon, folded, an empty
+value declares nothing.**'
+mutate "M28: take-it goes back to paraphrasing the resolution rules" R28
+
+# --- the emitter --------------------------------------------------------------
+start_mutant
+edit "$REL_SNAP" \
+    'if mode == "sites":' \
+    'if mode == "sites-disabled":'
+mutate "M26: --sites-of stops reaching sites_of" R26
+
+start_mutant
+edit "$REL_SNAP" \
+    'if [[ "$MODE" == "queue" ]]; then
+    command -v gh' \
+    'if true; then
+    command -v gh'
+mutate "M27: --sites-of starts reaching gh — a network round trip per issue" R27
+
 # --- the copies ---------------------------------------------------------------
 start_mutant
 edit "$REL_SNAP" \
@@ -607,8 +847,9 @@ mutate "M17: queue-snapshot's header stops naming the config-side fold as the re
 start_mutant
 edit "$REL_SNAP" \
     '#     of the list, `not sites or execution_site.lower() in sites`, cannot' \
-    '#     of the list, `not sites or execution_site in sites`, cannot'
-mutate "M18: queue-snapshot's header reverts to the unfolded form" R18
+    '#     of the list, `not sites or execution_site.lower() in sites` (or the
+#     unfolded `not sites or execution_site in sites`), cannot'
+mutate "M18: queue-snapshot's header re-admits the unfolded form beside the folded one" R18
 
 start_mutant
 edit "$REL_CONTRACT" \
@@ -624,28 +865,71 @@ edit "$REL_GHISSUES" \
     'Match it as `not sites or execution_site in sites`'
 mutate "M20: github-issues' SKILL.md reverts to the unfolded form" R20
 
+# THE VETO'S OWN MUTANT. Every other route to R21 writes the unfolded form inside
+# a window some must-exist row already covers, so narrowing R21's haystack to one
+# window would leave the gate green. This writes it into the Guardrails list,
+# which no `row_has` reads — the only edit that tells a whole-subject veto apart
+# from a windowed one.
 start_mutant
-edit "$REL_SNAP" \
-    '#     CONFLICT this script does not resolve:' \
-    '#     CONFLICT that matches no checkout:'
-mutate "M21: a copy claims again that a conflict matches no checkout" R22
+edit "$REL_DISPATCH" \
+    '- **Ready only.** Everything else is groom-backlog'"'"'s job' \
+    '- **Site match** is `not sites or execution_site in sites`.
+- **Ready only.** Everything else is groom-backlog'"'"'s job'
+mutate "M21: the unfolded form appears where no must-exist row looks" R21
+
+start_mutant
+edit "$REL_GHISSUES" \
+    'Emits `sites` as a sorted list with no scalar, so several labels are a conflict only a checkout named among them may take rather than "any site".' \
+    'Emits `sites` as a sorted list with no scalar, so several labels are a conflict that matches no checkout.'
+mutate "M22: a conflict is called unsatisfiable again, outside every header window" R22
 
 start_mutant
 edit "$REL_DISPATCH" \
     'and `blocked[]` with all three body contracts — `touches:`, `Depends on #N` and `stack:` — already' \
     'and `blocked[]` with the `touches:` and `Depends on #N` body contracts already'
-mutate "M22: §2 undercounts the body contracts again" R23
+mutate "M23: §2 undercounts the body contracts again" R23
 
-# Every declared mutant ran. Derived from this file rather than transcribed: the
-# count is whatever `mutate` was called with, and a call that died has already
-# recorded its own failure above.
-declared_mutants="$(grep -c '^mutate "M' "$SELF_ABS")"
+# --- the guard mutants --------------------------------------------------------
+# These break a PRECONDITION, so the child must refuse to produce a verdict at
+# all rather than flip a row. The first is the one that shipped broken: the
+# original overrun guard grepped the window for a stop line `raw_region` had
+# already excluded by construction, so renaming the stop grew §4 to EOF with
+# every row green.
+# The replacement must not START WITH the old heading: both `raw_region` and
+# `stop_present` anchor with index()==1, so `## 5. Dispatch work` is still a
+# match and the guard cannot fire on it — measured, both guards passed through
+# with all 30 rows green.
+start_mutant
+edit "$REL_DISPATCH" '## 5. Dispatch' '## 5. Hand off to sub-agents'
+guard_mutate "G1: §4's stop heading is renamed, so its window would run to EOF" \
+    'window sec4 has no stop line'
+
+start_mutant
+edit "$REL_TAKE" '## 4. Claim each issue' '## 4. Take each issue'
+guard_mutate "G2: take-it's §3 stop heading is renamed" \
+    'window sec3t has no stop line'
+
+# Every declared mutant ran. Derived from this file rather than transcribed, and
+# WHITESPACE-TOLERANT: an indented or re-wrapped call used to fall out of a
+# column-anchored count and report "only 22 of 21 declared mutants ran" — failing
+# closed, with a message naming the wrong problem. The labels are collected as a
+# list so the comparison is over members, not a number.
+declared_mutants="$(grep -cE '^[[:space:]]*mutate[[:space:]]+"' "$SELF_ABS")"
+declared_guards="$(grep -cE '^[[:space:]]*guard_mutate[[:space:]]+"' "$SELF_ABS")"
+staged_mutants="$(grep -c . "$MUTANT_LABELS")"
 asserts=$((asserts + 1))
-if [ "$mutants_run" -eq "$declared_mutants" ]; then
-    echo "  ok    every declared mutant ran ($mutants_run of $declared_mutants)"
+if [ "$staged_mutants" -eq "$declared_mutants" ] && [ "$mutants_run" -eq "$declared_mutants" ]; then
+    echo "  ok    every declared mutant ran ($mutants_run of $declared_mutants), plus $guards_run guard mutant(s)"
 else
     fail=1
-    echo "  FAIL  only $mutants_run of $declared_mutants declared mutants ran — the rest proved nothing"
+    echo "  FAIL  $mutants_run ran and $staged_mutants staged, against $declared_mutants declared — the rest proved nothing"
+fi
+asserts=$((asserts + 1))
+if [ "$guards_run" -eq "$declared_guards" ]; then
+    echo "  ok    every declared guard mutant aborted the run ($guards_run of $declared_guards)"
+else
+    fail=1
+    echo "  FAIL  only $guards_run of $declared_guards guard mutants aborted — a precondition is not enforced"
 fi
 
 # --- the derived matrix: which rows NO mutant can redden ----------------------
@@ -676,7 +960,7 @@ fi
 
 # ------------------------------------------------------------------------------
 if [ "$fail" -eq 0 ]; then
-    echo "site filter tests: all green ($asserts assertions, $mutants_run mutants)" >&2
+    echo "site filter tests: all green ($asserts assertions, $mutants_run mutants, $guards_run guards)" >&2
     exit 0
 fi
 echo "site filter tests: FAILURES above ($asserts assertions)" >&2

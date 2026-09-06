@@ -1182,32 +1182,48 @@
 #      mis-groom is fixed by a human moving a card, while a wrong dispatch
 #      claims the issue, spends a worktree agent that cannot reach the other
 #      machine's artifacts, and lands it in `blocked` under a comment naming
-#      the wrong cause. Four decisions are pinned. THE MATCH IS THE ARRAY FORM
+#      the wrong cause. Five decisions are pinned. THE MATCH IS THE ARRAY FORM
 #      FOLDED ON BOTH SIDES — `not sites or execution_site.lower() in sites` —
 #      because the array read is the only one that cannot resolve an ambiguous
 #      declaration to "any site", and because the snapshot folds only the LABEL
 #      side, so a raw `execution_site: VDI` holds the VDI loop's own work; every
-#      copy of that form is held to one spelling, and the three that existed
-#      before #341 disagreed — `queue-snapshot.sh`'s header and
-#      `config-contract.md` unfolded, `github-issues/SKILL.md` folded. THE
-#      DISCRIMINATION HALF IS LOAD-BEARING — an empty `sites` dispatches
-#      exactly as today, and a `sites` containing this checkout's site
-#      dispatches however many members it carries, since a filter that holds
-#      everything satisfies "mismatched work is held" and is useless. AN
-#      UNNAMED CHECKOUT IS FAIL-OPEN and is a DIFFERENT QUESTION from an
-#      unlabelled issue, each with its own row, because collapsing the two
-#      sends whichever half is dropped dark. A SITE HOLD IS NOT A FAILURE: no
-#      redispatch budget, no demotion, and in take-it the refusal is raised
-#      BEFORE the claim, checked as a line-number comparison against the claim
-#      step's heading rather than from prose that reads the same wherever it
-#      sits. It re-checks none of #340's resolution rules, which are
-#      test-queue-snapshot-site.sh's, and nothing about §7's terminal states,
-#      which are test-drain-terminal-states.sh's. Mutant reach is DERIVED: the
-#      gate re-runs ITSELF against each mutated copy of the tree, diffs the
+#      subject is held to one spelling, and the three that existed before #341
+#      disagreed — `queue-snapshot.sh`'s header and `config-contract.md`
+#      unfolded, `github-issues/SKILL.md` folded. THE DISCRIMINATION HALF IS
+#      LOAD-BEARING — an empty `sites` proceeds exactly as today, and a `sites`
+#      containing this checkout's site proceeds however many members it
+#      carries, in BOTH consumers, since a filter that holds everything
+#      satisfies "mismatched work is held" and is useless. AN UNNAMED CHECKOUT
+#      IS FAIL-OPEN and is a DIFFERENT QUESTION from an unlabelled issue, each
+#      with its own row, because collapsing the two sends whichever half is
+#      dropped dark. A SITE HOLD IS NOT A FAILURE: no redispatch budget, no
+#      demotion, and in take-it the refusal is raised BEFORE the claim, checked
+#      as a line-number comparison against the claim step's heading rather than
+#      from prose that reads the same wherever it sits. ONE RESOLVER, AND EVERY
+#      CONSUMER RUNS IT — the buckets are label-scoped, so dispatch-ready's
+#      `board:` path (whose snapshot carries `labels` and no `sites`) and
+#      take-it on an unpromoted issue would each need their own, and a filter
+#      with no input is a SILENT fail-open in a repo that opted in; two rows RUN
+#      `queue-snapshot.sh --sites-of` rather than describing it, one for the
+#      answer and one proving it reaches no `gh`. Needles are pinned THROUGH
+#      their terminator, because a qualifying clause — "no redispatch budget on
+#      the first hold" — inverts a decision while every phrase a substring check
+#      looks for survives; each such row carries a qualification mutant beside
+#      its deletion one. It re-checks none of #340's resolution rules, which are
+#      test-queue-snapshot-site.sh's, and nothing about §7's terminal states
+#      beyond the pointer §4 owes an operator, which are
+#      test-drain-terminal-states.sh's. Mutant reach is DERIVED: the gate
+#      re-runs ITSELF against each mutated copy of the tree, diffs the
 #      failing-row set against a baseline proved clean first, and the rows no
-#      mutant reddens are derived and compared to a declared set. Source-level,
-#      five tracked files, copies only — nothing tracked is written — no `gh`,
-#      no network.
+#      mutant reddens are derived and compared to a declared set; each
+#      whole-subject veto has a mutant writing the offending text OUTSIDE every
+#      window a must-exist row reads, which is what tells a whole-subject veto
+#      apart from a windowed one. Two GUARD mutants rename a section's stop
+#      heading and require the child to ABORT rather than flip a row — the
+#      overrun guard shipped unable to fire, because `raw_region` excludes its
+#      own stop line by construction and the guard grepped the window for it.
+#      Source-level plus the two emitter rows; seven tracked files, copies only,
+#      no `gh`, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -1971,12 +1987,16 @@ fi
 # --- 40. site filter tests -----------------------------------------------------
 # The two consumers of the execution-site declaration: dispatch-ready §4's Site
 # filter and take-it's refusal before the claim. Rows cover the folded array
-# match across all four copies of it, the discrimination half (an unlabelled
-# issue still dispatches, and membership dispatches however many members
-# `sites` carries), fail-open in an unnamed checkout as its own question, the
-# hold costing no redispatch budget and never demoting, and take-it's refusal
-# preceding the claim by line number. Mutant reach is derived from a baseline
-# diff of the gate re-run against mutated copies. No repo, no network.
+# match in every subject that spells it, the discrimination half (an unlabelled
+# issue still proceeds, and membership proceeds however many members `sites`
+# carries, in both consumers), fail-open in an unnamed checkout as its own
+# question, the hold costing no redispatch budget and never demoting — pinned
+# through the clause's terminator, so a qualifier cannot invert it — take-it's
+# refusal preceding the claim by line number, and two rows that RUN
+# `queue-snapshot.sh --sites-of`, the emitter the `board:` path and take-it
+# need because the buckets are label-scoped. Mutant reach is derived from a
+# baseline diff of the gate re-run against mutated copies; two guard mutants
+# require the run to abort instead. No repo, no network.
 if bash scripts/test-site-filter.sh; then
     pass "site filter tests (scripts/test-site-filter.sh)"
 else

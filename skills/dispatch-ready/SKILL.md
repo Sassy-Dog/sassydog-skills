@@ -272,10 +272,26 @@ loop claims the issue, spends a worktree agent that cannot reach those artifacts
 cause. So a site-mismatched issue is stepped around **before** it is claimed, never discovered
 after an agent has already burned an attempt on it (#341).
 
-**Read `sites` off the §2 snapshot.** `queue-snapshot.sh` has already resolved every `site:<name>`
-label into a sorted list. **Never re-parse the issue body for a site and never re-derive the list
-from raw labels here** — a body line can be quoted in prose, and a second resolver is a second
-answer; that script's header is the copy to trust for the resolution rules.
+**Read `sites` off the §2 snapshot on the boardless path.** `queue-snapshot.sh` has already
+resolved every `site:<name>` label into a sorted list. **Never re-parse the issue body for a site
+and never re-derive the list from raw labels here** — a body line can be quoted in prose, and a
+second resolver is a second answer; that script's header is the copy to trust for the resolution
+rules.
+
+**On the `board:` path, run the resolver — the board snapshot has no `sites`.** `board-snapshot.sh`
+returns `labels` per card and nothing more, so this filter would otherwise have no input on exactly
+the repos that configure a board, and a filter with no input is a **silent fail-open in a repo that
+opted in** — [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s wrong dispatch under
+prose that reads as protected. Feed the card's own labels through the emitter rather than reading
+them yourself:
+
+```bash
+jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+```
+
+One resolver, two callers, one answer. **This filter runs on both paths** — a rule written for one
+is invisible on the other, and the half it omits is the half that goes dark.
 
 **The match is `not sites or execution_site.lower() in sites`, and it folds case on BOTH sides.**
 `queue-snapshot.sh` folds the label's value, so folding the configured one is this skill's half:
@@ -303,8 +319,12 @@ writes no `dispatch-ready: attempt 1 failed` comment: the issue is dispatchable,
 here, and the machine that can take it is not this tick's to find. Treating it as a failure is
 precisely how the issue ends up `blocked` under a comment naming the wrong cause. Report it as
 `#N (requires site <x>)`, listing **all** of `sites` when there is more than one, so the operator
-can see which checkout to run the drain from. It re-dispatches by itself the moment that checkout
-ticks — nothing here needs undoing.
+can see which checkout to run the drain from. Nothing here needs undoing: the issue dispatches
+normally the moment the named checkout ticks. **But §7 does not know that yet** — a site hold joins
+the held set like any other, is not self-resolving, and a Ready column holding nothing else ends
+the loop at DRAIN STALLED two ticks later, telling the operator to resolve a gate this checkout
+cannot. Say so when it happens; the terminal-state half is
+[#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)'s.
 
 ### Collision — an in-flight PR's real files beat the declaration
 

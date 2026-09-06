@@ -24,7 +24,7 @@ Which header to read, keyed by what you are touching:
 | the label taxonomy or `align-labels.sh` | `test-label-taxonomy.sh`, `test-label-migrate.sh` |
 | `github-issues` scripts — stale detection, `gotcha_summary`, grooming drift | `test-stale-issues.sh`, `test-gotcha-claims.sh`, `test-verify-issue-refs.sh` |
 | `queue-snapshot.sh` — its emitted key set, the `touches:`/`Depends on #N`/`stack:` body parse, and the execution-site read (why a label rather than a body contract, and why several `site:` labels are a conflict rather than "any site") | `test-queue-snapshot-site.sh` |
-| the execution-site CONSUMERS — `dispatch-ready` §4's Site filter, `take-it`'s refusal before the claim, and the one folded spelling of `not sites or execution_site.lower() in sites` every copy of that rule is held to | `test-site-filter.sh` |
+| the execution-site CONSUMERS — `dispatch-ready` §4's Site filter, `take-it`'s refusal before the claim, `queue-snapshot.sh --sites-of` (the one resolver both reach for labels the buckets never saw), and the one folded spelling of `not sites or execution_site.lower() in sites` every subject is held to | `test-site-filter.sh` |
 | `file-or-link-issue.sh` — the two idempotency stages, the delimited-footer match, the refusal to file on an unverified scan | `test-file-or-link-issue.sh` |
 | `repo-health` security pulls (code scanning and secret scanning states) | `test-scanning-states.sh` |
 | `whats-on-fire`'s ranking and reporting — a security-labelled issue is never collapsed into a bare count | `test-security-listing.sh` |

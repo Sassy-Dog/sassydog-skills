@@ -49,14 +49,24 @@
 #     declaration letting the wrong loop claim the issue. The obvious reading
 #     of the list, `not sites or execution_site.lower() in sites`, cannot
 #     make that mistake. A shape that permits the wrong reading eventually
-#     gets read that way, and prose in three files is not what should be
-#     standing between a cold-worktree agent and that bug.
+#     gets read that way, and prose spread across every consumer is not what
+#     should be standing between a cold-worktree agent and that bug.
 #   * THE READER FOLDS THE CONFIG SIDE. This script folds the label's value, so
 #     the other half of the comparison is the consumer's and nothing here can
 #     perform it: an `execution_site: VDI` matched raw against the folded `vdi`
 #     holds the VDI loop's own work — the filter refusing exactly the checkout
 #     it was written for. Write it `not sites or execution_site.lower() in
 #     sites`, never plain equality against the raw config value (issue #341).
+#   * THE RESOLUTION IS AVAILABLE TO CALLERS THAT ARE NOT READING A BUCKET:
+#     `--sites-of` takes a JSON array of label names on stdin and prints the
+#     resolved `sites` array, running no `gh` and touching no network. It exists
+#     because the buckets are LABEL-SCOPED (`ready`, `in-progress`, `blocked`)
+#     and two consumers legitimately hold labels from somewhere else — a board
+#     card from `board-snapshot.sh`, and `take-it`'s `gh issue view` on an issue
+#     nobody promoted (issue #341). Without it each of them writes its own
+#     resolver, and the rules above stop having one answer; this is the
+#     `taxonomy`-emitter shape CLAUDE.md already requires of a consumer, applied
+#     to a resolver rather than a table. One `sites_of`, three callers.
 #   * No character grammar is applied to the value. A label is created through
 #     the GitHub UI or API by somebody with triage, is visible on the issue,
 #     and cannot be edited into an issue body unnoticed — so the body-contract
@@ -77,6 +87,7 @@
 # script only reads and parses.
 #
 # Usage: queue-snapshot.sh [--repo owner/name] [--limit 200]
+#        queue-snapshot.sh --sites-of   (JSON array of label names on stdin)
 # Env:   REPO=owner/name (fallback when --repo absent; else inferred from cwd)
 #
 # Output: single JSON object on stdout:
@@ -84,6 +95,8 @@
 #    "ready":[{number,title,labels,assignees,sites,touches,stack,depends_on,unannotated}...],
 #    "in_flight":[{number,title,labels,assignees,mine,sites,touches,stack}...],
 #    "blocked":[N...]}
+#   `--sites-of` instead prints one JSON array: the resolved sites, e.g.
+#   `["site:vdi","ready"]` on stdin gives `["vdi"]`.
 #
 # Exit codes: 0 ok; 10 skipped (gh/python3 missing or no repo); 64 usage.
 # Read-only.
@@ -91,39 +104,58 @@ set -euo pipefail
 
 REPO="${REPO:-}"
 LIMIT=200
+MODE=queue
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --repo)  REPO="$2";  shift 2 ;;
         --limit) LIMIT="$2"; shift 2 ;;
-        *) echo "usage: queue-snapshot.sh [--repo owner/name] [--limit N]" >&2; exit 64 ;;
+        --sites-of) MODE=sites; shift ;;
+        *) echo "usage: queue-snapshot.sh [--repo owner/name] [--limit N] | --sites-of" >&2; exit 64 ;;
     esac
 done
 case "$LIMIT" in ''|*[!0-9]*) echo "queue-snapshot: --limit must be a number" >&2; exit 64 ;; esac
 
-command -v gh >/dev/null 2>&1 || { echo "skipped: gh not installed" >&2; exit 10; }
 command -v python3 >/dev/null 2>&1 || { echo "skipped: python3 not installed" >&2; exit 10; }
-[[ -z "$REPO" ]] && REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
-[[ -z "$REPO" ]] && { echo "skipped: not in a GitHub repo and REPO not set" >&2; exit 10; }
 
-ME=$(gh api user --jq .login 2>/dev/null || true)
+# `--sites-of` resolves labels a caller already holds, so it needs no repo, no
+# `gh` and no network — and the guards above must not demand any. The buckets
+# and the resolver share ONE python program below rather than one each: a second
+# copy of `sites_of` is a second answer, which is the whole thing the emitter
+# exists to prevent.
+READY_JSON="[]"; INPROG_JSON="[]"; BLOCKED_JSON="[]"; ME=""; LABELS_JSON="[]"
+if [[ "$MODE" == "sites" ]]; then
+    # THE SHELL reads stdin, not python: the python program arrives on python's
+    # stdin as a heredoc, so `json.load(sys.stdin)` there reads an already
+    # exhausted stream. Measured — every call answered "stdin is not JSON".
+    [[ -t 0 ]] && { echo "usage: <json-array-of-label-names> | queue-snapshot.sh --sites-of" >&2; exit 64; }
+    LABELS_JSON=$(cat)
+fi
+if [[ "$MODE" == "queue" ]]; then
+    command -v gh >/dev/null 2>&1 || { echo "skipped: gh not installed" >&2; exit 10; }
+    [[ -z "$REPO" ]] && REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+    [[ -z "$REPO" ]] && { echo "skipped: not in a GitHub repo and REPO not set" >&2; exit 10; }
 
-# gh label filters AND together, so each bucket is its own list call.
-FIELDS="number,title,labels,assignees,body"
-READY_JSON=$(gh issue list --repo "$REPO" --state open --label ready \
-    --limit "$LIMIT" --json "$FIELDS" 2>/dev/null || echo "[]")
-INPROG_JSON=$(gh issue list --repo "$REPO" --state open --label in-progress \
-    --limit "$LIMIT" --json "$FIELDS" 2>/dev/null || echo "[]")
-BLOCKED_JSON=$(gh issue list --repo "$REPO" --state open --label blocked \
-    --limit "$LIMIT" --json number 2>/dev/null || echo "[]")
+    ME=$(gh api user --jq .login 2>/dev/null || true)
 
-python3 - "$REPO" "$ME" "$READY_JSON" "$INPROG_JSON" "$BLOCKED_JSON" <<'PY'
+    # gh label filters AND together, so each bucket is its own list call.
+    FIELDS="number,title,labels,assignees,body"
+    READY_JSON=$(gh issue list --repo "$REPO" --state open --label ready \
+        --limit "$LIMIT" --json "$FIELDS" 2>/dev/null || echo "[]")
+    INPROG_JSON=$(gh issue list --repo "$REPO" --state open --label in-progress \
+        --limit "$LIMIT" --json "$FIELDS" 2>/dev/null || echo "[]")
+    BLOCKED_JSON=$(gh issue list --repo "$REPO" --state open --label blocked \
+        --limit "$LIMIT" --json number 2>/dev/null || echo "[]")
+fi
+
+python3 - "$MODE" "$REPO" "$ME" "$READY_JSON" "$INPROG_JSON" "$BLOCKED_JSON" "$LABELS_JSON" <<'PY'
 import json, re, sys
 
-repo, me = sys.argv[1], sys.argv[2] or None
-ready_raw = json.loads(sys.argv[3])
-inprog_raw = json.loads(sys.argv[4])
-blocked_raw = json.loads(sys.argv[5])
+mode = sys.argv[1]
+repo, me = sys.argv[2], sys.argv[3] or None
+ready_raw = json.loads(sys.argv[4])
+inprog_raw = json.loads(sys.argv[5])
+blocked_raw = json.loads(sys.argv[6])
 
 # `touches:` line — first matching line wins; entries split on commas and/or
 # whitespace. Backticks tolerated (`touches: `a/b`, `c/d``).
@@ -176,6 +208,22 @@ def sites_of(labels):
             if value:
                 found.add(value)
     return sorted(found)
+
+
+if mode == "sites":
+    # The emitter. It dispatches HERE, below sites_of and above everything that
+    # touches a bucket, so the resolution a caller gets is the same function
+    # object the buckets use — not a copy that can drift from it.
+    try:
+        labels = json.loads(sys.argv[7])
+    except Exception as exc:
+        sys.stderr.write("queue-snapshot --sites-of: stdin is not JSON: %s\n" % exc)
+        sys.exit(64)
+    if not isinstance(labels, list) or not all(isinstance(x, str) for x in labels):
+        sys.stderr.write("queue-snapshot --sites-of: expected a JSON array of label names\n")
+        sys.exit(64)
+    print(json.dumps(sites_of(labels)))
+    sys.exit(0)
 
 
 def slim(issue, with_deps):

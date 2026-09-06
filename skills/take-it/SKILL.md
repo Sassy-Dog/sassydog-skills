@@ -145,24 +145,36 @@ worktree agent and an issue parked under a comment naming the wrong cause
 ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)); refusing before the claim costs
 one line of output.
 
-**Resolve `sites` from the issue's `site:<name>` LABELS, never from its body.** The `gh issue view`
-above already returned them, and `sassy-dog:github-issues`' `queue-snapshot.sh` header is the copy
-to trust for the resolution rules — prefix including the colon, folded, an empty value declares
-nothing, several labels are a set. Where a `queue-snapshot.sh` read already covers the issue —
-`dispatch-ready` §5 dispatches through these mechanics, and its own Site filter has run first —
-reuse that `sites` rather than resolving it a second time. **Do not make that snapshot the only
-source here**, the way `dispatch-ready` §4 can: its buckets are label-scoped (`ready`,
-`in-progress`, `blocked`), §3 above already skips the latter two, and `take #N` on an issue nobody
-promoted to Ready is the ordinary invocation of this skill — so a snapshot-only read would leave
-the commonest path through take-it unfiltered, which is the hole this step exists to close.
+**Resolve `sites` by RUNNING the resolver, never from the issue body and never by paraphrasing the
+rules here.** `sassy-dog:github-issues`' `queue-snapshot.sh` owns them, and a paraphrase forks
+them — one written in this file dropped the `strip()` and answered `" vdi"` where the script
+answers `"vdi"`, for a label its own header calls legal. Feed it the labels the `gh issue view`
+above already returned:
+
+```bash
+gh issue view <N> --repo "<slug>" --json labels --jq '[.labels[].name]' |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+```
+
+Where a `queue-snapshot.sh` bucket read already covers the issue — `dispatch-ready` §5 dispatches
+through these mechanics, and its own Site filter has run first — reuse that `sites` instead. **Do
+not make the bucket read the only source here**, the way `dispatch-ready` §4 can: the buckets are
+label-scoped (`ready`, `in-progress`, `blocked`), §3 above already skips the latter two, and
+`take #N` on an issue nobody promoted to Ready is the ordinary invocation of this skill — so a
+bucket-only read would leave the commonest path through take-it unfiltered, which is the hole this
+step exists to close.
 
 **The match is `not sites or execution_site.lower() in sites`, and it folds case on BOTH sides.**
 The label's value arrives already folded, so folding the configured one is this skill's half:
-compared raw, a repo configured `execution_site: VDI` refuses the VDI checkout its own work. Two
+compared raw, a repo configured `execution_site: VDI` refuses the VDI checkout its own work. Three
 consequences, because a filter is only as good as what it lets through:
 
 - **`sites` empty → proceed exactly as today.** No `site:` label is the ordinary case, and a step
   that holds those issues too is not a filter, it is a stopped queue.
+- **`sites` containing this checkout's site → proceed, however many members it carries.** Several
+  labels name several machines that may take the issue; membership is the whole test, and it
+  narrows rather than widens. Refusing a multi-member declaration outright is the tempting reading
+  and it is wrong — it holds work from a checkout the issue explicitly names.
 - **No `execution_site` configured → this step DOES NOT RUN and every named issue proceeds.**
   Fail-open, deliberately: an absent key means this repo has not adopted sites. It is **not** the
   same question as an issue with no label — an unnamed checkout ignores every declaration, a
