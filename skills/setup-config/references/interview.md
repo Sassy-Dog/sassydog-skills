@@ -150,7 +150,9 @@ State two things plainly before the user answers:
 That split is the mechanism, not a convenience: the key names a machine, nothing can re-derive it,
 and a question re-asked on every refresh is a proposal re-offered forever. Create, migrate and adopt
 are one-time transitions, so each repo gets exactly one offer — and a repo that answered "no" then
-stays unasked, which is the only way a decline is recorded at all. `references/update-mode.md` and
+stays unasked, which is the only way a decline is recorded at all — and, until a repo has actually
+been offered the question, an absent key records nothing but that. `references/update-mode.md`
+carries that distinction for the refresh path. `references/update-mode.md` and
 `references/migrate-mode.md` carry each mode's own half.
 
 `references/config-contract.md` documents the key — what it means, what its absence means, how a

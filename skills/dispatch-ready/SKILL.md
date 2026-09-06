@@ -3,7 +3,8 @@ name: dispatch-ready
 description: >
   Loop-driven dispatcher: each invocation is one idempotent tick that reconciles in-flight PRs,
   then tops the pipeline back up to the configured concurrency limit, pulling ONLY from issues
-  marked Ready, respecting dependencies and migration/codegen sequencing, until Ready is empty.
+  marked Ready, respecting dependencies and migration/codegen sequencing, until the loop reaches
+  one of its four terminal states.
   Designed to run under "/loop 5m /dispatch-ready" but a single manual invocation is also valid.
   Use when the user says "let's work ready items", "work ready items", "dispatch ready items",
   "dispatch ready items in the backlog", "dispatch the backlog", "work the ready queue", "drain
@@ -286,6 +287,12 @@ prose that reads as protected. Feed the card's own labels through the emitter ra
 them yourself:
 
 ```bash
+# `board-snapshot.sh`'s output, captured in the SAME Bash call — shell state does not
+# survive between calls, and empty stdin makes `--sites-of` exit 64, not print `[]`.
+BOARD_SNAPSHOT=$(bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/board-snapshot.sh \
+  --number <board.number> --owner <board.owner>)
+
+# One card shown; run it per card in the same call.
 jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
@@ -546,7 +553,7 @@ reads succeed, return incomplete data, and COMPLETE and STALLED consume them as 
 2026-08-26 — PR #283's required `ci` never fired during an outage, two consecutive ticks reported
 the state accurately and did nothing, and the coordinator then proposed closing and reopening the
 PR, which during an outage could leave it worse than doing nothing. Evaluating this state after
-the ones below it lets a degraded read produce a confident terminal verdict first.
+COMPLETE or STALLED lets a degraded read produce a confident terminal verdict first.
 
 This state **consumes** `pr-shepherd`'s probe and never re-derives platform health itself:
 
@@ -686,7 +693,7 @@ Announce loudly, naming the site each remaining item requires — **all** of an 
 it declares more than one, so the operator can see which checkout to run the drain from:
 
 ```text
-DRAIN DEFERRED — remaining Ready items require site <x>
+DRAIN DEFERRED — remaining Ready items require a site this checkout does not hold
   #1731 #1734 → requires site vdi
   #1736 → requires site vdi or bench
 Loop <id> cancelled — run the drain from a checkout those items name.
