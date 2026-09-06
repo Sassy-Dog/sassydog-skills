@@ -179,6 +179,41 @@ run_mut "M4: an unresolvable reference reads as current" R04 \
     '        "current": bool(reference) and vkey(v) >= vkey(reference),' \
     '        "current": (not reference) or vkey(v) >= vkey(reference),'
 
+# --- 5. the destructive-command warning, in the doc that carries it ------------
+#
+# NOT a row in the matrix above: those are scored from the script's JSON, and no
+# mutation of the script can reach a sentence in SKILL.md. It carries its own
+# proof instead, the way `reject()` does elsewhere in this repo — the predicate
+# is run against a copy with the sentence removed, so a check that could never
+# fail is itself a failure.
+#
+# WHY IT IS PINNED AT ALL. `claude plugin uninstall --scope project` does not
+# only remove local state: it EDITS the repo's committed `.claude/settings.json`
+# and empties `enabledPlugins`, stripping the declaration #97 requires. Measured
+# 2026-09-06 across 13 checkouts, 10 of which had the key silently deleted from
+# a tracked file. It is the one command in this area that damages a repo, and
+# the sentence warning about it is exactly the kind a later trim reads as
+# belt-and-braces.
+DOC="$ROOT/skills/repo-health/SKILL.md"
+WARN='Never clear a pin with `claude plugin uninstall --scope project`'
+EDITS='edits the repo'"'"'s committed'
+
+asserts=$((asserts + 1))
+if grep -qF -- "$WARN" "$DOC" && grep -qF -- "$EDITS" "$DOC"; then
+    ok "repo-health/SKILL.md warns that uninstall --scope project edits the committed settings"
+else
+    bad "repo-health/SKILL.md has lost the uninstall --scope project warning, or the reason it gives"
+fi
+
+# The self-proof: with the sentence gone, the same predicate must fail.
+sed "s/Never clear a pin with/A pin may be cleared with/" "$DOC" >"$WORK/doc-mut.md"
+asserts=$((asserts + 1))
+if grep -qF -- "$WARN" "$WORK/doc-mut.md"; then
+    bad "the warning check is vacuous — it still matches a copy with the warning removed"
+else
+    ok "and removing that warning reddens the check rather than passing it"
+fi
+
 # --- the derived matrix -------------------------------------------------------
 derived=""
 for r in $ROW_IDS; do grep -qx "$r" "$FLIPPED" || derived="$derived $r"; done
