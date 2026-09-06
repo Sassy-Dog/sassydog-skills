@@ -84,9 +84,17 @@
 # refuses; the two behavioural rows below check that `--sites-of` REACHES that
 # resolver and reaches nothing else, never what the resolver decides. It also
 # asserts nothing about §7's terminal states beyond the pointer §4 owes an
-# operator: a drain whose only remaining Ready items are site holds still ends
-# STALLED after this, which is a separate child of #322, and
-# `scripts/test-drain-terminal-states.sh` owns that section.
+# operator: a drain whose only remaining Ready items are site holds now ends at
+# DRAIN DEFERRED rather than STALLED (#342), and
+# `scripts/test-drain-terminal-states.sh` owns that state, its discrimination
+# from STALLED and its stop path. R30 reads §4's POINTER at it and nothing more,
+# so the two gates meet at that one sentence and neither transcribes the other's
+# subject. IT RUNS TO THAT SENTENCE'S OWN TERMINATOR — the `(#342)` citation
+# closing it — because a needle stopping at `cannot` is satisfied by a qualifier
+# inserted between the clause and the citation, phrase intact, which is what
+# M30q writes. The first edition stopped at `cannot` and its M30q got there by
+# REPLACING text inside the needle, making it a deletion mutant wearing a
+# qualification's label: `flips: R30` was true and proved the wrong thing.
 #
 # NEEDLES ARE PINNED THROUGH THEIR TERMINATOR, NOT AS BARE SUBSTRINGS. A
 # must-exist row matching `costs no redispatch budget` is satisfied by
@@ -377,8 +385,8 @@ fi
 row_has R25 "$sec4" 'This filter runs on both paths' \
     "§4 says the filter runs on BOTH paths, not just the one it was written for"
 row_has R30 "$sec4" \
-    'ends the loop at DRAIN STALLED two ticks later' \
-    "§4 tells the operator where a site hold ends, since §7 does not know yet"
+    'ends the loop at DRAIN DEFERRED, naming the site rather than telling the operator to resolve a gate this checkout cannot ([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).' \
+    "§4 tells the operator where a site hold ends, and §7 now ends it at DRAIN DEFERRED"
 
 # --- 2. take-it refuses BEFORE the claim --------------------------------------
 note "2. take-it"
@@ -735,12 +743,28 @@ mutate "M25: the filter stops claiming both paths" R25
 
 start_mutant
 edit "$REL_DISPATCH" \
-    'a Ready column holding nothing else ends
-the loop at DRAIN STALLED two ticks later, telling the operator to resolve a gate this checkout
-cannot.' \
-    'a Ready column holding nothing else
-resolves on its own.'
+    'so a Ready column
+holding nothing else ends the loop at DRAIN DEFERRED, naming the site rather than telling the
+operator to resolve a gate this checkout cannot' \
+    'so a Ready column
+holding nothing else resolves on its own'
 mutate "M30: §4 stops telling the operator where a site hold ends" R30
+
+# THE QUALIFICATION MUTANT beside the deletion one, the shape this gate's header
+# names: a needle that stops mid-sentence is satisfied by a clause that inverts
+# the rule after it. This one INSERTS between the clause and its citation and
+# deletes nothing — every word M30 removes is still here — so it reddens R30 only
+# because R30 runs to the citation. Narrow R30 back to `cannot` and this mutant
+# goes green, which is the measurement the first edition of this pair could not
+# make.
+start_mutant
+edit "$REL_DISPATCH" \
+    'operator to resolve a gate this checkout cannot
+([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).' \
+    'operator to resolve a gate this checkout cannot — unless the drain has been running long
+enough to call it a stall, in which case it says that instead
+([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).'
+mutate "M30q: a qualifier is INSERTED before the terminator, every phrase intact" R30
 
 # --- take-it ------------------------------------------------------------------
 # The MOVE, in two edits. A deletion would redden every take-it row at once and
