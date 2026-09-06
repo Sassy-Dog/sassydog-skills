@@ -101,6 +101,22 @@ all, the monitor stays P0 **and** the report footer names the repo that could no
 contract — reference-instant choice, owning-repo resolution, and the 404/403 split — is
 `cron-recovery.md`.
 
+<!-- rule: default-branch-ci-unknown -->
+### Not a tier — `default_branch_ci` is `null`
+
+`null` is not a conclusion. It means the sample held no completed push-class run on the default
+branch, so the repo is neither `✓ Clean today:` (nothing was read) nor P0 (nothing is known to be
+red). Report it as `CI unknown — no default-branch run in the newest N` and rank nothing on it.
+
+This is the common case, not the rare one. The newest runs in a busy repo are dominated by
+`pull_request` and bot events, so a repo with thousands of runs on file can easily have no `push`
+to its default branch in the sample — which is exactly why an unnamed `null` must never quietly
+read as green.
+
+Recovering the answer with a narrower re-query is the puller's business, not this table's: the
+tiers below apply to whatever the puller finally reports. What is load-bearing here is that a
+`null` never reaches the clean line and never reaches P0.
+
 <!-- rule: blind-spots-unranked -->
 ### Not ranked — blind spots
 
