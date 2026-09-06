@@ -132,6 +132,20 @@ can report success while a repo keeps loading a months-old plugin — and the fi
 usually a feature "not working" in a repo whose config is perfectly correct. Run this before
 treating any per-repo plugin behaviour as evidence.
 
+**Restarting does not move a project pin, and neither does the bare update command.** Both were
+measured on 2026-09-06: after a full restart this repo's pin was still `2026.8.94`, and
+`claude plugin update sassy-dog@sassydog-skills` answered *"Checking for updates … **at user
+scope** … already at the latest version (2026.9.4)"* — a success message that changed nothing for
+the checkout it was run in. The scope flag is what moves it, from inside the target repo:
+
+```bash
+claude plugin update <plugin>@<marketplace> --scope project   # then restart
+```
+
+So the fix is **three** steps, not two, and the middle one is the one that looks done:
+`marketplace update` refreshes metadata, `plugin update --scope project` moves the pin, and the
+session must restart to load it.
+
 Two results that are not what they look like:
 
 - **`no_entry` is not clean, and it has two causes that look identical here.** Either no session
