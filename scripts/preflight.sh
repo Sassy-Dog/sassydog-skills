@@ -1242,14 +1242,24 @@
 #      grooming lists candidates — and a paraphrase forks the rules, which is
 #      the failure #341 measured when one dropped the `strip()`. The `uname -s`
 #      table has exactly one home and its tokens are asserted ABSENT from the
-#      three consumer files — an earlier draft of #343 wrote a language
-#      runtime's platform constants, which no `uname -s` emits — with the same
-#      pattern first pointed at the table's home so it cannot pass vacuously.
-#      The three retired "no interview exists yet" sentences are each banned by
-#      a pattern proved against the exact sentence it retired. Mutation-proved
-#      at 41 mutants, which caught three rows whose phrases also occurred in
-#      prose they did not govern and one ban too narrow to catch its own
-#      subject's other inflection. Source-level and flattened; seven tracked
+#      three consumer files — an earlier draft of #343 wrote `darwin` / `win32`,
+#      a language runtime's constants no `uname -s` emits — and that ban is
+#      CASE-INSENSITIVE, because a case-sensitive one catches a faithful copy
+#      and admits the lowercase form this repo actually wrote. The same pattern
+#      is first pointed at the table's home so it cannot pass vacuously. The
+#      three retired "no interview exists yet" sentences are each banned by a
+#      pattern proved against the exact sentence it retired, and the retired
+#      match-no-checkout semantics by a pattern carrying a proof per
+#      INFLECTION — an English rewrite reaches for all of them, and three
+#      successive narrowings of that one ban each shipped green. MUTANT REACH IS
+#      DERIVED, not written down: the gate re-runs ITSELF against each mutated
+#      copy of the subjects (`EXEC_SITE_SRC` / `EXEC_SITE_CHILD`), diffs the
+#      failing-row set against a baseline proved clean first, and the rows NO
+#      mutant reddens are derived and compared to a declared set that is empty.
+#      That replaced a header-only mutation claim, which was false as a standing
+#      property the moment a row was re-anchored — the same shape
+#      test-queue-snapshot-site.sh paid three review rounds for. Copies only;
+#      source-level and flattened; seven tracked
 #      files, no `gh`, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
@@ -2037,8 +2047,10 @@ fi
 # neither surface refuses one nor reads it as "any site" — and the interview
 # proposes a platform-derived name it never assumes. Both surfaces run
 # `queue-snapshot.sh --sites-of` rather than paraphrasing the resolution rules,
-# and the `uname -s` table stays in its one home. Source-level, no repo, no
-# network.
+# and the `uname -s` table stays in its one home under a case-insensitive ban.
+# Mutant reach is derived from a baseline diff of the gate re-run against
+# mutated copies; the rows no mutant reddens must be the empty declared set.
+# Copies only, no repo, no network.
 if bash scripts/test-execution-site-surface.sh; then
     pass "execution-site surface tests (scripts/test-execution-site-surface.sh)"
 else

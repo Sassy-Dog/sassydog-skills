@@ -172,11 +172,18 @@ plus `sassy-dog:github-issues` stale-issue detection.
 **Run the resolver rather than re-deriving its rules** — a paraphrase forks them, which is the
 failure [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) measured when one dropped
 the `strip()`. This backlog read is not a `queue-snapshot.sh` bucket (those are label-scoped to
-`ready`/`in-progress`/`blocked`), so it takes the same emitter `take-it` and the `board:` path do,
-which runs no `gh` and touches no network:
+`ready`/`in-progress`/`blocked`), so it takes the same emitter `take-it` and `dispatch-ready`'s
+`board:` path do, which runs no `gh` and touches no network. **Feed it the labels this step's own
+pull already returned** — both forms above carry them, and a re-fetch would cost one API call per
+issue and read a tree that has moved since the pull:
 
 ```bash
-gh issue view N --json labels --jq '[.labels[].name]' |
+# boardless: the `gh issue list --json ...,labels` result above
+jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$ISSUES" |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+
+# board mode: `board-snapshot.sh` already carries each card's labels
+jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
 

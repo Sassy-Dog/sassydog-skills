@@ -87,7 +87,7 @@ Ask once per key, naming the exact value it writes and what that value claims:
 - `posthog: none` — this product has no product analytics
 - `mobile: none` — this product has no mobile app
 
-**Not skipped on a refresh** — unlike §1 and §3b. A key missing from the config is a key left
+**Not skipped on a refresh** — unlike §1, §3b, §3c and §3d. A key missing from the config is a key left
 absent, which is the state every consumer repo configured before this form existed is in, so a
 refresh that skipped the question would leave the blind-spot rows exactly where they were
 (`references/update-mode.md`).

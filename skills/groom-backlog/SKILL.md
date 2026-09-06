@@ -190,11 +190,17 @@ placeholder, would declare a site by accident. A label cannot be quoted in prose
 `sassy-dog:github-issues`' `queue-snapshot.sh` owns them, and a paraphrase forks them — one written
 into a skill dropped the `strip()` and answered `" vdi"` where the script answers `"vdi"`, for a
 label its own header calls legal ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)).
-§2's candidate pull already returned each issue's labels; feed them through the emitter, which runs
-no `gh` and touches no network:
+§2's candidate pull already returned each issue's labels, so feed **those** through the emitter,
+which runs no `gh` and touches no network. Re-fetching would cost one API call per candidate and
+read a tree that has moved since the pull:
 
 ```bash
-gh issue view N --json labels --jq '[.labels[].name]' |
+# boardless: the `gh issue list --json ...,labels` result from §2
+jq -c '[.[] | select(.number == 1712) | .labels[].name]' <<<"$CANDIDATES" |
+  bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
+
+# board mode: `board-snapshot.sh` already carries each card's labels
+jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
 
@@ -214,17 +220,23 @@ does. Propose this checkout's configured `execution_site` when the tools the bod
 label first if the repo lacks it:
 
 ```bash
-gh label list --json name --jq '.[].name'            # does it already exist?
+gh label list --limit 200 --json name --jq '.[].name'   # does it already exist?
 gh label create "site:vdi" --description "Work executable only from the vdi workstation"
 gh issue edit N --add-label "site:vdi"
 ```
 
-Two things about that create. **Look first, and never swallow its failure** — `gh label create`
-fails on a label that already exists, and a `|| true` there is precisely the silent no-op
-`scripts/test-label-taxonomy.sh` exists because of. And specify **no colour**: `site:` belongs to
-neither label taxonomy (`scripts/align-labels.sh` and `github-issues`' `issue-claim.sh` own those),
-so hard-coding one here would put a taxonomy value outside its home, and there is nothing for a
-later run to reconcile.
+Two things about that create. **Look first, raise the limit, and never swallow the failure.**
+`gh label list` defaults to **30**, and `site:` sorts late in an alphabetical list a mature repo
+fills past that — a truncated read reports a present label as absent with exit 0, and the create
+that follows then hard-fails with "already exists". `gh label create` fails on an existing label,
+and a `|| true` there is precisely the silent no-op `scripts/test-label-taxonomy.sh` exists because
+of, so neither half of this pair is optional.
+
+And **pass no `--color`**: `gh label create` then assigns a random one, so the label does carry a
+colour — it is simply not a *chosen* one, and two repos will differ. That inconsistency is the
+accepted trade. `site:` belongs to neither label taxonomy (`scripts/align-labels.sh` and
+`github-issues`' `issue-claim.sh` own those), so naming a colour here would put a taxonomy value
+outside its home, with nothing to reconcile it on a later run.
 
 **Several `site:` labels NARROW; they never widen, and they are never a defect to tidy away.** Two
 labels name two machines that may take the issue, and the dispatchers' test is membership —

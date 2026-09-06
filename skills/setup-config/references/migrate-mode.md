@@ -172,6 +172,14 @@ so it is never defaulted or inferred. And `sentry:` is **not** part of this ques
 written by the culprit check in `references/detection.md`, and it keeps its blind-spot row
 deliberately (`references/config-contract.md`, "The one exception").
 
+## Step 2c — ask §3d for `execution_site`, once
+
+The same shape as Step 2b and for the same reason: a legacy generated skill cannot express an
+execution site either, so extraction never produces one. The full rule is
+**`execution_site` on a migration** at the end of this file — read it here rather than walking past
+it, because it is an offer this mode makes exactly once and a walk of Steps 1-6 is what an agent
+follows.
+
 ## Step 3 — the renames: legacy names map to current names
 
 Four of the six skills have been renamed since the generated era (`fill-it` twice, via `groom-it`).
