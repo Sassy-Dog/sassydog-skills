@@ -55,7 +55,14 @@ gh issue view <N> --repo <R> --json labels --jq '[.labels[].name]' |
 ```
 
 Takes a JSON array of label names on stdin, prints the resolved `sites` array — `["Site: VDI"]`
-gives `["vdi"]`, `["site:mac","site:vdi"]` gives `["mac","vdi"]`, anything else gives `[]`. **A
+gives `["vdi"]` and `["site:mac","site:vdi"]` gives `["mac", "vdi"]` (`json.dumps` spacing, pinned
+by `scripts/test-site-filter.sh`). A label that is not a `site:` one **contributes nothing rather
+than zeroing the result**: `["Site: VDI","ready","offsite:x","site:"]` still gives `["vdi"]`, since
+`offsite:` is not the prefix and an empty value declares nothing. Only an array with no `site:`
+label carrying a value gives `[]`. Stdin that is not a JSON array of strings — including empty
+stdin, which is what an upstream failure produces — is refused with **exit 64** and no stdout, and
+a missing `python3` exits **10**: read the exit status, because every one of those prints exactly
+what an unlabelled issue prints. **A
 consumer that paraphrases the resolution rules instead has forked them**: an inline "prefix,
 folded, empty ignored" list dropped the `strip()` and answered `" vdi"` where the script answers
 `"vdi"`, for the same label the header calls legal ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)).

@@ -122,7 +122,9 @@ Announce the resolved shape before dispatching, as in
 ## 3. Pre-flight per issue
 
 ```bash
-gh issue view N --json number,title,state,labels,body,assignees
+# Captured, because the site resolver below reuses these labels rather than
+# re-reading them. Same Bash call — shell state does not survive between calls.
+ISSUE=$(gh issue view <N> --repo "<slug>" --json number,title,state,labels,body,assignees)
 ```
 
 Skip and announce if: not OPEN; `blocked` label; assignee already set; the board card is already
@@ -142,19 +144,28 @@ one — and go no further with it. §4 must not run for that issue: a claim writ
 `in-progress` label, which takes the issue off the queue every OTHER checkout reads while leaving
 it with the one machine that cannot do the work. Discovering the mismatch afterwards costs a spent
 worktree agent and an issue parked under a comment naming the wrong cause
-([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)); refusing before the claim costs
+(#341); refusing before the claim costs
 one line of output.
 
 **Resolve `sites` by RUNNING the resolver, never from the issue body and never by paraphrasing the
 rules here.** `sassy-dog:github-issues`' `queue-snapshot.sh` owns them, and a paraphrase forks
 them — one written in this file dropped the `strip()` and answered `" vdi"` where the script
-answers `"vdi"`, for a label its own header calls legal. Feed it the labels the `gh issue view`
-above already returned:
+answers `"vdi"`, for a label its own header calls legal. Feed it the labels §3's `gh issue view`
+already returned, rather than paying a second round trip per issue:
 
 ```bash
-gh issue view <N> --repo "<slug>" --json labels --jq '[.labels[].name]' |
+jq -c '[.labels[].name]' <<<"$ISSUE" |
   bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/queue-snapshot.sh --sites-of
 ```
+
+**A resolver that could not run is UNKNOWN, and UNKNOWN is a HOLD.** `--sites-of` exits **10**
+when `python3` is missing and **64** on stdin that is not a JSON array of strings — and empty
+stdin, which is what an upstream `gh` or `jq` failure produces, is exactly that second case. Every
+one of those prints **nothing on stdout**, so a caller reading the output alone sees what an
+unlabelled issue produces and proceeds. **Read the exit status, not the output.** On anything but
+0, announce `#N (site unresolved — <stderr>)` and go no further with that issue: it costs a line of
+output, while the alternative is claiming an issue for a checkout that may not be able to do
+it — #322's originating bug, reached through a failure instead of a parse. Never read a non-zero exit as `[]`.
 
 Where a `queue-snapshot.sh` bucket read already covers the issue — `dispatch-ready` §5 dispatches
 through these mechanics, and its own Site filter has run first — reuse that `sites` instead. **Do

@@ -128,8 +128,19 @@ if [[ "$MODE" == "sites" ]]; then
     # THE SHELL reads stdin, not python: the python program arrives on python's
     # stdin as a heredoc, so `json.load(sys.stdin)` there reads an already
     # exhausted stream. Measured — every call answered "stdin is not JSON".
-    [[ -t 0 ]] && { echo "usage: <json-array-of-label-names> | queue-snapshot.sh --sites-of" >&2; exit 64; }
-    LABELS_JSON=$(cat)
+    # THREE stdin states, not two, and the third one HANGS. `-t 0` catches a
+    # terminal; a CLOSED fd 0 (`--sites-of <&-`) is neither a terminal nor
+    # readable, and a bare `$(cat)` then inherits the read end of its OWN
+    # command-substitution pipe as fd 0 and blocks forever — reproduced, the
+    # probe had to be killed. Duplicating fd 0 is what separates "closed" from
+    # "empty": the dup fails on a closed descriptor, while `</dev/null`
+    # succeeds and reaches python's exit-64 branch, which is the right answer
+    # for it. Do not "simplify" this to `{ : <&0; }` — that reports a closed
+    # fd 0 as open (measured), so the guard reads correct and catches nothing.
+    SITES_USAGE="usage: <json-array-of-label-names> | queue-snapshot.sh --sites-of"
+    [[ -t 0 ]] && { echo "$SITES_USAGE" >&2; exit 64; }
+    { exec 3<&0; } 2>/dev/null || { echo "$SITES_USAGE" >&2; exit 64; }
+    LABELS_JSON=$(cat <&3)
 fi
 if [[ "$MODE" == "queue" ]]; then
     command -v gh >/dev/null 2>&1 || { echo "skipped: gh not installed" >&2; exit 10; }

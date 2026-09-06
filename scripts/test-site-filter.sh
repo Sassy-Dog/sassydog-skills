@@ -194,7 +194,8 @@ done
 # mutation matrix derives its "no mutant reaches this" set from the same list.
 ROW_IDS="R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 \
 R11 R12 R13 R14 R15 R16 R17 R18 R19 R20 \
-R21 R22 R23 R24 R25 R26 R27 R28 R29 R30"
+R21 R22 R23 R24 R25 R26 R27 R28 R29 R30 \
+R31 R32 R33 R34 R35 R36"
 
 fail=0
 asserts=0
@@ -319,11 +320,19 @@ ghissues="$(plain "$(cat "$G")")"
 # "no copy says Y": the unfolded spelling written into §7, or into
 # queue-snapshot's python region rather than its header, is the same defect
 # somewhere the windows cannot see.
-all_copies=""
-for rel in $SUBJECTS; do
-    all_copies="$all_copies
-$(plain "$(cat "$SRC/$rel")")"
-done
+# ONE flatten over all seven, not one `plain` per subject: `plain` is a 5-process
+# pipeline and this loop ran it per subject per CHILD, which the mutation matrix
+# then multiplies by every mutant. `@@SUBJECT-BOUNDARY@@` keeps the one guarantee
+# the loop gave for free — no veto needle may match across the junction between
+# two subjects — and it survives the flatten untouched, carrying neither `*` nor
+# a backtick (issue #351).
+all_copies="$(
+    for rel in $SUBJECTS; do
+        printf '\n@@SUBJECT-BOUNDARY@@\n'
+        cat "$SRC/$rel"
+    done | sed -E 's/^[[:space:]]*(> ?)+//; s/^[[:space:]]+//' \
+         | tr '\n' ' ' | tr -s ' ' | tr -d '*`' | sed -E 's/^ +//; s/ +$//'
+)"
 
 note "site filter consumers (issue #341) — subjects under $SRC"
 
@@ -343,9 +352,12 @@ row_has R02 "$sec4" \
     "§4 states the array match, folded on both sides"
 # Pinned through the clause's end, not as the bare phrase: "dispatch, exactly as
 # today WHEN THE REPO HAS OPTED OUT" satisfies a substring check while deleting
-# the discrimination half.
+# the discrimination half. THROUGH THE SENTENCE TERMINATOR, not to a convenient
+# mid-sentence word: this needle used to stop at "stopped queue", so a qualifier
+# APPENDED after that point left the row green while M03q proved only the
+# inside-clause insertion (issue #351). Same correction on R07 below.
 row_has R03 "$sec4" \
-    'sites empty → dispatch, exactly as today. Most issues carry no site: label at all, and a filter that also holds them is not a filter, it is a stopped queue' \
+    'sites empty → dispatch, exactly as today. Most issues carry no site: label at all, and a filter that also holds them is not a filter, it is a stopped queue — it satisfies "site-mismatched work is held" while being useless, which is the half a check for the hold alone cannot see.' \
     "§4 keeps the discrimination half: an unlabelled issue dispatches as today"
 row_has R04 "$sec4" \
     "sites containing this checkout's site → dispatch, however many members it carries." \
@@ -360,7 +372,7 @@ row_has R06 "$sec4" \
 # it — "no redispatch budget ON THE FIRST HOLD" — breaks the match, which a
 # substring check on either half cannot do.
 row_has R07 "$sec4" \
-    'It costs no redispatch budget, triggers no demotion, and writes no dispatch-ready: attempt 1 failed comment:' \
+    "It costs no redispatch budget, triggers no demotion, and writes no dispatch-ready: attempt 1 failed comment: the issue is dispatchable, just not from here, and the machine that can take it is not this tick's to find." \
     "§4's site hold spends no budget and never demotes, unqualified"
 row_has R08 "$sec4" 'A site hold is not a failure.' \
     "§4 states outright that a site hold is not a failure"
@@ -385,7 +397,7 @@ fi
 row_has R25 "$sec4" 'This filter runs on both paths' \
     "§4 says the filter runs on BOTH paths, not just the one it was written for"
 row_has R30 "$sec4" \
-    'ends the loop at DRAIN DEFERRED, naming the site rather than telling the operator to resolve a gate this checkout cannot ([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).' \
+    'ends the loop at DRAIN DEFERRED, naming the site rather than telling the operator to resolve a gate this checkout cannot (#342).' \
     "§4 tells the operator where a site hold ends, and §7 now ends it at DRAIN DEFERRED"
 
 # --- 2. take-it refuses BEFORE the claim --------------------------------------
@@ -437,12 +449,21 @@ mkdir -p "$BIN"
 # already holds, so reaching gh at all is the regression: it would make a
 # board-path or take-it site read cost a network round trip per issue, and this
 # file's header claims no network.
-cat >"$BIN/gh" <<'MOCK'
+# IT LOGS TO A FILE, and the file is what R27 reads. stderr cannot carry this
+# signal: `sites_of` below truncates `emit.err` on every call, and every `gh`
+# call inside queue-snapshot.sh carries `2>/dev/null` anyway — so the mock's
+# stderr never reached the assertion at all. R27 used to redden under M27 only
+# because exit 10 emptied stdout, which is a different fact about a different
+# failure. A durable append-only log is what makes "did not reach gh" the thing
+# actually measured (issue #351).
+cat >"$BIN/gh" <<MOCK
 #!/usr/bin/env bash
-echo "MOCK GH CALLED: $*" >&2
+printf '%s\n' "gh \$*" >>"$WORK/gh-calls.log"
+echo "MOCK GH CALLED: \$*" >&2
 exit 1
 MOCK
 chmod +x "$BIN/gh"
+: >"$WORK/gh-calls.log"
 if [ "$(PATH="$BIN:$PATH" command -v gh)" != "$BIN/gh" ]; then
     echo "test-site-filter: the mock gh shim did not install at $BIN/gh — refusing to run the emitter rows, because a real gh would answer them" >&2
     exit 1
@@ -458,11 +479,71 @@ if [ "$one" = '["vdi"]' ] && [ "$two" = '["mac", "vdi"]' ] && [ "$none" = '[]' ]
 else
     row R26 1 "--sites-of did not resolve through sites_of (got '$one' / '$two' / '$none')"
 fi
-if [ -n "$one" ] && ! grep -qF -- 'MOCK GH CALLED' "$WORK/emit.err"; then
+if [ -n "$one" ] && [ ! -s "$WORK/gh-calls.log" ]; then
     row R27 0 "--sites-of answers without reaching gh — no repo, no network"
 else
-    row R27 1 "--sites-of reached gh, or produced nothing: $(tr '\n' ' ' <"$WORK/emit.err")"
+    row R27 1 "--sites-of reached gh, or produced nothing: calls=[$(tr '\n' ' ' <"$WORK/gh-calls.log")] err=[$(tr '\n' ' ' <"$WORK/emit.err")]"
 fi
+
+# THE INPUT CONTRACT, which belongs to #341's emitter and not to #340's
+# resolution rules — every row above feeds a VALID array, so nothing here saw
+# the refusal path until this row (issue #351). It matters for one reason:
+# empty stdout is what a refusal AND an unlabelled issue both produce, so a
+# caller reading output alone cannot tell them apart. That is precisely what the
+# consumers' "UNKNOWN is a HOLD" rule (R33/R34) exists to stop, and this row is
+# the half that proves the exit code it tells them to read is really there.
+refuse_ok=1; refuse_saw=""
+for bad in '' 'null' '[1]' '"vdi"' '{}'; do
+    bad_out="$(printf '%s' "$bad" | PATH="$BIN:$PATH" bash "$Q" --sites-of 2>/dev/null)"
+    bad_rc=$?
+    refuse_saw="$refuse_saw [${bad}]=${bad_rc}/'${bad_out}'"
+    [ "$bad_rc" = "64" ] && [ -z "$bad_out" ] || refuse_ok=0
+done
+if [ "$refuse_ok" = "1" ]; then
+    row R31 0 "--sites-of refuses non-array stdin with exit 64 and empty stdout"
+else
+    row R31 1 "--sites-of did not refuse bad stdin as documented:$refuse_saw"
+fi
+
+# A CLOSED fd 0 is a THIRD state, and it used to HANG rather than refuse.
+# `-t 0` is false for it, so a bare `$(cat)` inherited the read end of its own
+# command-substitution pipe and blocked forever — reproduced, the probe had to
+# be killed. This row is therefore watchdogged: a regression must REDDEN, never
+# wedge the suite, so a child that has not exited within ~5s is killed and
+# scored as the failure it is.
+: >"$WORK/closed.rc"
+( PATH="$BIN:$PATH" bash "$Q" --sites-of <&- >"$WORK/closed.out" 2>/dev/null
+  echo $? >"$WORK/closed.rc" ) &
+closed_pid=$!
+closed_rc="HUNG"
+# Polled FINELY, not in half-seconds: this loop runs in every child, and the
+# mutation matrix multiplies it by every mutant — a 0.5s first sleep cost the
+# suite ~20s of pure waiting. 100 × 0.05s keeps the same ~5s ceiling.
+closed_wait=0
+while [ "$closed_wait" -lt 100 ]; do
+    kill -0 "$closed_pid" 2>/dev/null || { closed_rc="$(cat "$WORK/closed.rc" 2>/dev/null)"; break; }
+    sleep 0.05
+    closed_wait=$((closed_wait + 1))
+done
+kill -9 "$closed_pid" 2>/dev/null
+wait "$closed_pid" 2>/dev/null
+if [ "$closed_rc" = "64" ] && [ ! -s "$WORK/closed.out" ]; then
+    row R32 0 "--sites-of refuses a CLOSED fd 0 with exit 64 instead of hanging"
+else
+    row R32 1 "--sites-of mishandled a closed fd 0 (rc=$closed_rc, stdout=$(tr '\n' ' ' <"$WORK/closed.out" 2>/dev/null))"
+fi
+
+# THE CONSUMERS' HALF. The emitter refusing is worth nothing if the two callers
+# read stdout and not the exit code: empty stdout is byte-for-byte what an
+# unlabelled issue produces, so a failed resolve would dispatch/claim exactly
+# the work the filter exists to hold — #322's originating bug reached through a
+# failure rather than a parse. Both files carry the rule; neither may lose it.
+row_has R33 "$sec4" 'Read the exit status, not the output.' \
+    "dispatch-ready reads the resolver's exit status rather than its stdout"
+row_has R34 "$sec3t" 'Read the exit status, not the output.' \
+    "take-it reads the resolver's exit status rather than its stdout"
+row_has R35 "$sec4" 'On anything but 0 the filter did not run for that issue: hold it' \
+    "and an unresolved read is a HOLD, never a dispatch"
 
 # --- 4. the match form, across every subject ----------------------------------
 note "4. the match form"
@@ -495,6 +576,14 @@ if grep -qF -- 'all three body contracts — touches:, Depends on #N and stack: 
 else
     row R23 1 "§2's snapshot sentence undercounts the body contracts, or drops sites"
 fi
+
+# blocked[] IS BARE NUMBERS, and the §2 sentence used to attach the contracts and
+# the resolved sites to all three buckets alike (issue #351). It is not a
+# cosmetic overclaim: a reader who believes `blocked[]` carries `sites` writes a
+# site filter over a bucket that has no labels in it, and gets `[]` for every
+# entry — the fail-open direction again, this time invented by the prose.
+row_has R36 "$sec2" 'blocked[] is bare issue numbers' \
+    "§2 keeps blocked[] apart from the two buckets that carry the contracts"
 
 # --- consumption --------------------------------------------------------------
 # Every declared row ran, and nothing ran that is not declared. This is the
@@ -760,10 +849,10 @@ mutate "M30: §4 stops telling the operator where a site hold ends" R30
 start_mutant
 edit "$REL_DISPATCH" \
     'operator to resolve a gate this checkout cannot
-([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).' \
+(#342).' \
     'operator to resolve a gate this checkout cannot — unless the drain has been running long
 enough to call it a stall, in which case it says that instead
-([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).'
+(#342).'
 mutate "M30q: a qualifier is INSERTED before the terminator, every phrase intact" R30
 
 # --- take-it ------------------------------------------------------------------
@@ -861,6 +950,45 @@ edit "$REL_SNAP" \
     command -v gh'
 mutate "M27: --sites-of starts reaching gh — a network round trip per issue" R27
 
+start_mutant
+edit "$REL_SNAP" \
+    '    { exec 3<&0; } 2>/dev/null || { echo "$SITES_USAGE" >&2; exit 64; }
+    LABELS_JSON=$(cat <&3)' \
+    '    LABELS_JSON=$(cat)'
+mutate "M35: the closed-fd guard is dropped — the resolver hangs instead of refusing" R32
+
+start_mutant
+edit "$REL_SNAP" \
+    'if [[ "$MODE" == "queue" ]]; then
+    command -v gh' \
+    'ME=$(gh api user --jq .login 2>/dev/null || true)
+if [[ "$MODE" == "queue" ]]; then
+    command -v gh'
+mutate "M36: the user lookup is hoisted above the MODE branch — a gh round trip per --sites-of call" R27
+
+start_mutant
+edit "$REL_DISPATCH" \
+    '**Read the exit status, not the output.** On anything but 0 the filter did
+not run for that issue: hold it, report `#N (site unresolved — <stderr>)`, and dispatch nothing on
+the strength of a check that did not happen.' \
+    'An empty answer means no site was declared, so dispatch as usual.'
+mutate "M37: dispatch-ready reads the resolver's stdout instead of its exit status" R33
+
+start_mutant
+edit "$REL_TAKE" \
+    '**Read the exit status, not the output.** On anything but
+0, announce `#N (site unresolved — <stderr>)` and go no further with that issue' \
+    'An empty answer means no site was declared, so proceed. On a hard error, announce it'
+mutate "M38: take-it reads the resolver's stdout instead of its exit status" R34
+
+start_mutant
+edit "$REL_DISPATCH" \
+    'On anything but 0 the filter did
+not run for that issue: hold it, report' \
+    'On anything but 0 the filter did
+not run for that issue: dispatch it anyway, reporting'
+mutate "M39: an unresolved site read dispatches instead of holding" R35
+
 # --- the copies ---------------------------------------------------------------
 start_mutant
 edit "$REL_SNAP" \
@@ -909,9 +1037,28 @@ mutate "M22: a conflict is called unsatisfiable again, outside every header wind
 
 start_mutant
 edit "$REL_DISPATCH" \
-    'and `blocked[]` with all three body contracts — `touches:`, `Depends on #N` and `stack:` — already' \
-    'and `blocked[]` with the `touches:` and `Depends on #N` body contracts already'
+    'The first two carry all three body contracts — `touches:`, `Depends on #N` and
+`stack:` — already' \
+    'The first two carry the `touches:` and `Depends on #N` body contracts already'
 mutate "M23: §2 undercounts the body contracts again" R23
+
+start_mutant
+edit "$REL_DISPATCH" \
+    'list; **`blocked[]` is bare issue numbers**, which is all the Blocked filter needs.' \
+    'list.'
+mutate "M40: §2 flattens the three buckets again, implying blocked[] carries sites" R36
+
+start_mutant
+edit "$REL_DISPATCH" \
+    'which is the half a check for the hold alone cannot see.' \
+    'which is the half a check for the hold alone cannot see — except in a repo that has adopted sites, where holding them is correct.'
+mutate "M41: the discrimination half is qualified AFTER the old needle's end" R03
+
+start_mutant
+edit "$REL_DISPATCH" \
+    "and the machine that can take it is not this tick's to find." \
+    "and the machine that can take it is not this tick's to find — after the third such hold, demote it."
+mutate "M42: decision 4 is qualified AFTER the old needle's end" R07
 
 # --- the guard mutants --------------------------------------------------------
 # These break a PRECONDITION, so the child must refuse to produce a verdict at
