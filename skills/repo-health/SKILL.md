@@ -171,14 +171,18 @@ problem for a silent no-skills-at-all problem, which is strictly worse.
 Two results that are not what they look like:
 
 - **`no_entry` is not clean, and it has two causes that look identical here.** Either no session
-  has opened that checkout since the plugin state was recorded — in which case the next one
-  creates an entry pinned to whatever is current — or the repo is missing the
+  has opened that checkout **since the declaration reached its working tree** — in which case the
+  next one creates an entry pinned to whatever is current — or the repo is missing the
   `.claude/settings.json` declaration `sassy-dog:setup-config` writes, in which case it would load
   no skill at all in a cloud session or scheduled routine. **This report cannot tell them apart**:
   read the repo's `.claude/settings.json` for `enabledPlugins` *and* `extraKnownMarketplaces`
-  before concluding anything. Measured 2026-09-06, all three `no_entry` repos on this machine had
-  a correct tracked declaration and simply had not been opened; assuming the other cause would
-  have manufactured three PRs that changed nothing.
+  before concluding anything, and read it **in the checkout**, not on the default branch: a repo
+  can be committed-correct and locally behind. `mission-control` was exactly that — it ran a
+  session on 2026-08-16 and still has no entry, because the declaring commit did not reach its
+  working tree until a `git merge` three weeks later. "Has never been opened" is the reading that
+  case punishes; the file on disk at session time is what decided it. Measured 2026-09-06, all
+  three `no_entry` repos here had a correct tracked declaration and no pin; assuming the other
+  cause would have manufactured three PRs that changed nothing.
 - **`stale_clone_hint: true`** means an installed copy is newer than the marketplace clone, so
   `claude plugin update` cannot reach the current version yet — `claude plugin marketplace update`
   has to run first. That command refreshes metadata only and reports success either way.
