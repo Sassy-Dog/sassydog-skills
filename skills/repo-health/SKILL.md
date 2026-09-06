@@ -142,9 +142,31 @@ the checkout it was run in. The scope flag is what moves it, from inside the tar
 claude plugin update <plugin>@<marketplace> --scope project   # then restart
 ```
 
-So the fix is **three** steps, not two, and the middle one is the one that looks done:
+So that route is **three** steps, not two, and the middle one is the one that looks done:
 `marketplace update` refreshes metadata, `plugin update --scope project` moves the pin, and the
 session must restart to load it.
+
+**The cheaper route: delete the stale entry and let the next open re-take the snapshot.** A pin is
+created when a session first opens a checkout whose `.claude/settings.json` declares the plugin,
+and it is created **at whatever version is current then** — so a deleted pin does not come back
+stale, it comes back fresh. Measured 2026-09-06: entries removed from
+`~/.claude/plugins/installed_plugins.json` were re-created at `2026.9.4` on the next open, with no
+per-repo update at all. That is also the only way to clear the entries left by torn-down agent
+worktrees, which cannot be `cd`-ed into — 94 of them on this machine, every one a snapshot of a
+directory that no longer exists.
+
+> **Never clear a pin with `claude plugin uninstall --scope project`.** It does not only remove
+> local state: it **edits the repo's committed `.claude/settings.json`**, emptying `enabledPlugins`
+> — which strips the declaration `sassy-dog:setup-config` writes and #97 requires, so the repo then
+> loads nothing in a cloud session or scheduled routine. Measured 2026-09-06 across 13 checkouts,
+> 10 of which had the key silently deleted from a tracked file. It also makes a naive experiment
+> lie: uninstall-then-reopen looks like the pin "stays gone", when what actually happened is that
+> the declaration which creates it was deleted too.
+
+**The declaration and the local pin are one mechanism, and you cannot keep one without the other.**
+The declaration is a committed repo file and is what makes cloud sessions work; the pin is the
+local snapshot it causes. Removing the declaration to avoid the pin trades a silent staleness
+problem for a silent no-skills-at-all problem, which is strictly worse.
 
 Two results that are not what they look like:
 
