@@ -90,9 +90,10 @@ not — a snapshot with no labels — treat the issue as blocked rather than as 
 failing the other way fails open into the bug the exclusion exists to prevent.
 
 **Without a board** — live issue state is the source of truth. Snapshot the queue via
-`sassy-dog:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]`,
-and `blocked[]` with all three body contracts — `touches:`, `Depends on #N` and `stack:` — already
-parsed, and each issue's `site:<name>` labels already resolved into a `sites` list. In-flight is
+`sassy-dog:github-issues`' `queue-snapshot.sh` — one call returns `ready[]`, `in_flight[]` and
+`blocked[]`. The first two carry all three body contracts — `touches:`, `Depends on #N` and
+`stack:` — already parsed, plus each issue's `site:<name>` labels already resolved into a `sites`
+list; **`blocked[]` is bare issue numbers**, which is all the Blocked filter needs. In-flight is
 `in_flight[]` entries with `mine: true`.
 
 Either way, in-flight counts whether or not a PR exists yet: a sub-agent mid-implementation has
@@ -282,7 +283,7 @@ rules.
 **On the `board:` path, run the resolver — the board snapshot has no `sites`.** `board-snapshot.sh`
 returns `labels` per card and nothing more, so this filter would otherwise have no input on exactly
 the repos that configure a board, and a filter with no input is a **silent fail-open in a repo that
-opted in** — [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s wrong dispatch under
+opted in** — #322's wrong dispatch under
 prose that reads as protected. Feed the card's own labels through the emitter rather than reading
 them yourself:
 
@@ -300,13 +301,24 @@ jq -c '[.items[] | select(.number == 1712) | .labels[]]' <<<"$BOARD_SNAPSHOT" |
 One resolver, two callers, one answer. **This filter runs on both paths** — a rule written for one
 is invisible on the other, and the half it omits is the half that goes dark.
 
+**A resolver that could not run is UNKNOWN, and UNKNOWN is a HOLD.** `--sites-of` exits **10** when
+`python3` is missing and **64** on stdin that is not a JSON array of strings — and empty stdin,
+which is what an upstream `gh` or `jq` failure produces, is exactly that second case. All of them
+print **nothing on stdout**, so a caller reading the output alone sees what an unlabelled issue
+produces and dispatches. **Read the exit status, not the output.** On anything but 0 the filter did
+not run for that issue: hold it, report `#N (site unresolved — <stderr>)`, and dispatch nothing on
+the strength of a check that did not happen. This is the same rule the sibling reads in this file
+already carry — *"A failed read is never 'no overlap'"* for the collision filter, *"Exit 10 is a
+skip, not a pass"* for reference decay — and it fails in the same direction they do. A site hold
+from an unresolved read costs no redispatch budget either; it is a hold, not a failure.
+
 **The match is `not sites or execution_site.lower() in sites`, and it folds case on BOTH sides.**
 `queue-snapshot.sh` folds the label's value, so folding the configured one is this skill's half:
 compared raw, a repo configured `execution_site: VDI` holds the VDI loop's own work — the filter
 refusing exactly the checkout it was written for. Write the array form, never a scalar one. A
 scalar is null both for "nothing declared" and for "several declared", so
-`site is None or site == execution_site` resolves a conflict to "any site", which is the direction
-[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug ran.
+`site is None or site == execution_site` resolves a conflict to "any site", which is the
+direction #322's originating bug ran.
 
 - **`sites` empty → dispatch, exactly as today.** Most issues carry no `site:` label at all, and a
   filter that also holds them is not a filter, it is a stopped queue — it satisfies "site-mismatched
@@ -331,7 +343,7 @@ normally the moment the named checkout ticks. **§7 reads that hold as a termina
 own** — a site hold joins the held set like any other and is not self-resolving, so a Ready column
 holding nothing else ends the loop at DRAIN DEFERRED, naming the site rather than telling the
 operator to resolve a gate this checkout cannot
-([#342](https://github.com/Sassy-Dog/sassydog-skills/issues/342)).
+(#342).
 
 ### Collision — an in-flight PR's real files beat the declaration
 
