@@ -146,7 +146,8 @@ R17 R18 R19 R20 R21 R22 R23
 R24 R25 R26 R27
 R28 R29
 R30 R31 R32 R33 R34 R35
-R36 R37 R38 R39 R40"
+R36 R37 R38 R39 R40
+R41 R43 R44 R45 R46 R47 R48"
 
 # Rows no mutant is expected to redden. Empty on purpose: a row nothing can
 # redden is a row that proves nothing.
@@ -259,8 +260,15 @@ want R09 "groom-backlog guards the body-line edit in its Guardrails" "$groom_fla
 
 # --- 2. survey-work: the plate separates here-vs-elsewhere --------------------
 
+# THROUGH THE CLAIM, not the first four words of it. The needle used to stop at
+# 'execution site from the labels', so switching either surface to a per-issue
+# `gh issue view` re-fetch — the exact anti-pattern the surrounding prose argues
+# against — left this row green while its own label still said "it already
+# pulled" (issue #353).
 want R10 "survey-work resolves the site from the labels it already pulled" "$survey_flat" \
-    'execution site from the labels'
+    'execution site from the labels the pull already returned'
+want R41 "groom-backlog resolves the site from the labels §2 already pulled" "$groom_flat" \
+    "candidate pull already returned each issue's labels, so feed [*]{2}those[*]{2} through the emitter"
 
 want R11 "survey-work runs the resolver instead of re-deriving it" "$survey_flat" \
     'queue-snapshot.sh --sites-of' 'rather than re-deriving its rules'
@@ -336,21 +344,46 @@ want R23 "the defaults summary refuses to default execution_site" "$interview_fl
 # answer, which is the opposite of proposing from it.
 
 TABLE_TOKENS='Darwin|MINGW64|MSYS_NT|CYGWIN_NT|win32'
-if printf '%s' "$contract_flat" | grep -qiE -- "$TABLE_TOKENS"; then
-    row_ok R24 "the uname -s table is where the contract says it is"
-else
-    row_bad R24 "config-contract.md no longer carries the uname -s table — the ban below would be vacuous"
-fi
-table_row=24
-for pair in "interview.md:$interview_flat" "groom-backlog:$groom_flat" "survey-work:$survey_flat"; do
-    name="${pair%%:*}"; body="${pair#*:}"
-    table_row=$((table_row + 1))
-    if printf '%s' "$body" | grep -qiE -- "$TABLE_TOKENS"; then
-        row_bad "R$table_row" "$name restates the uname -s table — it has exactly one home, and a copy drifts"
-    else
-        row_ok "R$table_row" "$name does not restate the uname -s table"
-    fi
+
+# ONE PROOF PER ALTERNATIVE, which `reject()` above already does for §5 and this
+# section did not. R24 used to test the whole alternation, and `Darwin` alone
+# satisfies it: replacing the other four with garbage left the gate green
+# (measured, issue #353). Two separate facts are needed, because they are not
+# the same question.
+#
+# R24 — each token that HAS a home is present in it, individually.
+missing_tok=""
+for tok in Darwin MINGW64 MSYS_NT CYGWIN_NT; do
+    printf '%s' "$contract_flat" | grep -qiE -- "$tok" || missing_tok="$missing_tok $tok"
 done
+if [ -z "$missing_tok" ]; then
+    row_ok R24 "config-contract.md carries every uname -s token the ban below names"
+else
+    row_bad R24 "config-contract.md has lost uname -s token(s):$missing_tok — the ban below is that much weaker"
+fi
+
+# THROUGH reject(), so a dead alternative cannot pass as a clean answer. The bare
+# `grep -q` this replaced tested the whole alternation and nothing else: `win32`
+# has no home in any subject, so no positive control over a real file could ever
+# exercise it, and replacing four of the five tokens with garbage left the gate
+# green (measured, issue #353). reject() refuses to score a ban whose pattern
+# does not match its own proofs, which is the mechanism §5 has always used —
+# every token below is one proof, `win32` included.
+reject R25 "interview.md does not restate the uname -s table" \
+    "$interview_flat" "$TABLE_TOKENS" \
+    'proposed from Darwin here' 'proposed from MINGW64_NT-10.0 here' \
+    'proposed from MSYS_NT-10.0 here' 'proposed from CYGWIN_NT-10.0 here' \
+    'proposed from win32 here'
+reject R26 "groom-backlog does not restate the uname -s table" \
+    "$groom_flat" "$TABLE_TOKENS" \
+    'proposed from Darwin here' 'proposed from MINGW64_NT-10.0 here' \
+    'proposed from MSYS_NT-10.0 here' 'proposed from CYGWIN_NT-10.0 here' \
+    'proposed from win32 here'
+reject R27 "survey-work does not restate the uname -s table" \
+    "$survey_flat" "$TABLE_TOKENS" \
+    'proposed from Darwin here' 'proposed from MINGW64_NT-10.0 here' \
+    'proposed from MSYS_NT-10.0 here' 'proposed from CYGWIN_NT-10.0 here' \
+    'proposed from win32 here'
 
 # --- 5. the retired "matches no checkout" semantics stay retired --------------
 #
@@ -369,7 +402,16 @@ done
 # checkout" — and the `site` spelling of the same claim. The window is bounded
 # to one sentence (`[^.]`) so the alternation cannot reach across a full stop
 # into unrelated prose.
-RETIRED_SEMANTICS='(match(es|ed|ing)?( by)? no (checkout|site)|no (checkout|site)[^.]{0,40}match|match(es)? (none of the checkout|neither checkout))'
+# FIFTH WIDENING, and it closes an asymmetry INSIDE the fourth. Branches 1 and 2
+# accepted `checkout|site`; branch 3 accepted only `checkout`, so "matches none
+# of the sites" and "matches neither site" walked straight through. Both
+# branches also demanded the noun ADJACENT to "no", so any adjective between
+# them — "no valid checkout", "no eligible site", "no configured checkout" —
+# escaped as well (all five measured green against the old pattern, issue #353).
+# `([a-z]+ )?` admits exactly one such adjective, which is what an English
+# rewrite reaches for; the `[^.]` bound still stops the alternation crossing a
+# full stop into unrelated prose.
+RETIRED_SEMANTICS='(match(es|ed|ing)?( by)? no ([a-z]+ )?(checkout|site)|no ([a-z]+ )?(checkout|site)[^.]{0,40}match|match(es)? (none of the (checkout|site)|neither (checkout|site)))'
 
 reject R28 "groom-backlog does not resurrect the match-no-checkout reading" \
     "$groom_flat" \
@@ -383,7 +425,12 @@ reject R28 "groom-backlog does not resurrect the match-no-checkout reading" \
     'no site matches this declaration' \
     'a two-site issue is matched by no checkout' \
     'matching no checkout, it is parked' \
-    'no checkout matches a two-site declaration'
+    'no checkout matches a two-site declaration' \
+    'it matches none of the sites' \
+    'it matches neither site' \
+    'no valid checkout will match it' \
+    'no eligible site can match' \
+    'no configured checkout matches this'
 
 reject R29 "survey-work does not resurrect the match-no-checkout reading" \
     "$survey_flat" \
@@ -397,7 +444,26 @@ reject R29 "survey-work does not resurrect the match-no-checkout reading" \
     'no site matches this declaration' \
     'a two-site issue is matched by no checkout' \
     'matching no checkout, it is undispatchable' \
-    'no checkout matches a two-site declaration'
+    'no checkout matches a two-site declaration' \
+    'it matches none of the sites' \
+    'it matches neither site' \
+    'no valid checkout will match it' \
+    'no eligible site can match' \
+    'no configured checkout matches this'
+
+# THE CONTRACT IS A CARRIER TOO, and this gate's own header names it FIRST —
+# yet the reject ran against the two SKILL.md flattens only. The sibling gate
+# covers it with the bare literal `matches no checkout`, which is precisely the
+# narrow form the header above documents as the bug this pattern widened past
+# (issue #353).
+reject R43 "config-contract.md does not resurrect the match-no-checkout reading" \
+    "$contract_flat" \
+    "$RETIRED_SEMANTICS" \
+    'several labels match no checkout' \
+    'no checkout will match a two-site declaration' \
+    'it matches none of the sites' \
+    'it matches neither site' \
+    'no valid checkout will match it'
 
 # --- 6. the pre-#343 "no interview exists yet" sentences are gone -------------
 #
@@ -436,6 +502,53 @@ want R34 "update-mode refuses to ask on a refresh" "$update_flat" \
 # mechanism recording a decline.
 want R35 "migrate-mode asks §3d as its one offer" "$migrate_flat" \
     'put \*\*interview §3d\*\* to the user here' 'the one offer this repo gets'
+
+# --- 5b. the three decisions this gate shipped without covering ---------------
+#
+# All three were measured green under a verbatim revert (issue #353): the gate
+# reached 40 rows while leaving the highest-consequence rule it documents, the
+# decision the LAST review had to catch by hand, and the only repo-scoped write
+# in this skill entirely unpinned.
+
+# THE SILENT ONE. Every other rule here fails loudly when it is broken; this one
+# fails by promoting site-held work to Ready and reporting success, because a
+# resolver that could not run prints exactly what an unlabelled issue prints.
+# groom-backlog names that consequence in its own words, so the row pins the
+# instruction rather than the rationale: an instruction survives a rewrite of
+# the reasoning around it, and it is the half a cold agent acts on.
+want R44 "groom-backlog reads the resolver's exit status, not its output" "$groom_flat" \
+    'Read the exit status, not the output' \
+    'On anything but 0, rubric #9'
+want R45 "survey-work reads the resolver's exit status, not its output" "$survey_flat" \
+    'Read the exit status, not the output' \
+    'On anything but 0 the site'
+
+# THE ONE A HUMAN CAUGHT. Rubric #9 creates a label in the REPOSITORY, which is
+# the only write in this skill that an issue edit cannot reverse — and the
+# frontmatter said "issue-body edits, Ready promotion, epic-split sub-issues"
+# and stopped. Both halves are load-bearing and neither implies the other: the
+# declaration is what a reader of the skill list sees, the §1 prose is what the
+# agent about to write reads.
+want R46 "groom-backlog's Writes: declares the repo-scoped label creation" "$groom_flat" \
+    "rubric #9's .site:<name>. label" \
+    'which it creates in the repo when that label does not yet exist'
+want R47 "groom-backlog names what makes that write different, and cites the gate" "$groom_flat" \
+    'One write is not issue-scoped' \
+    'migrate_delete_gate' \
+    'strips the label from every issue carrying it, unrecoverably'
+
+# THE WRITE PATH ITSELF, whose two failures the prose calls already-paid-for and
+# nothing checked: `gh label list` bounded at 30 under CREATION order, so the
+# freshly created label is exactly what a truncated read misses; and a `|| true`
+# that swallows the create, which is the silent no-op test-label-taxonomy.sh
+# exists because of. The third is newer and worse: `--force` recolours the
+# existing label repo-wide, reached by trying to be tidy about an error that was
+# already the answer.
+want R48 "groom-backlog's label create asks exactly, branches on exists, and bans --force" "$groom_flat" \
+    'gh api "repos/<owner>/<repo>/labels/site:vdi"' \
+    'already exists. failure is a branch, not an error' \
+    'What must never appear is .[|][|] true.' \
+    'Never pass .--force'
 
 # --- 6b. decisions that had no row at all -------------------------------------
 #
@@ -858,6 +971,49 @@ edit "$REL_INTERVIEW" 'never offer a `none` — the confirmed-absent form' \
     'never offer a `none` unless the user asks for one — the confirmed-absent form'
 mutate "M52 QUALIFIED: the none refusal grows an exception" R21
 
+# --- the eight decisions #353 found unpinned -----------------------------------
+
+reset_mutant
+edit "$REL_GROOM" "§2's candidate pull already returned each issue's labels, so feed **those** through the emitter," \
+    "Re-read each candidate's labels with \`gh issue view <N> --json labels\` and feed those through the emitter,"
+mutate "M53: grooming re-fetches per candidate instead of reusing §2's pull" R41
+
+reset_mutant
+edit "$REL_CONTRACT" 'one means only a checkout **named among them** may take the issue — narrowing, never widening.' \
+    'one means the issue matches no checkout at all.'
+mutate "M55: the contract resurrects the match-no-checkout reading" R43
+
+reset_mutant
+edit "$REL_GROOM" '**Read the exit status, not the output.** On anything but 0, rubric #9' \
+    'An empty answer means no label, so proceed. On a hard error, rubric #9'
+mutate "M56: grooming reads the resolver's output instead of its exit status" R44
+
+reset_mutant
+edit "$REL_SURVEY" '**Read the exit status, not the output.** On anything but 0 the site' \
+    'An empty answer means no label, so proceed. On a hard error the site'
+mutate "M57: the plate reads the resolver's output instead of its exit status" R45
+
+reset_mutant
+edit "$REL_GROOM" "epic-split sub-issues, and rubric #9's \`site:<name>\` label —
+  which it creates in the repo when that label does not yet exist — only; never deletes" \
+    'epic-split sub-issues only; never deletes'
+mutate "M58: the Writes: declaration drops the repo-scoped label creation" R46
+
+reset_mutant
+edit "$REL_GROOM" '**One write is not issue-scoped.**' \
+    'Every write here is issue-scoped.'
+mutate "M59: §1 stops calling the label creation out as the exception" R47
+
+reset_mutant
+edit "$REL_GROOM" 'What must never appear is
+`|| true`' 'A `|| true` there is fine'
+mutate "M60: the label create is allowed to swallow its failure" R48
+
+reset_mutant
+edit "$REL_GROOM" '**Never pass `--force`.**' \
+    '**Pass `--force` when the label already exists.**'
+mutate "M61: the --force ban is inverted" R48
+
 rm -rf "$MDIR"
 
 # --- 8. the derived matrix ----------------------------------------------------
@@ -874,10 +1030,10 @@ else
     bad "rows no mutant reddens: '${unpinned% }', declared: '${declared_unpinned% }' — a row nothing can redden proves nothing"
 fi
 
-if [ "$mutants_run" = "52" ]; then
-    ok "every declared mutant ran (52 of 52)"
+if [ "$mutants_run" = "60" ]; then
+    ok "every declared mutant ran (60 of 60)"
 else
-    bad "$mutants_run of 52 mutants ran — the matrix above is measured against a partial set"
+    bad "$mutants_run of 60 mutants ran — the matrix above is measured against a partial set"
 fi
 
 if [ "$fails" -ne 0 ]; then
