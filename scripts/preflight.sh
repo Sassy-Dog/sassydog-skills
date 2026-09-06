@@ -1293,7 +1293,33 @@
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
-# installed locally SKIP with a note — CI still enforces them.
+# installed locally SKIP with a note — CI still enforces them.#  42. plugin drift tests (scripts/test-plugin-drift.sh) — a project-scope
+#      plugin install PINS the version resolved when that checkout was first
+#      opened, and nothing re-resolves it. `claude plugin list` reports user and
+#      project scope separately and they drift independently, so `plugin update`
+#      can report success at user scope while a repo keeps loading a months-old
+#      plugin. Measured 2026-09-06: user scope was 2026.9.4 while ELEVEN of
+#      eleven live project pins were behind it, `platform` and `sassydog-web` at
+#      2026.8.83 — and only 2026.9.4 carried the feature about to be verified in
+#      those very repos, so the verification would have "failed" for a reason
+#      that had nothing to do with the change. The pin is silent and has no
+#      expiry, which is CLAUDE.md's bare-count rule in another shape.
+#      `skills/repo-health/scripts/pull-plugin-drift.sh` reports it; this gate
+#      pins the four decisions that make the report trustworthy, each named by
+#      exactly one mutant. Two are the ones a later simplification takes out:
+#      CalVer compares FIELD-BY-FIELD AS INTEGERS, because `2026.8.100` is newer
+#      than `2026.8.94` and a text compare says the opposite — a lexical sort
+#      reports the newest pins as the stalest, and every version below 10 makes
+#      it look right; and a checkout with NO entry lands in `no_entry` rather
+#      than the clean set, because it inherits user scope, which usually means
+#      the `.claude/settings.json` declaration #97 requires is missing and the
+#      repo would load nothing at all in a cloud session. "Current by accident"
+#      and "current" are different facts. The other two: the pruned worktree and
+#      dead-path counts are EMITTED (96 of 107 entries on the machine this
+#      shipped from were agent worktrees — hiding the count is how nobody ever
+#      prunes them), and an unresolvable reference leaves every row NOT current,
+#      since unknown is never a pass. Fixture-driven, no network, and the real
+#      user state file is never read.
 set -uo pipefail
 
 MARKDOWNLINT_PKG="markdownlint-cli2@0.18.1"
@@ -2089,6 +2115,12 @@ if bash scripts/test-execution-site-surface.sh; then
     pass "execution-site surface tests (scripts/test-execution-site-surface.sh)"
 else
     failed "execution-site surface tests (scripts/test-execution-site-surface.sh)"
+fi
+
+if bash scripts/test-plugin-drift.sh; then
+    pass "plugin drift tests (scripts/test-plugin-drift.sh)"
+else
+    failed "plugin drift tests (scripts/test-plugin-drift.sh)"
 fi
 
 # ------------------------------------------------------------------------------
