@@ -454,8 +454,20 @@ EVENT_RULE_LINE='               and (.event == "push" or .event == "merge_group"
 DERIVE_CALL_LINE='        rec=$(derive_default_branch_ci "$recovery" "$default_branch")'
 MERGE_ELSE_LINE='                      else $r.runs_seen end) }'"'"')'
 
+# Both the anchor and the replacement travel through the ENVIRONMENT, never
+# `awk -v`. `-v` applies escape processing to its value, and several of the
+# strings below END IN A BACKSLASH because they are shell line continuations:
+# BSD awk keeps that trailing backslash, gawk and mawk consume it. Under `-v`
+# the mutants were therefore syntactically broken ON LINUX ONLY — every row in
+# every mutant run reddened, each mutant "reached" everything, and the only
+# thing that noticed was the unreached-set assertion going empty. ENVIRON values
+# are not escape-processed. The `bash -n` check below is the second half: a
+# mutant that does not parse scores nothing, and must say so in those words
+# rather than as a set mismatch fifty lines later.
 mutate() {  # 1: out path  2: match substring  3: replacement line
-    awk -v m="$2" -v r="$3" 'index($0, m) { print r; next } { print }' "$SCRIPT" >"$1"
+    MUT_M="$2" MUT_R="$3" awk \
+        'index($0, ENVIRON["MUT_M"]) { print ENVIRON["MUT_R"]; next } { print }' \
+        "$SCRIPT" >"$1"
 }
 
 # Each entry: <name> <anchor-var-name> <declared row it must redden>
@@ -519,6 +531,10 @@ for m in norecover alwaysrecover norepo noevent nostatus mergegroupevent trimjso
     mfile="$WORK/m-$m.sh"
     if diff -q "$mfile" "$SCRIPT" >/dev/null 2>&1; then
         bad "mutant '$m' is byte-identical to the script — its anchor no longer matches"
+        continue
+    fi
+    if ! bash -n "$mfile" 2>/dev/null; then
+        bad "mutant '$m' does not parse — it scores nothing, and every row it reddens is an artefact of the broken copy"
         continue
     fi
     got="$(matrix "$mfile")"
