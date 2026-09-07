@@ -25,7 +25,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/repo-health/scripts/pull-tech-debt.sh
 ```
 
 - `SCAN_PATHS` defaults to the whole tracked tree; pass source dirs to cut noise.
-- `EXCLUDE_PATHSPECS` for generated/migration dirs the caller knows about.
+- `EXCLUDE_PATHSPECS` for generated/migration dirs the caller knows about. Pass **bare paths** — the script adds the `:(exclude)` magic itself. A leading `:(exclude)` is stripped for back-compat with configs written against the old contract, but only one: doubling it produces a pathspec git accepts and silently ignores.
 - Output sections: `todo-markers` (capped 200), `skipped-tests` (capped 100), `todo-by-dir` (top 20 directories by marker count).
 
 ### CI duration + flake

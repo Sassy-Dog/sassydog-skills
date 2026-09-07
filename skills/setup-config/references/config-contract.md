@@ -575,11 +575,18 @@ Each section lists only the keys that skill reads *in addition to* the shared bl
 
 ```yaml
 scan_paths: apps packages          # tech-debt scan roots
-exclude_pathspecs: ":(exclude)packages/db/src/migrations"
+exclude_pathspecs: "packages/db/src/migrations"   # BARE — never `:(exclude)`-prefixed
 ci_workflow: ci.yml
 priority_labels: [p0, p1, p2]
 write_policy: read-only            # or `gated` to allow the Sentry->GitHub file path
 ```
+
+`exclude_pathspecs` values are **bare paths**. `repo-health`'s `pull-tech-debt.sh` supplies the
+`:(exclude)` magic itself, so a prefixed value used to reach git as `:(exclude):(exclude)<path>` — a
+valid pathspec matching nothing, which excludes nothing and exits `0`, silently disabling the
+exclusion ([#365](https://github.com/Sassy-Dog/sassydog-skills/issues/365)). The script now strips
+one leading `:(exclude)`, so configs already carrying the old spelling work unchanged and need no
+refresh; write new ones bare. Pinned by `scripts/test-tech-debt-excludes.sh`.
 
 Prose sections: `## extra-surfaces`, `## scoring-overrides`, `## extra-guardrails`.
 

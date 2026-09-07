@@ -4,8 +4,20 @@
 #
 # Env:
 #   SCAN_PATHS          space-separated pathspecs to scan (default: ".")
-#   EXCLUDE_PATHSPECS   space-separated extra git exclude pathspecs, e.g.
-#                       "packages/db/**/migrations/** src/generated/**"
+#   EXCLUDE_PATHSPECS   space-separated paths to exclude from the scan. The
+#                       canonical spelling is BARE — this script supplies the
+#                       `:(exclude)` magic itself — e.g.
+#                       "packages/db/src/migrations src/generated".
+#                       A leading `:(exclude)` is ALSO accepted and stripped,
+#                       because setup-config's contract shipped that spelling
+#                       and every config written against it carries the prefix
+#                       (issue #365). Double-prefixing yields
+#                       `:(exclude):(exclude)<path>`, a valid pathspec that
+#                       matches nothing, so git excludes nothing and exits 0 —
+#                       the exclusion is silently disabled with nothing red
+#                       anywhere. At most ONE prefix is stripped: a genuinely
+#                       doubled value stays visibly broken rather than being
+#                       masked by a greedy strip.
 #
 # Uses git grep with directory pathspecs (git pathspecs are not shell globs;
 # `**` requires :(glob) magic, so we pass directories and accept some noise).
@@ -28,7 +40,11 @@ EXCLUDES=(
   ':(exclude).claude/**'
 )
 for p in ${EXCLUDE_PATHSPECS:-}; do
-  EXCLUDES+=(":(exclude)$p")
+  # `${p#':(exclude)'}` — quoted so the pattern is literal, and `#` not `##`,
+  # so at most one prefix comes off. See the header: both spellings must land
+  # on the same single-prefixed pathspec, and a doubled input must NOT be
+  # silently repaired.
+  EXCLUDES+=(":(exclude)${p#':(exclude)'}")
 done
 
 # TODO/FIXME/HACK/XXX in tracked source. git grep walks tracked files, so
