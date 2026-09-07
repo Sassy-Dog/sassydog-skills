@@ -575,11 +575,36 @@ Each section lists only the keys that skill reads *in addition to* the shared bl
 
 ```yaml
 scan_paths: apps packages          # tech-debt scan roots
-exclude_pathspecs: ":(exclude)packages/db/src/migrations"
+exclude_pathspecs: "packages/db/src/migrations"   # BARE — never `:(exclude)`-prefixed
 ci_workflow: ci.yml
 priority_labels: [p0, p1, p2]
 write_policy: read-only            # or `gated` to allow the Sentry->GitHub file path
 ```
+
+`exclude_pathspecs` values are **bare paths**. `repo-health`'s `pull-tech-debt.sh` supplies the
+`:(exclude)` magic itself, so a prefixed value used to reach git as `:(exclude):(exclude)<path>` — a
+valid pathspec matching nothing, which excludes nothing and exits `0`, silently disabling the
+exclusion ([#365](https://github.com/Sassy-Dog/sassydog-skills/issues/365)). The script now strips
+one leading `:(exclude)`, so a config already carrying the old spelling needs **no edit** — write
+new ones bare. That is not the same as nothing to do: the strip lives in the plugin, so a consumer
+repo keeps scanning with the exclusion disabled until the plugin is updated **for that checkout**.
+Do not assume an ordinary update reached it: every repo this paragraph addresses declares the
+plugin in its `.claude/settings.json`, which is precisely what creates a **project pin**, and
+against a project pin the bare `claude plugin update` reports success at user scope while moving
+nothing for the checkout it ran in. The working procedure, and the cheaper route that avoids it,
+are in `repo-health`'s "Plugin drift (which checkouts run a stale plugin)" section — which owns
+that answer, so it is deliberately not restated here.
+
+Values are passed to git **literally**, so a `**` is a git pathspec and never a shell glob; the
+loop is fenced with `set -f` for exactly that reason. Do not write a value expecting shell
+expansion, and note that both spellings are equivalent only because of that fence — unfenced, bash
+expands a bare `src/generated/**` (skipping dotfiles, so `src/generated/.hidden.txt` leaks) while it
+cannot expand the prefixed form.
+
+A value that is unusable after the strip — a lone `:(exclude)`, or anything whose remainder still
+begins with `:` — is **dropped with a warning on stderr**, never passed through. A bare `:(exclude)`
+is an empty pattern that git honours as "exclude the entire tree", which would report zero tech debt
+at exit `0`. All of this is pinned by `scripts/test-tech-debt-excludes.sh`.
 
 Prose sections: `## extra-surfaces`, `## scoring-overrides`, `## extra-guardrails`.
 

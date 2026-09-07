@@ -1291,9 +1291,7 @@
 #      source-level and flattened; seven tracked
 #      files, no `gh`, no network.
 #
-# All gates run even after a failure (accumulate-and-report, same pattern as
-# check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
-# installed locally SKIP with a note — CI still enforces them.#  42. plugin drift tests (scripts/test-plugin-drift.sh) — a project-scope
+#  42. plugin drift tests (scripts/test-plugin-drift.sh) — a project-scope
 #      plugin install PINS the version resolved when that checkout was first
 #      opened, and nothing re-resolves it. `claude plugin list` reports user and
 #      project scope separately and they drift independently, so `plugin update`
@@ -1320,6 +1318,49 @@
 #      prunes them), and an unresolvable reference leaves every row NOT current,
 #      since unknown is never a pass. Fixture-driven, no network, and the real
 #      user state file is never read.
+#  43. tech-debt exclude tests (scripts/test-tech-debt-excludes.sh) — how
+#      pull-tech-debt.sh consumes EXCLUDE_PATHSPECS (issue #365). setup-config's
+#      contract shipped values already carrying `:(exclude)` while the script
+#      supplies that magic itself, so every repo configured per the contract
+#      handed git `:(exclude):(exclude)<path>` — a VALID pathspec matching
+#      nothing, which excludes nothing and exits 0. The script now strips AT
+#      MOST ONE leading prefix, and the bounded half is the row a later
+#      simplification takes out: `doubled-stays-broken` asserts a genuinely
+#      doubled value STILL LEAKS, because a greedy strip would silently repair
+#      a different config error. Its sibling `lone-prefix-token-ignored` covers
+#      the direction that fails toward SUPPRESSION rather than noise: a lone
+#      `:(exclude)` strips to empty and re-prefixes to a bare `:(exclude)`,
+#      an empty pattern git honours as "exclude the entire tree", so one stray
+#      token reported zero debt at exit 0 and the plate rendered "no debt" —
+#      such an element is DROPPED with a warning instead. What bounds the strip
+#      is the QUOTED glob-free pattern, not `#` over `##`, which behave
+#      identically here. The loop is fenced with `set -f` because it both
+#      word-splits and pathname-expands: unfenced, bash expands a bare
+#      `generated/**` (skipping dotfiles) while it cannot expand the prefixed
+#      form, so the two spellings genuinely diverge —
+#      `glob-spellings-identical` carries a dotfile for exactly that reason.
+#      Every assertion reads the emitted OUTPUT SET and never an exit code —
+#      git returns 0 or 1 here and never 128, and the script swallows stderr,
+#      so an exit-code check passes against the broken script and proves
+#      nothing. Two fixtures, both adequacy-checked: a scratch `git init` repo
+#      built with GIT_CONFIG_GLOBAL=/dev/null so a contributor's
+#      `core.excludesFile` cannot leave it empty and vacuous, whose markers are
+#      ASSEMBLED AT RUNTIME so this gate does not show up as debt in the scan
+#      it tests, and the live checkout carrying the issue's own reproduction
+#      with its excluded directory DERIVED from an unfiltered scan, so no
+#      unrelated edit can make that row vacuous. Mutant reach is derived by
+#      re-running the same matrix against six mutated copies, each anchor
+#      checked for presence first; the rows no mutant reddens are compared
+#      against a declared set holding exactly the two fixture-adequacy
+#      preconditions. SCAN_PATHS is deliberately OUT of scope and pinned
+#      unchanged — the `**`-needs-`:(glob)` claim it would rest on did not
+#      reproduce when tested, and the stale assertion is annotated in place in
+#      the script header rather than left to contradict this one. No gh, no
+#      network.
+#
+# All gates run even after a failure (accumulate-and-report, same pattern as
+# check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
+# installed locally SKIP with a note — CI still enforces them.
 set -uo pipefail
 
 MARKDOWNLINT_PKG="markdownlint-cli2@0.18.1"
@@ -2121,6 +2162,24 @@ if bash scripts/test-plugin-drift.sh; then
     pass "plugin drift tests (scripts/test-plugin-drift.sh)"
 else
     failed "plugin drift tests (scripts/test-plugin-drift.sh)"
+fi
+
+# --- 43. tech-debt exclude tests -----------------------------------------------
+# EXCLUDE_PATHSPECS reached git double-prefixed and silently excluded nothing.
+# Rows read the OUTPUT SET, never an exit code — git never returns 128 here and
+# the script swallows stderr. A doubled value is asserted to STILL LEAK: the
+# strip is bounded on purpose, so a real config error is not silently repaired.
+# Its sibling row covers the opposite direction: an element that strips to empty
+# would re-prefix to a bare `:(exclude)`, which git reads as "exclude the entire
+# tree", so it is dropped rather than passed through. The loop's `set -f` fence
+# keeps a `**` a git pathspec instead of a shell glob, which is the only thing
+# making the two spellings equivalent for glob values.
+# Mutant reach is derived by re-running the matrix against six mutated copies;
+# the unreached rows must equal the two declared fixture-adequacy preconditions.
+if bash scripts/test-tech-debt-excludes.sh; then
+    pass "tech-debt exclude tests (scripts/test-tech-debt-excludes.sh)"
+else
+    failed "tech-debt exclude tests (scripts/test-tech-debt-excludes.sh)"
 fi
 
 # ------------------------------------------------------------------------------
