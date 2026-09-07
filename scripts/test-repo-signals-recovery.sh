@@ -232,10 +232,16 @@ if [ -z "$branch" ]; then
       clean) emit "$(mkruns 'push|feature/x|completed|failure|1|u1' \
                             'push|main|completed|success|2|u2' \
                             'schedule|main|completed|failure|1|u3')" ;;
+      # The crowding rows carry events that NEITHER the real push-class rule NOR
+      # the `ignoreevent` mutation (`.event == "schedule"`) matches. That is a
+      # requirement, not a taste: with `schedule|main` here the mutant made the
+      # SAMPLE answer, the recovery gate never opened, and the one-answer
+      # property the header claims to pin behaviourally was pinned by nothing.
+      # Any replacement must stay null under both rules.
       recoverable|empty|unreadable|underivable|inflightnewest)
-             emit "$(mkruns 'schedule|main|completed|failure|1|u1' \
+             emit "$(mkruns 'workflow_dispatch|main|completed|failure|1|u1' \
                             'pull_request|feature/y|completed|success|1|u2' \
-                            'schedule|main|completed|success|2|u3')" ;;
+                            'workflow_dispatch|main|completed|success|2|u3')" ;;
       mergegroup)
              emit "$(mkruns 'merge_group|gh-readonly-queue/main/pr-7|completed|success|1|u1')" ;;
       recoveryfails)
@@ -341,7 +347,15 @@ matrix() {
     # page — otherwise every recovery row below is trivially satisfiable.
     printf 'sample-adequate\t%s\n'         "$(verdict is '.runs_sampled' 3)"
     printf 'recovery-fires-on-null\t%s\n'  "$(verdict test "$(runlist_calls)" = 2)"
-    printf 'recovered-verdict\t%s\n'       "$(verdict is '.default_branch_ci' success)"
+    # The recovery-path half of the one-answer property carries the two-call
+    # proof INSIDE its own row: a verdict of `success` reached without a second
+    # query is the sample answering, not the recovery, and a later fixture
+    # change must not be able to re-collapse the two silently.
+    if [ "$(runlist_calls)" = 2 ] && is '.default_branch_ci' success; then
+        printf 'recovered-verdict\tpass\n'
+    else
+        printf 'recovered-verdict\tfail\n'
+    fi
     printf 'recovered-runs-seen\t%s\n'     "$(verdict is '.default_branch_runs_seen' 1)"
     printf 'recovered-verdict-age\t%s\n'   "$(verdict is '.default_branch_ci_age_days' 30)"
     printf 'recovered-verdict-url\t%s\n'   "$(verdict is '.default_branch_ci_url' 'https://example.invalid/run/r1')"
