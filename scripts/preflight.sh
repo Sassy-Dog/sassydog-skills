@@ -1357,6 +1357,29 @@
 #      reproduce when tested, and the stale assertion is annotated in place in
 #      the script header rather than left to contradict this one. No gh, no
 #      network.
+#  44. repo-signals recovery tests (scripts/test-repo-signals-recovery.sh) —
+#      how `pull-repo-signals.sh` answers `default_branch_ci`, and what a
+#      SURVIVING null may mean (issue #367). One unfiltered sample of the newest
+#      runs across ALL branches is the wrong instrument for a per-branch,
+#      per-event question: 5 of 15 org repos returned null on 2026-09-06 with a
+#      verdict available, and null is well-formed JSON carrying no outcome, so
+#      a reader with no rule for it reads the repo as fine. The recovery is ONE
+#      narrow re-query and each part of its shape reads like it could be
+#      relaxed: `--event` is the load-bearing half (velovate had ZERO
+#      push-on-main runs in its newest 100, so no RUN_LIMIT reaches it, and the
+#      mock answers a branch-only query with the `schedule` run that actually
+#      crowds a default branch); `push` alone and never `merge_group`, whose
+#      head branch `gh-readonly-queue/<branch>/pr-<N>` can never satisfy the
+#      branch filter; and it fires ONLY on a null, counted rather than inferred,
+#      since it is a per-repo extra call. The still-null path is the point —
+#      `default_branch_runs_seen` splits "none was there to read" from "they are
+#      all in flight", which a bare null reports identically and identically to
+#      green — and a FAILED recovery leaves the first probe standing rather than
+#      overwriting a count the sample really saw. The verdict rule is asserted
+#      UNIQUE in the source, not merely present, because nothing downstream can
+#      tell which query answered. Mutant reach is derived by re-running the same
+#      matrix against seven mutated copies; the unreached rows must equal the
+#      one declared fixture-adequacy precondition. Mock gh only, no network.
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -2180,6 +2203,22 @@ if bash scripts/test-tech-debt-excludes.sh; then
     pass "tech-debt exclude tests (scripts/test-tech-debt-excludes.sh)"
 else
     failed "tech-debt exclude tests (scripts/test-tech-debt-excludes.sh)"
+fi
+
+# --- 44. repo-signals recovery tests -------------------------------------------
+# A null `default_branch_ci` is recovered by ONE narrow re-query, and `--event`
+# is the half that does the work — no page size reaches a repo whose newest
+# push-on-main sits weeks back. `push` alone: a merge_group run's head branch can
+# never equal the default branch. The recovery fires only on a null (counted,
+# not inferred), a failed one leaves the first probe standing, and a SURVIVING
+# null is split by `default_branch_runs_seen` into "none was there to read"
+# versus "all still in flight" — collapsed, both read as green.
+# Mutant reach is derived by re-running the matrix against seven mutated copies;
+# the unreached rows must equal the one declared precondition.
+if bash scripts/test-repo-signals-recovery.sh; then
+    pass "repo-signals recovery tests (scripts/test-repo-signals-recovery.sh)"
+else
+    failed "repo-signals recovery tests (scripts/test-repo-signals-recovery.sh)"
 fi
 
 # ------------------------------------------------------------------------------

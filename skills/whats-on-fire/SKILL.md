@@ -105,9 +105,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/whats-on-fire/scripts/pull-repo-signals.sh
   and `issues`; read the script header for why that filtering is load-bearing.
 - `pull-repo-signals.sh` — per-repo workflow failure counts, the **current** default-branch CI
   conclusion, currently-failing scheduled workflows, and Dependabot state — including alert AGE and
-  per-package fix-PR state. Slower (1 + 2N calls, plus one more per repo that actually has
-  high/critical alerts, so a healthy org pays nothing extra; ~25s for 15 repos); run it concurrently
-  with the Sentry pulls, not after them.
+  per-package fix-PR state. Slower (1 + 4N calls, plus one more per repo that actually has
+  high/critical alerts and one more per repo whose run sample holds no default-branch push, so a
+  healthy org pays nothing extra; ~25s for 15 repos); run it concurrently with the Sentry pulls,
+  not after them.
 
 `default_branch_ci` and `scheduled_failing` are separate fields and must stay separate in the
 report. Push-class red means shipping is blocked (P0); a failing nightly job is an ops problem that

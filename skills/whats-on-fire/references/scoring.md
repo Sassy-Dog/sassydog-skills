@@ -104,18 +104,22 @@ contract — reference-instant choice, owning-repo resolution, and the 404/403 s
 <!-- rule: default-branch-ci-unknown -->
 ### Not a tier — `default_branch_ci` is `null`
 
-`null` is not a conclusion. It means the sample held no completed push-class run on the default
-branch, so the repo is neither `✓ Clean today:` (nothing was read) nor P0 (nothing is known to be
-red). Report it as `CI unknown — no default-branch run in the newest N` and rank nothing on it.
+`null` is not a conclusion. It means no completed push-class run on the default branch was found,
+so the repo is neither `✓ Clean today:` (nothing was read) nor P0 (nothing is known to be red).
+Rank nothing on it, and report it with the reason `default_branch_runs_seen` gives: `CI unknown —
+no default-branch run in the newest N` when that count is `0`, `CI unknown — all still in flight`
+when it is not. Those are different facts and a bare null hides which one you have.
 
-This is the common case, not the rare one. The newest runs in a busy repo are dominated by
-`pull_request` and bot events, so a repo with thousands of runs on file can easily have no `push`
-to its default branch in the sample — which is exactly why an unnamed `null` must never quietly
-read as green.
+A null from the FIRST, unfiltered sample is the common case, not the rare one. The newest runs in
+a busy repo are dominated by `pull_request` and bot events, so a repo with thousands of runs on
+file can easily have no `push` to its default branch in the sample — 5 of 15 org repos on
+2026-09-06, all five with a verdict available. That is what the recovery is for, and it is why an
+unnamed `null` must never quietly read as green. A null that SURVIVES the recovery is the rare one,
+and it is the one this section is about.
 
-Recovering the answer with a narrower re-query is the puller's business, not this table's: the
-tiers below apply to whatever the puller finally reports. What is load-bearing here is that a
-`null` never reaches the clean line and never reaches P0.
+Recovering the answer with a narrower re-query is the puller's business, not this table's — both
+pullers do it, and the tiers below apply to whatever they finally report. What is load-bearing here
+is that a `null` never reaches the clean line and never reaches P0.
 
 <!-- rule: blind-spots-unranked -->
 ### Not ranked — blind spots
