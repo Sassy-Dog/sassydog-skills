@@ -585,8 +585,22 @@ write_policy: read-only            # or `gated` to allow the Sentry->GitHub file
 `:(exclude)` magic itself, so a prefixed value used to reach git as `:(exclude):(exclude)<path>` — a
 valid pathspec matching nothing, which excludes nothing and exits `0`, silently disabling the
 exclusion ([#365](https://github.com/Sassy-Dog/sassydog-skills/issues/365)). The script now strips
-one leading `:(exclude)`, so configs already carrying the old spelling work unchanged and need no
-refresh; write new ones bare. Pinned by `scripts/test-tech-debt-excludes.sh`.
+one leading `:(exclude)`, so a config already carrying the old spelling needs **no edit** — write
+new ones bare. That is not the same as nothing to do: the strip lives in the plugin, so a consumer
+repo keeps scanning with the exclusion disabled until its plugin is updated
+(`claude plugin update sassy-dog@sassydog-skills`, then restart — see the two-step cache note in
+`repo-health`).
+
+Values are passed to git **literally**, so a `**` is a git pathspec and never a shell glob; the
+loop is fenced with `set -f` for exactly that reason. Do not write a value expecting shell
+expansion, and note that both spellings are equivalent only because of that fence — unfenced, bash
+expands a bare `src/generated/**` (skipping dotfiles, so `src/generated/.hidden.txt` leaks) while it
+cannot expand the prefixed form.
+
+A value that is unusable after the strip — a lone `:(exclude)`, or anything whose remainder still
+begins with `:` — is **dropped with a warning on stderr**, never passed through. A bare `:(exclude)`
+is an empty pattern that git honours as "exclude the entire tree", which would report zero tech debt
+at exit `0`. All of this is pinned by `scripts/test-tech-debt-excludes.sh`.
 
 Prose sections: `## extra-surfaces`, `## scoring-overrides`, `## extra-guardrails`.
 

@@ -34,13 +34,44 @@
 # asserted to STILL LEAK. That row failing is the signal that someone widened
 # the strip, not that the fix regressed.
 #
-# CANONICAL SPELLING is bare, and `docs-normalized` pins the one doc site that
-# moved (config-contract.md's survey-work example). The script's own header
-# documents bare, and repo-health/SKILL.md already wrote bare, so normalizing
-# on bare left two of the three sites untouched. SCAN_PATHS is deliberately out
-# of scope: the `**`-needs-`:(glob)` claim in the script header did not
-# reproduce when tested on 2026-09-07, so it needs verification rather than a
-# fix, and nothing here touches it.
+# WHAT BOUNDS THE STRIP is the pattern, not the sigil. `${p#':(exclude)'}` is
+# quoted, so it is a glob-free literal admitting exactly one match length;
+# `${p##':(exclude)'}` yields the same result. Do not "harden" this by swapping
+# sigils — the greedy shape that row `doubled-stays-broken` exists to refuse is
+# a substitution like `${p//:(exclude)/}`, which is what the `greedy` mutant
+# writes.
+#
+# AN UNUSABLE ELEMENT IS DROPPED, NOT PASSED THROUGH, and this is the half that
+# fails toward suppression rather than noise. `:(exclude)` alone strips to the
+# empty string, and re-prefixing that yields a bare `:(exclude)` — an empty
+# pattern git honours as "exclude the ENTIRE tree". One stray token therefore
+# reported zero tech debt at exit 0, which `survey-work` renders as "no debt".
+# It is reachable without hostility: converting a prefixed value to bare by
+# inserting a space rather than deleting the prefix yields two words, and the
+# first blacks out the scan. A remainder still beginning with `:` is refused
+# the same way, since `:!path` would re-prefix to a silent no-op. Rows
+# `lone-prefix-token-ignored` and `doubled-stays-broken` are the pair: an
+# unusable element must leave the scan EXACTLY as an unconfigured one does.
+#
+# VALUES REACH GIT LITERALLY, and the `set -f` fence around the loop is load-
+# bearing rather than defensive. `for p in ${EXCLUDE_PATHSPECS:-}` both
+# word-splits AND pathname-expands, so without the fence the two spellings
+# genuinely diverge: bash expands the bare `generated/**` (skipping dotfiles,
+# leaking `generated/.hidden.txt`) while it cannot expand
+# `:(exclude)generated/**`, so git sees the literal. Row
+# `glob-spellings-identical` carries a hidden file for exactly that reason.
+#
+# CANONICAL SPELLING is bare. Three tracked sites teach it and this gate pins
+# two of them by content — config-contract.md's survey-work example, which is
+# the one that carried the prefixed form, plus a tree-wide scan asserting NO
+# tracked file teaches the prefixed spelling again. detection.md (the
+# generation site) and repo-health/SKILL.md were also edited alongside, for
+# prose the tree-wide scan covers rather than a spelling of their own.
+# SCAN_PATHS is deliberately out of scope: the `**`-needs-`:(glob)` claim it
+# would rest on did not reproduce when tested on 2026-09-07 or again on this
+# branch, so it needs verification rather than a fix. Nothing here touches it,
+# and the stale claim is annotated in place in the script header rather than
+# silently left to contradict this one.
 #
 # FIXTURES, both of them adequacy-checked rather than assumed:
 #
@@ -56,16 +87,21 @@
 #     rather than passing over an empty set.
 #
 # MUTATION PROOF. The matrix is a function of the script path, so it is re-run
-# against four mutated copies and the reach is DERIVED from the verdicts rather
-# than asserted in prose: no-strip (the pre-fix line), greedy-strip, a dropped
-# built-in exclude, and a disabled user-exclude loop. Every mutant must redden
-# at least one row, and the rows no mutant reaches must equal the declared set
-# — which holds exactly the two fixture-adequacy preconditions, since a
-# precondition is by construction not sensitive to the excluding code.
+# against six mutated copies and the reach is DERIVED from the verdicts rather
+# than asserted in prose: no-strip (the pre-fix line), greedy-strip, a removed
+# unusable-element guard, a removed `set -f` fence, a dropped built-in exclude,
+# and a disabled user-exclude loop. Every mutant must redden at least one row,
+# and the rows no mutant reaches must equal the declared set — which holds
+# exactly the two fixture-adequacy preconditions, since a precondition is by
+# construction not sensitive to the excluding code.
 #
 # Copies and scratch repos only: no gh, no network, no mutation of this
-# checkout. A LOCAL `git init` fixture, so a machine with credentials behaves
-# exactly like CI.
+# checkout. A LOCAL `git init` fixture built with GIT_CONFIG_GLOBAL=/dev/null,
+# GIT_CONFIG_NOSYSTEM=1 and `add -A -f`, so a contributor's global
+# `core.excludesFile` or `init.templateDir` cannot leave fixture files unstaged
+# — which would make every row here vacuous locally while CI stayed green.
+# `mktemp -d` is checked: `set -u` does not fire on empty-but-set, so an
+# unchecked failure would point the fixture at the filesystem root.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-tech-debt-excludes.sh
@@ -80,7 +116,14 @@ SCRIPT="$REPO_ROOT/skills/repo-health/scripts/pull-tech-debt.sh"
 CONTRACT="$REPO_ROOT/skills/setup-config/references/config-contract.md"
 [ -f "$SCRIPT" ] || { echo "test-tech-debt-excludes: $SCRIPT not found" >&2; exit 1; }
 
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d)" || { echo "test-tech-debt-excludes: mktemp -d failed" >&2; exit 1; }
+# Fail closed rather than continuing with an empty WORK: `set -u` does not fire
+# on empty-but-set, and every path below would then resolve against `/`.
+case "$WORK" in
+    /*) : ;;
+    *) echo "test-tech-debt-excludes: mktemp -d gave no absolute path ('$WORK')" >&2; exit 1 ;;
+esac
+[ -d "$WORK" ] || { echo "test-tech-debt-excludes: '$WORK' is not a directory" >&2; exit 1; }
 trap 'rm -rf "$WORK"' EXIT
 
 fail=0
@@ -93,7 +136,10 @@ echo "tech-debt exclude tests (work: $WORK)" >&2
 # Markers are assembled at runtime (see header). `git add` alone makes a file
 # tracked as far as `git grep` is concerned, so no commit and no identity are
 # needed. The lockfile sits one directory down because the built-in
-# `:(exclude)**/*.lock` needs a literal `/` to match.
+# `:(exclude)**/*.lock` needs a literal `/` to match, and `generated/.hidden.txt`
+# is a DOTFILE on purpose: shell pathname expansion skips it while a git
+# pathspec does not, which is the only thing that distinguishes a fenced loop
+# from an unfenced one.
 MARK="TO""DO"
 FIXTURE="$WORK/fixture"
 mkdir -p "$FIXTURE/src" "$FIXTURE/docs" "$FIXTURE/generated" \
@@ -101,10 +147,21 @@ mkdir -p "$FIXTURE/src" "$FIXTURE/docs" "$FIXTURE/generated" \
 printf '%s: real work\n'       "$MARK" >"$FIXTURE/src/app.txt"
 printf '%s: docs debt\n'       "$MARK" >"$FIXTURE/docs/notes.txt"
 printf '%s: generated noise\n' "$MARK" >"$FIXTURE/generated/gen.txt"
+printf '%s: generated hidden\n' "$MARK" >"$FIXTURE/generated/.hidden.txt"
 printf '%s: agent noise\n'     "$MARK" >"$FIXTURE/.claude/agent.txt"
 printf '%s: lockfile noise\n'  "$MARK" >"$FIXTURE/packages/bun.lock"
-git -C "$FIXTURE" init -q >/dev/null 2>&1
-git -C "$FIXTURE" add -A >/dev/null 2>&1
+# The contributor's own git config must not reach this fixture: a global
+# `core.excludesFile` leaves files unstaged, `git grep` then sees an empty tree,
+# and every row below passes over nothing while CI stays green. Same trap the
+# repo already pins in test-detect-capabilities.sh and test-platform-health-probe.sh.
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$FIXTURE" init -q >/dev/null 2>&1
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$FIXTURE" add -A -f >/dev/null 2>&1
+staged="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$FIXTURE" ls-files | grep -c .)"
+if [ "$staged" -ne 6 ]; then
+    echo "  FAIL  fixture staged $staged of 6 files — the matrix below would be vacuous" >&2
+    echo "test-tech-debt-excludes: FAILED" >&2
+    exit 1
+fi
 
 # --- helpers ------------------------------------------------------------------
 # `printf` is the writer into every `grep -q` below: the value is already a
@@ -140,12 +197,15 @@ echo "  ..    live reproduction directory: $LIVE_DIR" >&2
 # path so the mutants below are scored by exactly this code.
 matrix() {
     local s="$1"
-    local base bare pref dbl mixed lbase lbare lpref
+    local base bare pref dbl mixed lone gbare gpref lbase lbare lpref
     base="$(run_fixture  "$s" "")"
     bare="$(run_fixture  "$s" "generated")"
     pref="$(run_fixture  "$s" ":(exclude)generated")"
     dbl="$(run_fixture   "$s" ":(exclude):(exclude)generated")"
     mixed="$(run_fixture "$s" "generated :(exclude)docs")"
+    lone="$(run_fixture  "$s" ":(exclude)")"
+    gbare="$(run_fixture "$s" "generated/**")"
+    gpref="$(run_fixture "$s" ":(exclude)generated/**")"
     lbase="$live_base"
     lbare="$(run_live "$s" "$LIVE_DIR")"
     lpref="$(run_live "$s" ":(exclude)$LIVE_DIR")"
@@ -163,6 +223,19 @@ matrix() {
     # The refusal to strip greedily: a doubled value stays visibly broken.
     printf 'doubled-stays-broken\t%s\n' \
         "$(verdict has "$dbl" 'generated/gen.txt')"
+    # A lone `:(exclude)` strips to empty; re-prefixed it is an empty pattern
+    # git reads as "exclude everything". It must be dropped, leaving the scan
+    # byte-identical to an unconfigured one — NOT merely "non-empty", which a
+    # partially-applied exclusion would also satisfy.
+    printf 'lone-prefix-token-ignored\t%s\n' \
+        "$(verdict same "$lone" "$base")"
+    # The `set -f` fence: a `**` value must reach git literally, so the two
+    # spellings agree even on the dotfile shell expansion would have skipped.
+    if hasnt "$gbare" 'generated/' && same "$gbare" "$gpref"; then
+        printf 'glob-spellings-identical\tpass\n'
+    else
+        printf 'glob-spellings-identical\tfail\n'
+    fi
     # Per-item handling: one list may mix the two spellings.
     if hasnt "$mixed" 'generated/' && hasnt "$mixed" 'docs/' && has "$mixed" 'src/app.txt'; then
         printf 'mixed-list\tpass\n'
@@ -200,29 +273,46 @@ EOF
 # same matrix, never asserted in prose.
 echo "2. mutation proof" >&2
 
-STRIP_LINE='EXCLUDES+=(":(exclude)${p#'
+STRIP_LINE='q="${p#'
+GUARD_LINE='if [ -z "$q" ] || [ "${q#:}" != "$q" ]; then'
+APPEND_LINE='EXCLUDES+=(":(exclude)$q")'
 BUILTIN_LINE=':(exclude).claude/**'
+FENCE_LINE='set -f'
 
 mutate() {  # $1 = out path, $2 = match substring, $3 = replacement line
     awk -v m="$2" -v r="$3" 'index($0, m) { print r; next } { print }' "$SCRIPT" >"$1"
 }
+mutate_exact() {  # $1 = out path, $2 = WHOLE line to match, $3 = replacement
+    awk -v m="$2" -v r="$3" '$0 == m { print r; next } { print }' "$SCRIPT" >"$1"
+}
 
-# no-strip: the pre-fix line, which double-prefixes every configured value.
-mutate "$WORK/m-nostrip.sh" "$STRIP_LINE" '  EXCLUDES+=(":(exclude)$p")'
+# no-strip: the pre-fix behaviour, which double-prefixes every configured value.
+mutate "$WORK/m-nostrip.sh" "$STRIP_LINE" '  q="$p"'
 # greedy-strip: `//` removes EVERY occurrence, silently repairing a doubled value.
-mutate "$WORK/m-greedy.sh" "$STRIP_LINE" '  EXCLUDES+=(":(exclude)${p//:(exclude)/}")'
-# no-loop: the user-exclude loop body becomes a no-op.
-mutate "$WORK/m-noloop.sh" "$STRIP_LINE" '  :'
+mutate "$WORK/m-greedy.sh" "$STRIP_LINE" '  q="${p//:(exclude)/}"'
+# no-guard: an unusable element is passed to git instead of being dropped, so a
+# lone `:(exclude)` becomes an empty pattern and blacks out the whole scan.
+mutate "$WORK/m-noguard.sh" "$GUARD_LINE" '  if false; then'
+# no-loop: the user-exclude loop stops appending anything.
+mutate "$WORK/m-noloop.sh" "$APPEND_LINE" '  :'
 # no-builtin: one of the always-on excludes is dropped from the array.
 mutate "$WORK/m-nobuiltin.sh" "$BUILTIN_LINE" '  # built-in removed by mutant'
+# no-fence: the loop pathname-expands again, so bare and prefixed globs diverge.
+# Anchored on the WHOLE line: the header prose quotes `set -f` too.
+mutate_exact "$WORK/m-nofence.sh" "$FENCE_LINE" ':'
+
+# Anchor adequacy first: an anchor that has drifted makes its mutant a silent
+# no-op, which reads as "the matrix does not reach it" rather than as a stale
+# gate. Checked per anchor rather than for the strip line alone.
+for a in "$STRIP_LINE" "$GUARD_LINE" "$APPEND_LINE" "$BUILTIN_LINE" "$FENCE_LINE"; do
+    if ! grep -qF -- "$a" "$SCRIPT"; then
+        bad "mutation anchor no longer present in the script: $a"
+    fi
+done
 
 reached=""
-for m in nostrip greedy noloop nobuiltin; do
+for m in nostrip greedy noguard noloop nobuiltin nofence; do
     mfile="$WORK/m-$m.sh"
-    if ! grep -qF -- "$STRIP_LINE" "$SCRIPT"; then
-        bad "the strip line moved — every mutant below is a no-op; re-anchor them"
-        break
-    fi
     if diff -q "$mfile" "$SCRIPT" >/dev/null 2>&1; then
         bad "mutant '$m' is byte-identical to the script — its anchor no longer matches"
         continue
@@ -254,7 +344,7 @@ fi
 # --- 3. source and docs -------------------------------------------------------
 echo "3. source and docs" >&2
 
-header="$(sed -n '1,30p' "$SCRIPT")"
+header="$(sed -n '1,45p' "$SCRIPT")"
 if has "$header" 'canonical spelling is BARE' && has "$header" 'ALSO accepted'; then
     ok "the script header names bare as canonical and records that both spellings are accepted"
 else
@@ -265,8 +355,22 @@ if has "$header" 'At most ONE prefix is stripped'; then
 else
     bad "the header lost the at-most-one rule that doubled-stays-broken enforces"
 fi
+# The drop rule is the half that fails toward suppression, so the header must
+# say the element is dropped AND why: a bare `:(exclude)` excludes everything.
+if has "$header" 'is DROPPED' && has "$header" 'exclude the entire tree'; then
+    ok "the header records that an unusable element is dropped, and what it would otherwise do"
+else
+    bad "the header lost the drop rule or its consequence — the reason lone-prefix-token-ignored exists"
+fi
+# The `**`/`:(glob)` claim contradicted this gate's own finding. It must stay
+# annotated in place rather than being left to read as fact.
+if has "$header" 'NOTE, unverified' && has "$header" 'did not reproduce'; then
+    ok "the stale :(glob) claim is annotated in place rather than contradicting this gate"
+else
+    bad "the script header asserts the :(glob) claim as fact again — it did not reproduce"
+fi
 
-# The one doc site that moved. Searched tree-wide, not at a line number: the
+# The doc site that carried the prefixed form. Searched tree-wide, not at a line number: the
 # point is that NO tracked file teaches the prefixed spelling again. THIS FILE
 # is in that corpus, so the pattern is assembled from two pieces rather than
 # written out — the alternative is exempting this path, which would leave the
