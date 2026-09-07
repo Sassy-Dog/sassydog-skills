@@ -587,9 +587,13 @@ valid pathspec matching nothing, which excludes nothing and exits `0`, silently 
 exclusion ([#365](https://github.com/Sassy-Dog/sassydog-skills/issues/365)). The script now strips
 one leading `:(exclude)`, so a config already carrying the old spelling needs **no edit** — write
 new ones bare. That is not the same as nothing to do: the strip lives in the plugin, so a consumer
-repo keeps scanning with the exclusion disabled until its plugin is updated
-(`claude plugin update sassy-dog@sassydog-skills`, then restart — see the two-step cache note in
-`repo-health`).
+repo keeps scanning with the exclusion disabled until the plugin is updated **for that checkout**.
+Do not assume an ordinary update reached it: every repo this paragraph addresses declares the
+plugin in its `.claude/settings.json`, which is precisely what creates a **project pin**, and
+against a project pin the bare `claude plugin update` reports success at user scope while moving
+nothing for the checkout it ran in. The working procedure, and the cheaper route that avoids it,
+are in `repo-health`'s "Plugin drift (which checkouts run a stale plugin)" section — which owns
+that answer, so it is deliberately not restated here.
 
 Values are passed to git **literally**, so a `**` is a git pathspec and never a shell glob; the
 loop is fenced with `set -f` for exactly that reason. Do not write a value expecting shell
