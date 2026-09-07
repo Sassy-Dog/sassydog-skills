@@ -12,7 +12,10 @@
 #     "repos": [ { "repo",
 #                  "default_branch",
 #                  "runs_sampled", "failures", "failure_rate",
-#                  "default_branch_ci",       # latest push/merge_group run on default branch
+#                  "default_branch_ci",       # newest CONCLUDED push-class run on default branch
+#                  "default_branch_ci_age_days",  # its age; NOT bounded by RUN_LIMIT
+#                  "default_branch_ci_url",
+#                  "default_branch_runs_seen",    # 0 | >0 | null — see below
 #                  "scheduled_failing": [ { "workflow", "url", "created_at" } ],
 #                  "last_failure": { "workflow", "branch", "event", "url", "created_at" } | null,
 #                  "dependabot": { "enabled": true|false|null, "open", "high_crit",
@@ -41,13 +44,18 @@
 #                                       "active": [...], "unknown_validity": [...] } } ] }
 #
 # Cost is 1 + 4N calls, plus ONE extra per repo with high/critical Dependabot
-# alerts (its fix PRs). The code- and secret-scanning pulls each read a
-# single page capped at 100 alerts — there is no pagination loop, ever.
-# code_scanning reports `truncated: true` when the cap was hit, marking
-# `open` as a floor rather than a count; secret_scanning carries no such
-# field and simply reflects whatever sits in the first 100. A healthy org
-# pays nothing for the conditional Dependabot call. Keep RUN_LIMIT small —
-# this is a triage sweep, not a security analytics pass.
+# alerts (its fix PRs), plus ONE extra per repo whose unfiltered sample yields no
+# `default_branch_ci` VERDICT (a strict superset of "held no such run" — an
+# all-in-flight sample triggers the recovery too). The code- and secret-scanning
+# pulls each read a single page capped at 100 alerts — there is no pagination
+# loop, ever. code_scanning reports `truncated: true` when the cap was hit,
+# marking `open` as a floor rather than a count; secret_scanning carries no such
+# field and simply reflects whatever sits in the first 100. The two conditionals
+# are priced differently and only one is free for a healthy org: the Dependabot
+# call needs an actual high/critical alert, while the CI recovery fires for a
+# perfectly healthy repo that is merely QUIET — five of the fifteen repos in
+# issue #367's table were exactly that. Keep RUN_LIMIT small — this is a triage
+# sweep, not a security analytics pass.
 #
 # WHY AGE AND FIX-PR STATE ARE PART OF THE CONTRACT: a bare alert count is a
 # LAGGING indicator. It only falls when a fix MERGES, so it conflates "we were
@@ -65,6 +73,50 @@
 # opposite responses from a human — turn it on, versus fix your scope. Collapsing
 # both to `false` would have the report confidently tell you to enable something
 # that is already enabled. Unknown stays null and is reported as unknown.
+#
+# `default_branch_ci` IS RECOVERED, never left to whatever the unfiltered sample
+# happened to contain. One page of the newest runs across ALL branches is the
+# wrong instrument for a per-branch, per-event question: measured against the
+# live org on 2026-09-06, five repos returned null with a perfectly good verdict
+# available — velovate, brewslate, tailoredtip, what2wear and td3000, tabulated
+# in issue #367. Raising RUN_LIMIT does not fix it: velovate had ZERO
+# push-on-main runs in its newest 100, its most recent sitting weeks back behind
+# a wall of `schedule` and `pull_request` runs, so no page size reaches it.
+#
+# ALL THREE narrowing filters on the recovery are load-bearing, and each looks
+# droppable for a different reason. `--event` is the one that does the work:
+# `--branch` alone leaves the crowding intact, because what crowds a default
+# branch is `schedule` runs, which a branch filter keeps. `--status completed`
+# is the one a reader assumes the derivation already handles: the SAMPLE fetches
+# RUN_LIMIT rows so the derivation can walk past in-flight runs to the newest
+# concluded one, while this query fetches exactly ONE row and has nothing to
+# walk past — without it a single in-flight run re-creates the very null this
+# recovery exists to remove. `push` alone and never `merge_group`, whose head
+# branch `gh-readonly-queue/<branch>/pr-<N>` can never satisfy `--branch`.
+# sassydog-routines#46 shipped this with branch and status only and recovered
+# one repo of the two sampled; #47 added the event filter (issue #367).
+#
+# THE RECOVERED VERDICT IS NOT BOUNDED BY RUN_LIMIT, so it ships its own age.
+# The recovery reaches back as far as the branch's newest concluded push, which
+# in #367's own table was 2026-08-09 for two of the five repos it recovered,
+# measured on 2026-09-06. A month-old green rendered as "current" is a FALSE
+# GREEN — quieter than the missing verdict it replaced — and a seven-week-old
+# red rendered as P0 is a false alarm. `default_branch_ci_age_days` and
+# `default_branch_ci_url` therefore travel with the verdict, and `scoring.md`
+# bounds both directions at 14 days. Note that `last_failure` is derived from
+# the SAMPLE, so a recovered failure has no `last_failure` beside it — the url
+# here is the only link to it.
+#
+# `default_branch_runs_seen` IS THREE-STATE, for the same reason
+# `dependabot.enabled` is: `0` is the positive claim "no such run exists" and
+# may only come from a recovery that was actually READ. A call that failed,
+# returned nothing, or came back in a shape the derivation cannot reduce is
+# unknown — null — and never 0. The sample counting zero is not evidence
+# either; that is the entire bug this recovery fixes, so a zero from the sample
+# contributes nothing and the recovery answers alone. A non-zero count with a
+# null verdict means every such run is still in flight. The count itself is
+# bounded by whichever query answered (RUN_LIMIT, or 1), so only its
+# zero/non-zero/unknown split is sound — never read it as a total.
 #
 # Deliberately `set -uo pipefail` WITHOUT `-e`: one unreachable repo must not void
 # the sweep. Per-repo failures degrade to nulls and the loop continues.
@@ -91,6 +143,34 @@ fi
 
 [[ ${#targets[@]} -eq 0 ]] && { echo "skipped: no repos to scan in org ${ORG}" >&2; exit 10; }
 
+# THE ONE DEFINITION of the default-branch CI verdict, applied to BOTH the
+# unfiltered sample and the recovery query below. It is hoisted out of the
+# assembly jq so the rule cannot come to mean two different things depending on
+# which query answered. Emits {ci, runs_seen}.
+#
+# CI state on the default branch means PUSH-class runs only. A failing
+# `schedule` run on main is an ops-job failure, not a broken build — it blocks
+# no merges at all. Conflating them reports "main is red" for a nightly sweep
+# that hiccuped, which is confident nonsense. Same trap
+# repo-health/scripts/pull-ci-health.sh keys on `event` to avoid.
+#
+# `runs_seen` counts push-class default-branch runs REGARDLESS of status, and a
+# null verdict is only readable next to it — see the three-state note in the
+# header. `age_days` and `url` are projected from the SAME run the verdict came
+# from, because a verdict whose age is not carried alongside it gets rendered as
+# current by every consumer.
+derive_default_branch_ci() {  # arg 1: runs JSON   arg 2: default branch
+  jq -c --arg branch "$2" '
+    map(select(.headBranch == $branch
+               and (.event == "push" or .event == "merge_group"))) as $dbr
+    | ( $dbr | map(select(.status == "completed")) | first ) as $v
+    | { ci: ($v.conclusion // null),
+        age_days: (if ($v.createdAt // null) == null then null
+                   else ((now - ($v.createdAt | fromdateiso8601)) / 86400 | floor) end),
+        url: ($v.url // null),
+        runs_seen: ($dbr | length) }' <<<"$1"
+}
+
 results='[]'
 
 for repo in "${targets[@]}"; do
@@ -107,6 +187,54 @@ for repo in "${targets[@]}"; do
   runs=$(gh run list --repo "${ORG}/${repo}" --limit "$RUN_LIMIT" \
     --json conclusion,status,workflowName,headBranch,url,createdAt,event 2>/dev/null) || runs='[]'
   [[ -z "$runs" ]] && runs='[]'
+
+  db_ci=$(derive_default_branch_ci "$runs" "$default_branch")
+
+  # RECOVERY — see header for why each of the three narrowing filters is
+  # load-bearing. Fires ONLY when the unfiltered sample yielded no VERDICT, and
+  # it runs the SAME derivation above rather than a second copy of the rule.
+  #
+  # The query inherits the branch provenance the sample derivation already had —
+  # a guessed `default_branch` narrows this query exactly as wrongly as it
+  # filtered the sample, so this adds no exposure the verdict did not carry.
+  if [[ "$(jq -r '.ci' <<<"$db_ci")" == "null" ]]; then
+    # The unknown default. Every path that does not READ an answer leaves it
+    # here — a failed call, an empty body, a non-array shape. `0` is a claim and
+    # is only ever assigned below, from a recovery that came back empty.
+    rec='{"ci":null,"age_days":null,"url":null,"runs_seen":null}'
+    if recovery=$(gh run list --repo "${ORG}/${repo}" --branch "$default_branch" \
+        --event push --status completed --limit 1 \
+        --json conclusion,status,workflowName,headBranch,url,createdAt,event 2>/dev/null) \
+       && [[ -n "$recovery" ]] \
+       && jq -e 'type == "array"' >/dev/null 2>&1 <<<"$recovery"; then
+      if [[ "$(jq 'length' <<<"$recovery")" -eq 0 ]]; then
+        # READ, and it says there is no concluded push-class run on this branch.
+        rec='{"ci":null,"age_days":null,"url":null,"runs_seen":0}'
+      else
+        rec=$(derive_default_branch_ci "$recovery" "$default_branch")
+        if [[ "$(jq -r '.runs_seen' <<<"$rec")" == "0" ]]; then
+          # Rows came back that the derivation drops. The query asserts such
+          # runs exist and we cannot reduce them, which is unknown — never the
+          # positive claim that none exist.
+          rec='{"ci":null,"age_days":null,"url":null,"runs_seen":null}'
+        fi
+      fi
+    fi
+    db_ci=$(jq -c -n --argjson s "$db_ci" --argjson r "$rec" '
+      # The verdict, its age and its link travel together, from whichever probe
+      # HAS one — only the recovery can, since this branch runs only when the
+      # sample had none.
+      ( if $r.ci != null then $r else $s end ) as $v
+      | { ci: $v.ci, age_days: $v.age_days, url: $v.url,
+          # A sample count of ZERO is not evidence that none exist — that is the
+          # bug this recovery fixes — so it contributes nothing and the recovery
+          # answers alone, unknown included. A sample that DID see runs still
+          # bounds the count from below, so a one-row recovery cannot shrink it
+          # and an unreadable one cannot erase it.
+          runs_seen: (if $s.runs_seen > 0
+                      then ([$s.runs_seen, ($r.runs_seen // 0)] | max)
+                      else $r.runs_seen end) }')
+  fi
 
   # Dependabot: distinguish "off" from "invisible to this token" — see header.
   dependabot='{"enabled":null,"open":null,"high_crit":null,"oldest_high_crit_age_days":null,"open_fix_prs":null}'
@@ -244,6 +372,7 @@ for repo in "${targets[@]}"; do
     --arg repo "$repo" \
     --arg branch "$default_branch" \
     --argjson runs "$runs" \
+    --argjson db_ci "$db_ci" \
     --argjson dependabot "$dependabot" \
     --argjson code_scanning "$code_scanning" \
     --argjson secret_scanning "$secret_scanning" '
@@ -258,16 +387,23 @@ for repo in "${targets[@]}"; do
           failures: ($failed | length),
           failure_rate: (if $n == 0 then null
                          else (($failed | length) / $n * 100 | round) end),
-          # CI state on the default branch means PUSH-class runs only. A failing
-          # `schedule` run on main is an ops-job failure, not a broken build — it
-          # blocks no merges at all. Conflating them reports "main is red" for a
-          # nightly sweep that hiccuped, which is confident nonsense. Same trap
-          # repo-health/scripts/pull-ci-health.sh keys on `event` to avoid.
-          default_branch_ci:
-            ( $done
-              | map(select(.headBranch == $branch
-                           and (.event == "push" or .event == "merge_group")))
-              | first | .conclusion // null ),
+          # All four come from derive_default_branch_ci() above — the one place
+          # the push-class rule is written — recovered by a narrow re-query when
+          # the unfiltered sample yielded no verdict.
+          default_branch_ci: $db_ci.ci,
+          # The age and the link are NOT optional decoration. The recovery is
+          # unbounded by RUN_LIMIT, so the verdict can be weeks old; without the
+          # age a consumer renders a month-old green as "clean today" and a
+          # seven-week-old red as P0. `last_failure` below is derived from the
+          # SAMPLE, so a recovered failure has none — this url is its only link.
+          default_branch_ci_age_days: $db_ci.age_days,
+          default_branch_ci_url: $db_ci.url,
+          # THREE-STATE, like `dependabot.enabled`: 0 is the positive claim that
+          # no such run exists and comes only from a recovery that was read;
+          # non-zero with a null verdict means they are all in flight; null
+          # means the recovery could not be read. Bounded by whichever query
+          # answered, so read the split, never the total.
+          default_branch_runs_seen: $db_ci.runs_seen,
           # Per scheduled workflow, is its MOST RECENT run failing? A stale failure
           # already followed by a green run is not an active fire.
           scheduled_failing:

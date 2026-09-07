@@ -103,14 +103,18 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/whats-on-fire/scripts/pull-repo-signals.sh
 - `pull-org-github.sh` — three org-level calls: the repo roster, every open PR (with `idle_days`
   precomputed), and every open issue. Archived repos are flagged in `repos` but excluded from `prs`
   and `issues`; read the script header for why that filtering is load-bearing.
-- `pull-repo-signals.sh` — per-repo workflow failure counts, the **current** default-branch CI
+- `pull-repo-signals.sh` — per-repo workflow failure counts, the **newest concluded** default-branch CI
   conclusion, currently-failing scheduled workflows, and Dependabot state — including alert AGE and
-  per-package fix-PR state. Slower (1 + 2N calls, plus one more per repo that actually has
-  high/critical alerts, so a healthy org pays nothing extra; ~25s for 15 repos); run it concurrently
-  with the Sentry pulls, not after them.
+  per-package fix-PR state. Slower: 1 + 4N calls, plus one more per repo that actually has
+  high/critical alerts (free for a healthy org) and one more per repo whose sample yields no
+  default-branch CI verdict — which is **not** free for a healthy org, since a quiet repo triggers
+  it (5 of 15 in [#367](https://github.com/Sassy-Dog/sassydog-skills/issues/367)). Run it
+  concurrently with the Sentry pulls, not after them.
 
 `default_branch_ci` and `scheduled_failing` are separate fields and must stay separate in the
-report. Push-class red means shipping is blocked (P0); a failing nightly job is an ops problem that
+report, carried with its age. Push-class red **within 14 days** means shipping is blocked (P0) —
+older than that it is a last known state, not a live outage, and ranks P1 (`references/scoring.md`).
+A failing nightly job is an ops problem that
 blocks nobody (P1). Merging them manufactures false alarms.
 
 Both honor `ORG`, degrade with exit 10 + `skipped: <reason>` on stderr, and emit one JSON object.
@@ -214,8 +218,11 @@ Apply `references/scoring.md`. The two rules that matter most:
 
 - **Stuck work escalates with age; customer pain decays with it.** Never share one curve. A PR idle
   123 days outranks one idle 3 days.
-- **A red default branch is P0 on its own**, independent of historical failure rate. Rate answers
-  "is CI trustworthy"; the current conclusion answers "is it broken right now".
+- **A red default branch is P0 on its own when `default_branch_ci_age_days` is 14 or less**,
+  independent of historical failure rate. Rate answers "is CI trustworthy"; a *recent* conclusion
+  answers "is it broken right now". A verdict may be recovered by a narrow re-query and be months
+  old, so age is what separates a live outage from a last known state: older than 14 days it ranks
+  P1, and a stale `success` never earns `✓ Clean today:` (`references/scoring.md`).
 - **Dependabot exposure is ranked by REMEDIATION STATE, never by alert count.** The count is a
   lagging indicator — it falls only when a fix merges, so "we were slow" and "the world just
   changed" produce the identical number. Rank from `dependabot.oldest_high_crit_age_days`,
