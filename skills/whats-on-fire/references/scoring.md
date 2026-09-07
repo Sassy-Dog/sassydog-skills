@@ -25,7 +25,7 @@ So: **customer pain decays with age; stuck work escalates with age.** Never shar
 | Sentry issue passing the qualifying gate, `lastSeen` ≤ 48h | `sentry-triage` |
 | Cron monitor environment `missed` or `timeout` — always, a dispatch can never vouch for these | `find_monitors` |
 | Cron monitor environment `error` **and blind** — no auto-managed owner issue (`cron-recovery.md` rule 0) **and** no qualifying green dispatch after its last failing check-in | `find_monitors` + `cron-recovery.md` |
-| `default_branch_ci` is `failure` | `pull-repo-signals.sh` |
+| `default_branch_ci` is `failure` **and `default_branch_ci_age_days` <= 14** | `pull-repo-signals.sh` |
 | Any `secret_scanning.active[]` entry, or any `bypassed: true` | `pull-repo-signals.sh` |
 | `secret_scanning.unknown_validity[]` entry aged >= 30d | `pull-repo-signals.sh` |
 | `code_scanning.new[]` rule at `critical` | `pull-repo-signals.sh` |
@@ -40,6 +40,25 @@ problem but it blocks no merges, so it ranks as P1 ops (below), not P0. Ranking 
 produces the exact false alarm this split exists to prevent: reporting "main is red, shipping is
 blocked" when the only red thing is a database sweep that will retry in four hours.
 
+**The verdict is NOT bounded by `RUN_LIMIT`, so it must be read with its age.** The puller recovers
+a null verdict with a re-query narrowed to the default branch, which reaches back as far as that
+branch's newest concluded push — weeks, for a quiet repo. `default_branch_ci_age_days` carries how
+far, and `default_branch_ci_url` links the run. **Both directions of a stale verdict are wrong in
+the same way and neither may be silent:**
+
+- A `failure` older than 14 days is not "production is degraded right now". It ranks **P1** (below)
+  and is reported as `main last built red <N>d ago` with the run linked — a repo nobody has pushed
+  to since is not an outage.
+- A `success` older than 14 days does not earn `✓ Clean today:`. Report it as
+  `CI last green <N>d ago`. It is the newest evidence there is, and it is not evidence about today.
+
+**Why 14 days, and why it is a convention rather than a measurement:** it is the boundary this same
+puller already uses to split `code_scanning.new[]` from `code_scanning.inherited` — fresh enough to
+act on now, versus background state — so the sweep applies one notion of "recent" rather than
+inventing a second. It is deliberately more conservative than the 30-day `unknown_validity` bound
+and much less aggressive than Sentry's 48h, because those two measure live user impact and this one
+measures how long ago somebody last pushed. Change it here and it changes everywhere.
+
 <!-- rule: tier-p1 -->
 ### P1 — shipping is blocked or exposure is real
 
@@ -50,6 +69,7 @@ blocked" when the only red thing is a database sweep that will retry in four hou
 | Dependabot | any `high_crit` > 0 |
 | `scheduled_failing` | non-empty — an ops job whose most recent run failed |
 | `default_branch_ci` | `cancelled` or `timed_out` (ambiguous — verify before ranking P0) |
+| `default_branch_ci` | `failure` with `default_branch_ci_age_days` > 14 — last known state, not a live outage |
 | Secret scanning | `unknown_validity[]` entry aged < 30d |
 | Code scanning | `new[]` rule at `high` |
 
@@ -104,22 +124,33 @@ contract — reference-instant choice, owning-repo resolution, and the 404/403 s
 <!-- rule: default-branch-ci-unknown -->
 ### Not a tier — `default_branch_ci` is `null`
 
-`null` is not a conclusion. It means no completed push-class run on the default branch was found,
+`null` is not a conclusion. It means no concluded push-class run on the default branch was found,
 so the repo is neither `✓ Clean today:` (nothing was read) nor P0 (nothing is known to be red).
-Rank nothing on it, and report it with the reason `default_branch_runs_seen` gives: `CI unknown —
-no default-branch run in the newest N` when that count is `0`, `CI unknown — all still in flight`
-when it is not. Those are different facts and a bare null hides which one you have.
+Rank nothing on it, and report it with the reason `default_branch_runs_seen` gives — it is
+**three-state** and each state is a different sentence:
+
+| `default_branch_runs_seen` | Report as | Means |
+|---|---|---|
+| `0` | `CI unknown — no push has ever run on the default branch` | The recovery query answered, and there is no such run. Not a sampling artefact. |
+| non-zero | `CI unknown — all default-branch runs still in flight` | They exist; none has concluded yet. Re-read later. |
+| `null` | `CI unknown — could not be read` | The recovery call failed or came back unreadable. Name the repo on the sources line, the same way an unreadable Dependabot surface is named. |
+
+A bare null hides which of the three you have, and `0` is a **positive claim** — never report it for
+a call that did not answer. The count itself is bounded by whichever query answered, so read the
+split and never the total.
 
 A null from the FIRST, unfiltered sample is the common case, not the rare one. The newest runs in
 a busy repo are dominated by `pull_request` and bot events, so a repo with thousands of runs on
-file can easily have no `push` to its default branch in the sample — 5 of 15 org repos on
-2026-09-06, all five with a verdict available. That is what the recovery is for, and it is why an
-unnamed `null` must never quietly read as green. A null that SURVIVES the recovery is the rare one,
-and it is the one this section is about.
+file can easily have no `push` to its default branch in the sample — velovate, brewslate,
+tailoredtip, what2wear and td3000 on 2026-09-06, all five with a verdict available, tabulated in
+[#367](https://github.com/Sassy-Dog/sassydog-skills/issues/367). That is what the recovery is for,
+and it is why an unnamed `null` must never quietly read as green. A null that SURVIVES the recovery
+is the rare one, and it is the one this section is about.
 
 Recovering the answer with a narrower re-query is the puller's business, not this table's — both
 pullers do it, and the tiers below apply to whatever they finally report. What is load-bearing here
-is that a `null` never reaches the clean line and never reaches P0.
+is that a `null` never reaches the clean line and never reaches P0, and that a recovered verdict is
+read with `default_branch_ci_age_days` beside it (see P0 above).
 
 <!-- rule: blind-spots-unranked -->
 ### Not ranked — blind spots

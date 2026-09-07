@@ -1358,28 +1358,45 @@
 #      the script header rather than left to contradict this one. No gh, no
 #      network.
 #  44. repo-signals recovery tests (scripts/test-repo-signals-recovery.sh) —
-#      how `pull-repo-signals.sh` answers `default_branch_ci`, and what a
-#      SURVIVING null may mean (issue #367). One unfiltered sample of the newest
-#      runs across ALL branches is the wrong instrument for a per-branch,
-#      per-event question: 5 of 15 org repos returned null on 2026-09-06 with a
-#      verdict available, and null is well-formed JSON carrying no outcome, so
-#      a reader with no rule for it reads the repo as fine. The recovery is ONE
-#      narrow re-query and each part of its shape reads like it could be
-#      relaxed: `--event` is the load-bearing half (velovate had ZERO
-#      push-on-main runs in its newest 100, so no RUN_LIMIT reaches it, and the
-#      mock answers a branch-only query with the `schedule` run that actually
-#      crowds a default branch); `push` alone and never `merge_group`, whose
+#      how `pull-repo-signals.sh` answers `default_branch_ci`, what a SURVIVING
+#      null may mean, and what the recovered verdict must carry (issue #367).
+#      One unfiltered sample of the newest runs across ALL branches is the wrong
+#      instrument for a per-branch, per-event question: velovate, brewslate,
+#      tailoredtip, what2wear and td3000 returned null on 2026-09-06 with a
+#      verdict available (tabulated in #367), and null is well-formed JSON
+#      carrying no outcome, so a reader with no rule for it reads the repo as
+#      fine. The recovery is ONE narrow re-query, and ALL FIVE of its flags are
+#      pinned because three of five left two ordinary edits green:
+#      `--event` is the half that does the work (velovate had ZERO push-on-main
+#      runs in its newest 100, so no RUN_LIMIT reaches it, and the mock answers
+#      a branch-only query with the `schedule` run that actually crowds a
+#      default branch); `--status completed` is the one a reader assumes the
+#      derivation handles — it does for the SAMPLE, which fetches RUN_LIMIT rows
+#      and can walk past in-flight runs, while this query fetches ONE row and
+#      has nothing to walk past; `push` alone and never `merge_group`, whose
 #      head branch `gh-readonly-queue/<branch>/pr-<N>` can never satisfy the
-#      branch filter; and it fires ONLY on a null, counted rather than inferred,
-#      since it is a per-repo extra call. The still-null path is the point —
-#      `default_branch_runs_seen` splits "none was there to read" from "they are
-#      all in flight", which a bare null reports identically and identically to
-#      green — and a FAILED recovery leaves the first probe standing rather than
-#      overwriting a count the sample really saw. The verdict rule is asserted
-#      UNIQUE in the source, not merely present, because nothing downstream can
-#      tell which query answered. Mutant reach is derived by re-running the same
-#      matrix against seven mutated copies; the unreached rows must equal the
-#      one declared fixture-adequacy precondition. Mock gh only, no network.
+#      branch filter; a `--repo`-less `gh run list` answers as the CWD REPO,
+#      handing every repo in the org this one's verdict; and a trimmed `--json`
+#      makes the derivation reject every recovered run — so the mock MODELS gh
+#      (filter, then limit, then project) rather than pattern-matching it.
+#      It fires ONLY on a null, counted rather than inferred, since it is a
+#      per-repo extra call. The still-null path is the point:
+#      `default_branch_runs_seen` is THREE-STATE like `dependabot.enabled` —
+#      `0` is a positive claim and may only come from a recovery that ANSWERED,
+#      an unreadable or unreducible one is null, and a sample count of zero is
+#      not evidence at all while a non-zero one bounds the count from below. The
+#      verdict also ships `default_branch_ci_age_days` and `_url`, because the
+#      recovery is unbounded by RUN_LIMIT and a month-old green rendered as
+#      "clean today" is quieter than the missing verdict it replaced. One
+#      DEFINITION is not one ANSWER: the uniqueness grep is a spelling check an
+#      inline copy worded differently evades, so mutant `ignoreevent` must
+#      redden a sample-path row and a recovery-path row TOGETHER. Mutant reach
+#      is derived by re-running the matrix against fifteen mutated copies, each
+#      declaring the row it MUST redden (reddened sets overlap, so membership is
+#      what makes a red build attributable); the unreached rows must equal the
+#      two declared fixture-adequacy preconditions. Mock gh only, and "no
+#      network" is STRUCTURAL — the shim's resolution is verified after chmod
+#      and EXITS, since `mock-org` is a real GitHub organization (#348).
 #
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
@@ -2206,15 +2223,19 @@ else
 fi
 
 # --- 44. repo-signals recovery tests -------------------------------------------
-# A null `default_branch_ci` is recovered by ONE narrow re-query, and `--event`
-# is the half that does the work — no page size reaches a repo whose newest
-# push-on-main sits weeks back. `push` alone: a merge_group run's head branch can
-# never equal the default branch. The recovery fires only on a null (counted,
-# not inferred), a failed one leaves the first probe standing, and a SURVIVING
-# null is split by `default_branch_runs_seen` into "none was there to read"
-# versus "all still in flight" — collapsed, both read as green.
-# Mutant reach is derived by re-running the matrix against seven mutated copies;
-# the unreached rows must equal the one declared precondition.
+# A null `default_branch_ci` is recovered by ONE narrow re-query, and all FIVE of
+# its flags are pinned: `--event` is the half that does the work, `--status`
+# stops a single in-flight row re-creating the null, `push` alone because a
+# merge_group head branch can never equal the default branch, a `--repo`-less
+# call answers as the CWD repo, and a trimmed `--json` reduces to nothing. The
+# recovery fires only on a null (counted, not inferred). `default_branch_runs_seen`
+# is THREE-STATE — `0` is a positive claim that only an ANSWERED recovery may
+# make — and the verdict ships its age, because the recovery is unbounded by
+# RUN_LIMIT and a month-old green rendered as current is quieter than the missing
+# verdict it replaced. One definition is not one answer: `ignoreevent` must redden
+# a sample-path row and a recovery-path row together. Mutant reach is derived over
+# fifteen copies, each declaring the row it must redden; unreached rows must equal
+# the two declared preconditions. "No network" is structural (shim check, #348).
 if bash scripts/test-repo-signals-recovery.sh; then
     pass "repo-signals recovery tests (scripts/test-repo-signals-recovery.sh)"
 else
