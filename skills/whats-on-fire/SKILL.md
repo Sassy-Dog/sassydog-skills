@@ -188,6 +188,26 @@ here once, and the cron walk points back at it instead of carrying its own copy.
 an unconfirmed route costs the most — it decides which repo's green dispatch is allowed to vouch
 for a monitor — so `references/cron-recovery.md` spells out what unconfirmed means there.
 
+<!-- rule: coverage-not-assumed -->
+### Coverage is counted, never assumed
+
+**The roster is the denominator, and every aggregate claim needs a per-repo verdict behind it.**
+State coverage explicitly — `swept N of M active repos` — and name every repo that produced no
+verdict, with why. A repo the sweep could not read is reported as unread; it is never folded into
+an aggregate and never quietly dropped from the count.
+
+The sentence this exists to prevent is *"CI is green across all M repos"* written after only N of
+them were actually reduced. That is not a ranking mistake, so no tier rule catches it: the repos
+that were read really were green, and the claim is false only because of the ones that were not.
+An unread repo omitted from the report is indistinguishable from a healthy one.
+
+Two numbers make it checkable, so carry both: the roster count, and the count of repos that
+produced a verdict. If they differ, the difference is the finding — say which repos and why before
+saying anything about the ones that worked.
+
+This binds the report, not the puller. A puller is free to fail per repo; what it may not do is let
+the failure disappear between the pull and the summary.
+
 ## 4. Score
 
 Apply `references/scoring.md`. The two rules that matter most:
@@ -245,6 +265,7 @@ report and the run log disagree, the run log wins** — settle it with the out-o
 # What's on fire (YYYY-MM-DD)
 
 _Load: <plugin|fallback (degraded)> · Sources: <pulled, with any "skipped — reason">_
+_Coverage: swept <N> of <M> active repos — <named repos with no verdict, and why>_
 
 ✓ Clean today: <surface> · <surface> · ...
 
