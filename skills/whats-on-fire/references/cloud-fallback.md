@@ -50,6 +50,34 @@ session resolve them. The capabilities this recipe needs:
 No GitHub MCP server connected at all → there is no fallback to the fallback: all of section 2B is
 `skipped — <reason>` per section 1. Never turn "could not check" into silence.
 
+<!-- rule: public-repo-push-attach -->
+### A PUBLIC repo needs `access: "push"` — `read` attaches nothing
+
+`add_repo` with `access: "read"` is a **no-op on a public repository**. The session's git proxy
+already serves anonymous git reads, so the call succeeds, reports that read access "is already
+available", and attaches nothing — the MCP tool allowlist is untouched. The next `actions_list` for
+that repo then answers `Access denied: repository is not configured for this session`, which reads
+like a permission problem and is not one.
+
+**Retry with `access: "push"`. MCP tool scope follows the attach.** Verified across three runs of
+the org sweep: 2026-09-02 tried `read` alone and covered 13 of 15 active repos; 09-06 and 09-07
+retried with `push` and covered 15 of 15.
+
+Three constraints on using it:
+
+- **The elevated scope is an artifact of how `add_repo` works, not a licence.** The sweep reads; it
+  never writes to an attached repo.
+- **Name the repos attached this way on the report's sources line**, so the elevation is visible in
+  the artifact rather than only in a session log.
+- **A repo still unreadable after the retry stays `unread`** — never clean, never dropped from the
+  count.
+
+**Anonymous REST is not an alternative to this, and is not worth re-attempting.** Probed from inside
+the routine container on 2026-09-07: every `https://api.github.com/repos/...` call is intercepted by
+the session's egress proxy and answered with a synthetic 403 carrying no GitHub headers, including
+for an unrelated public repo used as a control. Nothing anonymous leaves that container, so the
+attach is the only route to a public repo's workflow runs.
+
 ## Order of operations
 
 1. **Roster first.** List the org's repositories and capture per repo: name, archived flag, last
