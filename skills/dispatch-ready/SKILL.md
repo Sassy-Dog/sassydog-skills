@@ -123,6 +123,16 @@ list; **`blocked[]` is bare issue numbers**, which is all the Blocked filter nee
 Either way, in-flight counts whether or not a PR exists yet: a sub-agent mid-implementation has
 only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots the cap.
 
+**Issue-only terminal failures — before the PR filter.** Load and apply `take-it` §5's
+**Issue-only terminal handoff** for every claimed issue just enumerated, on either board path
+and either review site. Its authenticated active-attempt and terminal records, not RESULT
+lines or absence of a PR, distinguish a worker that stopped from one still implementing.
+Resolve any newly appeared PR before demotion and retain its mapping for the PR/collision
+paths below. A verified terminal failure with no PR takes that shared once-only blocked
+transition, reporting the cause and preserving the worktree. Re-read live state before §3:
+confirmed demotion frees the slot; a failed write or unresolved provenance remains in-flight.
+Never create a PR, redispatch or reset recovery to make this handoff visible.
+
 - **Open PRs from those branches** → delegate to `sassy-dog:pr-shepherd`: mergeable check,
   merge greens per the configured merge policy, tear down worktrees for merged PRs, reconcile the
   local default branch. **Hand it only the PRs the review bullets below have cleared, and never one whose

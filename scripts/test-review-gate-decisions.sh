@@ -1274,6 +1274,9 @@ assert_has "$recovery" \
     'If identity/context changed, return a fresh `review-fanout-plan` with **no reusable results** and the invalidation reason, not a report based on stale findings.' \
     "stale aggregate-only input returns fresh classification with zero reusable evidence"
 assert_has "$recovery" \
+    'Allow at most one fresh planning pass in this reserved round; further input movement ends recovery rather than starting a replan loop.' \
+    "one stale-plan refresh is the cap, not permission for an unbounded replan loop"
+assert_has "$recovery" \
     'With matching input, run the original whole-diff Step 4 yourself and normal Step 5 aggregation without re-reviewing successful specialists.' \
     "aggregation still performs whole-diff integration without duplicate review"
 assert_has "$recovery" \
@@ -1412,6 +1415,40 @@ assert_has "$retry_review" 'recovery_used=1 recovery=pending' \
     "review-failure producer records its pending reservation"
 assert_has "$retry_review" '**before this tick ends**' \
     "review-failure producer persists before a later tick can mistake it for spent legacy history"
+
+# A terminal pre-PR failure is an issue outcome, not a missing entry in a PR list.
+assert_has "$takeit_handoff" \
+    'Both coordinators consume this handoff **by claimed issue, before filtering to open PRs**.' \
+    "exhausted failures are reconciled even when no PR was created"
+assert_has "$takeit_handoff" \
+    'An older attempt'\''s terminal record cannot demote a newer active attempt.' \
+    "terminal state is bound to the current authenticated attempt"
+assert_has "$takeit_handoff" \
+    'alone is not terminal failure**: without the explicit terminal outcome, the worker may still be implementing and remains in-flight.' \
+    "spent recovery does not demote a worker still implementing"
+assert_has "$takeit_handoff" \
+    'only a confirmed demotion frees capacity.' \
+    "failed issue-only demotion never frees phantom capacity"
+assert_has "$takeit_handoff" \
+    'Embed this subsection verbatim in each cold worker prompt;' \
+    "cold workers receive the durable terminal outcome producer"
+assert_has "$dispatch_budget" '**Issue-only terminal failures — before the PR filter.**' \
+    "later ticks reach the issue-only terminal consumer"
+assert_has "$dispatch_budget" \
+    'Its authenticated active-attempt and terminal records, not RESULT lines or absence of a PR,' \
+    "later ticks use durable authenticated terminal outcomes"
+terminal_line="$(grep -nF '**Issue-only terminal failures — before the PR filter.**' "$DISPATCH" | cut -d: -f1)"
+pr_filter_line="$(grep -nF -- '- **Open PRs from those branches**' "$DISPATCH" | cut -d: -f1)"
+if [[ "$terminal_line" =~ ^[0-9]+$ && "$pr_filter_line" =~ ^[0-9]+$ ]] \
+    && [ "$terminal_line" -lt "$pr_filter_line" ]; then
+    ok "issue-only reconciliation precedes PR filtering"
+else
+    bad "issue-only reconciliation must precede PR filtering exactly once"
+fi
+takeit_watch="$(section_slice "$TAKEIT" '## 6. Coordinator: watch + merge (delegated)')"
+assert_has "$takeit_watch" \
+    'including returned failures with `pr=none` and resumed attempts.' \
+    "bounded coordinator consumes issue-only failures before extracting PR numbers"
 # BOTH single and stacked RESULT shapes must carry the budget on their own
 # lines. A mention in the handoff prose cannot substitute for a missing field.
 recovery_results="$(grep -E '^>.*status=<.*review=<' "$TAKEIT")"

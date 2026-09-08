@@ -69,8 +69,11 @@
 # coordinator attempt comment no longer proves an unused allowance. Reconcile
 # both durable sources and legacy history; only an explicit pending/not-started
 # reservation resumes. The b042 canon and discriminator assertion bind this
-# conservative read. The new §2 accounting paragraphs join its opener inventory;
-# no failure row, terminal condition or assertion floor is relaxed.
+# conservative read. The new §2 accounting paragraphs join its opener inventory,
+# including the issue-only terminal handoff before PR filtering: an exhausted
+# pre-PR failure must demote without mistaking a still-working agent for terminal.
+# The shared producer/consumer guards live in test-review-gate-decisions.sh.
+# No failure row, terminal condition or assertion floor is relaxed.
 #
 # THE SAME FOREVER-TICK IS REACHABLE ONE BULLET EARLIER, AND #282 DOES NOT
 # CLOSE IT (issue #290). Every §2 failure path had a demotion route except one:
@@ -739,7 +742,7 @@ sec7_openers	## 7. Terminal states — drain ~ A drain loop ends itself in ~ ###
 sec7_bullets	0:- **No record** → write this ~ 0:- **Record present** → DEGRADED is ~ 0:- **Self-resolving holds can never trip ~ 0:- **A foreign claim is not ~ 0:- **No record, or the recorded ~ 0:- **Record matches this tick's hold-set ~ 0:- **Exactly one match** → `CronDelete ~ 0:- **Zero, multiple, or ambiguous matches**
 sec7_tablerows	0:| Open PR this tick | ~ 0:| --- | --- | --- ~ 0:| Its issue carries `blocked` | ~ 0:| `CONFLICTING` | **No** — §2 ~ 0:| Held by a §2 review ~ 0:| Checks still running, and not ~ 0:| Checks red, its issue not ~ 0:| Anything else this loop is ~ 0:| Mode | Recognize it by ~ 0:| --- | --- | --- ~ 0:| **Self-paced loop** (ScheduleWakeup) | This ~ 0:| **Cron / fixed interval** (CronCreate-backed) ~ 0:| **Manual invocation** | No loop
 sec7_headings	## 7. Terminal states — drain complete, drain deferred, drain stalled, drain degraded ~ ### DRAIN DEGRADED ~ ### DRAIN COMPLETE ~ ### DRAIN DEFERRED ~ ### DRAIN STALLED ~ #### The discriminator — may this loop advance it? ~ ### Stop path — every terminal state
-sec2_openers	## 2. Reconcile in-flight (always first) ~ Find work this loop already started. ~ **Reconcile the shared recovery allowance before ~ For a later-tick recovery, append `recovery_used=1 ~ **With `board:`** — the board snapshot ~ **Without a board** — live issue ~ Either way, in-flight counts whether or ~ - **Open PRs from those branches**
+sec2_openers	## 2. Reconcile in-flight (always first) ~ Find work this loop already started. ~ **Reconcile the shared recovery allowance before ~ For a later-tick recovery, append `recovery_used=1 ~ **With `board:`** — the board snapshot ~ **Without a board** — live issue ~ Either way, in-flight counts whether or ~ **Issue-only terminal failures — before the ~ - **Open PRs from those branches**
 sec2_bullets	0:- **Open PRs from those branches** ~ 0:- **Open PRs on blocked issues** ~ 0:- **Failed or red PRs** → ~ 0:- **Open PRs not yet reviewed, ~ 0:- **A review dispatched that never ~ 0:- **PRs carrying a Blocking review ~ 0:- **`CONFLICTING` PRs** → never auto-rebase;
 sec2_tablerows	
 sec2_headings	## 2. Reconcile in-flight (always first)

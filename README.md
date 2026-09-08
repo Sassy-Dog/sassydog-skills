@@ -143,6 +143,9 @@ Only authenticated workflow-owned records bound to the actual attempt supply tha
 `send-it` checkpoints issue-less pre-PR recovery under the Git common directory and transfers
 the consumed state into the eventual PR; later-tick retries reserve pending state before the
 scheduling tick ends.
+Exhausted failures before PR creation use an authenticated issue-only terminal handoff.
+Both coordinators reconcile it before PR filtering; only confirmed blocking frees capacity,
+and an absent PR or spent reservation alone never labels a still-working agent terminal.
 
 **However the gate is sited, the report is *returned*** — it is the reviewing agent's final text,
 never a message sent to a session it would first have to address, because an address is the thing a
