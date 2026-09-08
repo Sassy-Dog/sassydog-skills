@@ -40,6 +40,7 @@ problem but it blocks no merges, so it ranks as P1 ops (below), not P0. Ranking 
 produces the exact false alarm this split exists to prevent: reporting "main is red, shipping is
 blocked" when the only red thing is a database sweep that will retry in four hours.
 
+<!-- rule: ci-verdict-age-bound -->
 **The verdict is NOT bounded by `RUN_LIMIT`, so it must be read with its age.** The puller recovers
 a null verdict with a re-query narrowed to the default branch, which reaches back as far as that
 branch's newest concluded push — weeks, for a quiet repo. `default_branch_ci_age_days` carries how
