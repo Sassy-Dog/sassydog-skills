@@ -18,7 +18,7 @@ Dispatch only the agents with signal for the detected stack. All ship with this 
 | `sassy-dog:dx-docs-reviewer` | 6 DX, 11 docs | always |
 | `sassy-dog:dependency-supply-chain-reviewer` | 5 supply-chain slice, 12 dep debt | a lockfile/manifest is present |
 
-**Dispatch rule:** issue all selected agents in **one message, multiple Agent calls** (concurrent). Give each: the absolute repo path, the detected stack summary, the dedupe index is *not* needed by agents (you dedupe centrally), and an instruction to return **only** the JSON-ish finding list in the schema below. Tell each agent it is in **audit mode**: find what's wrong, cite evidence, do not propose to write code.
+**Dispatch rule:** issue all selected agents in **one message, multiple Agent calls** (concurrent). Give each: the absolute repo path, the detected stack summary, the dedupe index is *not* needed by agents (you dedupe centrally), and an instruction to return **only** the JSON object `{"findings": [...]}` in the schema below as its final text, with no Markdown fences or surrounding prose. Tell each agent it is in **audit mode**: find what's wrong, cite evidence, do not propose to write code.
 
 ## Dispatch outcomes (Phase 1)
 
@@ -28,8 +28,8 @@ Three outcomes belong to the fan-out itself:
 
 | Outcome | What it means | Reviewed |
 |---|---|---|
-| `returned` | The agent came back with a finding list in the schema below — empty or not | yes |
-| `no report` | The dispatch succeeded and came back with nothing usable: no final text, prose where a finding list belongs, or output you cannot parse | **no** |
+| `returned` | The agent came back with a JSON object containing a `findings` array in the schema below — empty or not | yes |
+| `no report` | The dispatch succeeded but returned no usable envelope: missing final text, malformed JSON, JSON `null`, missing `findings`, null/non-array `findings`, a legacy bare array, or invalid finding entries | **no** |
 | `could not dispatch` | The Agent call errored, timed out, or the agent could not be resolved | **no** |
 
 A fourth records a decision taken *before* the fan-out: `not dispatched`, for a domain the Phase-0 stack detection found no signal for. Record it with the reason that skipped it.
@@ -42,7 +42,7 @@ A fourth records a decision taken *before* the fan-out: `not dispatched`, for a 
 
 ## Finding output schema
 
-Each agent returns a list of findings. Each finding:
+Each agent returns a JSON object `{"findings": [...]}` in both audit and diff-scoped mode. Accept it only when `findings` is an array and every entry satisfies the existing finding schema; never coerce an unusable result to empty findings or salvage a partial array. Unwrap usable `findings` into Phase 2 verification without changing its fields. Each finding:
 
 ```
 - title:            imperative, PR-sized ("Pin GitHub Actions to commit SHAs")
@@ -58,7 +58,7 @@ Each agent returns a list of findings. Each finding:
   confidence:       0.0–1.0  (agent's own confidence the finding is real)
 ```
 
-Agents that find nothing in their domain return an empty list — that is a valid, useful result, **and it is a result only once you have received it**. An empty list that arrived is a clean domain; an empty list that never arrived is a dark one. The ledger above is the only thing that tells them apart, which is why it is recorded rather than inferred from what the Epic ended up containing.
+Agents that find nothing in their domain return `{"findings": []}` — that is a valid, useful result, **and it is a result only once you have received it**. A completed empty envelope that arrived is a clean domain; missing or unusable output is a dark one. The ledger above is the only thing that tells them apart, which is why it is recorded rather than inferred from what the Epic ended up containing.
 
 ## Adversarial review (Phase 2)
 

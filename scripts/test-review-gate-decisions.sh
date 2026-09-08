@@ -105,12 +105,12 @@
 #      reviewer -> orchestrator — carries far more traffic, since every
 #      diff-scoped review fans out to as many as nine of them, and it was
 #      UNBINDABLE rather than merely unbound (#280). Two halves, and each is
-#      useless without the other. (a) Each of the nine states that its finding
-#      list is its RETURNED FINAL TEXT, that the message tool is not a
+#      useless without the other. (a) Each of the nine states that its findings
+#      envelope is its RETURNED FINAL TEXT, that the message tool is not a
 #      delivery mechanism for it, and that an unresolvable dispatcher changes
 #      nothing — the same rule decision 6 gives the orchestrator, worded for a
-#      reviewer. `Return ONLY a list of findings` was already the right verb
-#      and is STRENGTHENED, never swapped: nothing said it was the only one.
+#      reviewer. #384 changes the container to a JSON object, preserving the
+#      return-only delivery channel and every finding field in both modes.
 #      (b) The orchestrator's fan-out brief says it 'contains, and contains
 #      only' an enumerated set, so an orchestrator following it LITERALLY
 #      could not pass the contract down. The list stays CLOSED — closedness is
@@ -1274,7 +1274,7 @@ fi
 # which is the direction this repo prefers over a check that reports clean on
 # a source stating the inverse.
 RV_DELIVERY="$(cat <<'RVEOF'
-**That list is your RETURN VALUE — the final text of this run, and nothing else.** Deliver it by *ending on it*. `SendMessage` is not a delivery mechanism for findings: sending needs an address, and a dispatched reviewer cannot reliably resolve its orchestrator's. Measured one hop up on 2026-08-25, five occurrences, not one of which reached the session that dispatched it ([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Returning needs no address. So an unresolvable dispatcher changes nothing about what you do: return the list in full anyway, as your final text. Never hand it to another session to relay, never leave it in a file and return a pointer to it, and never end a run with your findings unstated because delivery failed — the return **is** the delivery. An **empty list is returned the same way**: say you found nothing, out loud, rather than ending on silence, because silence and a lost run are the same text. In **diff-scoped mode** a reviewer that did not come back is scored `!` and named as an unreviewed surface, never as a clean one, so a list that reached nobody costs the review that whole surface and not merely your findings ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280)).
+**That object is your RETURN VALUE — the final text of this run, and nothing else.** Deliver it by *ending on it*. `SendMessage` is not a delivery mechanism for findings: sending needs an address, and a dispatched reviewer cannot reliably resolve its orchestrator's. Measured one hop up on 2026-08-25, five occurrences, not one of which reached the session that dispatched it ([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Returning needs no address. So an unresolvable dispatcher changes nothing about what you do: return the object in full anyway, as your final text. Never hand it to another session to relay, never leave it in a file and return a pointer to it, and never end a run with your findings unstated because delivery failed — the return **is** the delivery. A **completed empty review is returned the same way**: return `{"findings": []}` rather than ending on silence, because silence and a lost run are the same text. In **diff-scoped mode** a reviewer that did not come back is scored `!` and named as an unreviewed surface, never as a clean one, so an object that reached nobody costs the review that whole surface and not merely your findings ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280)).
 RVEOF
 )"
 # Both sides normalised the same way, by one expression rather than two call
@@ -1297,7 +1297,7 @@ for rv in "${REVIEWERS[@]}"; do
     fi
 
     assert_in "$rv_out" 'is your RETURN VALUE' \
-        "$rv_name states its finding list is its return value"
+        "$rv_name states its findings envelope is its return value"
     assert_in "$rv_out" 'SendMessage. is not a delivery mechanism' \
         "$rv_name states the message tool is not how findings are delivered"
     # The case-3 shape, one hop down: a dispatcher the reviewer cannot address
@@ -1308,8 +1308,8 @@ for rv in "${REVIEWERS[@]}"; do
     # gate still green, and the agent follows the affirmative instruction.
     assert_in "$rv_out" 'an unresolvable dispatcher changes nothing' \
         "$rv_name returns its findings even with no resolvable dispatcher"
-    assert_in "$rv_out" 'return the list in full anyway, as your final text' \
-        "$rv_name is told to return the list in full when it cannot resolve a dispatcher"
+    assert_in "$rv_out" 'return the object in full anyway, as your final text' \
+        "$rv_name is told to return the object in full when it cannot resolve a dispatcher"
     assert_in "$rv_out" 'the return \*\*is\*\* the delivery' \
         "$rv_name states the return is the delivery"
     assert_in "$rv_out" 'never leave it in a file and return a pointer to it' \
@@ -1318,11 +1318,11 @@ for rv in "${REVIEWERS[@]}"; do
         "$rv_name forbids ending a run with its findings unstated"
     assert_in "$rv_out" 'Never hand it to another session to relay' \
         "$rv_name forbids handing its findings to another session"
-    # The EMPTY list is the half a reviewer is likeliest to drop, and dropping
+    # The EMPTY envelope is the half a reviewer is likeliest to drop, and dropping
     # it is indistinguishable from a lost run: both end on silence, and Step 5
     # scores silence as an unreviewed surface rather than a clean one.
-    assert_in "$rv_out" 'empty list is returned the same way' \
-        "$rv_name returns an empty finding list rather than ending on silence"
+    assert_in "$rv_out" 'completed empty review is returned the same way' \
+        "$rv_name returns a completed empty envelope rather than ending on silence"
     # TWO ANCHORS, like every other clause here. Named phrases are pinned both
     # by their own assertion and by RV_DELIVERY; this sentence was pinned by
     # RV_DELIVERY alone, so deleting it from all nine AND from the canonical
@@ -1330,14 +1330,14 @@ for rv in "${REVIEWERS[@]}"; do
     # the next maintainer at exactly that second edit. It is also the sentence
     # that leaked before, which is why the canonical literal exists at all.
     assert_in "$rv_out" 'costs the review that whole surface' \
-        "$rv_name states that a list reaching nobody costs the whole surface"
-    # STRENGTHENED, NEVER SWAPPED. `return` was already the verb here and was
-    # already correct; what was missing is that it is the ONLY one. A fix that
-    # replaced the line instead of adding to it would read as one delivery
-    # mechanism traded for another, which is the shape decision 6 refuses one
-    # hop up. Line-scoped: the opening of the schema paragraph is structural.
-    assert_line "$rv" '^Return ONLY a list of findings' \
-        "$rv_name still opens its schema with the pre-#280 return instruction"
+        "$rv_name states that an envelope reaching nobody costs the whole surface"
+#    Return-only is still the delivery instruction; #384 changes only its
+#    container. Rejecting a legacy array must not retire that channel rule.
+#    The opening is structural; the complete empty envelope is asserted too.
+#    Runtime serialization is exercised at the harness boundary, not by this
+#    source gate, which protects the instructions the agent receives.
+    assert_line "$rv" '^Return ONLY a JSON object' \
+        "$rv_name opens its schema with the object return instruction"
 
     # TOKEN ACCOUNTING, the same arithmetic decision 6 applies to the
     # orchestrator: each reviewer names the message tool exactly once, to
@@ -1391,7 +1391,7 @@ for rv in "${REVIEWERS[@]}"; do
         bad "$rv_name has no '## Diff-scoped mode' section — the relay window below would narrow to ## Output with no diagnostic"
     fi
     rv_relay_win="$rv_out $rv_diff"
-    rv_delivery="$(awk '/\*\*That list is your RETURN VALUE/ { f = 1 } f && /^$/ { exit } f { print }' "$rv")"
+    rv_delivery="$(awk '/\*\*That object is your RETURN VALUE/ { f = 1 } f && /^$/ { exit } f { print }' "$rv")"
     if [ -z "$rv_delivery" ]; then
         bad "$rv_name has no delivery paragraph — its canonical comparison below would measure nothing"
         continue
@@ -1458,8 +1458,8 @@ else
         "the brief rules out the message channel for findings"
     assert_in "$brief_region" 'a file it wrote is not one either' \
         "the brief rules out the file-parking channel too"
-    assert_in "$brief_region" 'empty list is \*returned\*' \
-        "the brief carries the empty-list half of the rule"
+    assert_has "$brief_region" '`{"findings": []}` is *returned*' \
+        "the brief carries the completed-empty envelope half of the rule"
     # THE IMPERATIVES, not just the content. Item 6 contains its own
     # counter-argument — "each of the nine carries this rule in its own file" —
     # so "you need not restate it" is the first tidy a later reader reaches
@@ -1533,10 +1533,10 @@ assert_in "$orch_flat" 'do not read a clean fan-out as proof the hop worked' \
 # surface" — a claim of DELIBERATE behaviour, the variety that rots silently —
 # left the gate at exit 0.
 readme_flat="$(flatten "$READMEMD")"
-assert_in "$readme_flat" 'returns its finding list as its own final text' \
-    "README states each reviewer returns its finding list as its own final text"
-assert_in "$readme_flat" 'an empty list included' \
-    "README carries the empty-list half of the reviewer rule"
+assert_in "$readme_flat" 'returns its findings envelope as its own final text' \
+    "README states each reviewer returns its findings envelope as its own final text"
+assert_has "$readme_flat" '`{"findings": []}` included' \
+    "README carries the completed-empty envelope half of the reviewer rule"
 assert_in "$readme_flat" 'never rolled into Clean' \
     "README keeps a lost reviewer out of Clean rather than absorbing it"
 
