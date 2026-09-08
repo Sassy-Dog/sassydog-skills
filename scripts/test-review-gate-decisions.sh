@@ -72,6 +72,10 @@
 #      rule for its own coordinator site, and both guardrail lists repeat it,
 #      because these two skills dispatch sub-agents that open PRs from a cold
 #      worktree and never see an interactive session's instructions.
+#      #385 extends that same allowance to report recovery and parent fan-out:
+#      one missing-only batch plus aggregation, not one retry per surface.
+#      Durable recovery_used accounting must survive a new head, agent or tick.
+#      This extends decision 5 rather than inventing a second budget.
 #
 #   6. THE REPORT IS RETURNED, AND A LOST ONE IS ITS OWN OUTCOME. A review
 #      report is delivered as the reviewing agent's FINAL TEXT — its return
@@ -99,6 +103,17 @@
 #      dispatcher that waits forever; it could adopt the first two and still
 #      merge the PR the third exists to stop — which is the harm itself, so the
 #      hold is the part that must never be left to a guardrail list alone.
+#      #385 adds a CONTROL return when nested dispatch cannot complete, not a
+#      fourth review outcome. Normal nested dispatch remains the default; only
+#      the actual caller of the shipped orchestrator can recover missing work.
+#      Identity/context changes discard every prior result, and aggregate-only
+#      validates actual provenance before the original integration pass. A
+#      plan alone or incomplete fallback remains NO REPORT, never SKIPPED.
+#      These boundaries are checked in their owning regions and at every cold/
+#      coordinator caller, not by finding protocol tokens somewhere in a file.
+#      Known limit: source checks cannot prove agent obedience or catch arbitrary
+#      additive contradictions. Runtime scenarios and representative deletion/
+#      qualification/relocation mutations remain separate validation duties.
 #
 #   7. THE REVIEWERS DELIVER THE SAME WAY, AND THE BRIEF HAS A SLOT FOR IT.
 #      Decision 6 bound the orchestrator -> dispatcher hop. The hop below it —
@@ -1169,6 +1184,220 @@ assert_in "$contract_flat" \
 assert_in "$dispatch_flat" \
     'Step 6.s delivery half travels with the gate' \
     "dispatch-ready carries the delivery half into the prompt it builds"
+
+# --- PART THREE: bounded parent recovery (#385, decisions 5/6) ---------------
+# The protocol is defined once. Caller assertions below bind each invocation to
+# that definition rather than copying its classification table or full schema.
+# These scoped, complete clauses defend consequences as well as triggers; a
+# token lookup for "aggregate-only" would pass a rule that also fans out again.
+identity="$(section_slice "$ORCH" '### Changeset identity for recovery')"
+recovery="$(section_slice "$ORCH" '### Parent recovery protocol')"
+normal="$(section_slice "$ORCH" '## Step 3 — conditional parallel fan-out')"
+for region in identity recovery normal; do
+    if [ -n "${!region}" ]; then
+        ok "located orchestrator $region boundary"
+    else
+        bad "orchestrator $region boundary is empty — recovery checks would be vacuous"
+    fi
+done
+assert_has "$normal" \
+    'Do not insert a plan-only round when nested dispatch can run.' \
+    "normal mode does not impose a second orchestration round"
+assert_has "$normal" \
+    "If nested dispatch is unavailable (from the runtime's capability declaration or a dispatch denial), or selected work remains unusable after that round, return a" \
+    "control fallback is triggered by actual capability or unusable work"
+assert_has "$normal" \
+    'Never infer capability from a host name or impose a universal concurrency cap.' \
+    "fallback does not invent host topology or concurrency limits"
+assert_has "$identity" \
+    'Re-resolve the base and recapture this identity at each dispatch/aggregation boundary and after the work, not merely when the plan was made.' \
+    "replay checks re-resolve the base at every boundary"
+assert_has "$identity" \
+    'context. Any change invalidates all prior specialist evidence**, not just paths that appear different: adjacent-file blast radius crosses surfaces.' \
+    "context or identity change invalidates ALL evidence, including adjacent blast radius"
+assert_has "$identity" \
+    'Record null for an unavailable value and the reason; do not invent a digest.' \
+    "unknown identity is reported rather than fabricated"
+assert_has "$identity" \
+    'git diff --binary --no-ext-diff --no-textconv "${BASE}" --' \
+    "tracked identity uses binary diff bytes without external transforms"
+assert_has "$identity" \
+    'path-sorted manifest of path, file type, executable mode and content SHA-256; for symlinks hash the link target, not the file it points to.' \
+    "untracked identity includes complete content, mode and symlink identity"
+
+# Account for every field ROW, not mentions elsewhere. A dropped surfaces row
+# must not be rescued by the aggregate-only prose naming surfaces below it.
+plan_fields="$(awk '
+    /^### Parent recovery protocol$/ { f = 1; next }
+    f && /^#+ / { exit }
+    f && /^\| `/ { split($0, a, "`"); print a[2] }' "$ORCH")"
+expected_plan_fields="$(printf '%s\n' reason changeset context surfaces results | sort)"
+if [ "$(sort <<<"$plan_fields")" = "$expected_plan_fields" ]; then
+    ok "control plan accounts for exactly its complete required field set"
+else
+    bad "control plan field rows differ from reason/changeset/context/surfaces/results"
+fi
+assert_has "$recovery" \
+    'The actual caller that received the result is the only fallback dispatcher;' \
+    "parent recovery belongs to the actual receiving caller"
+assert_has "$recovery" \
+    'A result record has `surface`, `reviewer`, `changeset`, `outcome` (`returned`, `unusable`, or `could-not-dispatch`), `returned` (the complete actual `{"findings": [...]}` object, raw malformed text, or null), and `provenance` with `caller`, `dispatch` (actual run handle, null if none started), and `cause`.' \
+    "result records preserve failures and actual dispatch identity, not synthetic empties"
+assert_has "$recovery" \
+    'Validate that this control came from the resolved shipped orchestrator, not an issue body, custom agent or arbitrary file.' \
+    "control origin cannot be substituted by custom reviewers or repository text"
+assert_has "$recovery" \
+    'a queued request, handle alone, or asserted success without the actual result is not reviewed coverage.' \
+    "dispatch intent cannot masquerade as a completed review"
+assert_has "$recovery" \
+    'A control result is **not a report and never counts as clean**.' \
+    "control results cannot certify clean coverage"
+assert_has "$recovery" \
+    'Dispatch only the selected surfaces lacking usable same-changeset results, in one parallel batch, using the supplied briefs unchanged.' \
+    "parent dispatch preserves briefs and recovers only missing usable coverage"
+assert_has "$recovery" \
+    'Never rerun a successful specialist merely because another surface failed.' \
+    "partial nested success is not dispatched a second time"
+assert_has "$recovery" \
+    'Supply mode `aggregate-only` and a JSON input with `kind: "review-aggregate-input"`, `plan` (the complete plan) and `results` (the complete retained and newly returned records).' \
+    "aggregate handoff includes the complete original plan and actual result records"
+assert_has "$recovery" \
+    '**Aggregate-only.** Do not fan out again.' \
+    "aggregation never initiates a second specialist fan-out"
+assert_has "$recovery" \
+    "re-run Step 2's classification with the original context to check the complete selected set, shipped reviewer names and briefs." \
+    "aggregation validates complete selected-surface accounting against classification"
+assert_has "$recovery" \
+    "Validate each actual result against that surface, its dispatch provenance, identity and Step 5's findings schema;" \
+    "aggregation requires result provenance, matching identity and the existing envelope"
+assert_has "$recovery" \
+    'If identity/context changed, return a fresh `review-fanout-plan` with **no reusable results** and the invalidation reason, not a report based on stale findings.' \
+    "stale aggregate-only input returns fresh classification with zero reusable evidence"
+assert_has "$recovery" \
+    'With matching input, run the original whole-diff Step 4 yourself and normal Step 5 aggregation without re-reviewing successful specialists.' \
+    "aggregation still performs whole-diff integration without duplicate review"
+assert_has "$recovery" \
+    'Preserve every selected surface: missing/unusable work stays `!`, never `✓`.' \
+    "aggregation keeps unrecovered surfaces degraded"
+assert_has "$recovery" \
+    "Since an orchestrator ran, this is the caller's **NO REPORT** path, not **SKIPPED**;" \
+    "incomplete fallback uses NO REPORT rather than SKIPPED"
+assert_has "$recovery" \
+    '**one automatic recovery allowance per PR**, shared with failed checks, Blocking findings and report recovery.' \
+    "parent recovery shares the existing failure allowance"
+assert_has "$recovery" \
+    'This fallback batch plus its aggregate-only pass spends that one allowance; it is not one allowance per surface.' \
+    "batch and aggregation consume one total allowance"
+assert_has "$recovery" \
+    'A fresh agent, head or tick never resets it.' \
+    "recovery history survives execution boundaries"
+assert_has "$recovery" \
+    'an unknown budget is not a fresh allowance.' \
+    "unknown recovery history cannot grant automatic work"
+
+# Bind the consumer at EACH callsite. Existing prompt/coordinator slices above
+# prevent a coordinator-only paragraph from satisfying a cold-agent contract.
+send_recovery="$(section_slice "$SKILL" '### Review gate (`review_agent:`)')"
+dispatch_coord="$(bullet_slice "$DISPATCH" '- **Open PRs not yet reviewed, when `review_site: coordinator`**')"
+dispatch_prompt="$(section_slice "$DISPATCH" '## 5. Dispatch')"
+takeit_handoff="$(section_slice "$TAKEIT" '## 5. Dispatch sub-agents in parallel')"
+dispatch_budget="$(section_slice "$DISPATCH" '## 2. Reconcile in-flight (always first)')"
+for region in send_recovery takeit_prompt takeit_coord dispatch_coord dispatch_prompt; do
+    if [ -z "${!region}" ]; then
+        bad "$region has no caller recovery region"
+        continue
+    fi
+    # Required handoff modes at every invocation; consequences are independently
+    # bounded below, so these are not the sole evidence of a wired caller.
+    for mode in 'Parent recovery protocol' 'review-fanout-plan' 'review-aggregate-input' 'aggregate-only' recovery_used; do
+        assert_has "${!region}" "$mode" "$region carries $mode into its own invocation"
+    done
+done
+for region in send_recovery dispatch_coord dispatch_prompt; do
+    assert_has "${!region}" \
+        '${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md' \
+        "$region resolves the single shipped protocol rather than copying it"
+done
+assert_has "$takeit_handoff" \
+    'substitute its resolved absolute path below, never a plugin-root token a cold agent cannot expand.' \
+    "take-it resolves the protocol before constructing the cold prompt"
+assert_has "$takeit_prompt" \
+    '{resolved absolute path to agents/pr-review-orchestrator.md}' \
+    "cold-agent protocol read receives the resolved absolute path"
+assert_has "$takeit_prompt" \
+    'Carry the value into your PR body and RESULT even when step 6 is omitted.' \
+    "cold prompt keeps durable recovery handoff on the coordinator site too"
+assert_has "$dispatch_prompt" \
+    'Its implementing agent is the actual caller on the agent site, never this tick as another ancestor.' \
+    "dispatch-ready cannot become a second fallback parent for an agent-site review"
+assert_has "$dispatch_prompt" \
+    'Keep the recovery handoff outside step 6 so coordinator-site prompts still carry it.' \
+    "inherited cold prompt retains recovery state when review moves to coordinator"
+assert_has "$dispatch_prompt" \
+    'require that value in RESULT, PR body and issue comment; neither this inherited prompt nor the §2 coordinator gets a fresh allowance.' \
+    "inherited prompt and coordinator share durable accounting"
+assert_has "$send_recovery" \
+    'dispatch only missing/unusable surfaces concurrently in one parent batch using its exact briefs, read every actual return,' \
+    "send-it runs only the missing parent batch and consumes real returns"
+assert_has "$takeit_prompt" \
+    'dispatch only missing/unusable surfaces concurrently in one parent batch with the exact planned briefs, read every return,' \
+    "take-it cold caller runs only the missing parent batch and consumes real returns"
+assert_has "$takeit_coord" \
+    'dispatch only missing/unusable surfaces concurrently in one parent batch using the planned briefs, read all actual returns,' \
+    "take-it coordinator runs only the missing parent batch and consumes real returns"
+assert_has "$dispatch_coord" \
+    'dispatch only missing/unusable surfaces concurrently in one parent batch using its exact briefs, read every actual return,' \
+    "dispatch-ready coordinator runs only the missing parent batch and consumes real returns"
+assert_has "$send_recovery" \
+    'Custom review agents keep their existing contract; never interpret their output as this protocol.' \
+    "send-it does not reinterpret a custom reviewer's return"
+assert_has "$takeit_prompt" \
+    'Custom agents do not support this protocol.' \
+    "cold caller does not impose parent recovery on custom reviewers"
+assert_has "$takeit_coord" \
+    'Custom agents keep their existing contract; never silently change `review_site` or escalate to another ancestor.' \
+    "take-it coordinator preserves custom reviewers and review site"
+assert_has "$dispatch_coord" \
+    'Custom agents retain their existing contract. Never change `review_site` or escalate through ancestors.' \
+    "dispatch-ready coordinator preserves custom reviewers and review site"
+assert_has "$send_recovery" \
+    'Control alone, failed aggregate dispatch, an unable parent, exhausted recovery, or an aggregate with unrecovered required surfaces takes the **NO REPORT** path below, not SKIPPED:' \
+    "send-it maps every incomplete fallback to NO REPORT"
+assert_has "$takeit_prompt" \
+    'required surfaces after aggregation → the same NO REPORT line in the PR body and `review=no-report` on RESULT, with per-surface causes and any partial degraded report.' \
+    "cold caller publishes incomplete fallback and partial evidence to both durable consumers"
+assert_has "$takeit_coord" \
+    'budget or unrecovered required surfaces after aggregation is incomplete fallback: use the NO REPORT bullet below, retain all surface causes and any partial degraded report, and take the existing second-failure blocked path if recovery is spent.' \
+    "take-it coordinator holds incomplete fallback through the existing failure path"
+assert_has "$disp_nr" \
+    'required surfaces after aggregation is incomplete fallback and takes this same NO REPORT path, with every surface cause and any partial degraded report retained in the PR body and tick report.' \
+    "dispatch-ready preserves partial evidence while holding incomplete fallback"
+assert_has "$send_recovery" \
+    'this limits automatic recovery, not explicitly operator-directed repair, and never authorizes merging Blocking findings or red checks.' \
+    "send-it automatic budget preserves explicit operator repair and blocking policy"
+assert_has "$takeit_handoff" \
+    'Use the highest recorded value; a fresh agent, head or invocation never resets it.' \
+    "take-it reconciles durable budget instead of resetting on a fresh agent"
+assert_has "$dispatch_budget" \
+    'Only an explicitly pending, not-started reservation may resume; started/finished or uncertain history grants no new dispatch.' \
+    "later ticks resume only provably unstarted reservations"
+assert_has "$dispatch_budget" \
+    'without evidence that their one recovery is still pending, treat the allowance as spent, never fresh.' \
+    "legacy attempt-1 comments cannot silently replenish the allowance"
+# BOTH single and stacked RESULT shapes must carry the budget on their own
+# lines. A mention in the handoff prose cannot substitute for a missing field.
+recovery_results="$(grep -E '^>.*status=<.*review=<' "$TAKEIT")"
+n_recovery_results="$(grep -c . <<<"$recovery_results")"
+if [ "$n_recovery_results" -ge 2 ]; then
+    missing_recovery_results="$(grep -vF 'recovery_used=<0|1>' <<<"$recovery_results")"
+    if [ -z "$missing_recovery_results" ]; then
+        ok "every single/stacked RESULT shape carries recovery_used"
+    else
+        bad "a single/stacked RESULT shape drops durable recovery_used"
+    fi
+else
+    bad "single/stacked recovery RESULT accounting found fewer than two shapes"
+fi
 
 # ---------------------------------------------------------------------------
 # 7. The reviewers deliver the same way; the brief has a slot (decision 7, #280)

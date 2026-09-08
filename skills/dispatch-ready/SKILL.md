@@ -83,6 +83,24 @@ every invocation is noise. If declined, carry on and don't raise it again.
 
 Find work this loop already started.
 
+**Reconcile the shared recovery allowance before any review or redispatch.** Read each PR body
+and its issue's durable attempt comments, carrying `recovery_used=0|1` from take-it's handoff.
+This ONE automatic allowance per PR is shared by failed checks, Blocking findings, missing/faulty
+reports and parent recovery. Use the highest recorded value; a new agent, head, PR replacing the
+same failed attempt, or tick never resets it. Start at 0 only for new work with no prior
+failure/recovery history. Reconcile legacy `dispatch-ready: attempt 1 failed` comments too: without
+evidence that their one recovery is still pending, treat the allowance as spent, never fresh.
+
+For a later-tick recovery, append `recovery_used=1 recovery=pending` to the existing attempt-1
+comment when reserving the ONE allowance; before the actual dispatch, durably mark that same
+reservation `recovery=started`, then `recovery=finished` with its outcome on completion. Mirror
+`recovery_used=1` in the PR body. Only an explicitly pending, not-started reservation may resume;
+started/finished or uncertain history grants no new dispatch. Confirm the durable write before
+dispatch; a failed write holds, never launches an unaccounted retry. Reconcile this state on
+EITHER review site, so recovery spent inside an implementing agent reaches the existing
+second-failure `blocked` path, not a fresh coordinator budget. All ONE-redispatch instructions
+below refer to this allowance; parent batch plus aggregate-only costs ONE total.
+
 **With `board:`** — the board snapshot is the source of truth: cards in **In progress** / **In
 review** with assignee @me **and not carrying `blocked`**, per §3's definition, are in-flight.
 `board-snapshot.sh` returns `labels` per item, so the exclusion is computable here; where it is
@@ -151,7 +169,21 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   stay synonymous with dispatchable.
 - **Open PRs not yet reviewed, when `review_site: coordinator`** → review before merging, never
   after. Dispatch the agent resolved by `send-it`'s order against the PR's diff versus the derived
-  default branch, and hand only reviewed PRs to `sassy-dog:pr-shepherd` this tick. A PR whose review
+  default branch with the original scope statement and reconciled `recovery_used`. For the shipped
+  `sassy-dog:pr-review-orchestrator` only, load the **Parent recovery protocol** under Step 3 of
+  `${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` and pass its resolved absolute path.
+  Context `review_surfaces` is null, never forwarded by this workflow; default to `normal`, not a
+  preliminary plan-only round.
+  On a shipped `review-fanout-plan`, this tick is the actual caller: follow that protocol, dispatch
+  only missing/unusable surfaces concurrently in one parent batch using its exact briefs, read every
+  actual return, then submit the complete original plan and complete actual results/provenance as
+  `review-aggregate-input` to the shipped orchestrator in `aggregate-only` mode. Never replay a
+  successful surface or invent empty results; identity/context changes invalidate all reuse without
+  resetting the budget. Refresh a stale plan before the batch within the same reserved round;
+  an aggregate-only response cannot authorize a second batch. Custom agents retain their existing
+  contract. Never change `review_site` or escalate through ancestors. Persist the outcome and
+  `recovery_used` in the PR body and issue comment, and hand only reviewed PRs to
+  `sassy-dog:pr-shepherd` this tick. A PR whose review
   could not run at all — no agent resolved, or the dispatch failed — reports
   `review: SKIPPED — no review_agent resolved (lint/type/test only)` with the cause, and is held,
   not merged on an unreported review. Under `review_site: agent` this bullet does not run: the
@@ -164,6 +196,11 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   agent, and **hold the PR** exactly as above — never merge it, and never hand it to
   `sassy-dog:pr-shepherd` this tick. **Never fold that into the SKIPPED line**: that line says no
   agent ran, and here one did (#273).
+  Control alone, failed aggregate dispatch, unable parent, exhausted recovery or unrecovered
+  required surfaces after aggregation is incomplete fallback and takes this same NO REPORT path,
+  with every surface cause and any partial degraded report retained in the PR body and tick report.
+  It is never clean or SKIPPED: the orchestrator ran. Only failure to start the whole orchestrator
+  takes SKIPPED. Apply the existing second-failure blocked path when the shared allowance is spent.
 - **PRs carrying a Blocking review finding** → **never merge past one.** This is the existing
   failure path, not new machinery: surface it in the tick report with the finding named, comment
   `dispatch-ready: attempt 1 failed — review: <finding>` on the issue, and allow ONE redispatch
@@ -172,8 +209,8 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   and a human decides. **Never park it back in Ready**: Ready must stay synonymous with
   dispatchable. On the `agent` site this rarely fires, because findings were fixed before the PR
   existed — but it still fires when a sub-agent could not resolve a reviewer at all, and equally
-  when its PR body carries the `NO REPORT` line: the agent ran and its report reached nobody, so
-  the PR is held and never merged on it. Those are exactly the cases that must not pass silently,
+  when its PR body carries the `NO REPORT` line: the agent ran but no complete reported review
+  reached the caller, so the PR is held and never merged on it. Those are exactly the cases that must not pass silently,
   and on the
   default `agent` site they are the ONLY way a review outcome reaches this loop — a rule stated
   only in the `coordinator` bullets above would leave the default site merging unreviewed work.
@@ -508,6 +545,18 @@ dispatch that came back with nothing as `review: NO REPORT`, never as a skip. Un
 `review_site: coordinator` that half does not disappear with the step — it moves here, to §2, which
 owes the PRs it reviews exactly the same three outcomes.
 
+**The Parent recovery protocol handoff travels too.** Only when the resolved agent is the shipped
+orchestrator, read `${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` and put its resolved
+absolute path, original scope statement and reconciled `recovery_used` into take-it's cold prompt.
+Context `review_surfaces` is null, never forwarded here. Keep its shipped-only `normal` → `review-fanout-plan` →
+parent batch → `review-aggregate-input` / `aggregate-only` instructions intact, including reading
+actual returns, no successful replay, identity invalidation, and incomplete fallback → NO REPORT.
+Its implementing agent is the actual caller on the agent site, never this tick as another ancestor.
+Keep the recovery handoff outside step 6 so coordinator-site prompts still carry it. Read §2's
+durable pending/started/finished reservation before any §2 redispatch, pass `recovery_used=1`,
+and require that value in RESULT, PR body and issue comment; neither this inherited prompt nor
+the §2 coordinator gets a fresh allowance.
+
 Those two gates are the ones most easily lost here, because these agents open their own PRs from a
 cold worktree and never see an interactive session's instructions: a gate that lives only in
 `send-it` never runs for them at all. That is why the review gate is a config key read here rather
@@ -839,10 +888,12 @@ not been written yet matches no row above and falls to the default. Unknown is n
 
 **Read the review outcome from the PR body**, exactly as §2 reads it — take-it's step 6 requires
 the sub-agent to have written the verbatim line. This loop reads no RESULT lines, and a later tick
-is a different session from the one that dispatched. **Read the redispatch budget from the issue,
-not from the PR**: §2 spends it by commenting `dispatch-ready: attempt 1 failed — <cause>` on the
-issue, so that comment is the record of whether it is spent, and a tick that never reads it cannot
-answer either failure row. No such comment means the budget is unspent.
+is a different session from the one that dispatched. **Read the redispatch budget from the issue**
+and reconcile it with the PR body's `recovery_used` per §2, never from this tick's memory. The
+`dispatch-ready: attempt 1 failed — <cause>` comment reserves the shared allowance; only its
+explicit pending/not-started reservation can advance once. Started/finished recovery, agent-spent
+recovery, or uncertain legacy history is not a new allowance. No comment alone does not prove
+unspent: inspect the PR handoff and prior failure/recovery history too.
 
 **A gate that could not be read is not a hold**, and this is not in tension with "unknown is not
 clear" two paragraphs up — the two answer different questions. An unknown *state that was read*

@@ -180,14 +180,50 @@ that are not this skill, and a check written in two places drifts into a check i
 | a repo's own agent | **not** forwarded; say so on the run — the map has no contract outside the shipped orchestrator |
 | none (`review_agent: skip`, or a dispatch failure) | nothing is dispatched, so nothing is forwarded |
 
+**Shipped orchestrator only — load the Parent recovery protocol** from
+`${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` (Step 3) before dispatch, and pass that
+resolved absolute path, the original scope statement, optional verbatim `review_surfaces:`, and
+`recovery_used` to it. Default to `normal`: capable nested fan-out runs once, not a preliminary
+plan-only round. Custom review agents keep their existing contract; never interpret their output
+as this protocol.
+
+If the shipped agent returns `review-fanout-plan`, that is intermediate control, not reviewed
+coverage. As its actual caller, follow the linked protocol: validate the plan and current identity,
+dispatch only missing/unusable surfaces concurrently in one parent batch using its exact briefs,
+read every actual return, and submit `review-aggregate-input` with the complete original plan and
+complete actual result records/provenance to the shipped orchestrator in `aggregate-only` mode.
+Never replay successful surfaces, fabricate empty results, or replace results with summaries.
+Identity/context changes invalidate all reuse; a fresh plan never resets the allowance. Do not
+escalate through ancestors or wait for a report notification.
+
+**One automatic recovery allowance per PR** is shared by failed checks, Blocking findings,
+missing/faulty reports and parent recovery. Carry `recovery_used=0|1` through every dispatch and
+the PR body; read existing PR-body and linked-issue comments first, including legacy attempt-1
+history. Start at 0 only for a new PR with no prior failure/recovery history; never reset for a new
+agent, head or invocation. Before using the allowance, persist `recovery_used=1` and its cause in
+the PR body when it exists and a durable linked-issue comment when there is an issue. Follow the
+linked protocol's pending/started/finished reservation semantics; uncertain legacy history is not
+a fresh allowance. Confirm durable writes before starting a recovery. The parent batch plus
+aggregate-only costs ONE total, not one per surface or another on resume. Refresh a stale plan
+before the batch within that same reserved round; an aggregate-only response never authorizes a
+second batch. With the allowance spent, surface further failures to the operator; this limits
+automatic recovery, not explicitly operator-directed repair, and never authorizes merging Blocking
+findings or red checks.
+
+Control alone, failed aggregate dispatch, an unable parent, exhausted recovery, or an aggregate
+with unrecovered required surfaces takes the **NO REPORT** path below, not SKIPPED: the
+orchestrator ran. Retain each surface cause and any partial degraded report in the output and PR
+body; incomplete fallback is never clean. Only failure to start the whole orchestrator takes
+SKIPPED. After the allowed recovery, `send-it` retains its operator-facing continue policy below.
+
 **The gate has THREE outcomes, not two.** A dispatch that *succeeded* and whose report never
 reached you is neither "reviewed" nor "could not dispatch", and reported as either it states
 something untrue:
 
 | Outcome | What happened | What renders |
 | --- | --- | --- |
-| reviewed | the agent returned a report | its findings — Blocking fixed and re-run, Nits rolled in or noted |
-| dispatched, no report returned | the agent ran; nothing readable came back | the NO REPORT line below, naming the agent |
+| reviewed | the agent returned a report, not control or incomplete fallback | its findings — Blocking fixed and re-run, Nits rolled in or noted |
+| dispatched, no report returned | the agent ran; no complete readable report came back | the NO REPORT line below, naming the agent |
 | could not dispatch | no agent resolved, or the dispatch itself errored | the SKIPPED line below, naming the cause |
 
 **Read the report yourself; never wait to be told.** A review report is the *return value* of the
