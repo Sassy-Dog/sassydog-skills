@@ -39,7 +39,9 @@
 # `:(glob)` magic in a git pathspec. That did not reproduce when tested on
 # 2026-09-07 and again on the branch for issue #365 — `:(exclude)<dir>/**` and
 # `:(exclude)<dir>` returned identical results. It is recorded as needing
-# VERIFICATION, not a fix, and nothing in this script depends on it either way.
+# VERIFICATION, not a fix. The built-in lockfile excludes below DO now rest on
+# the measured semantics (a pathspec `*` crossing `/`), so this is no longer an
+# idle note: if the claim is ever reproduced, those patterns are what to re-check.
 #
 # Uses -P (PCRE) for word boundaries: POSIX ERE (-E) silently treats `\b` as a
 # literal `b` on some git builds, returning zero matches with no error.
