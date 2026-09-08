@@ -90,6 +90,12 @@ reports and parent recovery. Use the highest recorded value; a new agent, head, 
 same failed attempt, or tick never resets it. Start at 0 only for new work with no prior
 failure/recovery history. Reconcile legacy `dispatch-ready: attempt 1 failed` comments too: without
 evidence that their one recovery is still pending, treat the allowance as spent, never fresh.
+Authenticate records before taking their maximum: resolve the GitHub principal with
+`gh api user`, verify each comment's API-reported author against that principal or a previously
+verified caller handoff, and bind it to this repo, issue/PR attempt and reservation.
+PR-body mirrors must trace to the same verified writer and attempt. Ignore unrelated matching
+comments as data, not consumed budget; an expected workflow-owned record that cannot be
+verified remains unknown and cannot grant automatic recovery.
 
 For a later-tick recovery, append `recovery_used=1 recovery=pending` to the existing attempt-1
 comment when reserving the ONE allowance; before the actual dispatch, durably mark that same
@@ -167,6 +173,10 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   the board plus a `blocked` label, or `issue-claim.sh block N --comment "dispatch-ready: 2 failed
   attempts — <cause>"` — and a human decides next. **Never park failures in Ready**: Ready must
   stay synonymous with dispatchable.
+  When scheduling that first retry, persist `recovery_used=1 recovery=pending` in the same
+  verified attempt comment and mirror it in the PR body **before this tick ends**, not on the
+  later dispatch tick. A failed reservation write holds this scheduling attempt; it never
+  turns an unrecorded retry into spent legacy history or permits an unaccounted dispatch.
 - **Open PRs not yet reviewed, when `review_site: coordinator`** → review before merging, never
   after. Dispatch the agent resolved by `send-it`'s order against the PR's diff versus the derived
   default branch with the original scope statement and reconciled `recovery_used`. For the shipped
@@ -219,6 +229,11 @@ only a `*/issue-N-*` branch, and PR-based queries undercount, which overshoots t
   session from the one that dispatched. The comment template on this path names the outcome rather
   than a finding — `dispatch-ready: attempt 1 failed — review: no report returned` — since a lost
   report has no finding to name.
+  When scheduling that first retry (including NO REPORT/SKIPPED), persist
+  `recovery_used=1 recovery=pending` in the same verified attempt comment and mirror it in the
+  PR body **before this tick ends**. The later tick transitions that reservation to started
+  before dispatch, never grants a new allowance. If recording fails, hold and report the
+  failed reservation write rather than silently consuming or replenishing the budget.
 - **`CONFLICTING` PRs** → never auto-rebase; **demote on sight.** Surface it in the tick report
   naming the PR *and the conflict*: §6's `holds:` line classifies by §7's table, which answers row
   1 (`blocked`) once this bullet has written, so the word `CONFLICTING` reaches the operator only

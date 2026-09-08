@@ -1384,6 +1384,34 @@ assert_has "$dispatch_budget" \
 assert_has "$dispatch_budget" \
     'without evidence that their one recovery is still pending, treat the allowance as spent, never fresh.' \
     "legacy attempt-1 comments cannot silently replenish the allowance"
+
+# Review feedback on #385: authenticate before taking maxima, and preserve the
+# reservation at both durable boundaries (pre-PR and the scheduling tick).
+for region in send_recovery takeit_handoff dispatch_budget takeit_prompt; do
+    assert_has "${!region}" 'API-reported author' \
+        "$region authenticates recovery control records rather than accepting matching text"
+    assert_has "${!region}" 'issue/PR attempt and reservation' \
+        "$region binds recovery state to its actual work attempt"
+done
+assert_has "$send_recovery" \
+    '<absolute git-common-dir>/sassy-dog-review-recovery/<branch-key>.json' \
+    "issue-less pre-PR recovery has a worktree-safe durable destination"
+assert_has "$send_recovery" \
+    'Read this checkpoint on **every** invocation, even after a PR exists,' \
+    "resumed send-it discovers the same checkpoint instead of replenishing recovery"
+assert_has "$send_recovery" \
+    'Copy its consumed state into the eventual PR body and confirm that write;' \
+    "pre-PR accounting survives the GitHub handoff"
+retry_checks="$(bullet_slice "$DISPATCH" '- **Failed or red PRs**')"
+retry_review="$(bullet_slice "$DISPATCH" '- **PRs carrying a Blocking review finding**')"
+assert_has "$retry_checks" 'recovery_used=1 recovery=pending' \
+    "failed-check producer records its pending reservation"
+assert_has "$retry_checks" '**before this tick ends**' \
+    "failed-check producer persists before a later tick can mistake it for spent legacy history"
+assert_has "$retry_review" 'recovery_used=1 recovery=pending' \
+    "review-failure producer records its pending reservation"
+assert_has "$retry_review" '**before this tick ends**' \
+    "review-failure producer persists before a later tick can mistake it for spent legacy history"
 # BOTH single and stacked RESULT shapes must carry the budget on their own
 # lines. A mention in the handoff prose cannot substitute for a missing field.
 recovery_results="$(grep -E '^>.*status=<.*review=<' "$TAKEIT")"
