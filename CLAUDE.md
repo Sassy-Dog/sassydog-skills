@@ -115,6 +115,12 @@ clone this one anonymously while this one's CI cannot authenticate to it at all 
 `private`-visibility trap of [#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178)). A
 change spanning both repos lands **here first**, or that repo's CI clones a `main` without the new
 marker and fails.
+The stale-verdict section ([#375](https://github.com/Sassy-Dog/sassydog-skills/issues/375)) renders
+the existing `ci-verdict-age-bound` rule, whose marker was added in
+[#379](https://github.com/Sassy-Dog/sassydog-skills/pull/379); it does not introduce another rule
+identity. Its marker counterpart was reconciled in
+[sassydog-routines#60](https://github.com/Sassy-Dog/sassydog-routines/issues/60); that marker-only
+change does not establish parity of the rendering instructions.
 - **Skill `description` is a trigger spec, not a summary.** It is dense with quoted user phrases ("set a GitHub secret", "check TestFlight feedback") because matching those phrases is what activates the skill. When adding/editing a skill, write the description as the list of utterances that should trigger it.
 - **Progressive disclosure.** SKILL.md stays thin and actionable; depth goes in `references/*.md` that the skill says to read "when you reach that phase." Don't inline reference-doc detail into SKILL.md.
 - **`${CLAUDE_PLUGIN_ROOT}` expands only in `SKILL.md`, at load time.** It is NOT substituted in `references/*.md` and is not a shell variable, so a reference doc or a bundled script that writes the token raw emits it literally and the path silently fails to resolve. A reference doc must take the already-resolved absolute path from the `SKILL.md` that invoked it. The thirteen reference-doc commands that wrote the token raw were repointed in [#329](https://github.com/Sassy-Dog/sassydog-skills/issues/329): each doc now opens with a **path-resolution preamble** setting `PLUGIN_ROOT`, and its commands quote `"$PLUGIN_ROOT/..."`. `test-plugin-root-in-references.sh` keeps it that way — it bans the token in COMMAND usage (keyed on fenced code blocks) while deliberately sparing the prose in `skills/assess-it/references/github-issue-ops.md` that documents the trap, and it fails a doc that uses `$PLUGIN_ROOT` without defining it, since an unset variable resolves against `/` exactly like the token did.

@@ -221,8 +221,10 @@ Apply `references/scoring.md`. The two rules that matter most:
 - **A red default branch is P0 on its own when `default_branch_ci_age_days` is 14 or less**,
   independent of historical failure rate. Rate answers "is CI trustworthy"; a *recent* conclusion
   answers "is it broken right now". A verdict may be recovered by a narrow re-query and be months
-  old, so age is what separates a live outage from a last known state: older than 14 days it ranks
-  P1, and a stale `success` never earns `✓ Clean today:` (`references/scoring.md`).
+  old, so age is what separates a live outage from a last known state: a `failure` older than
+  14 days ranks P1, and a stale `success` never earns `✓ Clean today:` — it renders under
+  `🕰 Stale CI verdicts` below, its one destination. A **null** age is not a young one: an undated
+  verdict resolves the same way in both directions (`references/scoring.md`).
 - **Dependabot exposure is ranked by REMEDIATION STATE, never by alert count.** The count is a
   lagging indicator — it falls only when a fix merges, so "we were slow" and "the world just
   changed" produce the identical number. Rank from `dependabot.oldest_high_crit_age_days`,
@@ -304,6 +306,10 @@ _Inherited: <repo> N alerts across M rules, oldest Dd._
 ## 🎯 Backlog heat
 - **<repo>#<N> <title>** — `<label>` — <one-line why>
 
+## 🕰 Stale CI verdicts (not a tier)
+- **<repo>** — `CI last green <N>d ago` — [run](url)
+- **<repo>** — `CI last green — age unknown` — [run](url)
+
 ## 🕶 Blind spots (silent, not healthy)
 - <condition> — <affected repos>
 
@@ -319,6 +325,14 @@ _To ship: `cd <product> && take #<N>`_
 
 Keep the footer. This skill's job ends at naming the product; the per-repo `survey-work` and `take-it`
 take it from there, and the footer is what makes that handoff explicit rather than implied.
+
+`🕰 Stale CI verdicts` is the ONLY place a stale `success` renders, and it is a real section
+rather than a phrase an agent is left to place. A `default_branch_ci` of `success` whose
+`default_branch_ci_age_days` is over 14 or `null` is the newest evidence there is and is not
+evidence about today: it is not a fire, not a tier, and not `✓ Clean today:`. It does not go on the
+`Coverage:` line either — that line names repos with **no** verdict, and a stale success has one.
+Empty, this section collapses to a token on the clean line like any other surface. Full rule:
+`references/scoring.md`.
 
 P0 security items are **not** duplicated into Production fires. The cross-product top 5 is where
 urgency gets expressed; this skill's existing rule is that semantically distinct signals stay in

@@ -1389,11 +1389,11 @@
 #      verdict also ships `default_branch_ci_age_days` and `_url`, because the
 #      recovery is unbounded by RUN_LIMIT and a month-old green rendered as
 #      "clean today" is quieter than the missing verdict it replaced. One
-#      DEFINITION is not one ANSWER: the uniqueness grep is a spelling check an
-#      inline copy worded differently evades, so mutant `ignoreevent` must
-#      redden a sample-path row and a recovery-path row TOGETHER. Mutant reach
-#      is derived by re-running the matrix against fifteen mutated copies, each
-#      declaring the row it MUST redden (reddened sets overlap, so membership is
+#      DEFINITION is not one ANSWER: mutant `ignoreevent` must redden a
+#      sample-path row and a recovery-path row TOGETHER. Mutant `zeroage`
+#      catches undated success/failure evidence being reported as current on
+#      either query path. Reach is derived over the gate's enumerated mutants,
+#      each declaring the rows it MUST redden (reddened sets overlap, so membership is
 #      what makes a red build attributable); the unreached rows must equal the
 #      two declared fixture-adequacy preconditions. Mock gh only, and "no
 #      network" is STRUCTURAL — the shim's resolution is verified after chmod
@@ -2235,9 +2235,10 @@ fi
 # make — and the verdict ships its age, because the recovery is unbounded by
 # RUN_LIMIT and a month-old green rendered as current is quieter than the missing
 # verdict it replaced. One definition is not one answer: `ignoreevent` must redden
-# a sample-path row and a recovery-path row together. Mutant reach is derived over
-# fifteen copies, each declaring the row it must redden; unreached rows must equal
-# the two declared preconditions. "No network" is structural (shim check, #348).
+# a sample-path row and a recovery-path row together. Mutant `zeroage` catches
+# unknown ages becoming zero on both paths. Reach is derived over the gate's
+# enumerated mutants; unreached rows must equal the two declared preconditions.
+# "No network" is structural (shim check, #348).
 if bash scripts/test-repo-signals-recovery.sh; then
     pass "repo-signals recovery tests (scripts/test-repo-signals-recovery.sh)"
 else
