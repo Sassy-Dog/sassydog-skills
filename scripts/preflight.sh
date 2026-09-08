@@ -1349,7 +1349,8 @@
 #      it tests, and the live checkout carrying the issue's own reproduction
 #      with its excluded directory DERIVED from an unfiltered scan, so no
 #      unrelated edit can make that row vacuous. Mutant reach is derived by
-#      re-running the same matrix against six mutated copies, each anchor
+#      re-running the same matrix against seven mutated copies (the sixth and
+#      seventh being `nofence` and `norootlock`), each anchor
 #      checked for presence first; the rows no mutant reddens are compared
 #      against a declared set holding exactly the two fixture-adequacy
 #      preconditions. SCAN_PATHS is deliberately OUT of scope and pinned
@@ -2214,7 +2215,8 @@ fi
 # tree", so it is dropped rather than passed through. The loop's `set -f` fence
 # keeps a `**` a git pathspec instead of a shell glob, which is the only thing
 # making the two spellings equivalent for glob values.
-# Mutant reach is derived by re-running the matrix against six mutated copies;
+# Mutant reach is derived by re-running the matrix against seven mutated copies
+# (nostrip greedy noguard noloop nobuiltin nofence norootlock);
 # the unreached rows must equal the two declared fixture-adequacy preconditions.
 if bash scripts/test-tech-debt-excludes.sh; then
     pass "tech-debt exclude tests (scripts/test-tech-debt-excludes.sh)"

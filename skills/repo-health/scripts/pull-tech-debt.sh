@@ -39,7 +39,9 @@
 # `:(glob)` magic in a git pathspec. That did not reproduce when tested on
 # 2026-09-07 and again on the branch for issue #365 — `:(exclude)<dir>/**` and
 # `:(exclude)<dir>` returned identical results. It is recorded as needing
-# VERIFICATION, not a fix, and nothing in this script depends on it either way.
+# VERIFICATION, not a fix. The built-in lockfile excludes below DO now rest on
+# the measured semantics (a pathspec `*` crossing `/`), so this is no longer an
+# idle note: if the claim is ever reproduced, those patterns are what to re-check.
 #
 # Uses -P (PCRE) for word boundaries: POSIX ERE (-E) silently treats `\b` as a
 # literal `b` on some git builds, returning zero matches with no error.
@@ -52,10 +54,19 @@ fi
 
 # shellcheck disable=SC2206  # word-splitting of the env lists is intentional
 SCAN=(${SCAN_PATHS:-.})
+# The lockfile patterns are BARE (`*.lock`), and the `**/` spelling they
+# replaced is the tempting "more thorough" edit that must not come back. A
+# leading `**/` requires a literal `/` in the path, so it matched `sub/bun.lock`
+# and NEVER a root-level `bun.lock` — which is where a lockfile actually sits in
+# the repos this scans, so every marker in a root lockfile was reported as the
+# repo's own tech debt (issue #372). Without `:(glob)` magic a pathspec `*`
+# matches `/` as well, so the bare form covers root, nested, deep and
+# dot-directory lockfiles alike: it is a strict SUPERSET of the `**/` form, not
+# a narrowing of it. `.claude/**` is deliberately left anchored at the root.
 EXCLUDES=(
-  ':(exclude)**/*.lock'
-  ':(exclude)**/*.lock.json'
-  ':(exclude)**/*-lock.json'
+  ':(exclude)*.lock'
+  ':(exclude)*.lock.json'
+  ':(exclude)*-lock.json'
   ':(exclude).claude/**'
 )
 # `set -f` fences the loop's word expansion: split on whitespace, but do NOT
