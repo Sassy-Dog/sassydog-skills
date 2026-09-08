@@ -13,9 +13,8 @@
 #   1. COMPARE CONTENT, NEVER VERSION STRINGS. Measured on `main`: cache and
 #      clone both at `2026.8.100`, with 18 skill files and all ten agent files
 #      differing. The version string cannot distinguish N merges of content
-#      because the manifest is stamped only in release PRs — which is #296's
-#      other half, still open and blocked on branch protection owned by
-#      Terraform in `Sassy-Dog/platform`.
+#      because the manifest is stamped only in release PRs. #382 adds a
+#      read-only release-lag reminder, not #296's rejected per-merge stamping.
 #   2. THE `--scope` WARNING. `claude plugin update` defaults to `user`. A
 #      reader who correctly identifies a `project` copy and then runs the bare
 #      command updates the WRONG copy, sees no error, and finds the comparison
@@ -150,19 +149,15 @@ has "$VERS_FLAT" "--scope <scope>" "VERSIONING's update command carries --scope 
 has "$README_FLAT" "Step 2 is load-bearing rather than tidiness" \
     "refreshing the marketplace clone is stated to be load-bearing, not tidiness"
 
-# --- 6. the no-auto-stamp record (#296's blocked half) ------------------------
-has "$VERS_FLAT" "so the committed value lags, by design and by a wide margin" \
-    "VERSIONING records that the committed value lags by design"
-has "$VERS_FLAT" "git log -1 -G" \
-    "and gives the REPRODUCIBLE way to find the last stamp (-G on the version line)"
-has "$VERS_FLAT" "which is not the same thing" \
-    "stating why plain 'git log -1 -- <path>' answers a different question"
-
-# VERSIONING must not claim a per-merge stamp EXISTS. #296's criterion 1 is
-# blocked on branch protection owned by Terraform in another repo, so a doc
-# asserting the manifest tracks every merge would send a reader to a version
-# comparison that cannot work — which is the #12 idiom arriving from the other
-# direction, and the reason this veto reads the emphasis-stripped copy too.
+# --- 6. the no-auto-stamp record ---------------------------------------------
+# #382 replaces this section's former version-line-grep recommendation and
+# lag-by-wide-margin wording checks with actual parsed-history behavior in
+# test-release-lag.sh. Do not restore the inaccurate baseline command to make a
+# prose gate green. The no-per-merge-stamp policy below is unchanged.
+#
+# VERSIONING must not claim a per-merge stamp EXISTS: that would send a reader
+# to a version comparison that cannot work — the #12 idiom arriving from the
+# other direction. This veto reads the emphasis-stripped copy too.
 absent "$VERS_FLAT" "$VERS_EMPH" 'stamped on every merge|auto-?stamped on merge|version is bumped on every merge' \
     "VERSIONING claims no per-merge stamp, which does not exist"
 
@@ -170,7 +165,7 @@ absent "$VERS_FLAT" "$VERS_EMPH" 'stamped on every merge|auto-?stamped on merge|
 # A floor beneath the count cannot tell "everything measured" from "an extractor
 # silently stopped matching". Set just under today's total so a collapse fails
 # and a deliberate trim does not.
-FLOOR=27
+FLOOR=24
 if [ "$asserts" -ge "$FLOOR" ]; then
     ok "assertion floor met ($asserts >= $FLOOR)"
 else

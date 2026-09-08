@@ -10,10 +10,9 @@ spec rather than a local fork.
 > `Sassy-Dog/platform#397`. Nothing here depends on reading them: this document
 > is self-contained, and `scripts/test-versioning.sh` is the executable copy of
 > every rule it states about *resolving and stamping a version*. Where you
-> want the authority for such a rule, read the test. The cadence note under
-> "Releasing" and the "CI (spec §8)" account of why CI does not stamp are both
-> prose, pinned by no gate — the test runs against a `mktemp` fixture and
-> asserts the ladder, not the cadence.
+> want the authority for such a rule, read the test. The separate release-lag
+> behavior is exercised by `scripts/test-release-lag.sh`; the no-auto-stamp
+> rationale remains prose rather than a version-resolution rule.
 
 Adopted 2026-07-11 via issue #31. Per spec §9, this doc is validated against the
 scripts at adoption and whenever either changes — the validation is automated as
@@ -87,17 +86,21 @@ still update manually (`claude plugin update --scope <scope> sassy-dog@sassydog-
 — see README "Updating / Troubleshooting", under "`claude plugin marketplace
 update` is not a plugin update", which is where the content check lives).
 
-**Cadence: only when some PR happens to carry a fresh stamp — so the
-committed value lags, by design and by a wide margin.** Content lands on
-`main` on every merge; the manifest moves only when someone runs the stamp
-script and commits the result. In practice that is not confined to release
-PRs: the `2026.8.96` → `2026.8.100` stamp rode a *feature* PR (`98d5d42`), so
-a reader hunting for the last `chore(release):` commit can land on the wrong
-one and compute the wrong gap. To find the last stamp reproducibly, search the
-version *line* rather than the file — `git log -1 -G'"version":' --
-.claude-plugin/plugin.json`. Plain `git log -1 -- <path>` returns the last
-commit that merely touched the manifest, which is not the same thing:
-`951e131` added the `license` key and left `version` at `2026.8.41`.
+**Cadence: dedicated release-only stamping, with a daily read-only reminder.**
+Content lands on `main` on every merge; the manifest moves only when someone
+runs the stamp script and commits the result. Historical stamps have also
+ridden feature PRs (`2026.8.96` → `2026.8.100` at `98d5d42`), so a commit subject
+cannot identify the baseline. Nor can a manifest touch (`951e131` added
+`license` without changing `2026.8.41`), or a version-line grep that misses
+reformatted JSON. Use `scripts/check-release-lag.sh` below: it compares parsed
+versions on the first-parent integration history.
+
+When the reminder reports **due**, review its changed-path evidence, run
+`bash scripts/stamp-version.sh --dry-run` then `bash scripts/stamp-version.sh`,
+and commit the stamped manifest in a dedicated release PR. Use the ordinary
+review, CI and merge-queue path; never push `main` directly. The checker neither
+stamps nor opens that PR. A release resets its baseline and pending clocks,
+including when only the version changes, so the stamp cannot create a loop.
 
 Measured 2026-08-27 at `31e9579`, the committed `2026.8.100` was 23 below what
 its own formula resolved, across 22 unstamped merges (issue #296). The
@@ -118,29 +121,124 @@ Migration note (spec §6): the semver → CalVer switch needed no cutover gate �
 `2026.M.P` strictly exceeds the pre-adoption `0.x` train, and this repo has no
 store tier, so the mid-month switch was monotonic-safe.
 
+## Release-lag reminder
+
+`.github/workflows/release-lag.yml` checks the event repository's derived default
+branch daily at **09:17 UTC** (`17 9 * * *`) and via `workflow_dispatch`.
+Both triggers use the same checker with full history. A release is due when
+any currently pending path has remained divergent for **at least 72 elapsed
+hours** (259200 seconds, inclusive). No merge-count threshold or rounded-day
+comparison is involved. Daily sampling can notice that boundary roughly one
+interval later, plus GitHub scheduling delays; notification delivery depends
+on the user's Actions settings and is not guaranteed.
+
+```bash
+bash scripts/check-release-lag.sh --repo . --ref HEAD --format markdown
+bash scripts/check-release-lag.sh --repo . --ref HEAD --format json \
+  --due-after-hours 72 --now 2026-09-08T09:17:00Z
+```
+
+Requires Git and Python 3 (standard library only). Defaults: current checkout,
+`HEAD`, JSON, 72 hours and the current UTC clock. `--now` is an explicit UTC
+ISO-8601 observation-clock seam for deterministic history fixtures, not a
+CalVer override. The checker reads **committed objects only**, never the index
+or working files, fetches nothing (including no lazy object fetch), performs
+no repair or mutation, and never calls the live CalVer resolver as lag evidence.
+
+### Baseline and runtime inventory
+
+The baseline is the newest **first-parent commit whose parsed top-level plugin
+version differs from its first parent's**. Its tree includes that commit's
+delivered content. A complete-history root introducing a valid CalVer may be
+the baseline. Formatting, same-value rewrites, metadata edits, subjects, tags
+and today's computed CalVer are not releases. The current committed version
+must be valid CalVer (non-padded month 1–12, positive patch).
+
+The fixed release-relevant inventory is:
+
+- All tracked content under `skills/` and `agents/`, including bundled scripts,
+  references, templates and removals.
+- The runtime root helper `scripts/align-labels.sh`, not every root script.
+- `.claude-plugin/plugin.json`, parsed with **only top-level `version` removed**.
+- `.claude-plugin/marketplace.json`, parsed with **only optional
+  `plugins[].version` removed**. Source, identity and configuration metadata
+  remain relevant.
+
+Manifest object-key order and whitespace normalize away; arrays and every
+non-version value remain significant. Ordinary entries compare content,
+presence, executable mode and symlink identity; manifest modes also remain
+significant. Missing ordinary entries are deletions, but both required manifests
+must be readable JSON objects (marketplace `plugins` is an array of objects).
+Repo-only documentation, README, CI, lint/config files and other root scripts
+do not create release demand. This is a fixed inventory, not a dependency crawler.
+
+### Pending clocks and unverified evidence
+
+No net difference between normalized baseline and analyzed payload is **clean**,
+including full change/revert cycles, unrelated work and formula/month changes.
+For each currently differing path, walk first-parent integration commits to
+find the start of its **current uninterrupted divergence** from that baseline
+entry. Returning to baseline resets that path; reintroduction starts it again.
+Later edits, including partial reverts that leave a file divergent, retain its
+pending date. Currently reverted paths cannot age newer outstanding paths.
+Dates are committers' integration timestamps, not old side-branch author dates.
+
+Incomplete/shallow history, unavailable refs or objects, missing/malformed
+required manifests, invalid current CalVer, unusable pending timestamps or a
+selected pending time after the observation clock produce **error/unverified**.
+There is no guessed baseline, zero-age substitute, clamp, history repair or
+protection workaround. Required manifests across the analyzed interval must
+remain valid, even when the final payload has reverted.
+
+### Reports and response
+
+JSON and Markdown render the same computed report: `status`, `analyzed_ref`,
+`head_sha`, `release_version`, `baseline_sha`, `baseline_date`,
+`observation_time`, `due_after_hours`, `threshold_seconds`, `changed_paths`,
+`oldest_pending_age_seconds` and `error`. Each changed path has `path`, `status`
+(`added`, `deleted`, `modified`), `first_pending_sha`, `first_pending_date` and
+`age_seconds`. Unknown evidence is JSON `null` (Markdown `unknown`), never a
+fabricated zero; a clean result has an empty changed-path list and no pending
+age. Unverified analysis retains known identity fields but no certified pending
+list or age. Error reports carry the concrete reason.
+
+| State | Exit | Response |
+|---|---|---|
+| clean | 0 | No net runtime difference; no pending release |
+| pending | 0 | Pending content is younger than the threshold |
+| due | 3 | Follow the [dedicated release procedure](#releasing) |
+| error | 1 | Evidence is unverified; resolve the reported prerequisite |
+| usage error | 64 | Correct the checker arguments |
+
+The dedicated reminder captures the checker exit under errexit, publishes the
+same Markdown in logs and `GITHUB_STEP_SUMMARY`, then annotates and fails on
+**due** or **error** with distinct messages. A process failure before a report
+is generated is also visible and nonzero. It has only `contents: read`, uses a
+GitHub-hosted Ubuntu runner, and creates no release, PR, issue, token or secret.
+It is **not a required PR/merge-queue gate**. Preflight runs only the isolated
+behavioral fixture, so overdue work cannot block its own release PR.
+
+This signal cannot certify consumer pins or already-running sessions. Keep using
+README's [Updating / Troubleshooting](../README.md#updating--troubleshooting)
+content comparison, correct-scope update and restart diagnostic; CI does not
+read install registries or update consumer installations.
+
 ## CI (spec §8)
 
-Nothing in CI computes a version — the preflight gate only shape-checks the
-committed manifest (`^[0-9]{4}\.[0-9]{1,2}\.[0-9]+$`) and cross-checks any
-`marketplace.json` `plugins[].version` against it, so no `fetch-depth: 0` is
-needed today. If a CI job ever *computes* the version (e.g. a future
-auto-stamp workflow), that job needs full history (`fetch-depth: 0`).
+The required `ci` job does not compute this repo's live version — preflight
+shape-checks the committed manifest (`^[0-9]{4}\.[0-9]{1,2}\.[0-9]+$`) and
+cross-checks any `marketplace.json` `plugins[].version` against it. Its checkout
+stays shallow. The separate release-lag reminder **does** need
+`fetch-depth: 0`, to inspect release boundaries and pending history, not to
+compute or stamp CalVer.
 
-**Re-checked 2026-08-28 against the tree** (issue #296): still true.
-`scripts/preflight.sh` section 5 reads `.version`, matches it against the
-CalVer regex and compares `marketplace.json` against it — and computes
-nothing — which is exactly why the manifest measured above, 23 below its own
-formula on that date, passed the gate green. (The gap is not a constant: within a month it
-widens with every unstamped merge, and at a month roll it inverts — on
-2026-09-01 the formula resolves `2026.9.1` against a committed `2026.8.100`,
-which is still monotonic-safe but shows no gap at all. Quote it only with a
-date and a SHA.) Gate 6 does *execute* both versioning scripts on every CI run
-(`scripts/test-versioning.sh`), but against a `mktemp` fixture repo rather
-than this repo's history — which is why the shallow checkout is still safe,
-and what a future assertion against live history would change. This is a
-*deliberate absence*, not an unfinished item, and the section below records
-why; an absence nobody can explain gets re-derived as an oversight and
-"fixed" by whoever finds it next.
+Preflight executes the versioning scripts (`scripts/test-versioning.sh`) and
+the release-lag checker (`scripts/test-release-lag.sh`) against isolated
+`mktemp` histories, not this checkout's history. Thus a live formula/manifest
+gap is not a manifest-gate failure, and an overdue release is not a required
+`ci` failure. If a future CI job computes a live version, that job also needs
+full history. Automatic stamping remains a **deliberate absence** for the
+reasons below; the read-only reminder changes none of them.
 
 ### Why there is no per-merge auto-stamp
 
@@ -218,9 +316,10 @@ line and permanently serializing `dispatch-ready`'s collision filter at a
 throughput of 1. It is rejected on that ground, not on the credential ground
 above.
 
-Until one of these lands the version-of-record cannot track content, so the
-consequence is handled where it bites instead of being papered over: README's
-stale-cache diagnostic is keyed on file content rather than on the version
-string. None of the decisions in this section is pinned by a gate — they are
-prose, and the paragraph above about `test-versioning.sh` being the executable
-copy of this document's rules does not reach them.
+The version-of-record still does not track every content merge. The read-only
+release-lag reminder detects pending runtime content and directs it to a
+dedicated release PR; it does not implement any rejected stamping policy.
+Consumer consequences remain handled by README's stale-cache diagnostic, keyed
+on file content rather than the version string. The policy decisions in this
+no-auto-stamp section remain prose; neither the versioning fixture nor the
+release-lag fixture proves that policy reasoning.

@@ -356,8 +356,8 @@
 #      hard-wrapped. Mock gh serving recorded payloads: no repo, no network.
 #  26. template-actionlint tests (scripts/test-template-actionlint.sh) — the
 #      three setup-deps WORKFLOW templates are linted by actionlint, in a
-#      RENDER (issue #245). Bare actionlint lints `.github/workflows/*`, which
-#      here is ci.yml and nothing else, so the highest-consequence YAML in the
+#      RENDER (issue #245). Bare actionlint lints real `.github/workflows/*`,
+#      not the templates, so the highest-consequence YAML in the
 #      repo — `pull_request_target`, a minted PLATFORM_WRITER_APP_* token, a
 #      push to a PR head ref — was checked by nothing, and a defect there
 #      never reddens this repo: it ships to consumers, where Dependabot
@@ -1399,6 +1399,13 @@
 #      network" is STRUCTURAL — the shim's resolution is verified after chmod
 #      and EXITS, since `mock-org` is a real GitHub organization (#348).
 #
+#  45. release-lag tests (scripts/test-release-lag.sh) — the actual read-only
+#      checker against fixed-clock Git histories: parsed first-parent release
+#      boundaries, normalized runtime payload, uninterrupted per-path age and
+#      revert resets, inclusive due threshold, and unverified missing evidence.
+#      Fixture due exits are asserted, never propagated as a release reminder
+#      into required ci. No network or real repository mutation.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -2243,6 +2250,15 @@ if bash scripts/test-repo-signals-recovery.sh; then
     pass "repo-signals recovery tests (scripts/test-repo-signals-recovery.sh)"
 else
     failed "repo-signals recovery tests (scripts/test-repo-signals-recovery.sh)"
+fi
+
+# --- 45. release-lag tests ------------------------------------------------------
+# The scheduled reminder alone gates on live lag. Here only fixture behavior
+# is checked, so overdue runtime work cannot block its own dedicated release PR.
+if bash scripts/test-release-lag.sh; then
+    pass "release-lag tests (scripts/test-release-lag.sh)"
+else
+    failed "release-lag tests (scripts/test-release-lag.sh)"
 fi
 
 # ------------------------------------------------------------------------------
