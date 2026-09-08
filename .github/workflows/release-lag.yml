@@ -1,0 +1,54 @@
+name: Release lag reminder
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-lag:
+    # This reminder is not a required PR/merge-queue check and never writes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Report committed runtime release lag
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEFAULT_BRANCH" ]; then
+            echo '::error::Release lag unverified: event repository default branch is unavailable.'
+            exit 1
+          fi
+          report="$RUNNER_TEMP/release-lag.md"
+          status=0
+          bash scripts/check-release-lag.sh \
+            --repo "$GITHUB_WORKSPACE" \
+            --ref "refs/remotes/origin/$DEFAULT_BRANCH" \
+            --format markdown > "$report" || status=$?
+          if [ ! -s "$report" ]; then
+            echo '::error::Release lag unverified: checker failed before generating a report.'
+            exit 1
+          fi
+          # Preserve the one computed report before handling nonzero exits.
+          cat "$report"
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          case "$status" in
+            0) ;;
+            3)
+              echo '::error::Release due: runtime content has waited at least 72 hours. Follow docs/VERSIONING.md#releasing.'
+              exit 1
+              ;;
+            *)
+              echo "::error::Release lag unverified: checker exited $status. Read the report; do not interpret this as clean."
+              exit 1
+              ;;
+          esac

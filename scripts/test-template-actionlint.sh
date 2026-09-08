@@ -3,10 +3,10 @@
 # them first (issue #245).
 #
 # Why this exists: `actionlint` is the gate this repo relies on for workflow
-# correctness, and bare `actionlint` lints `.github/workflows/*` — which here is
-# exactly one file, ci.yml. The three workflow templates setup-deps renders into
-# every consumer repo were therefore linted by nothing, while being the
-# highest-consequence YAML in the tree: `pull_request_target`, a minted
+# correctness, and bare `actionlint` lints the real `.github/workflows/*`,
+# including ci.yml and the release-lag reminder. The three workflow templates
+# setup-deps renders into every consumer repo were otherwise linted by nothing,
+# while being the highest-consequence YAML in the tree: `pull_request_target`, a minted
 # PLATFORM_WRITER_APP_* token, and a push to a PR head ref. A defect there does
 # not redden this repo's CI; it ships to consumers, where Dependabot answers a
 # broken workflow by silently doing nothing.

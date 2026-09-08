@@ -98,9 +98,9 @@ jobs:
       - name: actionlint
         run: actionlint -color
 
-      # Bare actionlint above lints `.github/workflows/*` — in this repo, this
-      # file and nothing else. The three workflow TEMPLATES setup-deps renders
-      # into every consumer repo were therefore linted by nothing, while being
+      # Bare actionlint above lints the real `.github/workflows/*`, including
+      # the release-lag reminder. The three workflow TEMPLATES setup-deps renders
+      # into every consumer repo were otherwise linted by nothing, while being
       # the highest-consequence YAML in the tree (issue #245). They cannot be
       # linted in place: their render-time placeholders parse as errors that
       # are not defects, so this gate renders each template in every documented
