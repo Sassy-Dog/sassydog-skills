@@ -206,11 +206,12 @@ with tempfile.TemporaryDirectory(prefix="release-lag-") as scratch:
     side = commit(repo, 1, author_hours=-500)
     git(repo, "checkout", "-q", "main")
     commit(repo, 80)
-    git(repo, "merge", "--no-ff", "-m", "integrate", "side", hours=90)
+    git(repo, "merge", "--no-ff", "-m", "integrate", "side", hours=90, author_hours=-500)
     integrated = git(repo, "rev-parse", "HEAD").decode().strip()
     report = check(repo, "pending", now=100, baseline=base, age=36000)
     assert report["changed_paths"][0]["first_pending_sha"] == integrated
     assert report["changed_paths"][0]["first_pending_sha"] != side
+    check(repo, "due", now=162, baseline=base, age=259200)
     git(repo, "checkout", "-q", "-b", "release-side")
     put(repo, PLUGIN, '{"name":"fixture","version":"2026.9.2"}')
     commit(repo, 91)
