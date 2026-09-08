@@ -226,8 +226,20 @@ as plugin feedback / drop), then the legacy directories are deleted on approval.
 
 ## Phase 6 — create mode
 
-No prior state. Interview, then write config. **Print every file in full and write only after the
-user approves** — writing into a product repo is outward-facing and never silent.
+No prior state. Interview, then write config. Render each file from
+`references/templates/<skill>.config.md`: substitute the `{{FACT}}` placeholders, omit each optional
+block this repo lacks, drop the template's own leading comment block, and keep everything below the
+frontmatter as written — including a `##` section's explanatory comment, which is the only place a
+generated config explains its own conventions to the next reader.
+
+**The template is the starting point, never the authority on completeness.** Check the rendered
+config against `references/config-contract.md` before printing it: a template can lag the contract,
+and rendering is not a licence to omit a key the contract requires. Today no template emits
+`review_site:`, which `config-contract.md` names as one of the two keys that may *not* be omitted —
+so a render that stopped at the template would silently seat a repo on the fail-safe default it
+never chose. **Print every file in full and
+write only after the user approves** — writing into a product repo is outward-facing and never
+silent.
 
 ## Phase 7 — verify
 
