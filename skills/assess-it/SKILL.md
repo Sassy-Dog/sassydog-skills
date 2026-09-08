@@ -36,7 +36,7 @@ Follow the five phases. Full dispatch details, the finding schema, and exact `gh
 
 ### Phase 1 — Fan out (parallel review agents)
 
-Dispatch the relevant `sassy-dog:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns findings in the shared schema with mandatory `file:line` evidence.
+Dispatch the relevant `sassy-dog:*-reviewer` agents **in a single message with multiple Agent tool calls** so they run concurrently. Skip domains with no signal (no IaC → skip `infra-platform-reviewer`). Give each agent the repo path, the detected stack, and its scope. Each returns only the JSON object `{"findings": [...]}` as final text, with findings in the shared schema and mandatory `file:line` evidence. Accept `returned` only for a usable envelope per `orchestration.md`; `{"findings": []}` is completed-empty, while missing or malformed results are `no report`, never clean. Unwrap usable `findings` for Phase 2 verification.
 
 **Record an outcome for every domain as the fan-out returns** — `returned`, `no report`, or `could not dispatch` — plus `not dispatched`, with its reason, for a domain the Phase-0 stack detection skipped. That ledger is Phase 4's input **and the Epic body's** (#294): a domain whose outcome is not `returned` is **dark**, and a dark domain is never scored as clean and never reported as "no findings". In the executive summary its rubric dimension scores `n/a — not measured (dark)`, never a number — the table and this rule otherwise leave no compliant answer, and an agent facing that invents a score, which is worse than a missing one because it is quantitative. A reviewer that came back with nothing looks exactly like one that found nothing, and writing down which happened is the only thing that separates them. Carry the ledger through Phases 2 and 3 unchanged — nothing there adds a domain or clears one.
 
@@ -58,7 +58,7 @@ Cluster surviving findings so each cluster is one coherent PR (e.g. "harden GitH
    ```text
    Domain coverage — 9 dispatched, 7 returned, 2 dark (+0 not dispatched)
      returned:           architecture, code-quality, testing, dx-docs, observability-ops, cicd-release, dependency-supply-chain
-     no report:          infra-platform — came back with prose, not a finding list
+     no report:          infra-platform — came back with prose, not a findings envelope
      could not dispatch: security — Agent call errored (agent not resolved)
      not dispatched:     (none)
 

@@ -98,7 +98,7 @@ Nine domain reviewers ship with the plugin (namespaced `sassy-dog:<name>`):
 `architecture-reviewer`, `code-quality-reviewer`, `security-reviewer`, `testing-reviewer`,
 `cicd-release-reviewer`, `infra-platform-reviewer`, `observability-ops-reviewer`,
 `dx-docs-reviewer`, `dependency-supply-chain-reviewer`. Each runs in either of two modes and
-returns the same finding schema in both: **audit mode**, a whole-repo sweep dispatched by
+returns the same findings envelope (`{"findings": [...]}`) and finding schema in both: **audit mode**, a whole-repo sweep dispatched by
 `assess-it`, and **diff-scoped mode**, one changeset dispatched by `pr-review-orchestrator`.
 
 `pr-review-orchestrator` is the tenth agent and the diff-scoped entry point, dispatched by `send-it`
@@ -157,8 +157,8 @@ exists yet: those two go on to merge with nobody reading along, so a lost report
 unreviewed merge. `send-it` hands its run back to the person who started it, who is reading the
 output, so it records the outcome and carries on.
 
-**The same rule binds the fan-out one level down.** Each of the nine reviewers returns its finding
-list as its own final text — an empty list included — because a reviewer can no more reliably
+**The same rule binds the fan-out one level down.** Each of the nine reviewers returns its findings
+envelope as its own final text — `{"findings": []}` included — because a reviewer can no more reliably
 address the orchestrator that dispatched it than the orchestrator can address the session that
 dispatched *it*, and the fan-out brief carries that rule down as one of its enumerated items rather
 than assuming each agent's own file gets read. It does not make the hop reliable and is not meant
