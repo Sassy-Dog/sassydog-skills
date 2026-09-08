@@ -104,11 +104,16 @@ routine reads by path, which exists because plugin skills cannot load in a routi
 ([#175](https://github.com/Sassy-Dog/sassydog-skills/issues/175)). Nothing used to check that the
 two agreed, and on 2026-08-20 that produced a false P0 in the scheduled run — **a fix applied to
 this copy would not have changed the routine's behaviour at all** ([#221](https://github.com/Sassy-Dog/sassydog-skills/issues/221)).
-Every load-bearing rule now carries a `<!-- rule: <id> -->` marker beside it in *both* homes, and
+Load-bearing rules carry a `<!-- rule: <id> -->` marker beside them in *both* homes, and
 `sassydog-routines`' `scripts/check-skill-parity.sh` fails when the marker sets differ. **Adding a
 rule here means adding the marker here, the marker there, and a line in that repo's
-`parity/whats-on-fire-rules.tsv`.** Two things not to redesign: the check compares marker
-*identity* and never prose, because the two homes word the same rule differently and wrap it
+`parity/whats-on-fire-rules.tsv`.** **One family is knowingly outside that and it is tracked, not
+forgotten**: `default_branch_ci`'s 14-day age bound ([#370](https://github.com/Sassy-Dog/sassydog-skills/pull/370))
+and the stale-verdict section it renders into ([#375](https://github.com/Sassy-Dog/sassydog-skills/issues/375))
+are unmarked in *both* homes, so parity is green and silent about them — which is the blind spot,
+not a clean bill. `Sassy-Dog/sassydog-routines#58` owns the sequence; marking one home alone
+reddens the other's CI for a rule it has not received, so the two markers land together or not at
+all. Two things not to redesign: the check compares marker *identity* and never prose, because the two homes word the same rule differently and wrap it
 differently — a wording-based check reports the routine as missing rules it plainly carries; and it
 cannot move into this repo, because this repo is PUBLIC and that one is INTERNAL, so its CI can
 clone this one anonymously while this one's CI cannot authenticate to it at all (the

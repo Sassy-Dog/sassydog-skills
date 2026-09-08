@@ -87,6 +87,42 @@
 # `recovered-verdict-url`). The url matters on its own: `last_failure` is
 # derived from the sample, so a recovered failure has none beside it.
 #
+# THE AGE BOUND NEEDS A DESTINATION, and section 4 is where that is pinned
+# (issue #375). Bounding the verdict at 14 days stops a month-old run rendering
+# as `✓ Clean today:` — and on its own it replaces a false green with an
+# OMISSION, which `coverage-not-assumed` calls the worse of the two: a stale
+# `success` is forbidden the clean line, ranks no tier, and every other slot in
+# the output template already means something else. The `Coverage:` line is the
+# one that looks closest and is wrong — it names repos with NO verdict, and a
+# stale success has one, so widening it would make one line mean both "never
+# measured" and "measured, but not recently".
+#
+# So the destination is a section of its own, following the precedent
+# `cron-recovery.md` sets for the third cron state, and the gate pins the two
+# halves TOGETHER because either alone is vacuous: `scoring.md` prescribes the
+# string `CI last green <N>d ago` and names the section, `SKILL.md` renders that
+# section as a real heading in the template. One variable supplies both greps,
+# so a rename touching one home reddens here rather than silently pointing the
+# rule at a section that no longer exists.
+#
+# THE TWO SIBLING STATES came out of the same review and fell between tiers. A
+# conclusion with `default_branch_ci_age_days: null` satisfies neither `<= 14`
+# nor `> 14`, and the puller emits it deliberately rather than guessing a date
+# — so it ranked nowhere at all. It now resolves the way a stale one does, in
+# both directions. And `cancelled`/`timed_out` kept an unbounded promotion path
+# to P0 while `failure` had one, which is the asymmetry scoring.md's own
+# "**Both directions** ... neither may be silent" forbids. Both are pinned as
+# must-exist rows plus one must-not-exist for the unbounded form of the
+# `cancelled`/`timed_out` row, which stays syntactically fine when the bound is
+# deleted and so cannot be caught any other way.
+#
+# Section 4's prose checks run against WHITESPACE-FLATTENED copies, must-exist
+# included — a deliberate departure from test-security-listing.sh's split. What
+# is under test there is ADJACENCY (the prescribed string beside its
+# destination, the conclusion beside its bound), which spans a hard wrap in a
+# repo that hard-wraps prose, so a line-scoped grep would redden on a reflow
+# that changed nothing.
+#
 # MUTATION PROOF, with the MEMBERSHIP half. The matrix is a function of the
 # script path, so it is re-run against fifteen mutated copies. Reach is DERIVED
 # from the verdicts, and each mutant additionally declares the row it MUST
@@ -114,7 +150,8 @@ cd "$REPO_ROOT" || exit 1
 SCRIPT="$REPO_ROOT/skills/whats-on-fire/scripts/pull-repo-signals.sh"
 CLOUD="$REPO_ROOT/skills/whats-on-fire/references/cloud-fallback.md"
 SCORING="$REPO_ROOT/skills/whats-on-fire/references/scoring.md"
-for f in "$SCRIPT" "$CLOUD" "$SCORING"; do
+SKILL="$REPO_ROOT/skills/whats-on-fire/SKILL.md"
+for f in "$SCRIPT" "$CLOUD" "$SCORING" "$SKILL"; do
     [ -f "$f" ] || { echo "test-repo-signals-recovery: $f not found" >&2; exit 1; }
 done
 
@@ -643,6 +680,69 @@ if grep -qF -- 'no default-branch run in the newest N' "$SCORING"; then
     bad "scoring.md still explains a zero count as a RUN_LIMIT problem, which the recovery has already ruled out"
 else
     ok "scoring.md no longer blames RUN_LIMIT for a zero count"
+fi
+
+# --- 4. the age bound's destination (issue #375) -------------------------------
+echo "4. the age bound has one named destination" >&2
+
+# One string, two homes: scoring.md names the section, SKILL.md renders it.
+STALE_SECTION='🕰 Stale CI verdicts'
+
+flatten() { tr '\n' ' ' < "$1" | tr -s ' '; }
+SCORING_FLAT="$(flatten "$SCORING")"
+SKILL_FLAT="$(flatten "$SKILL")"
+
+# Needles are assembled from single-quoted halves so the backticks in them are
+# never inside a double-quoted string, where they would be command substitution.
+if printf '%s' "$SKILL_FLAT" | grep -qF -- "## $STALE_SECTION"; then
+    ok "SKILL.md's output template renders '$STALE_SECTION' as its own section"
+else
+    bad "SKILL.md has no '$STALE_SECTION' section — a stale verdict has nowhere to render"
+fi
+
+needle='`CI last green <N>d ago` under **`'"$STALE_SECTION"'`**'
+if printf '%s' "$SCORING_FLAT" | grep -qF -- "$needle"; then
+    ok "scoring.md prescribes the string and names the section in the same breath"
+else
+    bad "scoring.md prescribes 'CI last green <N>d ago' without naming '$STALE_SECTION' beside it"
+fi
+
+if printf '%s' "$SCORING_FLAT" | grep -qF -- 'Do not send it to the `Coverage:` line instead.'; then
+    ok "scoring.md refuses the Coverage line as the destination"
+else
+    bad "scoring.md no longer refuses the Coverage line — one line would mean unmeasured AND stale"
+fi
+
+needle='`'"$STALE_SECTION"'` is the ONLY place a stale `success` renders'
+if printf '%s' "$SKILL_FLAT" | grep -qF -- "$needle"; then
+    ok "SKILL.md states the section is the only destination"
+else
+    bad "SKILL.md no longer states where a stale success renders"
+fi
+
+# The two states that used to fall between tiers.
+if printf '%s' "$SCORING_FLAT" | grep -qF -- 'An age of `null` is not an age of 14 days or less.'; then
+    ok "scoring.md ranks an undated conclusion rather than letting it fall out"
+else
+    bad "scoring.md does not say how a null default_branch_ci_age_days ranks"
+fi
+
+if printf '%s' "$SCORING_FLAT" | grep -qF -- '`cancelled`, `timed_out` or `failure` older than 14 days, or with a null age'; then
+    ok "the P1 row covers cancelled/timed_out/failure past the bound and undated"
+else
+    bad "the P1 row no longer ranks the stale and undated conclusions"
+fi
+
+if printf '%s' "$SCORING_FLAT" | grep -qF -- '`cancelled` or `timed_out` with `default_branch_ci_age_days` <= 14'; then
+    ok "the cancelled/timed_out P0 promotion path carries the same 14-day bound"
+else
+    bad "cancelled/timed_out may be promoted to P0 at any age — the bound went one-directional again"
+fi
+
+if printf '%s' "$SCORING_FLAT" | grep -qF -- '`cancelled` or `timed_out` (ambiguous'; then
+    bad "the unbounded cancelled/timed_out row is back — it promotes a month-old run to P0"
+else
+    ok "no unbounded cancelled/timed_out row survives"
 fi
 
 if [ "$fail" -ne 0 ]; then
