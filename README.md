@@ -135,8 +135,17 @@ reviewing each PR after it opens and before it merges. An absent key selects `ag
 `setup-config` seeds it once from repo visibility (public → `agent`, internal/private →
 `coordinator`) and writes the resolved value explicitly rather than re-deriving it, so a later
 visibility change cannot silently rewrite a repo's review architecture. It chooses only the site —
-`review_agent:` still chooses the agent — and a Blocking finding is never merged past: one
-redispatch carrying the finding, then the `blocked` label.
+`review_agent:` still chooses the agent — and a Blocking finding is never merged past. The
+unattended paths share one automatic recovery allowance across failed checks, Blocking findings,
+missing/faulty reports and parent fan-out recovery; another failure gets the `blocked` label.
+The durable `recovery_used` value survives new heads, agents and dispatcher ticks.
+Only authenticated workflow-owned records bound to the actual attempt supply that budget.
+`send-it` checkpoints issue-less pre-PR recovery under the Git common directory and transfers
+the consumed state into the eventual PR; later-tick retries reserve pending state before the
+scheduling tick ends.
+Exhausted failures before PR creation use an authenticated issue-only terminal handoff.
+Both coordinators reconcile it before PR filtering; only confirmed blocking frees capacity,
+and an absent PR or spent reservation alone never labels a still-working agent terminal.
 
 **However the gate is sited, the report is *returned*** — it is the reviewing agent's final text,
 never a message sent to a session it would first have to address, because an address is the thing a
@@ -156,6 +165,23 @@ merged, on either `review_site:`. The discriminator is **unattended merging**, n
 exists yet: those two go on to merge with nobody reading along, so a lost report there becomes an
 unreviewed merge. `send-it` hands its run back to the person who started it, who is reading the
 output, so it records the outcome and carries on.
+
+**Nested fan-out remains the default.** Only the shipped PR orchestrator supports the
+[parent recovery protocol](agents/pr-review-orchestrator.md#parent-recovery-protocol):
+an explicit plan-only request or inability to dispatch nested reviewers returns a
+`review-fanout-plan` control object, not reviewed coverage or a completed report. Its actual
+caller may dispatch only missing/unusable surfaces in one concurrent round, retaining real
+successful returns, then request `aggregate-only` with the complete plan and results. The
+orchestrator rechecks changeset and context identity, rejects stale reuse, performs its
+whole-diff integration pass and returns the usual Markdown report. It never reruns successful
+specialists during aggregation. This does not change audit mode, custom reviewers or `review_site:`.
+
+That batch plus aggregation consumes the same single recovery allowance, not one per surface.
+A control object alone, failed aggregation or still-missing required surface is **NO REPORT**,
+with causes and any partial report retained — never SKIPPED or clean. `take-it` and
+`dispatch-ready` hold the PR and use their existing second-failure path once recovery is spent.
+`send-it` records the degraded outcome and continues its operator-facing flow; its one automatic
+recovery does not limit an explicit operator-directed repair.
 
 **The same rule binds the fan-out one level down.** Each of the nine reviewers returns its findings
 envelope as its own final text — `{"findings": []}` included — because a reviewer can no more reliably

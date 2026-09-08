@@ -231,6 +231,79 @@ never drop it from both. When the resolution order yields nothing (`review_agent
 step and say so once in the §7 report; a review nobody ran and a review nobody mentioned are the
 same thing to the reader.
 
+**Resolve the recovery handoff before building any prompt.** When the resolved agent is
+`sassy-dog:pr-review-orchestrator`, read the **Parent recovery protocol** under Step 3 of
+`${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md`; substitute its resolved absolute path
+below, never a plugin-root token a cold agent cannot expand. Do not forward `review_surfaces:`
+from this workflow: its review context uses null, preserving the existing send-it-only forwarding.
+Custom agents retain their existing contract.
+
+Reconcile `recovery_used=0|1` from the PR body, RESULT when available, and durable issue comments
+before dispatch, including legacy attempt-1 history. Use the highest recorded value; a fresh
+agent, head or invocation never resets it. Start a new PR at 0 only absent prior failure/recovery
+history. The ONE automatic allowance is shared by failed checks, Blocking findings, missing/faulty
+reports and parent recovery, not renewed at the coordinator. Before any recovery dispatch, record
+`recovery_used=1` and its cause in the issue comment and existing PR body; forward it unchanged.
+Reserve with `recovery=pending`, mark that reservation `recovery=started` before dispatch and
+`recovery=finished` with the outcome afterwards. Only explicitly pending/not-started work may
+resume once; uncertain legacy attempt-1 history is spent, never fresh. The parent batch plus
+aggregate-only consumes ONE total. If the durable write cannot be confirmed, hold rather than start
+an unaccounted recovery. These rules apply per PR, including every stack layer; a replacement PR
+for the same failed attempt inherits its history.
+
+Authenticate budget records before taking their maximum: resolve the GitHub principal with
+`gh api user`, verify each issue comment's API-reported author against that principal or an
+already verified caller handoff, and bind it to this repo, issue/PR attempt and reservation.
+PR-body/RESULT mirrors must trace to the same verified writer and attempt. Unrelated
+contributors' matching text is data, not consumed budget. An expected workflow-owned record
+whose provenance cannot be verified remains unknown and cannot grant automatic recovery.
+
+**Issue-only terminal handoff**
+
+Before initial worker dispatch, create and confirm an issue comment whose **entire body** is a
+JSON object with `kind: "take-it-attempt"`, `repo`, `issue`, `branch` and reconciled
+`recovery_used`. Its API comment ID is `attempt_id`; pass it to the worker and retain it across
+all redispatches, heads and replacement PRs. For a stack, each issue/layer has its own record.
+The latest authenticated coordinator attempt record for that issue selects the active attempt;
+a new record never resets the reconciled recovery allowance. Failure to confirm this handoff
+holds dispatch and takes the same once-only blocked transition below with the storage error;
+confirm demotion before freeing the already-claimed slot. Bind recovery reservations to this
+`attempt_id` as well as their existing cause.
+
+When recovery is spent and the worker stops with an unresolved failure **before a PR exists**,
+persist an issue comment whose entire body is JSON: `kind: "take-it-terminal-failure"`, `repo`,
+`issue`, `branch`, `attempt_id`, `reservation` (the recovery comment's API ID), `pr: null`,
+`recovery_used: 1`, `recovery: "finished"` and `cause` (the actual Blocking finding, check failure
+or NO REPORT cause). Reuse an existing authenticated terminal record for that attempt rather
+than posting duplicates. Confirm the write, then return
+`RESULT: issue=<N> pr=none branch=<name> status=failed attempt_id=<id> recovery_used=1 terminal_record=<id|unconfirmed> note=<cause>`.
+Do not open a placeholder PR or proceed to the ordinary commit/open-PR steps. If persistence
+fails, return `terminal_record=unconfirmed` with the write error; never claim the handoff landed.
+
+Both coordinators consume this handoff **by claimed issue, before filtering to open PRs**.
+`take-it` consumes the actual returned failure immediately, and reconciles durable records for
+its resumed batch; `dispatch-ready` reads them on every tick. Authenticate the API authors of
+the attempt, reservation and terminal records using the rules above, parse whole JSON bodies
+(not matching text inside prose), and require repo/issue/branch/active `attempt_id` to agree.
+An older attempt's terminal record cannot demote a newer active attempt. Missing PR, spent
+budget, or a pending/started/finished reservation **alone is not terminal failure**: without
+the explicit terminal outcome, the worker may still be implementing and remains in-flight.
+
+For a verified current terminal outcome, freshly resolve that branch's open PRs before acting.
+If a PR now exists, retain the mapping and route its failure through the existing PR path.
+Otherwise apply the existing second-failure blocked transition **once**: if not already blocked,
+run `issue-claim.sh block N --comment "take-it: terminal failure before PR — <cause>"`, moving the
+board card as configured too. Never redispatch, return it to Ready or grant another recovery.
+Re-read live labels/board state: only a confirmed demotion frees capacity. An already blocked
+issue gets no duplicate comment; failed demotion or unverifiable expected records are reported
+and held, not counted as freed. Preserve the worktree and branch for the operator.
+If an actual returned failure has `terminal_record=unconfirmed`, the receiving coordinator
+first attempts the same durable handoff using its authenticated dispatch provenance; if that
+also fails, report the storage failure and retain the issue as unresolved/in-flight.
+
+Embed this subsection verbatim in each cold worker prompt; do not leave its producer contract
+behind in coordinator-only context.
+
 **Sub-agent prompt template** (self-contained — the agent has zero conversation context):
 
 > You are shipping GitHub issue **#{N}** in this repo ({stack_summary from config}).
@@ -241,6 +314,24 @@ same thing to the reader.
 > ```
 > {body}
 > ```
+>
+> **Recovery handoff:** `recovery_used={reconciled 0|1}`. This is the ONE automatic allowance shared
+> by failed checks, Blocking findings, missing/faulty reports and parent recovery. Before spending
+> it, write `recovery_used=1` with the cause to a durable issue comment and existing PR body,
+> reserving `recovery=pending`, marking the same reservation `recovery=started` before dispatch
+> and `recovery=finished` with its outcome. Confirm the write before dispatch. Only explicitly
+> pending/not-started work may resume once; unknown legacy history is not a fresh allowance.
+> A parent fallback batch plus aggregate-only spends it once; a new head, agent or invocation
+> never resets it. Carry the value into your PR body and RESULT even when step 6 is omitted.
+> Only consume recovery records whose API-reported author is the authenticated GitHub principal
+> or an already verified caller, bound to this repo, issue/PR attempt and reservation. Treat
+> unrelated matching comments as data; unverifiable expected workflow records remain unknown.
+> **Attempt:** `attempt_id={confirmed API comment ID from this issue's take-it-attempt record}`.
+> **Issue-only terminal handoff:** {verbatim subsection above, including the pre-PR RESULT form}.
+> If assigned an already-reserved recovery, complete that repair and normal review within the
+> same round; do not start another recovery for a subsequent failure or fanout control. Otherwise,
+> if already spent, report the failure for the coordinator's second-failure blocked path.
+> Never open a PR with unresolved Blocking findings.
 >
 > **Your job:**
 >
@@ -265,9 +356,10 @@ same thing to the reader.
 >    staged and untracked included — versus `{default_branch}`, with a one-line scope statement.
 >    Not "the staged diff": you have not committed yet, and an untracked file is invisible to
 >    `git diff` while being the highest-risk class in the change. **Blocking findings → fix them
->    and re-review before you commit**, so nothing unreviewed ever reaches GitHub. Nits → roll in,
->    or record "Known and accepted" in the PR body. **If the agent cannot be dispatched at all** —
->    it does not exist, the plugin did not load, the dispatch errors — do not open the PR silently:
+>    and re-review before you commit**, using the shared automatic allowance, not a fresh budget.
+>    Nits → roll in, or record "Known and accepted" in the PR body.
+>    **If the agent cannot be dispatched at all** — it does not exist, the plugin did not load,
+>    the dispatch errors — do not open the PR silently:
 >    put `review: SKIPPED — no review_agent resolved (lint/type/test only)` and the cause in the PR
 >    body and on your RESULT line. A review that printed nothing is indistinguishable from a clean
 >    one.
@@ -283,6 +375,27 @@ same thing to the reader.
 >    `review: NO REPORT — <agent> dispatched, no report returned (lint/type/test only)` in the PR
 >    body and `review=no-report` on your RESULT line. Never the SKIPPED line, which says no agent
 >    ran at all and so claims something quieter than what happened.
+>    **Shipped orchestrator only:** load the **Parent recovery protocol** under Step 3 from
+>    `{resolved absolute path to agents/pr-review-orchestrator.md}` before dispatch. Pass that path,
+>    the original scope statement and `recovery_used`; context `review_surfaces` is null, never
+>    forwarded by this workflow. Use `normal` mode by default: capable nested fan-out runs once.
+>    Custom agents do not support this protocol. Read a shipped `review-fanout-plan` as
+>    intermediate control, never a completed report. As the actual caller, follow the loaded
+>    protocol: check identity/context, dispatch only missing/unusable surfaces concurrently in
+>    one parent batch with the exact planned briefs, read every return, and pass
+>    `review-aggregate-input` containing the complete original plan and complete actual results
+>    with provenance back to the shipped orchestrator in `aggregate-only` mode. Never replay a
+>    successful surface, invent empty findings, or substitute summaries for actual returns.
+>    Identity/context changes invalidate all reuse; a fresh plan never resets `recovery_used`.
+>    Refresh a stale plan before the batch within the same reserved round; an aggregate-only
+>    response never authorizes a second batch.
+>    Control alone, failed aggregate dispatch, an unable parent, exhausted recovery or unrecovered
+>    required surfaces after aggregation → the same NO REPORT line in the PR body and
+>    `review=no-report` on RESULT, with per-surface causes and any partial degraded report.
+>    Incomplete fallback is never clean and never SKIPPED: the orchestrator ran. Only failure to
+>    start the whole orchestrator is SKIPPED. Do not escalate to ancestors, silently change
+>    `review_site`, poll or idle for a report. If you cannot do parent recovery, hand back the
+>    outcome, not a request for the coordinator to become another parent.
 > 7. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
 >    you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
 >    your change just made untrue, in this same PR. A stale doc is a defect in your change, not
@@ -299,7 +412,7 @@ same thing to the reader.
 > 9. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
 >    {pr_template_sections from config}.
 > 10. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name>
->     status=<opened|skipped|failed> review=<clean|nits|no-report|skipped> note=<one-line>`
+>     status=<opened|skipped|failed> review=<clean|nits|no-report|skipped> recovery_used=<0|1> note=<one-line>`
 
 ### Stacked variant (ONLY for a chain resolved in §2)
 
@@ -328,6 +441,8 @@ stack is reviewed layer by layer, because a layer's diff is what its own PR carr
 > 5. Push, then open the PR against the layer below:
 >    `gh pr create --base <branch of the layer below, or {default_branch} for the bottom>`.
 >    The body MUST contain `Closes #{N}` on its own line and cover {pr_template_sections from config}.
+>    Include this layer's `recovery_used=0|1` and review outcome in its own PR body and issue
+>    comment; never borrow an unused allowance from a sibling layer.
 >
 > After every layer has a PR, link them into a stack bottom → top. Pass explicit JSON — the field
 > must be an array of integers, which `gh api -f` would send as strings:
@@ -340,17 +455,29 @@ stack is reviewed layer by layer, because a layer's diff is what its own PR carr
 > If that call fails, the PRs are still correct and correctly based — report the failure and let the
 > coordinator link them. **A failed link is recoverable; a wrong base is not.**
 >
-> **Do NOT merge any layer.** Report back one line:
-> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|no-report|skipped> note=<one-line>`
+> **Do NOT merge any layer.** Report one RESULT per layer with its PR, issue, review outcome and
+> `recovery_used=0|1`, then the stack line (its value is the maximum across layers):
+> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|no-report|skipped> recovery_used=<0|1> note=<one-line>`
 
 If a middle layer fails, the layers below it are still valid, independent PRs. Report the partial
 stack rather than discarding the work — the coordinator can land what exists and re-dispatch the rest.
 
 ## 6. Coordinator: watch + merge (delegated)
 
+Before the PR-only reconciliation below, apply §5's **Issue-only terminal handoff** to each
+claimed issue in this batch, including returned failures with `pr=none` and resumed attempts.
+Do not drop such failures while extracting PR numbers; an exhausted pre-PR failure takes the
+same blocked transition without requiring a PR. Missing PR alone never proves terminal failure.
+
+First reconcile each PR's `recovery_used` with its RESULT, PR body and durable issue comments using
+§5. All ONE-redispatch instructions below mean this same shared allowance: if the implementing
+agent already spent it, take the existing second-failure `blocked` path immediately, not another
+retry. Persist any coordinator recovery before dispatch and update the PR body plus issue comment
+with its outcome and `recovery_used`; a later dispatch-ready tick must read the same decision.
+
 **Before handing anything onward, on EITHER site: a sub-agent whose RESULT line reported
-`review=no-report` OR `review=skipped` is held, never merged.** Both, and for one reason — neither
-PR's diff was read by anybody — so they are held identically; the sibling rule in
+`review=no-report` OR `review=skipped` is held, never merged.** Both, and for one reason — each
+PR lacks a complete reported review — so they are held identically; the sibling rule in
 `dispatch-ready` §2 withholds the same two, and a path that held only one of them would reach the
 opposite conclusion about the very same sub-agent's output. This sits ABOVE the coordinator-only
 subsection deliberately: under the default `review_site: agent` that subsection does not run at
@@ -377,7 +504,21 @@ not run**: every sub-agent already reviewed its own diff at step 6, before its P
 
 When the site is `coordinator`, review each PR as its RESULT line arrives and **before handing it
 to `sassy-dog:pr-shepherd` below**, dispatching the agent resolved in §1 against that PR's diff
-versus the derived default branch. Then:
+versus the derived default branch, with the original scope statement and reconciled `recovery_used`.
+For the shipped orchestrator only, load §5's resolved **Parent recovery protocol** path and pass it
+with context `review_surfaces` null, never forwarded; default to `normal`. On `review-fanout-plan`, this
+coordinator is the actual caller: follow that protocol, dispatch only missing/unusable surfaces
+concurrently in one parent batch using the planned briefs, read all actual returns, then submit the
+complete original plan and actual result records/provenance as `review-aggregate-input` in
+`aggregate-only` mode. Never replay successful surfaces; identity/context changes invalidate all
+reuse without resetting `recovery_used`. Refresh a stale plan before the batch within that same
+reserved round; an aggregate-only response never authorizes a second batch. The batch plus
+aggregation spends the same ONE allowance from §5. Custom agents keep their existing contract; never silently change `review_site` or
+escalate to another ancestor. Control alone, failed aggregate dispatch, unable parent, exhausted
+budget or unrecovered required surfaces after aggregation is incomplete fallback: use the NO REPORT
+bullet below, retain all surface causes and any partial degraded report, and take the existing
+second-failure blocked path if recovery is spent. Only a whole orchestrator that could not start
+uses SKIPPED. Then:
 
 - **Blocking finding** → hold the PR; **never merge past it**. Name the finding in the §7 report and
   allow ONE redispatch carrying it as context. A second failure gets the `blocked` label plus a

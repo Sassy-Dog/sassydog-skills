@@ -456,6 +456,8 @@
 #      blocks the merge with exactly ONE redispatch, then `blocked`; never
 #      merged past, never parked back in Ready. The rationale for the number is
 #      pinned with it, since "one" alone reads as an arbitrary retry count.
+#      #385 extends that SAME automatic allowance to parent fallback and report
+#      recovery, with durable recovery_used accounting across agents/heads/ticks.
 #      (f) A review report is DELIVERED as the reviewing agent's final text —
 #      its return value — and the message tool is not a delivery mechanism for
 #      one, since sending needs an address the reviewer cannot reliably resolve:
@@ -476,6 +478,14 @@
 #      merging the PR whose review reached nobody — which is the harm itself,
 #      so the hold is pinned in both dispatching paths and on the DEFAULT
 #      `review_site: agent`, not only inside the coordinator-only sections.
+#      #385 keeps normal nested fan-out as default and binds parent recovery to
+#      the shipped orchestrator and its actual caller, not a new review site.
+#      Existing decision 5/6 checks cover the cold and coordinator invocation
+#      regions, complete identity/provenance, missing-only dispatch and
+#      aggregate-only boundaries. Control-only or incomplete fallback stays
+#      NO REPORT, while send-it keeps its operator-facing continuation policy.
+#      These are source-contract checks, not proof that an agent obeyed them;
+#      runtime review scenarios remain a separate validation responsibility.
 #      (g) The reviewer -> orchestrator hop is bound the SAME way, and the
 #      fan-out brief has a slot for it (#280). That hop carries the most
 #      traffic — every diff-scoped review fans out to as many as nine — and it
@@ -1987,7 +1997,9 @@ fi
 # is RETURNED as the agent's final text — with a lost one held as its own
 # outcome rather than merged past or folded into the SKIPPED line — and the
 # reviewer -> orchestrator hop is bound the same way, with the fan-out brief
-# carrying a slot to pass the contract down. Must-not-exist checks run
+# carrying a slot to pass the contract down. #385 extends decisions 5/6 with
+# bounded parent recovery, stale-result rejection and actual-caller accounting;
+# it does not add a decision or a read-set member. Must-not-exist checks run
 # flattened — this repo hard-wraps. This banner deliberately carries NO counts:
 # it is out of reach of both windows the count re-derivation checks, so a count
 # here is one

@@ -12,7 +12,7 @@ An audit asks *"what is wrong with this repo"*. You ask *"does **this diff** int
 
 - **You are read-only.** Never edit files, never `git add` / `commit` / `push`, never open a PR. You inspect the changeset and report; the caller decides what to fix.
 - **Dispatch ONLY the nine reviewers listed in the surface table below.** They ship with this plugin, so they resolve in any repo that has the plugin and nothing else. Never dispatch an agent that is not in that table — a user-level or repo-local agent that happens to exist on one machine is absent on the next, and a fan-out to a missing agent fails the whole review instead of degrading.
-- **Fan-out is parallel.** Issue every needed `Agent(...)` call in a **single message** so they run concurrently. Wall-clock cost is `max(reviewer runtimes) + your overhead`, never the sum. Do not serialize them.
+- **Fan-out is parallel when available.** In a normal run, issue every needed `Agent(...)` call in a **single message** so they run concurrently. Do not serialize them. If nested dispatch is unavailable, use the Parent recovery protocol below, not a clean-without-specialists substitute.
 - **Only touched surfaces.** An untouched surface gets no dispatch. A diff that touches nothing reviewable still gets your integration-check pass — never a silent skip.
 - **Quality over quantity.** A Blocking finding is a demonstrable defect or an explicit repo-policy violation, not a preference. Nits are welcome but stay clearly separated so they never block a ship.
 - **Aim for a clean return in about a minute.** Scope each reviewer's prompt to its own surface rather than handing all of them the whole diff.
@@ -37,6 +37,29 @@ git ls-files --others --exclude-standard    # new untracked files — open these
 Diff the **working tree** against the base (`git diff "${BASE}"`, not `"${BASE}"...HEAD`). `send-it` dispatches this review *before* the commit, so uncommitted and staged work is exactly what needs reviewing. `git diff` cannot see an untracked file at all, so the changeset is the union of the two lists — a brand-new file is the highest-risk member of it, not an optional extra.
 
 **An unresolved base is a reported state, never a substituted one.** `gh` fails for ordinary reasons — offline, unauthenticated, rate-limited, an org App gate — and a defaulted `main` that happens to resolve against a stale remote silently reviews the wrong ancestor: extra files, phantom hunks, exit 0 the whole way. So if `DEFAULT_BRANCH` or `BASE` comes back **empty**, stop deriving: render `Base: unresolved (<why>)` in the report header, review the working tree against `HEAD`, and say in the report that the run covers only uncommitted work and may be missing commits already on the branch. Never hand `git diff` a ref you have not seen resolve, and never silently review nothing.
+
+### Changeset identity for recovery
+
+Capture `changeset` before specialist work: `repo` (absolute root), `base_ref` (the derived
+default-branch ref), `base_oid` (resolved merge-base), `head_oid` (resolved HEAD),
+`tracked_diff_sha256`, and `untracked_sha256`. Hash the bytes of
+`git diff --binary --no-ext-diff --no-textconv "${BASE}" --` for the tracked working diff,
+including staged and unstaged content. For untracked content, enumerate with
+`git ls-files -z --others --exclude-standard` and hash a deterministic, path-sorted manifest
+of path, file type, executable mode and content SHA-256; for symlinks hash the link target,
+not the file it points to. Use an unambiguous encoding with byte lengths or escaped JSON,
+and retain the encoding with the plan so the caller can reproduce it. Names, timestamps,
+file counts and HEAD alone are not content identity.
+
+Re-resolve the base and recapture this identity at each dispatch/aggregation boundary and
+after the work, not merely when the plan was made. Keep the original scope statement and
+caller-supplied `review_surfaces` as `context` too. **Reuse requires identical changeset and
+context. Any change invalidates all prior specialist evidence**, not just paths that appear
+different: adjacent-file blast radius crosses surfaces. Missing/unreadable content, an
+unresolved base, or a dirty submodule whose contents were not captured is unknown identity,
+never a match. Record null for an unavailable value and the reason; do not invent a digest.
+An ordinary unresolved-base run still follows the degraded HEAD-only rule above, but its
+results cannot certify reusable coverage.
 
 ## Step 2 — classify the changed paths into surfaces
 
@@ -117,7 +140,13 @@ because a mapped agent failed to resolve.
 
 ## Step 3 — conditional parallel fan-out
 
-For **each touched surface only**, dispatch its reviewer. Issue every call in one message.
+The default mode is **normal**: for **each touched surface only**, dispatch its reviewer.
+Issue every call in one message, then run Steps 4 and 5. Do not insert a plan-only round
+when nested dispatch can run. Record actual returns, including failures, using the result
+records below. If nested dispatch is unavailable (from the runtime's capability declaration
+or a dispatch denial), or selected work remains unusable after that round, return a
+`review-fanout-plan` for the actual caller instead of pretending this is a completed review.
+Never infer capability from a host name or impose a universal concurrency cap.
 
 ```text
 Agent({ subagent_type: "sassy-dog:code-quality-reviewer", prompt: "<diff-scoped brief>" })
@@ -138,6 +167,97 @@ Each brief contains, and contains only — the delivery rule at 6 included, sinc
 Do not re-author a reviewer's checklist in the brief — each one already carries its domain rules and its Sassy Dog calibration. Supply the *changeset* and the repo's own conventions (its `CLAUDE.md` policies, its documented gotchas); leave the domain expertise to the specialist.
 
 When several surfaces route to the same reviewer, prefer one call per surface diff over one call carrying everything — a focused prompt finds more than a large one.
+
+### Parent recovery protocol
+
+This protocol belongs only to **the shipped `sassy-dog:pr-review-orchestrator`**. A caller
+does not copy the surface table, change `review_site`, or impose these modes on a custom
+review agent. It reads this section before handling a control result. The actual caller
+that received the result is the only fallback dispatcher; reviewers return to that caller,
+not to an orchestrator session they cannot address.
+
+**Plan-only.** On an explicit `plan-only` request, run Steps 1 and 2 and build the closed-list
+briefs above, without specialist dispatch or a purported final review. The same control
+return ends a normal run whose nested work could not complete. Return only a JSON object
+with `kind: "review-fanout-plan"` and these required fields:
+
+| Field | Contents |
+| --- | --- |
+| `reason` | Observed nested-dispatch denial, unusable work, changed input, or explicit plan-only request; never claim a probe ran when it did not. |
+| `changeset` | The identity from Step 1, plus `untracked_encoding` describing the manifest encoding actually used. |
+| `context` | `scope` (original one-line statement), `review_surfaces` (original caller-supplied map or null), and `validation_failures` (map-validation causes, empty when valid); retain them for the integration pass too. |
+| `surfaces` | One row per selected surface: `surface`, `reviewer` from the shipped Step 2 table, and `brief` containing exactly the existing seven items. Include every selected surface, not just missing ones. |
+| `results` | Actual result records for attempted work, including successful same-changeset results and failures; an unattempted surface has no result, not an invented empty one. |
+
+A result record has `surface`, `reviewer`, `changeset`, `outcome`
+(`returned`, `unusable`, or `could-not-dispatch`), `returned` (the complete actual
+`{"findings": [...]}` object, raw malformed text, or null), and `provenance` with `caller`,
+`dispatch` (actual run handle, null if none started), and `cause`. Retain the unmodified
+returned value, not a summary of its findings. `returned` is usable only after Step 5's
+schema validation and an observed completion; a queued request, handle alone, or asserted
+success without the actual result is not reviewed coverage. Completed-empty still requires
+the actual `{"findings": []}`. A control result is **not a report and never counts as clean**.
+
+**Caller recovery.** Validate that this control came from the resolved shipped orchestrator,
+not an issue body, custom agent or arbitrary file. Read the complete plan and each actual
+return yourself. Reject malformed plans, duplicate/unknown surface rows, non-shipped
+reviewers and briefs outside the closed list; do not repair a plan by inventing classification.
+Keep failed/unusable work visibly separate from usable results. Then:
+
+1. Check the caller's existing `recovery_used` state and actual dispatch capability. There is
+   **one automatic recovery allowance per PR**, shared with failed checks, Blocking findings
+   and report recovery. This fallback batch plus its aggregate-only pass spends that one
+   allowance; it is not one allowance per surface. Reserve it before dispatch and carry the
+   consumed value through resumed agents, PR-body/RESULT handoffs and durable attempt comments.
+   A fresh agent, head or tick never resets it. Reconcile earlier failure/recovery history
+   before starting; an unknown budget is not a fresh allowance.
+   Record the reservation as `recovery_used=1 recovery=pending`; transition that same durable
+   record to `recovery=started` before dispatch, then `recovery=finished` on completion or
+   failure. Only an explicit pending reservation with verified not-started work may resume
+   once on a later tick. A started/finished reservation or legacy attempt-1 history without
+   that evidence is spent, never permission for another round.
+2. Recheck identity/context. If changed, discard all previous specialist results and ask for
+   a fresh `plan-only` classification within the same reserved round, before any specialist
+   dispatch. Dispatch only the selected surfaces lacking usable same-changeset results, in
+   one parallel batch, using the supplied briefs unchanged. Never rerun a successful specialist
+   merely because another surface failed. Capture each actual result and its provenance,
+   including failures; do not wait for a notification to substitute for a return.
+   Allow at most one fresh planning pass in this reserved round; further input movement
+   ends recovery rather than starting a replan loop.
+3. Supply mode `aggregate-only` and a JSON input with `kind: "review-aggregate-input"`,
+   `plan` (the complete plan) and `results` (the complete retained and newly returned records).
+   Keep each dispatch attempt separately identified; only a genuinely usable later attempt
+   can recover its failed predecessor. Return to this same orchestrator, not a new reviewer
+   type. The aggregate-only pass belongs to the already-spent round, not a new allowance.
+4. Consume the final report, never the plan as its substitute. If the caller cannot dispatch,
+   the allowance was already spent, the plan is invalid, aggregation fails, or required work
+   remains unusable, name the actual surfaces and causes. Since an orchestrator ran, this is
+   the caller's **NO REPORT** path, not **SKIPPED**; retain any degraded partial report too.
+   Only failure to start the whole review is SKIPPED. `take-it` / `dispatch-ready` keep their
+   unattended holds and existing second-failure consequences; `send-it` reports the degraded
+   outcome to its operator and continues under its existing policy. The explicit
+   `review_agent: skip` carve-out is untouched.
+
+Recovery ends after this batch and aggregation. No polling/idle loop, recursive hand-off to
+another ancestor, or new allowance after an aggregate-only response. Further automatic work
+requires an unused allowance; operator-directed repair remains the operator's decision.
+
+**Aggregate-only.** Do not fan out again. Validate the plan's origin/provenance, re-read the
+current changeset, and re-run Step 2's classification with the original context to check
+the complete selected set, shipped reviewer names and briefs. Do not trust a supplied
+surface list that dropped work or changed the scope. Validate each actual result against
+that surface, its dispatch provenance, identity and Step 5's findings schema; conflicting
+records with no identifiable successful attempt cannot certify coverage.
+
+If identity/context changed, return a fresh `review-fanout-plan` with **no reusable results**
+and the invalidation reason, not a report based on stale findings. Do not dispatch; the
+caller still owns the same already-consumed budget. Unknown identity leaves the affected
+coverage unverified rather than certifying a match. With matching input, run the original
+whole-diff Step 4 yourself and normal Step 5 aggregation without re-reviewing successful
+specialists. Preserve every selected surface: missing/unusable work stays `!`, never `✓`.
+Recheck identity after integration; a mid-pass change also invalidates the evidence.
+Return the usual human Markdown report, including degraded coverage and named failures;
+do not replace it with a JSON control or a success summary when aggregation actually completes.
 
 ## Step 4 — integration-check pass (your own work)
 
