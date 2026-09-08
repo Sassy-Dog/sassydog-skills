@@ -221,8 +221,8 @@ Apply `references/scoring.md`. The two rules that matter most:
 - **A red default branch is P0 on its own when `default_branch_ci_age_days` is 14 or less**,
   independent of historical failure rate. Rate answers "is CI trustworthy"; a *recent* conclusion
   answers "is it broken right now". A verdict may be recovered by a narrow re-query and be months
-  old, so age is what separates a live outage from a last known state: older than 14 days it ranks
-  P1, and a stale `success` never earns `✓ Clean today:` — it renders under
+  old, so age is what separates a live outage from a last known state: a `failure` older than
+  14 days ranks P1, and a stale `success` never earns `✓ Clean today:` — it renders under
   `🕰 Stale CI verdicts` below, its one destination. A **null** age is not a young one: an undated
   verdict resolves the same way in both directions (`references/scoring.md`).
 - **Dependabot exposure is ranked by REMEDIATION STATE, never by alert count.** The count is a
@@ -307,7 +307,8 @@ _Inherited: <repo> N alerts across M rules, oldest Dd._
 - **<repo>#<N> <title>** — `<label>` — <one-line why>
 
 ## 🕰 Stale CI verdicts (not a tier)
-- **<product>** — `CI last green <N>d ago` — [run](url)
+- **<repo>** — `CI last green <N>d ago` — [run](url)
+- **<repo>** — `CI last green — age unknown` — [run](url)
 
 ## 🕶 Blind spots (silent, not healthy)
 - <condition> — <affected repos>

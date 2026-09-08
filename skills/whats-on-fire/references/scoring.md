@@ -55,7 +55,7 @@ the same way and neither may be silent:**
   its one destination, named below. It is the newest evidence there is, and it is not evidence
   about today.
 - **An age of `null` is not an age of 14 days or less.** `default_branch_ci_age_days` is `null`
-  when the run the verdict came from carried no usable `createdAt`; the puller emits that
+  when the run the verdict came from carried a missing or null `createdAt`; the puller emits that
   deliberately rather than guessing a date. An undated conclusion resolves the way a stale one
   does, in both directions: a `failure` ranks **P1** and reads `main last built red — age unknown`,
   because P0 is a positive claim about *now* that an undated run cannot make; a `success` reads
@@ -134,12 +134,13 @@ contract — reference-instant choice, owning-repo resolution, and the 404/403 s
 ### Not a tier — the verdict is real, and it is not about today
 
 A `success` whose `default_branch_ci_age_days` is greater than 14, **or `null`**, is a conclusion
-the sweep can read and cannot date to this week. The P0 rules above already forbid it the
+the sweep can read but cannot establish as recent. The age-bound rule above already forbids it the
 `✓ Clean today:` line; this is where it goes instead. Like the two cron states above it is a state
-rather than a severity — nothing is known to be broken, so no tier applies — and like them it is
+rather than a severity: success establishes no failure. Like those states, it is
 **not dropped and not folded onto `✓ Clean today:`: it gets its own section**, `🕰 Stale CI verdicts`
-(SKILL.md section 5), one line per repo reading `CI last green <N>d ago` (or `age unknown`) with
-`default_branch_ci_url` linked. That is its only destination.
+(SKILL.md section 5), one line per repo reading `CI last green <N>d ago` for an age over 14 days
+or `CI last green — age unknown` for a null age, with `default_branch_ci_url` linked.
+That is its only destination.
 
 **Do not send it to the `Coverage:` line instead.** Coverage names repos that produced **no**
 verdict, and `coverage-not-assumed` (SKILL.md section 3) exists to keep that line precise. A stale
@@ -147,15 +148,15 @@ success has a verdict; folding the two makes one line mean both "never measured"
 not recently", which is the distinction a reader is using it to draw.
 
 Only `success` lands here. A stale or undated `failure`, `cancelled` or `timed_out` already ranks
-P1 above and reports there — this section is for the verdict that ranks nowhere else, which is the
-one that would otherwise be omitted. Omission is the failure mode the age bound was at risk of
-trading the false green for ([#375](https://github.com/Sassy-Dog/sassydog-skills/issues/375)).
+P1 above and reports there — this section keeps stale or undated `success` verdicts from being
+omitted. Omission is the failure mode the age bound was at risk of trading the false green for
+([#375](https://github.com/Sassy-Dog/sassydog-skills/issues/375)).
 
-This section deliberately carries **no parity marker**, and that is a sequencing decision rather
-than an oversight: the 14-day bound it renders (P0 above) carries none either, and
-`Sassy-Dog/sassydog-routines#58` has split the marking of that whole rule family into its own
-cross-repo step. Marking this one alone would fail that repo's parity check for a rule its home has
-not received yet. Mark it there and here together, in that sequence, or not at all.
+This section renders the existing `ci-verdict-age-bound` rule above, whose marker was added in
+[#379](https://github.com/Sassy-Dog/sassydog-skills/pull/379); it needs no separate marker.
+The marker's counterpart was reconciled in
+[sassydog-routines#60](https://github.com/Sassy-Dog/sassydog-routines/issues/60).
+That marker-only change does not establish parity of these rendering instructions.
 
 <!-- rule: default-branch-ci-unknown -->
 ### Not a tier — `default_branch_ci` is `null`

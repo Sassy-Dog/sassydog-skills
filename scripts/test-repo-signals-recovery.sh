@@ -49,10 +49,8 @@
 # test-queue-snapshot-site.sh treats as first-class.
 #
 # ONE DEFINITION IS NOT ONE ANSWER. The rule lives in
-# derive_default_branch_ci() and is applied to both queries. Section 3 asserts
-# the code form appears exactly once, but that is a SPELLING check and an
-# inline copy worded differently slips past it — so the property is pinned
-# behaviourally instead: mutant `ignoreevent` changes the shared rule and must
+# derive_default_branch_ci() and is applied to both queries. The property is
+# pinned behaviourally: mutant `ignoreevent` changes the shared rule and must
 # redden a SAMPLE-path row and a RECOVERY-path row together. Nothing downstream
 # can tell which query answered, which is why the two must not be able to
 # disagree.
@@ -87,45 +85,21 @@
 # `recovered-verdict-url`). The url matters on its own: `last_failure` is
 # derived from the sample, so a recovered failure has none beside it.
 #
-# THE AGE BOUND NEEDS A DESTINATION, and section 4 is where that is pinned
-# (issue #375). Bounding the verdict at 14 days stops a month-old run rendering
-# as `✓ Clean today:` — and on its own it replaces a false green with an
-# OMISSION, which `coverage-not-assumed` calls the worse of the two: a stale
-# `success` is forbidden the clean line, ranks no tier, and every other slot in
-# the output template already means something else. The `Coverage:` line is the
-# one that looks closest and is wrong — it names repos with NO verdict, and a
-# stale success has one, so widening it would make one line mean both "never
-# measured" and "measured, but not recently".
+# AN UNKNOWN AGE IS NOT A MISSING VERDICT (issue #375). A completed run can
+# retain its success or failure conclusion without a usable creation time.
+# `sample-undated-success` and `recovered-undated-failure` omit createdAt;
+# `sample-undated-failure` and `recovered-undated-success` carry an explicit
+# null. Each row requires the conclusion AND a present, null age field, on the
+# intended query path. Mutant `zeroage` must redden all these rows: guessing
+# zero days would make undated evidence look current to every consumer.
 #
-# So the destination is a section of its own, following the precedent
-# `cron-recovery.md` sets for the third cron state, and the gate pins the two
-# halves TOGETHER because either alone is vacuous: `scoring.md` prescribes the
-# string `CI last green <N>d ago` and names the section, `SKILL.md` renders that
-# section as a real heading in the template. One variable supplies both greps,
-# so a rename touching one home reddens here rather than silently pointing the
-# rule at a section that no longer exists.
-#
-# THE TWO SIBLING STATES came out of the same review and fell between tiers. A
-# conclusion with `default_branch_ci_age_days: null` satisfies neither `<= 14`
-# nor `> 14`, and the puller emits it deliberately rather than guessing a date
-# — so it ranked nowhere at all. It now resolves the way a stale one does, in
-# both directions. And `cancelled`/`timed_out` kept an unbounded promotion path
-# to P0 while `failure` had one, which is the asymmetry scoring.md's own
-# "**Both directions** ... neither may be silent" forbids. Both are pinned as
-# must-exist rows plus one must-not-exist for the unbounded form of the
-# `cancelled`/`timed_out` row, which stays syntactically fine when the bound is
-# deleted and so cannot be caught any other way.
-#
-# Section 4's prose checks run against WHITESPACE-FLATTENED copies, must-exist
-# included — a deliberate departure from test-security-listing.sh's split. What
-# is under test there is ADJACENCY (the prescribed string beside its
-# destination, the conclusion beside its bound), which spans a hard wrap in a
-# repo that hard-wraps prose, so a line-scoped grep would redden on a reflow
-# that changed nothing.
+# These fixtures cover the puller's evidence, not the report's rendering or
+# ranking. Those are prose instructions and must be exercised with report
+# scenarios; searching for their wording does not prove their behaviour.
 #
 # MUTATION PROOF, with the MEMBERSHIP half. The matrix is a function of the
-# script path, so it is re-run against fifteen mutated copies. Reach is DERIVED
-# from the verdicts, and each mutant additionally declares the row it MUST
+# script path, so it is re-run against the mutants enumerated below. Reach is
+# DERIVED from the verdicts, and each mutant additionally declares the rows it MUST
 # redden — because reddened sets overlap, and without membership "the recovery
 # does not exist" and "`--event` is not load-bearing" produce indistinguishable
 # red builds. Same shape as test-site-filter.sh and test-queue-snapshot-site.sh.
@@ -148,12 +122,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 cd "$REPO_ROOT" || exit 1
 
 SCRIPT="$REPO_ROOT/skills/whats-on-fire/scripts/pull-repo-signals.sh"
-CLOUD="$REPO_ROOT/skills/whats-on-fire/references/cloud-fallback.md"
-SCORING="$REPO_ROOT/skills/whats-on-fire/references/scoring.md"
-SKILL="$REPO_ROOT/skills/whats-on-fire/SKILL.md"
-for f in "$SCRIPT" "$CLOUD" "$SCORING" "$SKILL"; do
-    [ -f "$f" ] || { echo "test-repo-signals-recovery: $f not found" >&2; exit 1; }
-done
+[ -f "$SCRIPT" ] || { echo "test-repo-signals-recovery: $SCRIPT not found" >&2; exit 1; }
 
 WORK="$(mktemp -d)" || { echo "test-repo-signals-recovery: mktemp -d failed" >&2; exit 1; }
 # Fail closed rather than continuing with an empty WORK: set -u does not fire on
@@ -188,19 +157,22 @@ set -uo pipefail
 printf '%s\n' "$*" >>"$CALL_LOG"
 
 # Ages are relative to the run so the age rows stay stable without depending on
-# GNU vs BSD date. Fields: event|branch|status|conclusion|ageDays|urlToken,
-# with "-" meaning a JSON null conclusion.
+# GNU vs BSD date. Fields: event|branch|status|conclusion|ageDays|urlToken.
+# "-" means a JSON null conclusion; ageDays accepts "missing" (omit createdAt)
+# and "null" (explicitly unavailable timestamp) as well as numeric ages.
 mkruns() {
     local acc='[]' a ev br st co ag ur
     for a in "$@"; do
         IFS='|' read -r ev br st co ag ur <<<"$a"
         acc="$(jq -c -n --argjson acc "$acc" --arg ev "$ev" --arg br "$br" \
-              --arg st "$st" --arg co "$co" --argjson ag "$ag" --arg ur "$ur" \
+              --arg st "$st" --arg co "$co" --arg ag "$ag" --arg ur "$ur" \
               '$acc + [{conclusion: (if $co == "-" then null else $co end),
                         status: $st, workflowName: "CI", headBranch: $br,
                         url: ("https://example.invalid/run/" + $ur),
-                        createdAt: ((now - ($ag * 86400)) | todate),
-                        event: $ev}]')"
+                        createdAt: (if $ag == "missing" or $ag == "null" then null
+                                    else ((now - (($ag | tonumber) * 86400)) | todate) end),
+                        event: $ev}
+                       | if $ag == "missing" then del(.createdAt) else . end]')"
     done
     printf '%s' "$acc"
 }
@@ -269,13 +241,15 @@ if [ -z "$branch" ]; then
       clean) emit "$(mkruns 'push|feature/x|completed|failure|1|u1' \
                             'push|main|completed|success|2|u2' \
                             'schedule|main|completed|failure|1|u3')" ;;
+      samplemissing) emit "$(mkruns 'push|main|completed|success|missing|s-missing')" ;;
+      samplenull)    emit "$(mkruns 'push|main|completed|failure|null|s-null')" ;;
       # The crowding rows carry events that NEITHER the real push-class rule NOR
       # the `ignoreevent` mutation (`.event == "schedule"`) matches. That is a
       # requirement, not a taste: with `schedule|main` here the mutant made the
       # SAMPLE answer, the recovery gate never opened, and the one-answer
       # property the header claims to pin behaviourally was pinned by nothing.
       # Any replacement must stay null under both rules.
-      recoverable|empty|unreadable|underivable|inflightnewest)
+      recoverable|empty|unreadable|underivable|inflightnewest|recoverymissing|recoverynull)
              emit "$(mkruns 'workflow_dispatch|main|completed|failure|1|u1' \
                             'pull_request|feature/y|completed|success|1|u2' \
                             'workflow_dispatch|main|completed|success|2|u3')" ;;
@@ -314,8 +288,10 @@ esac
 case "$MOCK_MODE" in
   # clean must never reach here. An empty answer keeps the call-count row the
   # only one that reddens, so the finding is not smeared across the matrix.
-  clean|empty|mergegroup|inflightsample) printf '%s\n' '[]' ;;
+  clean|samplemissing|samplenull|empty|mergegroup|inflightsample) printf '%s\n' '[]' ;;
   recoverable)   emit "$(mkruns "push|$DB|completed|success|30|r1")" ;;
+  recoverymissing) emit "$(mkruns "push|$DB|completed|failure|missing|r-missing")" ;;
+  recoverynull)    emit "$(mkruns "push|$DB|completed|success|null|r-null")" ;;
   # The NEWEST row is in flight. With --status completed the concluded one
   # answers; without it, --limit 1 takes the in-flight row and the null returns.
   inflightnewest) emit "$(mkruns "push|$DB|in_progress|-|0|r0" \
@@ -378,6 +354,38 @@ matrix() {
     printf 'sample-verdict-age\t%s\n' "$(verdict is '.default_branch_ci_age_days' 2)"
     printf 'sample-runs-seen\t%s\n'   "$(verdict is '.default_branch_runs_seen' 1)"
     printf 'no-redundant-call\t%s\n'  "$(verdict test "$(runlist_calls)" = 1)"
+
+    run_case "$s" samplemissing
+    if [ "$(runlist_calls)" = 1 ] && is '.default_branch_ci' success \
+       && is 'has("default_branch_ci_age_days") and .default_branch_ci_age_days == null' true; then
+        printf 'sample-undated-success\tpass\n'
+    else
+        printf 'sample-undated-success\tfail\n'
+    fi
+
+    run_case "$s" samplenull
+    if [ "$(runlist_calls)" = 1 ] && is '.default_branch_ci' failure \
+       && is 'has("default_branch_ci_age_days") and .default_branch_ci_age_days == null' true; then
+        printf 'sample-undated-failure\tpass\n'
+    else
+        printf 'sample-undated-failure\tfail\n'
+    fi
+
+    run_case "$s" recoverymissing
+    if [ "$(runlist_calls)" = 2 ] && is '.default_branch_ci' failure \
+       && is 'has("default_branch_ci_age_days") and .default_branch_ci_age_days == null' true; then
+        printf 'recovered-undated-failure\tpass\n'
+    else
+        printf 'recovered-undated-failure\tfail\n'
+    fi
+
+    run_case "$s" recoverynull
+    if [ "$(runlist_calls)" = 2 ] && is '.default_branch_ci' success \
+       && is 'has("default_branch_ci_age_days") and .default_branch_ci_age_days == null' true; then
+        printf 'recovered-undated-success\tpass\n'
+    else
+        printf 'recovered-undated-success\tfail\n'
+    fi
 
     run_case "$s" recoverable
     # Fixture adequacy: the null must come from the FILTER, not from an empty
@@ -504,6 +512,7 @@ BRANCH_LINE='    map(select(.headBranch == $branch'
 EVENT_RULE_LINE='               and (.event == "push" or .event == "merge_group"))) as $dbr'
 DERIVE_CALL_LINE='        rec=$(derive_default_branch_ci "$recovery" "$default_branch")'
 MERGE_ELSE_LINE='                      else $r.runs_seen end) }'"'"')'
+NULL_AGE_LINE='        age_days: (if ($v.createdAt // null) == null then null'
 
 # Both the anchor and the replacement travel through the ENVIRONMENT, never
 # `awk -v`. `-v` applies escape processing to its value, and several of the
@@ -536,6 +545,7 @@ mutate "$WORK/m-ignorebranch.sh"    "$BRANCH_LINE"      '    map(select(true'
 mutate "$WORK/m-ignoreevent.sh"     "$EVENT_RULE_LINE"  '               and (.event == "schedule"))) as $dbr'
 mutate "$WORK/m-hardcodemain.sh"    "$DERIVE_CALL_LINE" '        rec=$(derive_default_branch_ci "$recovery" "main")'
 mutate "$WORK/m-zeroonunknown.sh"   "$MERGE_ELSE_LINE"  '                      else ($r.runs_seen // 0) end) }'"'"')'
+mutate "$WORK/m-zeroage.sh"         "$NULL_AGE_LINE"    '        age_days: (if ($v.createdAt // null) == null then 0'
 # takerecovery makes the merge ignore the sample entirely, so a one-row recovery
 # shrinks a count the sample really saw. Written on the guard, not the else arm.
 SAMPLE_BOUND_LINE='          runs_seen: (if $s.runs_seen > 0'
@@ -545,7 +555,7 @@ mutate "$WORK/m-takerecovery.sh"    "$SAMPLE_BOUND_LINE" '          runs_seen: (
 # reads as "the matrix does not reach it" rather than as a stale gate.
 for a in "$GATE_LINE" "$REPO_LINE" "$EVENT_LINE" "$JSON_LINE" "$KEY_LINE" "$AGE_LINE" \
          "$URL_LINE" "$BRANCH_LINE" "$EVENT_RULE_LINE" "$DERIVE_CALL_LINE" \
-         "$MERGE_ELSE_LINE" "$SAMPLE_BOUND_LINE"; do
+         "$MERGE_ELSE_LINE" "$SAMPLE_BOUND_LINE" "$NULL_AGE_LINE"; do
     if ! grep -qF -- "$a" "$SCRIPT"; then
         bad "mutation anchor no longer present in the script: $a"
     fi
@@ -572,13 +582,14 @@ declared_row() {
         hardcodemain)    echo 'recovery-branch-follows-default' ;;
         takerecovery)    echo 'still-null-all-in-flight' ;;
         zeroonunknown)   echo 'unreadable-recovery-is-unknown' ;;
+        zeroage)         echo 'sample-undated-success sample-undated-failure recovered-undated-success recovered-undated-failure' ;;
     esac
 }
 
 reached=""
 for m in norecover alwaysrecover norepo noevent nostatus mergegroupevent trimjson \
          norunsseen noage nourl ignorebranch ignoreevent hardcodemain takerecovery \
-         zeroonunknown; do
+         zeroonunknown zeroage; do
     mfile="$WORK/m-$m.sh"
     if diff -q "$mfile" "$SCRIPT" >/dev/null 2>&1; then
         bad "mutant '$m' is byte-identical to the script — its anchor no longer matches"
@@ -623,126 +634,6 @@ if [ "${unreached% }" = "${declared_sorted% }" ]; then
     ok "rows no mutant reaches == declared preconditions (${declared_sorted% })"
 else
     bad "unreached rows '${unreached% }' != declared '${declared_sorted% }'"
-fi
-
-# --- 3. source and docs -------------------------------------------------------
-echo "3. source and docs" >&2
-
-# A cheap uniqueness check on the code form. It is NOT the pin for one-answer —
-# a copy worded differently slips past it, which is why mutant `ignoreevent`
-# carries that property behaviourally. Kept because it catches the literal copy
-# for free, and uniqueness is the shape test-scanning-states.sh already uses.
-defs="$(grep -cF '.event == "push" or .event == "merge_group"' "$SCRIPT")"
-if [ "$defs" = "1" ]; then
-    ok "the push-class rule is written exactly once, verbatim, in the script"
-else
-    bad "expected exactly one verbatim push-class filter in the puller, found $defs"
-fi
-
-for key in '"default_branch_ci_age_days"' '"default_branch_ci_url"' '"default_branch_runs_seen"'; do
-    if grep -qF -- "$key" "$SCRIPT"; then
-        ok "the output-shape comment names $key"
-    else
-        bad "the script header output shape does not list $key"
-    fi
-done
-
-if grep -qF -- 'VERDICT (a strict superset of' "$SCRIPT"; then
-    ok "the header prices the recovery on a null VERDICT, the superset it actually fires on"
-else
-    bad "the header prices the recovery on the wrong condition"
-fi
-
-if grep -qF -- 'ALL THREE narrowing filters' "$SCRIPT" \
-   && grep -qF -- 'push-on-main runs in its newest 100' "$SCRIPT" \
-   && grep -qF -- 'NOT BOUNDED BY RUN_LIMIT' "$SCRIPT"; then
-    ok "the header records the three filters, why RUN_LIMIT is not a substitute, and the age problem"
-else
-    bad "the header lost part of the recovery rationale — the next reader drops a filter or the age"
-fi
-
-# The reference docs a report is written from. A key that exists only in the
-# script is a key no report knows how to render — and the age bound is the half
-# that keeps a month-old verdict off the clean line and out of P0.
-for pair in "$CLOUD:default_branch_runs_seen" "$CLOUD:default_branch_ci_age_days" \
-            "$SCORING:default_branch_runs_seen" "$SCORING:default_branch_ci_age_days"; do
-    doc="${pair%%:*}"; needle="${pair##*:}"
-    if grep -qF -- "$needle" "$doc"; then
-        ok "$(basename "$doc") carries $needle"
-    else
-        bad "$(basename "$doc") does not mention $needle"
-    fi
-done
-
-# The zero reason must not point a reader back at RUN_LIMIT, which the header
-# proves useless — the recovery already looked past it.
-if grep -qF -- 'no default-branch run in the newest N' "$SCORING"; then
-    bad "scoring.md still explains a zero count as a RUN_LIMIT problem, which the recovery has already ruled out"
-else
-    ok "scoring.md no longer blames RUN_LIMIT for a zero count"
-fi
-
-# --- 4. the age bound's destination (issue #375) -------------------------------
-echo "4. the age bound has one named destination" >&2
-
-# One string, two homes: scoring.md names the section, SKILL.md renders it.
-STALE_SECTION='🕰 Stale CI verdicts'
-
-flatten() { tr '\n' ' ' < "$1" | tr -s ' '; }
-SCORING_FLAT="$(flatten "$SCORING")"
-SKILL_FLAT="$(flatten "$SKILL")"
-
-# Needles are assembled from single-quoted halves so the backticks in them are
-# never inside a double-quoted string, where they would be command substitution.
-if printf '%s' "$SKILL_FLAT" | grep -qF -- "## $STALE_SECTION"; then
-    ok "SKILL.md's output template renders '$STALE_SECTION' as its own section"
-else
-    bad "SKILL.md has no '$STALE_SECTION' section — a stale verdict has nowhere to render"
-fi
-
-needle='`CI last green <N>d ago` under **`'"$STALE_SECTION"'`**'
-if printf '%s' "$SCORING_FLAT" | grep -qF -- "$needle"; then
-    ok "scoring.md prescribes the string and names the section in the same breath"
-else
-    bad "scoring.md prescribes 'CI last green <N>d ago' without naming '$STALE_SECTION' beside it"
-fi
-
-if printf '%s' "$SCORING_FLAT" | grep -qF -- 'Do not send it to the `Coverage:` line instead.'; then
-    ok "scoring.md refuses the Coverage line as the destination"
-else
-    bad "scoring.md no longer refuses the Coverage line — one line would mean unmeasured AND stale"
-fi
-
-needle='`'"$STALE_SECTION"'` is the ONLY place a stale `success` renders'
-if printf '%s' "$SKILL_FLAT" | grep -qF -- "$needle"; then
-    ok "SKILL.md states the section is the only destination"
-else
-    bad "SKILL.md no longer states where a stale success renders"
-fi
-
-# The two states that used to fall between tiers.
-if printf '%s' "$SCORING_FLAT" | grep -qF -- 'An age of `null` is not an age of 14 days or less.'; then
-    ok "scoring.md ranks an undated conclusion rather than letting it fall out"
-else
-    bad "scoring.md does not say how a null default_branch_ci_age_days ranks"
-fi
-
-if printf '%s' "$SCORING_FLAT" | grep -qF -- '`cancelled`, `timed_out` or `failure` older than 14 days, or with a null age'; then
-    ok "the P1 row covers cancelled/timed_out/failure past the bound and undated"
-else
-    bad "the P1 row no longer ranks the stale and undated conclusions"
-fi
-
-if printf '%s' "$SCORING_FLAT" | grep -qF -- '`cancelled` or `timed_out` with `default_branch_ci_age_days` <= 14'; then
-    ok "the cancelled/timed_out P0 promotion path carries the same 14-day bound"
-else
-    bad "cancelled/timed_out may be promoted to P0 at any age — the bound went one-directional again"
-fi
-
-if printf '%s' "$SCORING_FLAT" | grep -qF -- '`cancelled` or `timed_out` (ambiguous'; then
-    bad "the unbounded cancelled/timed_out row is back — it promotes a month-old run to P0"
-else
-    ok "no unbounded cancelled/timed_out row survives"
 fi
 
 if [ "$fail" -ne 0 ]; then
