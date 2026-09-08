@@ -24,12 +24,17 @@ gotcha_summary: >
 
 # optional
 
+execution_site: {{EXECUTION_SITE}}
+stacked_prs:
+  max_depth: {{STACK_MAX_DEPTH}}
 board:
   number: {{BOARD_NUMBER}}
   owner: {{BOARD_OWNER}}
   project_id: {{BOARD_PROJECT_ID}}
   status_field_id: {{BOARD_STATUS_FIELD_ID}}
   ready_option_id: {{BOARD_READY_OPTION_ID}}
+  backlog_option_id: {{BOARD_BACKLOG_OPTION_ID}}
+  in_progress_option_id: {{BOARD_IN_PROGRESS_OPTION_ID}}
 ---
 
 ## extra-rubric

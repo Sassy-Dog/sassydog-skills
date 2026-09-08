@@ -569,7 +569,54 @@ around work that belongs to another, and say so.
 
 ## Per-skill schemas
 
-Each section lists only the keys that skill reads *in addition to* the shared blocks above.
+The applicability inventory below includes shared blocks; the YAML examples in the subsequent
+sections show only each skill's additional keys. Shared-block policy above remains authoritative.
+
+### Template applicability inventory
+
+Each row accounts for one `references/templates/<skill>.config.md`, including the unchanged
+`tidy-repo` template. Paths enumerate **leaf slots**, with dots denoting nested frontmatter keys.
+`scripts/test-doc-reconciliation.sh` compares this roster to every tracked template and compares
+these paths to its actual frontmatter, not to key mentions in comments or body prose.
+
+- **Always-written** means written whenever that config file is selected, not that all six files
+  must be selected. These slots precede the template's `# optional` boundary.
+- **Conditional** slots follow that boundary: write only for applicable verified facts or existing
+  consent, per the shared-block rules and interview. This column describes the block form of
+  product surfaces; the existing scalar `none` alternatives and their verification rules are
+  unchanged. A conditional slot is not a new default or another interview.
+- **Hand-set** fields have no generated slot. Preserve a user's existing value, but never propose
+  one. `none` in this column means no hand-set field, not a rendered config value.
+- A field absent from a row is **inapplicable to that template**, not a missing slot to fill from
+  the entire shared example. In particular, the dispatchers use `send-it`'s review-agent choice;
+  they do not acquire their own `review_agent` or `review_surfaces` slots. `dispatch_model` is
+  not a config key.
+
+| Template | Always-written | Conditional | Hand-set |
+| --- | --- | --- | --- |
+| `survey-work` | `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`, `write_policy` | `execution_site`, `sentry.org`, `sentry.projects`, `sentry.gate`, `board.number`, `board.owner`, `board.project_id`, `board.status_field_id`, `board.ready_option_id`, `board.backlog_option_id`, `board.in_progress_option_id`, `testflight.bundle_id`, `mobile.release_workflow`, `mobile.path_prefix`, `posthog`, `secret_bootstrap` | none |
+| `groom-backlog` | `gotcha_summary` | `execution_site`, `stacked_prs.max_depth`, `board.number`, `board.owner`, `board.project_id`, `board.status_field_id`, `board.ready_option_id`, `board.backlog_option_id`, `board.in_progress_option_id` | none |
+| `take-it` | `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`, `review_site` | `claim_label`, `execution_site`, `stacked_prs.max_depth`, `board.number`, `board.owner`, `board.project_id`, `board.status_field_id`, `board.ready_option_id`, `board.backlog_option_id`, `board.in_progress_option_id`, `migrations.dirs`, `migrations.regen_command`, `codegen.hint` | none |
+| `dispatch-ready` | `max_in_flight`, `merge_queue`, `review_site` | `claim_label`, `execution_site`, `stacked_prs.max_depth`, `board.number`, `board.owner`, `board.project_id`, `board.status_field_id`, `board.ready_option_id`, `board.backlog_option_id`, `board.in_progress_option_id`, `migrations.dirs`, `migrations.regen_command`, `codegen.hint` | none |
+| `send-it` | `pr_template_path`, `pr_template_sections`, `preflight_commands`, `merge_queue` | `stacked_prs.max_depth`, `migrations.schema_dir`, `migrations.dirs`, `migrations.regen_command`, `codegen.command`, `codegen.output_dirs`, `review_agent` | `review_surfaces` |
+| `tidy-repo` | `dep_version_globs`, `noise_allowlist`, `never_discard` | `claim_label` | none |
+
+Use the **same selected board block** in the four rows that list it, with every field from the
+shared block above; omit it wholesale for a boardless repo. Read the actual project owner and IDs
+from the selected board, never infer the owner from the repo slug or invent missing IDs.
+`migrations.schema_dir` is a `send-it` input only; the dispatchers need the existing
+`migrations.dirs` / `migrations.regen_command` coupling inputs. Likewise `codegen.hint` is for
+the dispatchers, while `send-it` takes `codegen.command` / `codegen.output_dirs`.
+`claim_label` is conditional on the repo's claim-label flow, including tidy-repo's existing
+interview §4b condition; it is not an unconditional placeholder to leave unresolved.
+
+Both `review_site` slots take the **already-resolved choice** from Phase 1, including a user
+override, or the carried-forward choice from Phase 4. They are outside optional omissions.
+This does not make `review_agent` required: omission selects the shipped orchestrator, and an
+explicit override or `skip` remains valid. Preserve hand-set `review_surfaces` in `send-it`
+without guessing a map. User-confirmed `execution_site` and approved `stacked_prs.max_depth`
+reach only their enumerated consumers; declined opt-ins remain absent, and refresh follows the
+existing carry-forward rules. No new seeding or proposal table belongs in these templates.
 
 ### `survey-work.md`
 
