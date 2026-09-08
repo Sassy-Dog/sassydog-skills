@@ -52,10 +52,19 @@ fi
 
 # shellcheck disable=SC2206  # word-splitting of the env lists is intentional
 SCAN=(${SCAN_PATHS:-.})
+# The lockfile patterns are BARE (`*.lock`), and the `**/` spelling they
+# replaced is the tempting "more thorough" edit that must not come back. A
+# leading `**/` requires a literal `/` in the path, so it matched `sub/bun.lock`
+# and NEVER a root-level `bun.lock` — which is where a lockfile actually sits in
+# the repos this scans, so every marker in a root lockfile was reported as the
+# repo's own tech debt (issue #372). Without `:(glob)` magic a pathspec `*`
+# matches `/` as well, so the bare form covers root, nested, deep and
+# dot-directory lockfiles alike: it is a strict SUPERSET of the `**/` form, not
+# a narrowing of it. `.claude/**` is deliberately left anchored at the root.
 EXCLUDES=(
-  ':(exclude)**/*.lock'
-  ':(exclude)**/*.lock.json'
-  ':(exclude)**/*-lock.json'
+  ':(exclude)*.lock'
+  ':(exclude)*.lock.json'
+  ':(exclude)*-lock.json'
   ':(exclude).claude/**'
 )
 # `set -f` fences the loop's word expansion: split on whitespace, but do NOT

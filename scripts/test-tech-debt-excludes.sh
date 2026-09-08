@@ -73,12 +73,31 @@
 # and the stale claim is annotated in place in the script header rather than
 # silently left to contradict this one.
 #
+# THE BUILT-IN EXCLUDES ARE PINNED TOO, and the lockfile ones needed widening
+# (issue #372). They shipped as `:(exclude)**/*.lock`, and a leading `**/`
+# demands a literal `/` in the path — so the pattern matched `sub/bun.lock` and
+# NEVER a root-level `bun.lock`, which is the location a lockfile actually
+# occupies in the repos this scans. Every marker inside a root lockfile was
+# reported as that repo's own tech debt, by the exclusion written to suppress
+# exactly that. The fix is the BARE `*.lock`: without `:(glob)` magic a pathspec
+# `*` matches `/` too, so the bare form is a strict SUPERSET of the `**/` one,
+# covering root, nested, deep and dot-directory lockfiles alike. Two rows hold
+# the two locations apart on purpose — `root-lockfiles-excluded` reads all three
+# extensions at the root, and `builtins-hold` keeps the nested one, so a later
+# "widening" that trades one location for the other reddens rather than passing.
+# Both read the OUTPUT SET for the reason in point 1 above: git returns 0 or 1
+# for these pathspecs, never 128, so an exit-code assertion would pass against
+# the broken pattern and prove nothing.
+#
 # FIXTURES, both of them adequacy-checked rather than assumed:
 #
 #   * A scratch git repo under mktemp carries the behavioural matrix — small,
 #     deterministic, and immune to this checkout's own contents changing.
 #     Its markers are ASSEMBLED AT RUNTIME rather than written literally, so
-#     this gate does not itself show up as debt in the scan it tests.
+#     this gate does not itself show up as debt in the scan it tests. It carries
+#     lockfiles at BOTH the root and one directory down, because the two
+#     locations are matched by different pathspec shapes (#372) and a fixture
+#     holding only one of them cannot tell the two apart.
 #   * The live checkout carries the issue's own reproduction. The excluded
 #     directory is DERIVED from an unfiltered scan rather than hard-coded, so
 #     the row can never go vacuous and no unrelated edit that removes markers
@@ -87,10 +106,11 @@
 #     rather than passing over an empty set.
 #
 # MUTATION PROOF. The matrix is a function of the script path, so it is re-run
-# against six mutated copies and the reach is DERIVED from the verdicts rather
+# against seven mutated copies and the reach is DERIVED from the verdicts rather
 # than asserted in prose: no-strip (the pre-fix line), greedy-strip, a removed
 # unusable-element guard, a removed `set -f` fence, a dropped built-in exclude,
-# and a disabled user-exclude loop. Every mutant must redden at least one row,
+# a disabled user-exclude loop, and the root-lockfile pattern reverted to the
+# `**/` spelling that shipped. Every mutant must redden at least one row,
 # and the rows no mutant reaches must equal the declared set — which holds
 # exactly the two fixture-adequacy preconditions, since a precondition is by
 # construction not sensitive to the excluding code.
@@ -135,11 +155,16 @@ echo "tech-debt exclude tests (work: $WORK)" >&2
 # --- the scratch fixture ------------------------------------------------------
 # Markers are assembled at runtime (see header). `git add` alone makes a file
 # tracked as far as `git grep` is concerned, so no commit and no identity are
-# needed. The lockfile sits one directory down because the built-in
-# `:(exclude)**/*.lock` needs a literal `/` to match, and `generated/.hidden.txt`
-# is a DOTFILE on purpose: shell pathname expansion skips it while a git
-# pathspec does not, which is the only thing that distinguishes a fenced loop
-# from an unfenced one.
+# needed. There is one lockfile ONE DIRECTORY DOWN and three AT THE ROOT, and
+# the split is the point rather than duplication: the built-in exclude shipped
+# as `:(exclude)**/*.lock`, which needs a literal `/` to match, so only the
+# nested file was ever excluded and the root case — the common one in real repos
+# — went untested (#372). Keep both locations: the nested file is what would
+# catch a later "fix" that traded one for the other, and the three root files
+# are one per lockfile pathspec, so the row below is sensitive to each of the
+# three individually. `generated/.hidden.txt` is a DOTFILE on purpose: shell
+# pathname expansion skips it while a git pathspec does not, which is the only
+# thing that distinguishes a fenced loop from an unfenced one.
 MARK="TO""DO"
 FIXTURE="$WORK/fixture"
 mkdir -p "$FIXTURE/src" "$FIXTURE/docs" "$FIXTURE/generated" \
@@ -150,6 +175,13 @@ printf '%s: generated noise\n' "$MARK" >"$FIXTURE/generated/gen.txt"
 printf '%s: generated hidden\n' "$MARK" >"$FIXTURE/generated/.hidden.txt"
 printf '%s: agent noise\n'     "$MARK" >"$FIXTURE/.claude/agent.txt"
 printf '%s: lockfile noise\n'  "$MARK" >"$FIXTURE/packages/bun.lock"
+# The root lockfiles (#372). Their marker text is distinct from the nested
+# file's, because the rows below read CONTENT: a path substring like `bun.lock`
+# matches `packages/bun.lock` too, and a row that cannot tell the two apart is
+# the one shape this fixture exists to refuse.
+printf '%s: root lockfile noise\n'       "$MARK" >"$FIXTURE/bun.lock"
+printf '%s: root lock-dot-json noise\n'  "$MARK" >"$FIXTURE/deps.lock.json"
+printf '%s: root dash-lock-json noise\n' "$MARK" >"$FIXTURE/package-lock.json"
 # The contributor's own git config must not reach this fixture: a global
 # `core.excludesFile` leaves files unstaged, `git grep` then sees an empty tree,
 # and every row below passes over nothing while CI stays green. Same trap the
@@ -157,8 +189,8 @@ printf '%s: lockfile noise\n'  "$MARK" >"$FIXTURE/packages/bun.lock"
 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$FIXTURE" init -q >/dev/null 2>&1
 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$FIXTURE" add -A -f >/dev/null 2>&1
 staged="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$FIXTURE" ls-files | grep -c .)"
-if [ "$staged" -ne 6 ]; then
-    echo "  FAIL  fixture staged $staged of 6 files — the matrix below would be vacuous" >&2
+if [ "$staged" -ne 9 ]; then
+    echo "  FAIL  fixture staged $staged of 9 files — the matrix below would be vacuous" >&2
     echo "test-tech-debt-excludes: FAILED" >&2
     exit 1
 fi
@@ -243,10 +275,22 @@ matrix() {
         printf 'mixed-list\tfail\n'
     fi
     # The built-in excludes are not collateral damage of the user-exclude loop.
+    # `packages/bun.lock` is the NESTED lockfile: this row is the no-regression
+    # half of the pair `root-lockfiles-excluded` completes.
     if hasnt "$base" '.claude/agent.txt' && hasnt "$base" 'packages/bun.lock'; then
         printf 'builtins-hold\tpass\n'
     else
         printf 'builtins-hold\tfail\n'
+    fi
+    # The built-in lockfile excludes must reach the ROOT, not only one directory
+    # down (#372). All three extensions, because each is its own pathspec and a
+    # revert of any one of them must redden this row.
+    if hasnt "$base" 'root lockfile noise' \
+        && hasnt "$base" 'root lock-dot-json noise' \
+        && hasnt "$base" 'root dash-lock-json noise'; then
+        printf 'root-lockfiles-excluded\tpass\n'
+    else
+        printf 'root-lockfiles-excluded\tfail\n'
     fi
     # The issue's own reproduction, against this checkout.
     printf 'live-baseline-has-markers\t%s\n' \
@@ -278,6 +322,7 @@ GUARD_LINE='if [ -z "$q" ] || [ "${q#:}" != "$q" ]; then'
 APPEND_LINE='EXCLUDES+=(":(exclude)$q")'
 BUILTIN_LINE=':(exclude).claude/**'
 FENCE_LINE='set -f'
+ROOTLOCK_LINE="  ':(exclude)*.lock'"
 
 mutate() {  # $1 = out path, $2 = match substring, $3 = replacement line
     awk -v m="$2" -v r="$3" 'index($0, m) { print r; next } { print }' "$SCRIPT" >"$1"
@@ -300,18 +345,23 @@ mutate "$WORK/m-nobuiltin.sh" "$BUILTIN_LINE" '  # built-in removed by mutant'
 # no-fence: the loop pathname-expands again, so bare and prefixed globs diverge.
 # Anchored on the WHOLE line: the header prose quotes `set -f` too.
 mutate_exact "$WORK/m-nofence.sh" "$FENCE_LINE" ':'
+# no-rootlock: the pre-fix `**/` spelling of the built-in `*.lock` exclude, which
+# only ever matched a lockfile one directory down (#372). Anchored on the WHOLE
+# line, because `':(exclude)*.lock.json'` is a different pattern on the next one.
+mutate_exact "$WORK/m-norootlock.sh" "$ROOTLOCK_LINE" "  ':(exclude)**/*.lock'"
 
 # Anchor adequacy first: an anchor that has drifted makes its mutant a silent
 # no-op, which reads as "the matrix does not reach it" rather than as a stale
 # gate. Checked per anchor rather than for the strip line alone.
-for a in "$STRIP_LINE" "$GUARD_LINE" "$APPEND_LINE" "$BUILTIN_LINE" "$FENCE_LINE"; do
+for a in "$STRIP_LINE" "$GUARD_LINE" "$APPEND_LINE" "$BUILTIN_LINE" "$FENCE_LINE" \
+         "$ROOTLOCK_LINE"; do
     if ! grep -qF -- "$a" "$SCRIPT"; then
         bad "mutation anchor no longer present in the script: $a"
     fi
 done
 
 reached=""
-for m in nostrip greedy noguard noloop nobuiltin nofence; do
+for m in nostrip greedy noguard noloop nobuiltin nofence norootlock; do
     mfile="$WORK/m-$m.sh"
     if diff -q "$mfile" "$SCRIPT" >/dev/null 2>&1; then
         bad "mutant '$m' is byte-identical to the script — its anchor no longer matches"
@@ -394,6 +444,25 @@ if has "$(cat "$CONTRACT")" 'exclude_pathspecs: "packages/db/src/migrations"'; t
     ok "config-contract.md's survey-work example spells the bare form"
 else
     bad "config-contract.md's survey-work exclude_pathspecs example is gone or changed shape"
+fi
+
+# The built-in lockfile spelling (#372) and the reason beside it. The
+# behavioural row reddens on a reverted pattern; these two rows are what stop
+# the REASON being deleted as noise, which is how the `**/` form comes back —
+# it reads as the more thorough spelling to anyone who has not measured it. The
+# negative half is a WHOLE-FILE scan, so the old spelling must not be quoted
+# anywhere in the script, its own prose included; that history lives in this
+# gate's header instead, which is not in the scanned corpus.
+script_all="$(cat "$SCRIPT")"
+if has "$script_all" "':(exclude)*.lock'" && hasnt "$script_all" "':(exclude)**/*.lock'"; then
+    ok "the built-in lockfile excludes are spelled bare, so they reach a root lockfile"
+else
+    bad "a built-in lockfile exclude is back to the '**/' form, which never matches a root lockfile (#372)"
+fi
+if has "$script_all" 'requires a literal `/`' && has "$script_all" 'issue #372'; then
+    ok "the script records why the lockfile excludes are bare rather than '**/'-prefixed"
+else
+    bad "the script lost the note explaining why the lockfile excludes are bare — the '**/' form reads as more thorough"
 fi
 
 # SCAN_PATHS is out of scope for issue #365 and must stay that way: the

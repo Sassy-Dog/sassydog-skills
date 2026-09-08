@@ -28,7 +28,7 @@ Which header to read, keyed by what you are touching:
 | `execution_site`'s human surface — `groom-backlog` rubric #9, the plate's backlog lines, `setup-config`'s interview question, and where the `uname -s` proposal table may live | `test-execution-site-surface.sh` |
 | `file-or-link-issue.sh` — the two idempotency stages, the delimited-footer match, the refusal to file on an unverified scan | `test-file-or-link-issue.sh` |
 | `repo-health` security pulls (code scanning and secret scanning states) | `test-scanning-states.sh` |
-| `repo-health`'s tech-debt scan — `EXCLUDE_PATHSPECS` / the config `exclude_pathspecs` spelling, and why `SCAN_PATHS` is out of scope | `test-tech-debt-excludes.sh` |
+| `repo-health`'s tech-debt scan — `EXCLUDE_PATHSPECS` / the config `exclude_pathspecs` spelling, the built-in lockfile excludes (why they are bare rather than `**/`-prefixed), and why `SCAN_PATHS` is out of scope | `test-tech-debt-excludes.sh` |
 | `whats-on-fire`'s ranking and reporting — a security-labelled issue is never collapsed into a bare count | `test-security-listing.sh` |
 | `pull-repo-signals.sh`'s `default_branch_ci` — the recovery re-query's shape, and what a surviving null may mean | `test-repo-signals-recovery.sh` |
 | `pr-shepherd`'s `teardown.sh` arguments | `test-teardown-args.sh` |
