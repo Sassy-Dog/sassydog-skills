@@ -1,5 +1,8 @@
 <!--
 CONFIG TEMPLATE: take-it — see survey-work.config.md header for render rules.
+review_site uses the resolved Phase 1 choice (including an override), never an optional omission;
+on refresh carry the chosen value forward. Site/stack slots below require the existing interview
+consent; migrations and claim_label render only when applicable (config-contract.md inventory).
 Drop THIS block from the rendered output. The comment below `## subagent-rules` is NOT part of it:
 that one sits after the frontmatter, is body prose, and RENDERS into the consumer config on
 purpose — the same shape as the commented "... go here." placeholders a config carries under its
@@ -18,15 +21,25 @@ preflight_commands: |
   {{PREFLIGHT_COMMANDS}}
 pr_template_sections: {{PR_TEMPLATE_SECTIONS}}
 merge_queue: {{MERGE_QUEUE}}
-claim_label: {{CLAIM_LABEL}}
+review_site: {{REVIEW_SITE}}
 
 # optional
 
+claim_label: {{CLAIM_LABEL}}
+execution_site: {{EXECUTION_SITE}}
+stacked_prs:
+  max_depth: {{STACK_MAX_DEPTH}}
 board:
   number: {{BOARD_NUMBER}}
+  owner: {{BOARD_OWNER}}
   project_id: {{BOARD_PROJECT_ID}}
   status_field_id: {{BOARD_STATUS_FIELD_ID}}
+  ready_option_id: {{BOARD_READY_OPTION_ID}}
+  backlog_option_id: {{BOARD_BACKLOG_OPTION_ID}}
   in_progress_option_id: {{BOARD_IN_PROGRESS_OPTION_ID}}
+migrations:
+  dirs: {{MIGRATION_DIRS}}
+  regen_command: {{MIGRATION_REGEN_COMMAND}}
 codegen:
   hint: {{CODEGEN_HINT}}
 ---

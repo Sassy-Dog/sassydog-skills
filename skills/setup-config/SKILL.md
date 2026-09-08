@@ -233,11 +233,14 @@ frontmatter as written — including a `##` section's explanatory comment, which
 generated config explains its own conventions to the next reader.
 
 **The template is the starting point, never the authority on completeness.** Check the rendered
-config against `references/config-contract.md` before printing it: a template can lag the contract,
-and rendering is not a licence to omit a key the contract requires. Today no template emits
-`review_site:`, which `config-contract.md` names as one of the two keys that may *not* be omitted —
-so a render that stopped at the template would silently seat a repo on the fail-safe default it
-never chose. **Print every file in full and
+config against `references/config-contract.md`'s template applicability inventory before printing
+it, including nested fields: a template can lag the contract, and rendering is not a licence to omit
+an applicable slot. Write the already-resolved `review_site` explicitly in both dispatch configs,
+outside optional omissions; Phase 1 owns the seed and override, and Phase 4 owns carry-forward.
+An absent `review_agent` is valid and selects the shipped orchestrator; preserve an explicit `skip`
+or override and any hand-set `review_surfaces` without inventing a map. Conditional slots use only
+the existing verified facts and interview consent; omit declined opt-ins and boardless blocks
+wholesale, and leave no unresolved placeholders. **Print every file in full and
 write only after the user approves** — writing into a product repo is outward-facing and never
 silent.
 

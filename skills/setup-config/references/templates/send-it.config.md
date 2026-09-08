@@ -6,6 +6,7 @@ review_agent is the one key presence does NOT toggle: omit it unless this repo h
 own review orchestrator, and the review gate falls back to the shipped
 sassy-dog:pr-review-orchestrator. `review_agent: skip` is the explicit opt-out from
 review entirely — render it only when the user asks for it (config-contract.md).
+review_surfaces has no generated slot: never propose a map; preserve a user's hand-set map.
 -->
 ---
 pr_template_path: "{{PR_TEMPLATE_PATH}}"
@@ -16,6 +17,8 @@ merge_queue: {{MERGE_QUEUE}}
 
 # optional
 
+stacked_prs:
+  max_depth: {{STACK_MAX_DEPTH}}
 migrations:
   schema_dir: {{SCHEMA_DIR}}
   dirs: {{MIGRATION_DIRS}}

@@ -2,8 +2,8 @@
 # test-doc-reconciliation.sh — pins the doc-reconciliation step in all THREE
 # shipping paths (issue #220).
 #
-# What this gate is NOT. It does not check whether any doc is actually stale.
-# #220 rules that out explicitly and correctly: staleness is a semantic
+# What the shipping-path checks are NOT. They do not decide whether arbitrary
+# prose is actually stale. #220 rules that out: staleness is a semantic
 # judgement about whether a sentence still describes the code, there is nothing
 # to grep for, and a script pretending otherwise would produce exactly the
 # skimmed-past output issue #199 documents for the reference checker. This gate
@@ -43,7 +43,30 @@
 # Must-not-exist assertions run on a WHITESPACE-FLATTENED copy: this repo
 # hard-wraps prose, and a line-scoped grep turns a wrap into a false PASS.
 #
-# No gh, no network: three tracked files.
+# The structural exceptions are derivable: section 6 reconciles the gate count,
+# and section 7 compares setup-config's complete template applicability inventory
+# with its tracked template roster and actual nested frontmatter slots (#380).
+# Missing review_site was only the first measured gap: board subfields and
+# conditional site/stack/migration inputs were also missing. Checking file-wide
+# mentions would accept prose about a key no template could emit.
+#
+# The contract's per-skill inventory is the only applicability list. The checker
+# reads its always-written, conditional and hand-set columns, including unchanged
+# tidy-repo; it does not duplicate the list or create a general schema validator.
+# It scans the templates' simple mapping syntax, skips folded/literal scalar
+# contents, and stops at the closing frontmatter fence. Template # optional
+# boundaries distinguish slots that must survive omission from opt-ins.
+# Hand-set review_surfaces deliberately has NO generated slot; this is not a
+# rendered-config validator and must not reject a user's map or a legal omission
+# of review_agent. Product-surface none alternatives remain owned by the Sentry
+# gates. A skill invocation still has to prove actual rendering and consent.
+#
+# In-memory negative specimens exercise the same comparison as the live files:
+# removed review_site/site/stack/migration slots, a nested board-field omission,
+# keys moved into prose/comments/block scalars, an always-written key made
+# optional, an invented hand-set slot, and template/inventory roster drift.
+# Each must fail for its named path or roster mismatch, not an unrelated error.
+# No gh or network; all subjects are tracked and no specimen writes to the tree.
 #
 # Wired into scripts/preflight.sh; run directly:
 #   bash scripts/test-doc-reconciliation.sh
@@ -217,6 +240,207 @@ elif [ "$n_files" = "$n_wired" ] && [ "$n_wired" = "$n_said" ]; then
     ok "CLAUDE.md's gate count is re-derived: $n_said tracked = $n_wired wired = $n_said stated"
 else
     bad "gate count disagrees — $n_files tracked scripts/test-*.sh, $n_wired wired into preflight, CLAUDE.md says $n_said"
+fi
+
+# --- 7. Template applicability reconciles against actual frontmatter ----------
+#
+# Python stdlib only, like the other structural gates. This deliberately reads
+# slots, not placeholder VALUES: YAML rendering and runtime skill proof remain
+# separate, and {{FACT}} is not itself a resolved YAML scalar.
+if python3 - "$REPO_ROOT" <<'PY'
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+root = Path(sys.argv[1])
+template_dir = "skills/setup-config/references/templates/"
+contract = (root / "skills/setup-config/references/config-contract.md").read_text()
+tracked = subprocess.check_output(
+    ["git", "ls-files", "-z", template_dir], cwd=root
+).decode().split("\0")
+templates = {
+    path[len(template_dir):]: (root / path).read_text()
+    for path in tracked if path
+}
+
+
+def inventory(text):
+    section = text.split("### Template applicability inventory\n", 1)[1]
+    section = section.split("\n### ", 1)[0]
+    rows = {}
+    for line in section.splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) != 4 or not re.fullmatch(r"`[a-z-]+`", cells[0]):
+            raise ValueError("malformed applicability row")
+        name = cells[0].strip("`") + ".config.md"
+        if name in rows:
+            raise ValueError(f"duplicate inventory template: {name}")
+        slots = {}
+        for mode, cell in zip(("always", "conditional", "hand-set"), cells[1:]):
+            if cell == "none":
+                continue
+            for token in cell.split(", "):
+                if not re.fullmatch(r"`[a-z_]+(?:\.[a-z_]+)*`", token):
+                    raise ValueError(f"{name}: malformed inventory path {token}")
+                path = token.strip("`")
+                if path in slots:
+                    raise ValueError(f"{name}: duplicate inventory path {path}")
+                slots[path] = mode
+        if not slots:
+            raise ValueError(f"{name}: empty applicability row")
+        rows[name] = slots
+    if not rows:
+        raise ValueError("empty applicability inventory")
+    return rows
+
+
+def frontmatter_slots(text):
+    # Drop ONLY the leading template header, never body comments. The resulting
+    # first line must be the opening fence, not an arbitrary fence found later.
+    text = re.sub(r"\A<!--.*?-->\r?\n", "", text, count=1, flags=re.S)
+    lines = text.splitlines()
+    if not lines or lines[0] != "---":
+        raise ValueError("frontmatter must start on line 1 after the header")
+    slots, parents = {}, []
+    mode, scalar_indent = "always", None
+    for line in lines[1:]:
+        if line == "---":
+            return slots
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if scalar_indent is not None:
+            if indent > scalar_indent:
+                continue
+            scalar_indent = None
+        if line.startswith("# optional"):
+            mode = "conditional"
+        if line.lstrip().startswith("#"):
+            continue
+        match = re.fullmatch(r"( *)([a-z_]+):(?:\s+(.*))?", line)
+        if not match:
+            raise ValueError(f"unsupported template mapping line: {line}")
+        while parents and parents[-1][0] >= indent:
+            parents.pop()
+        expected_indent = parents[-1][0] + 2 if parents else 0
+        if indent != expected_indent:
+            raise ValueError(f"invalid mapping indentation: {line}")
+        path = ".".join([parent[1] for parent in parents] + [match[2]])
+        if path in slots:
+            raise ValueError(f"duplicate frontmatter path: {path}")
+        value = (match[3] or "").split(" #", 1)[0].strip()
+        if value.startswith("#"):
+            value = ""
+        slots[path] = (mode, not value)
+        if not value:
+            parents.append((indent, match[2]))
+        elif re.fullmatch(r"[>|][-+0-9]*", value):
+            scalar_indent = indent
+    raise ValueError("missing closing frontmatter fence")
+
+
+def reconcile(text, sources):
+    errors = []
+    try:
+        rows = inventory(text)
+    except (IndexError, ValueError) as error:
+        return [f"inventory: {error}"]
+    if rows.keys() != sources.keys():
+        errors.append(
+            "roster mismatch: unlisted=" + str(sorted(sources.keys() - rows.keys()))
+            + "; missing=" + str(sorted(rows.keys() - sources.keys()))
+        )
+    for name in sorted(rows.keys() & sources.keys()):
+        expected = {}
+        for path, mode in rows[name].items():
+            if mode == "hand-set":
+                continue
+            parts = path.split(".")
+            for depth in range(1, len(parts) + 1):
+                key = ".".join(parts[:depth])
+                value = (mode, depth < len(parts))
+                if key in expected and expected[key] != value:
+                    errors.append(f"{name}: conflicting inventory path {key}")
+                expected[key] = value
+        try:
+            actual = frontmatter_slots(sources[name])
+        except ValueError as error:
+            errors.append(f"{name}: {error}")
+            continue
+        for path in sorted(expected.keys() | actual.keys()):
+            if expected.get(path) != actual.get(path):
+                errors.append(
+                    f"{name}: {path}: expected {expected.get(path)}, got {actual.get(path)}"
+                )
+    return errors
+
+
+errors = reconcile(contract, templates)
+if errors:
+    print("\n".join("  FAIL  " + error for error in errors), file=sys.stderr)
+    sys.exit(1)
+print(f"  ok    applicability reconciles all {len(templates)} tracked templates")
+
+
+def rejected(label, sources, expected, text=contract):
+    failures = reconcile(text, sources)
+    if not any(expected in failure for failure in failures):
+        raise AssertionError(f"{label}: expected {expected!r}, got {failures}")
+    print(f"  ok    rejects {label}")
+
+
+def without_line(name, line):
+    original = templates[name]
+    if original.count(line) != 1:
+        raise AssertionError(f"{name}: specimen line is not unique: {line!r}")
+    return {**templates, name: original.replace(line, "", 1)}
+
+
+# Each independent missing slot must fail at the named path, not merely because
+# some other specimen happened to break YAML or the inventory roster.
+for name, line, path in (
+    ("take-it", "review_site: {{REVIEW_SITE}}\n", "review_site"),
+    ("dispatch-ready", "review_site: {{REVIEW_SITE}}\n", "review_site"),
+    ("survey-work", "execution_site: {{EXECUTION_SITE}}\n", "execution_site"),
+    ("send-it", "  max_depth: {{STACK_MAX_DEPTH}}\n", "stacked_prs.max_depth"),
+    ("take-it", "  regen_command: {{MIGRATION_REGEN_COMMAND}}\n", "migrations.regen_command"),
+    ("dispatch-ready", "  owner: {{BOARD_OWNER}}\n", "board.owner"),
+):
+    filename = name + ".config.md"
+    rejected(f"{name} missing {path}", without_line(filename, line), f"{filename}: {path}:")
+
+name = "take-it.config.md"
+line = "review_site: {{REVIEW_SITE}}\n"
+missing = without_line(name, line)
+for label, replacement in (
+    ("body-only key", missing[name] + "\n```yaml\n" + line + "```\n"),
+    ("comment-only key", templates[name].replace(line, "# " + line)),
+    ("block-scalar-only key", missing[name].replace(
+        "  {{STACK_SUMMARY}}\n", "  {{STACK_SUMMARY}}\n  " + line
+    )),
+    ("always-written key moved to optional", missing[name].replace(
+        "# optional\n", "# optional\n" + line
+    )),
+):
+    rejected(label, {**templates, name: replacement}, f"{name}: review_site:")
+
+name = "send-it.config.md"
+invented = templates[name].replace("# optional\n", "# optional\nreview_surfaces: {}\n")
+rejected("generated hand-set map", {**templates, name: invented}, f"{name}: review_surfaces:")
+rejected("unlisted template", {**templates, "extra.config.md": templates[name]}, "roster mismatch")
+rejected("removed tidy-repo template",
+         {key: value for key, value in templates.items() if key != "tidy-repo.config.md"},
+         "roster mismatch")
+row = next(line for line in contract.splitlines(True) if line.startswith("| `tidy-repo` |"))
+rejected("inventory row removed", templates, "roster mismatch", contract.replace(row, "", 1))
+PY
+then
+    ok "template applicability and negative specimens"
+else
+    bad "template applicability or its negative specimens failed"
 fi
 
 if [ "$fails" -ne 0 ]; then
