@@ -183,9 +183,10 @@ that are not this skill, and a check written in two places drifts into a check i
 **Shipped orchestrator only — load the Parent recovery protocol** from
 `${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` (Step 3) before dispatch, and pass that
 resolved absolute path, the original scope statement, optional verbatim `review_surfaces:`, and
-`recovery_used` to it. Default to `normal`: capable nested fan-out runs once, not a preliminary
-plan-only round. Custom review agents keep their existing contract; never interpret their output
-as this protocol.
+`recovery_used` to it. Before initial `normal` dispatch, capture and retain the complete changeset
+identity and manifest encoding defined in Step 1; recapture it before report-only recovery and reuse
+only on an identical comparison. Capable nested fan-out runs once, not a preliminary plan-only round.
+Custom review agents keep their existing contract; never interpret their output as this protocol.
 
 If the shipped agent returns `review-fanout-plan`, that is intermediate control, not reviewed
 coverage. As its actual caller, follow the linked protocol: validate the plan and current identity,
@@ -195,6 +196,16 @@ complete actual result records/provenance to the shipped orchestrator in `aggreg
 Never replay successful surfaces, fabricate empty results, or replace results with summaries.
 Identity/context changes invalidate all reuse; a fresh plan never resets the allowance. Do not
 escalate through ancestors or wait for a report notification.
+For an incomplete returned final text from the shipped orchestrator, apply its **Report-only
+recovery** before the NO REPORT outcome: normal and compact-clean reports are already complete;
+corrections, tallies and partial text are not. Retain enumerated findings, dark surfaces and
+provenance. Only with identical changeset/context, an unused shared allowance and supported resume
+capability, reserve that allowance and make exactly one `report-only` request through the actual
+returned dispatch handle and agent identity — never guess an address from an agent type — for the
+same agent to return its already-completed full human report. Do not re-run analysis, fan-out, or
+integration. Do not request a relay or file pointer. A changed input, expired/unreachable handle,
+spent or unknown allowance, or incomplete second return is NO REPORT, never clean or another
+request.
 
 **One automatic recovery allowance per PR** is shared by failed checks, Blocking findings,
 missing/faulty reports and parent recovery. Carry `recovery_used=0|1` through every dispatch and

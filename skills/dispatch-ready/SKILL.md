@@ -192,8 +192,9 @@ Never create a PR, redispatch or reset recovery to make this handoff visible.
   default branch with the original scope statement and reconciled `recovery_used`. For the shipped
   `sassy-dog:pr-review-orchestrator` only, load the **Parent recovery protocol** under Step 3 of
   `${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` and pass its resolved absolute path.
-  Context `review_surfaces` is null, never forwarded by this workflow; default to `normal`, not a
-  preliminary plan-only round.
+  Context `review_surfaces` is null, never forwarded by this workflow. Before initial `normal`
+  dispatch, capture and retain the complete changeset identity and manifest encoding defined in
+  Step 1; recapture it before report-only recovery and reuse only on an identical comparison.
   On a shipped `review-fanout-plan`, this tick is the actual caller: follow that protocol, dispatch
   only missing/unusable surfaces concurrently in one parent batch using its exact briefs, read every
   actual return, then submit the complete original plan and complete actual results/provenance as
@@ -208,6 +209,15 @@ Never create a PR, redispatch or reset recovery to make this handoff visible.
   `review: SKIPPED — no review_agent resolved (lint/type/test only)` with the cause, and is held,
   not merged on an unreported review. Under `review_site: agent` this bullet does not run: the
   sub-agent reviewed before its PR existed.
+  For incomplete returned final text from the shipped orchestrator, apply its **Report-only
+  recovery** before the NO REPORT path: normal and compact-clean reports are complete; corrections,
+  tallies and partial text are not. Retain enumerated findings, dark surfaces and provenance. Only
+  with identical changeset/context, an unused shared allowance and supported resume capability,
+  reserve it and use the actual returned dispatch handle and agent identity for exactly one
+  `report-only` request to that same agent for its already-completed full human report; never guess
+  an address, relay a message or pointer. Do not re-run analysis, fan-out, or integration. Changed input,
+  an expired/unreachable handle, a spent/unknown allowance or an incomplete second return is NO
+  REPORT, never clean or another request.
 - **A review dispatched that never came back, when `review_site: coordinator`** → a review report is
   the *return value* of the agent this tick dispatched, read from that agent's final text. A tick
   never blocks, polls or idles waiting for a notification to carry one in — a tick that waits is a
@@ -573,14 +583,25 @@ owes the PRs it reviews exactly the same three outcomes.
 **The Parent recovery protocol handoff travels too.** Only when the resolved agent is the shipped
 orchestrator, read `${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` and put its resolved
 absolute path, original scope statement and reconciled `recovery_used` into take-it's cold prompt.
-Context `review_surfaces` is null, never forwarded here. Keep its shipped-only `normal` → `review-fanout-plan` →
-parent batch → `review-aggregate-input` / `aggregate-only` instructions intact, including reading
-actual returns, no successful replay, identity invalidation, and incomplete fallback → NO REPORT.
+Context `review_surfaces` is null, never forwarded here. Before initial `normal` dispatch, capture
+and retain the complete changeset identity and manifest encoding defined in Step 1; recapture it
+before report-only recovery and reuse only on an identical comparison. Keep its shipped-only
+`normal` → `review-fanout-plan` → parent batch → `review-aggregate-input` / `aggregate-only`
+instructions intact, including reading actual returns, no successful replay, identity invalidation,
+and incomplete fallback → NO REPORT.
 Its implementing agent is the actual caller on the agent site, never this tick as another ancestor.
 Keep the recovery handoff outside step 6 so coordinator-site prompts still carry it. Read §2's
 durable pending/started/finished reservation before any §2 redispatch, pass `recovery_used=1`,
 and require that value in RESULT, PR body and issue comment; neither this inherited prompt nor
 the §2 coordinator gets a fresh allowance.
+The same handoff includes **Report-only recovery**: normal and compact-clean reports are complete;
+corrections, tallies and partial text are not. On matching changeset/context with an unused shared
+allowance and supported resume capability, reserve it and use the actual returned dispatch handle
+and agent identity for exactly one `report-only` request to that same agent for its already-completed
+full human report; never guess an address, relay a message or pointer. Do not re-run analysis, fan-out,
+or integration. Retain enumerated findings, dark surfaces and provenance. An expired/unreachable
+handle, changed input, spent/unknown allowance or incomplete second return is NO REPORT, never
+clean or another request.
 
 Those two gates are the ones most easily lost here, because these agents open their own PRs from a
 cold worktree and never see an interactive session's instructions: a gate that lives only in

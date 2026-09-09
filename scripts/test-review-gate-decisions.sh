@@ -72,10 +72,10 @@
 #      rule for its own coordinator site, and both guardrail lists repeat it,
 #      because these two skills dispatch sub-agents that open PRs from a cold
 #      worktree and never see an interactive session's instructions.
-#      #385 extends that same allowance to report recovery and parent fan-out:
-#      one missing-only batch plus aggregation, not one retry per surface.
-#      Durable recovery_used accounting must survive a new head, agent or tick.
-#      This extends decision 5 rather than inventing a second budget.
+#      #385 extends that same allowance to parent fan-out; #386 uses it for
+#      one same-agent report-only recovery. Both preserve durable
+#      recovery_used accounting across a new head, agent or tick. This extends
+#      decision 5 rather than inventing a second budget.
 #
 #   6. THE REPORT IS RETURNED, AND A LOST ONE IS ITS OWN OUTCOME. A review
 #      report is delivered as the reviewing agent's FINAL TEXT — its return
@@ -104,13 +104,15 @@
 #      merge the PR the third exists to stop — which is the harm itself, so the
 #      hold is the part that must never be left to a guardrail list alone.
 #      #385 adds a CONTROL return when nested dispatch cannot complete, not a
-#      fourth review outcome. Normal nested dispatch remains the default; only
-#      the actual caller of the shipped orchestrator can recover missing work.
-#      Identity/context changes discard every prior result, and aggregate-only
-#      validates actual provenance before the original integration pass. A
-#      plan alone or incomplete fallback remains NO REPORT, never SKIPPED.
-#      These boundaries are checked in their owning regions and at every cold/
-#      coordinator caller, not by finding protocol tokens somewhere in a file.
+#      fourth review outcome. #386 allows one report-only resume to the same
+#      actual returned agent when a correction, tally or partial text omitted
+#      the complete report. Normal and compact clean reports need no recovery;
+#      changed input, an expired handle, a spent allowance or an incomplete
+#      resumed return remains NO REPORT, never clean or SKIPPED. The request
+#      returns the already-completed full report, never re-analysis, fan-out,
+#      relay or a file pointer. These boundaries are checked in their owning
+#      regions and at every cold/coordinator caller, not by finding protocol
+#      tokens somewhere in a file.
 #      Known limit: source checks cannot prove agent obedience or catch arbitrary
 #      additive contradictions. Runtime scenarios and representative deletion/
 #      qualification/relocation mutations remain separate validation duties.
@@ -1185,7 +1187,8 @@ assert_in "$dispatch_flat" \
     'Step 6.s delivery half travels with the gate' \
     "dispatch-ready carries the delivery half into the prompt it builds"
 
-# --- PART THREE: bounded parent recovery (#385, decisions 5/6) ---------------
+# --- PART THREE: bounded parent and report recovery (#385/#386, decisions 5/6)
+# -------------------------------------------------------------------------------
 # The protocol is defined once. Caller assertions below bind each invocation to
 # that definition rather than copying its classification table or full schema.
 # These scoped, complete clauses defend consequences as well as triggers; a
@@ -1298,6 +1301,50 @@ assert_has "$recovery" \
     'an unknown budget is not a fresh allowance.' \
     "unknown recovery history cannot grant automatic work"
 
+# Report recovery is deliberately separate from parent fan-out: it requests the
+# already-completed human report from the same returned agent, rather than
+# treating a fragment as clean or replaying review work. These assertions cover
+# the observable accepted/rejected shapes and the bounded recovery operation.
+assert_has "$recovery" \
+    'The compact clean form is complete and needs no recovery.' \
+    "normal and compact clean report shapes do not trigger report recovery"
+assert_has "$recovery" \
+    'including an explicit `Base: unresolved (<why>)` degraded base if necessary' \
+    "an unresolved base still permits a complete degraded report"
+assert_has "$recovery" \
+    'A correction, tally, partial prose, `review-fanout-plan`, message, file pointer, or a summary that does not enumerate the report'\''s findings is not a complete report and never counts as clean.' \
+    "corrections, tallies and partial returns cannot authorize a clean review"
+assert_has "$recovery" \
+    'A `review-fanout-plan` is a control result for Caller recovery below, not report-only recovery.' \
+    "review-fanout plans route only through caller recovery"
+assert_has "$recovery" \
+    'retain the raw text, every already-enumerated finding, every `!` surface and their provenance.' \
+    "report recovery retains enumerated findings and dark coverage"
+assert_has "$recovery" \
+    'same changeset and context before doing anything.' \
+    "report recovery requires matching input before reuse"
+assert_has "$recovery" \
+    'use the **actual returned dispatch handle and agent identity** to make exactly one `report-only` resume/request to that same agent.' \
+    "report recovery resumes only the exact returned agent once"
+assert_has "$recovery" \
+    'Never guess an address from an agent type.' \
+    "report recovery never invents an agent address"
+assert_has "$recovery" \
+    'do not re-run analysis, fan-out, the integration pass, or a plan' \
+    "report recovery requests retained report text without new review work"
+assert_has "$recovery" \
+    'never a message, cross-session hand-off, or file pointer.' \
+    "report recovery keeps delivery as returned final text"
+assert_has "$recovery" \
+    'expired/unreachable handle, changed input, spent/unknown allowance, or an incomplete second return is NO REPORT; it never authorizes a clean result, another request, a re-analysis, or a new fan-out.' \
+    "unrecoverable report fragments remain NO REPORT without another attempt"
+assert_has "$recovery" \
+    'Preserve known Blocking findings and dark (`!`) coverage unless that full report supplies an explicit, supported correction that identifies what it replaces;' \
+    "resumed report cannot erase known Blocking findings or dark coverage"
+assert_has "$recovery" \
+    'including its header, Base/changeset context, surface ledger, complete findings and integration/Clean content.' \
+    "resumed report must carry the complete final human report"
+
 # Bind the consumer at EACH callsite. Existing prompt/coordinator slices above
 # prevent a coordinator-only paragraph from satisfying a cold-agent contract.
 send_recovery="$(section_slice "$SKILL" '### Review gate (`review_agent:`)')"
@@ -1315,6 +1362,30 @@ for region in send_recovery takeit_prompt takeit_coord dispatch_coord dispatch_p
     for mode in 'Parent recovery protocol' 'review-fanout-plan' 'review-aggregate-input' 'aggregate-only' recovery_used; do
         assert_has "${!region}" "$mode" "$region carries $mode into its own invocation"
     done
+done
+
+# Every caller that can receive this shipped agent's final text carries the
+# same report-only discriminator. The list includes the cold agent prompt and
+# both coordinator sites; a statement in one cannot protect the others.
+for region in send_recovery takeit_prompt takeit_coord dispatch_coord dispatch_prompt; do
+    assert_has "${!region}" 'Report-only recovery' \
+        "$region recognizes the shipped report-only recovery protocol"
+    assert_has "${!region}" 'Before initial `normal` dispatch, capture and retain the complete changeset identity and manifest encoding defined in Step 1; recapture it before report-only recovery and reuse only on an identical comparison.' \
+        "$region retains a complete identity baseline before report-only recovery"
+    assert_in "${!region}" 'normal and compact-clean reports are (already )?complete' \
+        "$region accepts normal and compact-clean reports without recovery"
+    assert_in "${!region}" 'correction(s)?, tall(ies|y) and partial text are not|a correction, tally or partial text is not' \
+        "$region rejects correction/tally/partial text as a complete report"
+    assert_has "${!region}" 'actual returned dispatch handle and agent identity' \
+        "$region resumes only the actual returned agent identity"
+    assert_in "${!region}" 'exactly one .report-only. request' \
+        "$region bounds report recovery to one request"
+    assert_in "${!region}" 'never guess an address' \
+        "$region does not infer a report-recovery address from agent type"
+    assert_has "${!region}" 'Do not re-run analysis, fan-out, or integration.' \
+        "$region prohibits re-analysis during report recovery"
+    assert_in "${!region}" 'incomplete second return is NO REPORT, never clean or another request' \
+        "$region leaves an incomplete resumed return in NO REPORT"
 done
 for region in send_recovery dispatch_coord dispatch_prompt; do
     assert_has "${!region}" \

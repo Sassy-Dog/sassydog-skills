@@ -378,7 +378,9 @@ behind in coordinator-only context.
 >    **Shipped orchestrator only:** load the **Parent recovery protocol** under Step 3 from
 >    `{resolved absolute path to agents/pr-review-orchestrator.md}` before dispatch. Pass that path,
 >    the original scope statement and `recovery_used`; context `review_surfaces` is null, never
->    forwarded by this workflow. Use `normal` mode by default: capable nested fan-out runs once.
+>    forwarded by this workflow. Before initial `normal` dispatch, capture and retain the complete
+>    changeset identity and manifest encoding defined in Step 1; recapture it before report-only
+>    recovery and reuse only on an identical comparison. Capable nested fan-out runs once.
 >    Custom agents do not support this protocol. Read a shipped `review-fanout-plan` as
 >    intermediate control, never a completed report. As the actual caller, follow the loaded
 >    protocol: check identity/context, dispatch only missing/unusable surfaces concurrently in
@@ -389,28 +391,36 @@ behind in coordinator-only context.
 >    Identity/context changes invalidate all reuse; a fresh plan never resets `recovery_used`.
 >    Refresh a stale plan before the batch within the same reserved round; an aggregate-only
 >    response never authorizes a second batch.
->    Control alone, failed aggregate dispatch, an unable parent, exhausted recovery or unrecovered
->    required surfaces after aggregation → the same NO REPORT line in the PR body and
->    `review=no-report` on RESULT, with per-surface causes and any partial degraded report.
->    Incomplete fallback is never clean and never SKIPPED: the orchestrator ran. Only failure to
->    start the whole orchestrator is SKIPPED. Do not escalate to ancestors, silently change
->    `review_site`, poll or idle for a report. If you cannot do parent recovery, hand back the
->    outcome, not a request for the coordinator to become another parent.
+>    **Report-only recovery for the shipped orchestrator:** normal and compact-clean reports are
+>    complete; a correction, tally or partial text is not. Retain its enumerated findings, dark
+>    surfaces and provenance. Only when changeset/context still match, the shared allowance is
+>    unused and resume is supported, reserve it and use the actual returned dispatch handle and
+>    agent identity for exactly one `report-only` request to that same agent for its already-completed
+>    full human report; never guess an address, relay a message or pointer. Do not re-run analysis,
+>    fan-out, or integration. Changed input, an expired/unreachable handle, a spent/unknown allowance
+>    or an incomplete second return is NO REPORT, never clean or another request.
+> Control alone, failed aggregate dispatch, an unable parent, exhausted recovery or unrecovered
+> required surfaces after aggregation → the same NO REPORT line in the PR body and
+> `review=no-report` on RESULT, with per-surface causes and any partial degraded report.
+> Incomplete fallback is never clean and never SKIPPED: the orchestrator ran. Only failure to
+> start the whole orchestrator is SKIPPED. Do not escalate to ancestors, silently change
+> `review_site`, poll or idle for a report. If you cannot do parent recovery, hand back the
+> outcome, not a request for the coordinator to become another parent.
 > 7. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
->    you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
->    your change just made untrue, in this same PR. A stale doc is a defect in your change, not
->    tidying for later; no other gate reads docs, so a wrong sentence ships silently and stays
->    confident. Scope it to the area you touched plus any claim you happened to disprove — not every
->    markdown file. Too large to close here → say so in the PR body rather than leaving a confident
->    sentence that is wrong. Two traps: **issue state is not evidence** (a closed issue does not
->    prove the behaviour landed, an open one does not prove it did not — read the code, the workflow,
->    the config; and check whether a `#N` you cite is an issue or a PR), and **claims of deliberate
->    absence rot silently** ("nothing tests X", "there is no Y yet") because nothing fails when they
->    stop being true.
+> you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
+> your change just made untrue, in this same PR. A stale doc is a defect in your change, not
+> tidying for later; no other gate reads docs, so a wrong sentence ships silently and stays
+> confident. Scope it to the area you touched plus any claim you happened to disprove — not every
+> markdown file. Too large to close here → say so in the PR body rather than leaving a confident
+> sentence that is wrong. Two traps: **issue state is not evidence** (a closed issue does not
+> prove the behaviour landed, an open one does not prove it did not — read the code, the workflow,
+> the config; and check whether a `#N` you cite is an issue or a PR), and **claims of deliberate
+> absence rot silently** ("nothing tests X", "there is no Y yet") because nothing fails when they
+> stop being true.
 > 8. Commit on branch `{prefix}/issue-{N}-{slug}` with a conventional-commit message containing a
->    literal `Closes #{N}` line.
+> literal `Closes #{N}` line.
 > 9. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
->    {pr_template_sections from config}.
+> {pr_template_sections from config}.
 > 10. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name>
 >     status=<opened|skipped|failed> review=<clean|nits|no-report|skipped> recovery_used=<0|1> note=<one-line>`
 
@@ -506,7 +516,9 @@ When the site is `coordinator`, review each PR as its RESULT line arrives and **
 to `sassy-dog:pr-shepherd` below**, dispatching the agent resolved in §1 against that PR's diff
 versus the derived default branch, with the original scope statement and reconciled `recovery_used`.
 For the shipped orchestrator only, load §5's resolved **Parent recovery protocol** path and pass it
-with context `review_surfaces` null, never forwarded; default to `normal`. On `review-fanout-plan`, this
+with context `review_surfaces` null, never forwarded. Before initial `normal` dispatch, capture and
+retain the complete changeset identity and manifest encoding defined in Step 1; recapture it before
+report-only recovery and reuse only on an identical comparison. On `review-fanout-plan`, this
 coordinator is the actual caller: follow that protocol, dispatch only missing/unusable surfaces
 concurrently in one parent batch using the planned briefs, read all actual returns, then submit the
 complete original plan and actual result records/provenance as `review-aggregate-input` in
@@ -518,7 +530,17 @@ escalate to another ancestor. Control alone, failed aggregate dispatch, unable p
 budget or unrecovered required surfaces after aggregation is incomplete fallback: use the NO REPORT
 bullet below, retain all surface causes and any partial degraded report, and take the existing
 second-failure blocked path if recovery is spent. Only a whole orchestrator that could not start
-uses SKIPPED. Then:
+uses SKIPPED.
+For an incomplete returned final text from the shipped orchestrator, apply its **Report-only
+recovery** before the NO REPORT bullet: normal and compact-clean reports are complete; corrections,
+tallies and partial text are not. Retain enumerated findings, dark surfaces and provenance. Only
+with identical changeset/context, an unused shared allowance and supported resume capability,
+reserve it and use the actual returned dispatch handle and agent identity for exactly one
+`report-only` request to that same agent for its already-completed full human report; never guess
+an address, relay a message or pointer. Do not re-run analysis, fan-out, or integration. Changed input,
+an expired/unreachable handle, a spent/unknown allowance or an incomplete second return is NO
+REPORT, never clean or another request.
+Then:
 
 - **Blocking finding** → hold the PR; **never merge past it**. Name the finding in the §7 report and
   allow ONE redispatch carrying it as context. A second failure gets the `blocked` label plus a
