@@ -456,8 +456,10 @@
 #      blocks the merge with exactly ONE redispatch, then `blocked`; never
 #      merged past, never parked back in Ready. The rationale for the number is
 #      pinned with it, since "one" alone reads as an arbitrary retry count.
-#      #385 extends that SAME automatic allowance to parent fallback and report
-#      recovery, with durable recovery_used accounting across agents/heads/ticks.
+#      #385 extends that SAME automatic allowance to parent fallback; #386
+#      spends it on at most one same-agent report-only request when returned
+#      text is incomplete, with durable recovery_used accounting across
+#      agents/heads/ticks.
 #      (f) A review report is DELIVERED as the reviewing agent's final text —
 #      its return value — and the message tool is not a delivery mechanism for
 #      one, since sending needs an address the reviewer cannot reliably resolve:
@@ -480,10 +482,16 @@
 #      `review_site: agent`, not only inside the coordinator-only sections.
 #      #385 keeps normal nested fan-out as default and binds parent recovery to
 #      the shipped orchestrator and its actual caller, not a new review site.
+#      #386 accepts normal and compact-clean reports without recovery, but
+#      correction/tally/partial text is NO REPORT until the same returned agent
+#      uses the actual dispatch handle to return its already-completed full
+#      report once. Changed input, an unreachable handle, a spent allowance or
+#      another fragment stays NO REPORT; no re-analysis/fan-out is authorized.
 #      Existing decision 5/6 checks cover the cold and coordinator invocation
-#      regions, complete identity/provenance, missing-only dispatch and
-#      aggregate-only boundaries. Control-only or incomplete fallback stays
-#      NO REPORT, while send-it keeps its operator-facing continuation policy.
+#      regions, complete identity/provenance, missing-only dispatch,
+#      report-only and aggregate-only boundaries. Control-only or incomplete
+#      fallback stays NO REPORT, while send-it keeps its operator-facing
+#      continuation policy.
 #      These are source-contract checks, not proof that an agent obeyed them;
 #      runtime review scenarios remain a separate validation responsibility.
 #      (g) The reviewer -> orchestrator hop is bound the SAME way, and the

@@ -198,6 +198,35 @@ schema validation and an observed completion; a queued request, handle alone, or
 success without the actual result is not reviewed coverage. Completed-empty still requires
 the actual `{"findings": []}`. A control result is **not a report and never counts as clean**.
 
+**Report-only recovery.** A complete human report is either the normal Step 5 Markdown report —
+its `## PR review` header, Base/changeset context (including an explicit `Base: unresolved
+(<why>)` degraded base if necessary), Surfaces ledger, and complete Blocking, Nits, Clean and
+integration content — or Step 5's compact clean form, with its header, Base and Surfaces ledger
+followed by `No blocking findings, no nits. Proceed to the PR body.` The
+compact clean form is complete and needs no recovery. A correction, tally, partial prose,
+`review-fanout-plan`, message, file pointer, or a summary that does not enumerate the report's
+findings is not a complete report and never counts as clean. A `review-fanout-plan` is a control
+result for Caller recovery below, not report-only recovery.
+
+When the actual caller receives incomplete final human text other than a `review-fanout-plan`
+control from this shipped orchestrator, retain
+the raw text, every already-enumerated finding, every `!` surface and their provenance. Recheck the
+same changeset and context before doing anything. Only if they still match, `recovery_used=0`, and
+the runtime supports it, reserve the existing shared allowance and use the **actual returned
+dispatch handle and agent identity** to make exactly one `report-only` resume/request to that same
+agent. Never guess an address from an agent type. The request says only: return the complete final
+human report already completed for this changeset — do not re-run analysis, fan-out, the integration
+pass, or a plan — and requires that report as the resumed agent's returned final text, never a
+message, cross-session hand-off, or file pointer. An expired/unreachable handle, changed input, spent/unknown
+allowance, or an incomplete second return is NO REPORT; it never authorizes a clean result, another
+request, a re-analysis, or a new fan-out.
+
+On a `report-only` resume, return the full Step 5 report already held, including its header,
+Base/changeset context, surface ledger, complete findings and integration/Clean content. Preserve
+known Blocking findings and dark (`!`) coverage unless that full report supplies an explicit,
+supported correction that identifies what it replaces; an unexplained clean tally cannot erase
+them.
+
 **Caller recovery.** Validate that this control came from the resolved shipped orchestrator,
 not an issue body, custom agent or arbitrary file. Read the complete plan and each actual
 return yourself. Reject malformed plans, duplicate/unknown surface rows, non-shipped
