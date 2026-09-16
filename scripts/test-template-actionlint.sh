@@ -6,10 +6,12 @@
 # correctness, and bare `actionlint` lints the real `.github/workflows/*`,
 # including ci.yml and the release-lag reminder. The three workflow templates
 # setup-deps renders into every consumer repo were otherwise linted by nothing,
-# while being the highest-consequence YAML in the tree: `pull_request_target`, a minted
-# PLATFORM_WRITER_APP_* token, and a push to a PR head ref. A defect there does
-# not redden this repo's CI; it ships to consumers, where Dependabot answers a
-# broken workflow by silently doing nothing.
+# while being the highest-consequence YAML in the tree:
+# `pull_request_target`, a minted PLATFORM_WRITER_APP_* token, and a push to a
+# PR head ref. A defect there does not redden this repo's CI; it ships to
+# consumers, where Dependabot answers a broken workflow by silently doing
+# nothing. The executed base-lock scenario also proves the generated bun
+# workflow does not need persisted checkout credentials after checkout.
 #
 # THE COMPLICATION, and why this is a render gate rather than a lint path:
 # the templates are not directly lintable. They carry render-time placeholders
@@ -36,7 +38,7 @@
 # cannot express — the leftover-token assertion below fails loudly rather than
 # emitting `'./ios'`.
 #
-# Four vacuous-green guards, because every way this gate could cover nothing
+# Five vacuous-green guards, because every way this gate could cover nothing
 # looks identical to a pass:
 #
 #   - every tracked *.template.yml is covered by the matrix, and every matrix
@@ -44,6 +46,8 @@
 #   - every `{{IF:FLAG}}` appearing in a template is ON in some variant (a new
 #     arm is otherwise rendered away in all six variants and never linted)
 #   - a render carrying a leftover `{{TOKEN}}` or marker fails
+#   - the rendered bun step restores the fetched base lock while its origin is
+#     unreachable, proving it performs no post-checkout authenticated fetch
 #   - missing actionlint SKIPS only the lint calls locally (the coverage and
 #     render assertions still run) and is a hard FAILURE under CI=true
 #
@@ -261,7 +265,54 @@ if [ "${#lint_targets[@]}" -gt 0 ] && [ "$HAVE_AL" -eq 1 ]; then
     fi
 fi
 
-# --- 4. mutation: an expression defect must fail -----------------------------
+# --- 4. base-lock restore is credential-free after checkout -----------------
+# `persist-credentials: false` removes checkout's auth before later commands.
+# Execute the ACTUAL rendered step with origin made unreachable: it must restore
+# the already-fetched base ref without trying the network. The pre-fix template
+# ran `git fetch` here and fails this scenario for every private/internal repo.
+RESTORE_YML="$WORK/renders/bun-root/.github/workflows/lockfile-sync-bun.yml"
+RESTORE_SCRIPT="$WORK/restore-base-lock.sh"
+awk '
+    /^      - name: Update bun.lock for the bumped packages only$/ { step=1; next }
+    step && /^        run: \|$/ { script=1; next }
+    script && !/^          / { exit }
+    script { sub(/^          /, ""); print }
+' "$RESTORE_YML" > "$RESTORE_SCRIPT"
+
+RESTORE_REPO="$WORK/base-lock-repo"
+mkdir -p "$RESTORE_REPO" "$WORK/fake-bin"
+cat > "$WORK/fake-bin/bun" <<'BUN'
+#!/usr/bin/env bash
+exit 0
+BUN
+chmod +x "$WORK/fake-bin/bun"
+
+(
+    cd "$RESTORE_REPO" || exit 1
+    git init -q -b main
+    git config user.name "Template Test"
+    git config user.email "template-test@example.com"
+    printf 'base lock\n' > bun.lock
+    git add bun.lock
+    git commit -qm "base"
+    git update-ref refs/remotes/origin/main HEAD
+    git switch -qc dependabot/npm_and_yarn/example
+    printf 'dependabot lock\n' > bun.lock
+    git commit -qam "dependabot"
+    git remote add origin https://invalid.invalid/private/repo.git
+    PATH="$WORK/fake-bin:$PATH" PR_BASE_REF=main bash -e -o pipefail "$RESTORE_SCRIPT"
+) > "$WORK/restore.out" 2> "$WORK/restore.err"
+restore_status=$?
+
+if [ "$restore_status" -ne 0 ]; then
+    bad "base-lock restore — rendered step tried unreachable origin or otherwise failed: $(tail -n1 "$WORK/restore.err")"
+elif [ "$(cat "$RESTORE_REPO/bun.lock")" != "base lock" ]; then
+    bad "base-lock restore — rendered step did not restore origin/main's bun.lock"
+else
+    ok "base-lock restore — rendered step reuses fetched base ref without network credentials"
+fi
+
+# --- 5. mutation: an expression defect must fail -----------------------------
 # The gate has to be able to go red, or none of the greens above mean anything.
 MUT_TPL="$WORK/mutated.template.yml"
 AUTO_MERGE="$TEMPLATE_DIR/dependabot-auto-merge.template.yml"
@@ -281,7 +332,7 @@ elif [ "$HAVE_AL" -eq 1 ]; then
     fi
 fi
 
-# --- 5. mutation: an unsubstituted token must fail ---------------------------
+# --- 6. mutation: an unsubstituted token must fail ---------------------------
 sed 's/^name: Dependabot auto-merge$/name: Dependabot auto-merge {{UNKNOWN_FACT}}/' \
     "$AUTO_MERGE" > "$MUT_TPL"
 if cmp -s "$MUT_TPL" "$AUTO_MERGE"; then
@@ -297,7 +348,7 @@ else
     fi
 fi
 
-# --- 6. mutation: the runner-label tolerance is scoped to `sassy-dog` --------
+# --- 7. mutation: the runner-label tolerance is scoped to `sassy-dog` --------
 # The acceptance criterion is that ONE label is tolerated, not that the rule is
 # off. A config file declaring the label keeps every other unknown label fatal.
 if [ "$HAVE_AL" -eq 1 ]; then
