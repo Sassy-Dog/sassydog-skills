@@ -57,7 +57,7 @@ for f in "$CONSUMER" "$DELEGATE" "$CONTRACT"; do
 done
 
 # --- 1. sentinels in both homes ------------------------------------------------
-for needle in 'fire-watch-v1' 'C0BNNEE59PX' 'U0AAJ2WGMTQ' 'Daily Fire Watch ('; do
+for needle in 'fire-watch-v1' 'C0BNNEE59PX' 'U0AAJ2WGMTQ' 'Daily Fire Watch (' 'daily-fire-watch could not run.' 'item|<repo>|<kind>|<id>|<tier>|<labels>|<title>' 'top|<rank>|<repo>|<kind>:<id>'; do
     for home in "$CONSUMER" "$CONTRACT"; do
         if grep -qF -- "$needle" "$home"; then
             ok "sentinel '$needle' present in ${home#"$ROOT"/}"
@@ -68,7 +68,7 @@ for needle in 'fire-watch-v1' 'C0BNNEE59PX' 'U0AAJ2WGMTQ' 'Daily Fire Watch ('; 
 done
 # The rendered first line has no leading `# ` in either home's sentinel table.
 for home in "$CONSUMER" "$CONTRACT"; do
-    if grep -qF -- '`# Daily Fire Watch (' "$home"; then
+    if grep -qF -- '`# Daily Fire Watch (' "$home" || grep -qE -- '^# Daily Fire Watch \(' "$home"; then
         bad "${home#"$ROOT"/} spells the first-line sentinel with a Markdown '# ' — Slack delivers it without one"
     else
         ok "${home#"$ROOT"/} spells the first-line sentinel as Slack renders it"
@@ -98,6 +98,27 @@ else
 fi
 
 RE="$(extract_regex "$DELEGATE" | head -n1)"
+if [ -z "$RE" ]; then bad "no handle regex extracted — the vector rows below cannot run"; fi
+
+# The five kinds the consumer emits are the five the block defines, and the
+# delegate writes exactly three marker prefixes. Bare counts elsewhere in prose
+# are safe only while these re-derive them.
+for kind in issue pr sentry cron ci-red; do
+    if grep -qE -- "^\| \`$kind\` \| " "$CONSUMER"; then ok "consumer emits kind '$kind'"; else bad "consumer's handle table lacks kind '$kind'"; fi
+done
+markers="$(grep -oE -- '`[a-z-]+-source:`' "$DELEGATE" | sort -u | tr -d '`' | tr '\n' ' ')"
+if [ "$markers" = "fire-watch-source: plate-source: sentry-source: " ]; then
+    ok "delegate names exactly the three markers: $markers"
+else
+    bad "delegate's marker set is '$markers' (want fire-watch-source: plate-source: sentry-source:)"
+fi
+tiers_row="$(grep -E -- '^\| `tier` \|' "$CONSUMER" | cut -d'|' -f3 | grep -oE -- '`[A-Za-z0-9]+`' | tr -d '`' | sort | tr '\n' ' ')"
+tiers_order="$(grep -E -- '^by tier — ' "$CONSUMER" | grep -oE -- '`[A-Za-z0-9]+`' | tr -d '`' | sort | tr '\n' ' ')"
+if [ -n "$tiers_row" ] && [ "$tiers_row" = "$tiers_order" ]; then
+    ok "tier value set equals the tier order list: $tiers_row"
+else
+    bad "tier values ('$tiers_row') and the order list ('$tiers_order') disagree"
+fi
 
 slug() {  # the slug rule as work-recommendations §3 states it
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//'
@@ -130,13 +151,18 @@ if [ -n "$RE" ]; then
     done
 fi
 
-# --- 3. extraction is not vacuous ----------------------------------------------
-tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
-grep -v -- '`\^(' "$DELEGATE" >"$tmp"
-if [ "$(extract_regex "$tmp" | wc -l | tr -d ' ')" = "0" ] && [ "$n_home" = "1" ]; then
-    ok "deleting the regex from a flattened copy is visible to the extractor"
+# --- 3. the vectors have teeth: a widened grammar in a flattened copy flips one ---
+tmp="$(mktemp)" || { echo "test-fire-watch-block: mktemp failed" >&2; exit 1; }
+[ -n "$tmp" ] && [ -w "$tmp" ] || { echo "test-fire-watch-block: unusable temp file" >&2; exit 1; }
+trap 'rm -f "$tmp"' EXIT
+# Mutant: re-admit `human-only` as a handle kind (the divergence a prior review
+# caught) and widen the slug class to accept uppercase.
+sed -e 's/|fire-watch:(ci-red|cron)\/\[a-z0-9._-\]+)\$`/|fire-watch:(ci-red|cron)\/[A-Za-z0-9._-]+|human-only)$`/' "$DELEGATE" >"$tmp"
+MRE="$(extract_regex "$tmp" | head -n1)"
+if [ -n "$MRE" ] && [ "$MRE" != "$RE" ] && [[ 'human-only' =~ $MRE ]] && [[ 'fire-watch:ci-red/CI' =~ $MRE ]]; then
+    ok "mutant grammar accepts 'human-only' and 'ci-red/CI' — the negative vectors are load-bearing"
 else
-    bad "regex extraction cannot tell a present regex from an absent one"
+    bad "mutant grammar did not flip the negative vectors — the vector rows are not pinning the class"
 fi
 
 if [ "$fail" -eq 0 ]; then

@@ -37,9 +37,10 @@ This skill has **no config file of its own**. It reads two that already exist:
   filing anything**: an issue filed here that `take-it` then refuses to dispatch is the wrong half
   of the job done. Tell the user to run `sassy-dog:setup-config` first and offer it once per
   session, exactly as `take-it` does.
-- `survey-work.md` — `sentry.projects` only. The optional `board:` block, when filed issues
-  should land on its Backlog column, is read from `take-it.md` — the same file `take-it` claims
-  from, so the two never disagree after a partial refresh.
+- `survey-work.md` — `sentry.projects` only; absent or `NO_CONFIG`, nothing here changes,
+  since the Sentry lookup in §3 is keyed on the handle, not the config. The optional `board:`
+  block, when filed issues should land on its Backlog column, is read from `take-it.md` — the
+  same file `take-it` claims from, so the two never disagree after a partial refresh.
 
 Repo slug and default branch are derived, never configured — run this **inside the target
 checkout**, since it reads the session cwd exactly as the config block does:
@@ -85,10 +86,14 @@ carries no issue number.
 | Blind spot, inherited debt, `Suspected complete` epic | none | not a work item; one line saying so |
 
 **The label check runs on every `#N` before it is DISPATCH**, whichever source the list came
-from: `gh issue view <N> --json labels`. `auto-security-watch` → HUMAN-ONLY; `security` →
-CONFIRM-EACH. Nothing else here reads labels — `take-it` owns the `site:` filter and the claim,
+from: `gh issue view <N> --json title,labels`. `auto-security-watch` → HUMAN-ONLY; `security` →
+CONFIRM-EACH; **a read that fails or returns no labels field is UNKNOWN → HOLD**, never
+DISPATCH — unknown is not verified, the same shape `take-it` and `file-or-link-issue.sh` use.
+Labels carried on a plate or block line are display only; the live read decides. The live
+title is printed beside each number in the §4 preview, so a steered id is visible before
+approval. Nothing else here reads labels — `take-it` owns the `site:` filter and the claim,
 and a hold it reports is carried into §6 as HOLD. Every `pr:#N` gets
-`gh pr view <N> --json author,isCrossRepository` for the preview.
+`gh pr view <N> --json title,author,isCrossRepository` for the same reason.
 
 The handle grammar is closed, and this is its one home — `work-fire-watch` cites it and carries
 no copy:
@@ -96,8 +101,9 @@ no copy:
 The **slug rule** for the `fire-watch:` path segment lives here too: lowercase the source
 string, replace every run of characters outside `[a-z0-9._-]` with one `-`, and trim `-` from
 both ends — so the workflow `CI` becomes `ci` and `Routine Heartbeat` becomes
-`routine-heartbeat`. A list that arrived through args (§2 source 1) carries handles inline and
-they map directly: `#N` → DISPATCH (label check first), `sentry:<id>` → FILE, `pr:#N` →
+`routine-heartbeat`. A list that arrived through args (§2 source 1) carries handles inline — **the handle is the
+final ` · ` segment of the line and nothing else on the line is one**, so a title that happens
+to contain `#999` steers nothing — and they map directly: `#N` → DISPATCH (label check first), `sentry:<id>` → FILE, `pr:#N` →
 SHEPHERD, `fire-watch:ci-red/<slug>` → FILE with marker `fire-watch-source: ci-red/<slug>` and
 label `ci-cd`, `fire-watch:cron/<slug>` → FILE with marker `fire-watch-source: cron/<slug>` and
 label `observability`. A `fire-watch:` handle is valid for those two kinds only; a
@@ -108,9 +114,11 @@ A `sentry:` handle may arrive numeric (a permalink's `issues/<id>/`) or as a sho
 (`PROJ-123`). Every `sentry:` handle gets **one read-only Sentry lookup** (tools by capability,
 never by id): it resolves a numeric id to the short id the marker needs — what `survey-work` and
 `sentry-triage` key on — and it is where the body's evidence (permalink, counts, last seen)
-comes from, since a caller's list carries titles only. No Sentry tools → file as
-`sentry-source: <numeric id>` with the evidence the list carried, and say in the preview that it
-will not dedupe against theirs.
+comes from, since a caller's list carries titles only. **No Sentry tools → HOLD**, listed with
+the numeric id: a marker keyed on anything but the short id is a second identity for one
+signal that `file-or-link-issue.sh`'s dedupe cannot match, and the next gated `survey-work` run
+would file the duplicate. This is the same read `sentry-triage`'s qualifying gate performs;
+that skill stays the home of Sentry mechanics.
 
 **Why the secret alert is human-only:** the fix is minutes of a human's time in a vendor console,
 rotation of a shared credential is irreversible and cross-product, and an issue describing an
@@ -150,8 +158,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/file-or-link-issue.sh \
   `gh issue list --repo <owner/name> --limit 100 --search '"plate-source: next-bet/" in:body'`
   (or `tech-debt/`), printing the count against the limit — so a near-duplicate is caught by the
   human before approval rather than by a marker that cannot.
-- When `take-it.md` has a `board:` block, pass `--project-id`, `--status-field-id` and
-  `--status-option-id <backlog_option_id>` so the issue lands on the Backlog column.
+- When `take-it.md` has a `board:` block carrying `project_id`, `status_field_id` and
+  `backlog_option_id`, pass `--project-id`, `--status-field-id` and `--status-option-id` so
+  the issue lands on the Backlog column. A block missing any of the three → file with no board
+  flags and say so in the preview; never guess an option id.
 
 **The body must clear `take-it` §2's pre-flight** — read that section rather than a paraphrase
 here — so it carries the evidence (the Sentry permalink and counts, or the plate's signals
@@ -187,8 +197,9 @@ Skill: sassy-dog:take-it
 Args: "take #<N> #<M> #<K> — in this order; from work-recommendations."
 ```
 
-Then one `pr-shepherd` call for every SHEPHERD handle, with the repo's merge policy from
-`take-it.md`:
+And, **in the same message as the `take-it` call** — a rank-1 stuck PR must not wait for the
+whole batch to land — one `pr-shepherd` call for every SHEPHERD handle, with the repo's merge
+policy from `take-it.md`:
 
 ```text
 Skill: sassy-dog:pr-shepherd

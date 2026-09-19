@@ -9,7 +9,10 @@ ship one implementation each in the plugin and read their per-repo behavior from
 
 One file per skill. Each file is YAML frontmatter (facts and toggles) followed by `##` sections
 (freeform prose). This document is the source of truth for that format; `setup-config`
-writes these files and the six skills read them.
+writes these files and the six skills read them. Two dispatch front-ends with no file of their own also read them:
+`work-recommendations` reads `take-it.md` (including `board.backlog_option_id`, which `take-it`
+itself never reads — do not prune it as unread) and `survey-work.md`; `work-fire-watch` reads
+`take-it.md`.
 
 ## Governing principle: configure only what cannot be derived
 

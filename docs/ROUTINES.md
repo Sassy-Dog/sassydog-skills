@@ -163,27 +163,36 @@ ruled-out table. The short version, because it changes how you read every degrad
 `skills/work-fire-watch/SKILL.md` reads the newest `daily-fire-watch` post from Slack
 `#daily-fire-watch` and works the items routed to the repo it runs in. What Slack delivers is
 mrkdwn whose prose shape changes from day to day (bullets one day, inline runs the next), so the
-consumer **never parses the prose**. The contract is a fenced machine block the routine appends
-to every report — `fire-watch-v1`, one `item|<repo>|<kind>|<id>|<tier>|<labels>|<title>` line
+consumer **never parses the prose**. The contract is a fenced machine block the routine **must
+append** to every report — the producer-side change is
+[sassydog-routines#68](https://github.com/Sassy-Dog/sassydog-routines/issues/68); until it lands,
+every post is block-less and the consumer stops with "this post predates `fire-watch-v1`" — `fire-watch-v1`, one `item|<repo>|<kind>|<id>|<tier>|<labels>|<title>` line
 per item plus `top|<rank>|<repo>|<kind>:<id>` lines for the cross-product Top 5 — specified in
 full in that skill's §2. The producer resolves the product→repo map, so the consumer's routing
 is one exact `repo` match.
+
+```text
+item|<repo>|<kind>|<id>|<tier>|<labels>|<title>
+top|<rank>|<repo>|<kind>:<id>
+```
 
 The sentinels the consumer keys on, so that a producer-side edit is a visible two-repo change:
 
 | Sentinel | Value the consumer expects |
 | --- | --- |
 | channel | `#daily-fire-watch`, id `C0BNNEE59PX` |
-| poster | Slack user id `U0AAJ2WGMTQ` — the user-scoped connector the routine posts through; the trailing `Sent using` line is plain text and never evidence. Any other id, member or bot, is skipped and named |
+| poster | Slack user id `U0AAJ2WGMTQ` — the user-scoped connector the routine posts through; the trailing `Sent using` line is plain text and never evidence. Only that id's **newest** message is judged; any report-shaped post from another id is skipped and named |
 | report first line | `Daily Fire Watch (YYYY-MM-DD)` — no leading `#` once Slack has rendered it |
 | header lines, copied verbatim | `_Load: repo (sassydog-routines@<sha>) · Sources: …_` and `_Coverage: …_` |
-| machine block | a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item` / `top` lines; the block survives truncation — prose is what gets cut |
+| machine block | a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item\|<repo>\|<kind>\|<id>\|<tier>\|<labels>\|<title>` and `top\|<rank>\|<repo>\|<kind>:<id>` lines; the producer keeps the block whole under truncation — prose is what gets cut |
 | could-not-run post | first line `⚠ **daily-fire-watch could not run.**` (the routine prompt's missing-skill-body path) |
 | anything else from the pinned poster | the consumer stops and prints the first line |
 
 The routines repo's CI is the right home for a gate over this table — it can clone this repo
-anonymously, while this repo's CI cannot authenticate to it ([#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178)). Here, `scripts/test-fire-watch-block.sh` pins the sentinels in
-both this file and the consumer, and the handle grammar the block feeds. A change to any row
+anonymously, while this repo's CI cannot authenticate to it ([#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178)). Here, `scripts/test-fire-watch-block.sh` pins, in both this file and
+the consumer, the block name, channel id, poster id, the rendered first line, the could-not-run
+line and the two block line shapes — not the header-line rows — plus the handle grammar the
+block feeds. A change to any row
 above lands **here first**, then in `sassydog-routines`.
 
 ## What the in-report field is for
