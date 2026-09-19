@@ -253,6 +253,10 @@ this report.
 
 ## 5. Output format
 
+> The routine edition of this skill (in `sassydog-routines`) has one automated consumer,
+> `work-fire-watch`, which reads only the `fire-watch-v1` block that edition appends —
+> `docs/ROUTINES.md` lists the sentinels. This interactive edition appends no block.
+
 Render inline as markdown. Two anti-verbosity rules are non-negotiable: (1) empty surfaces get a
 single token on the consolidated `✓ Clean today:` line, never their own section; (2) within a
 section, skip empty tiers. Recommendations go LAST.

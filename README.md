@@ -31,6 +31,8 @@ Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin
 | `sassy-dog` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag, code/secret scanning |
 | `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, code/secret scanning, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `survey-work` |
 | `sassy-dog` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
+| `sassy-dog` | `work-recommendations` | Work a survey-work plate in order — resolve each recommendation to an issue (filing the issue-less ones behind one preview), then ship them through `take-it` in plate order |
+| `sassy-dog` | `work-fire-watch` | Work this repo's items from the latest `daily-fire-watch` Slack post — exact-name routing, report order preserved, delegates the loop to `work-recommendations` |
 
 ### Workflow skills + capability skills
 
@@ -43,10 +45,18 @@ Per-repo behavior lives in that repo's `.claude/sassy-dog/<skill>.md`: YAML fron
 and toggles, `##` sections for freeform prose that survives refreshes. Each skill inlines its config
 at load time, and treats a missing config as a first-class `NO_CONFIG` state — degrading to a
 conservative mode rather than erroring. `take-it` and `dispatch-ready` are the two exceptions that stop
-instead, because both act unattended and outward-facing.
+instead, because both act unattended and outward-facing (the two dispatch front-ends below stop
+with them).
 
 Facts that can be derived are never configured: repo slug, default branch, and
 `delete_branch_on_merge` all come from `gh repo view` at runtime, so they cannot drift.
+
+Two dispatch front-ends sit on top of the six workflow skills and carry **no config template of their own**:
+`work-recommendations` turns a `survey-work` plate's ordered recommendations into one `take-it`
+batch (filing the issue-less items first, preview-then-confirm), and `work-fire-watch` reads the
+latest `daily-fire-watch` post from Slack, keeps the lines routed to the current repo by exact
+name, and hands them to `work-recommendations` — one implementation of the loop. Both read the
+repo's existing `take-it.md` only, and stop on `NO_CONFIG`.
 
 [Stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs) are supported
 and **opt-in per repo** via a `stacked_prs:` config block, absent by default. Handling an existing

@@ -1424,6 +1424,19 @@
 #      Fixture due exits are asserted, never propagated as a release reminder
 #      into required ci. No network or real repository mutation.
 #
+#  46. fire-watch block tests (scripts/test-fire-watch-block.sh) — the contract
+#      between the daily-fire-watch routine's Slack post and `work-fire-watch`.
+#      The consumer was first written against THIS repo's whats-on-fire template
+#      and would have matched zero real posts: the routine runs the flattened
+#      copy in sassydog-routines, and what Slack delivers is mrkdwn that changes
+#      prose shape day to day. So the consumer reads only a fenced
+#      `fire-watch-v1` block, and this gate pins the sentinels both homes must
+#      spell identically (block name, channel id, the poster's Slack user id —
+#      the routine posts through a user-scoped connector, so "bot only" can
+#      never match — and the rendered first line WITHOUT the Markdown `# `),
+#      plus the handle grammar's single home and the slug rule, run against the
+#      org's real workflow names. Source-level, no network.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -2279,6 +2292,17 @@ if bash scripts/test-release-lag.sh; then
     pass "release-lag tests (scripts/test-release-lag.sh)"
 else
     failed "release-lag tests (scripts/test-release-lag.sh)"
+fi
+
+# --- 46. fire-watch block tests -------------------------------------------------
+# The routine's Slack post is parsed only through its `fire-watch-v1` block;
+# the sentinels the consumer and docs/ROUTINES.md must agree on, the handle
+# grammar's one home, and the slug rule against real workflow names. Source-
+# level, no network.
+if bash scripts/test-fire-watch-block.sh; then
+    pass "fire-watch block tests (scripts/test-fire-watch-block.sh)"
+else
+    failed "fire-watch block tests (scripts/test-fire-watch-block.sh)"
 fi
 
 # ------------------------------------------------------------------------------

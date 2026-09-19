@@ -9,7 +9,9 @@ ship one implementation each in the plugin and read their per-repo behavior from
 
 One file per skill. Each file is YAML frontmatter (facts and toggles) followed by `##` sections
 (freeform prose). This document is the source of truth for that format; `setup-config`
-writes these files and the six skills read them.
+writes these files and the six skills read them. Two dispatch front-ends with no file of their own also read `take-it.md`:
+`work-recommendations` (including `board.backlog_option_id`, which `take-it` itself never reads —
+do not prune it as unread) and `work-fire-watch`.
 
 ## Governing principle: configure only what cannot be derived
 
@@ -357,7 +359,8 @@ then the `blocked` label — and never parks it back in Ready. That path lives i
 `dispatch-ready` §2; this key only decides whether it is the path that runs.
 
 **`NO_CONFIG` is not a hole in this.** `take-it` and `dispatch-ready` are the two workflow skills
-that stop outright on `NO_CONFIG` rather than degrading, so an unconfigured repo dispatches nothing
+that stop outright on `NO_CONFIG` rather than degrading (the `work-recommendations` and
+`work-fire-watch` front-ends stop with them, on `take-it.md`), so an unconfigured repo dispatches nothing
 and therefore produces no unreviewed PR by this route. The absent-key default covers the other
 half: a repo configured before this key existed still gets a review, at `agent`, until its next
 `setup-config` run writes a value.
