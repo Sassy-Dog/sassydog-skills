@@ -457,6 +457,9 @@ whole reason the declaration exists. Four rendering rules, from the value §3B r
   third rendering for a multi-member declaration, and it is never reported as undispatchable: a
   checkout it names can dispatch it today.
 
+`work-recommendations` consumes this block and the `To ship:` line as rendered — the numbered
+order, the `(not this checkout)` marker and the section each title came from are what it keys on.
+
 **Only issues this checkout can take reach the closing `To ship:` line** — an off-site issue named
 there hands the user a `take` that the dispatcher will refuse, and a recommendation the tooling then
 rejects trains a reader to stop trusting the line. When the top 5 is entirely off-site, say so in

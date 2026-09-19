@@ -45,10 +45,18 @@ Per-repo behavior lives in that repo's `.claude/sassy-dog/<skill>.md`: YAML fron
 and toggles, `##` sections for freeform prose that survives refreshes. Each skill inlines its config
 at load time, and treats a missing config as a first-class `NO_CONFIG` state — degrading to a
 conservative mode rather than erroring. `take-it` and `dispatch-ready` are the two exceptions that stop
-instead, because both act unattended and outward-facing.
+instead, because both act unattended and outward-facing (the two dispatch front-ends below stop
+with them).
 
 Facts that can be derived are never configured: repo slug, default branch, and
 `delete_branch_on_merge` all come from `gh repo view` at runtime, so they cannot drift.
+
+Two dispatch front-ends sit on top of the six workflow skills and carry **no config template of their own**:
+`work-recommendations` turns a `survey-work` plate's ordered recommendations into one `take-it`
+batch (filing the issue-less items first, preview-then-confirm), and `work-fire-watch` reads the
+latest `daily-fire-watch` post from Slack, keeps the lines routed to the current repo by exact
+name, and hands them to `work-recommendations` — one implementation of the loop. Both read the
+repo's existing `take-it.md` and `survey-work.md`, and both stop on `NO_CONFIG`.
 
 [Stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs) are supported
 and **opt-in per repo** via a `stacked_prs:` config block, absent by default. Handling an existing
@@ -57,13 +65,6 @@ reports green + `MERGEABLE` + `CLEAN` exactly like an ordinary PR and merging on
 it out of order. Whether a repo is enabled for the preview, whether a PR is a layer, and whether a
 layer is safe to merge now are all derived at runtime by `pr-shepherd`'s `stack-probe.sh` — the
 config carries only the policy.
-
-Two dispatch front-ends sit on top of them and carry **no config template of their own**:
-`work-recommendations` turns a `survey-work` plate's ordered recommendations into one `take-it`
-batch (filing the issue-less items first, preview-then-confirm), and `work-fire-watch` reads the
-latest `daily-fire-watch` post from Slack, keeps the lines routed to the current repo by exact
-name, and hands them to `work-recommendations` — one implementation of the loop. Both read the
-repo's existing `take-it.md` and `survey-work.md`, and both stop on `NO_CONFIG`.
 
 Workflow skills stay thin by delegating shared mechanics to the capability skills
 (`github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).

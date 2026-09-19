@@ -158,6 +158,25 @@ ruled-out table. The short version, because it changes how you read every degrad
   `Sassy-Dog`. Flipping the repo to `PUBLIC` fixed the sync on the first attempt. Neither SSO nor app
   scope was ever implicated — do not re-test those.
 
+## Consumers of the posted report
+
+`skills/work-fire-watch/SKILL.md` reads the newest `daily-fire-watch` post from Slack
+`#daily-fire-watch` (`C0BNNEE59PX`) and works the lines routed to the repo it runs in. It keys on
+the **`sassydog-routines` edition's** shape, not this repo's — the two are divergent by design
+(above). The sentinels it recognizes, so that a producer-side edit is a visible two-repo change:
+
+| Sentinel | Value the consumer expects |
+| --- | --- |
+| report title (first line) | `# Daily Fire Watch (YYYY-MM-DD)` |
+| could-not-run post (first line) | `⚠ **daily-fire-watch could not run.**` |
+| header lines, copied verbatim | `_Load: repo (sassydog-routines@<sha>) · Sources: …_` and `_Coverage: …_` |
+| delivery | one Slack message per run, posted by the routine's bot identity; a report over Slack's size cap says it was truncated |
+| item sections | `## 🔥 Production fires` (`**<product> — <title>**`), `## 🚧 Stuck shipping` and `## 🎯 Backlog heat` (`**<repo>#<N> <title>**`), `## 🕶 Blind spots`, `## 👉 Today's top 5` (`1. **<title>** — <product> · <why>`), `_⚠ CI verdict stale for:_` / `_⚠ CI unknown for:_` footers |
+| security findings | no `## 🔒 Security` section; they arrive as Backlog-heat issues labelled `security` + `auto-security-watch` |
+
+The routines repo's CI is the right home for a gate over this table — it can clone this repo
+anonymously, while this repo's CI cannot authenticate to it ([#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178)). Until one exists, a change to any row above lands **here first**, then in `sassydog-routines`.
+
 ## What the in-report field is for
 
 The `Load:` field is not redundant with this check — it covers the case nobody is investigating.
