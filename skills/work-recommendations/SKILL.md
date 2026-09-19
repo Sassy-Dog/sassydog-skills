@@ -59,8 +59,8 @@ Three sources, in precedence order. Use the first that applies and say which one
 1. **An explicit item list in this invocation's args** (this is how `work-fire-watch` calls in).
    The list is authoritative: its order is the order, and each line carries its own handle.
 2. **The most recent `## 👉 Today's recommendations` block in this conversation**, rendered by
-   `survey-work`. Items are `**<title>** — <category> · <why>`; the closing `_To ship:_` line names
-   the issues this checkout can take.
+   `survey-work`. Items are `**<title>** — <category> · <why> · <handle>`; the closing `_To ship:_`
+   line names the issues this checkout can take.
 3. **Neither present** → run `Skill: sassy-dog:survey-work` first (it is read-only), then use its
    block. Do not build a list from memory or from `gh issue list` — a list without the plate's
    scoring is not "the recommendations".
@@ -71,9 +71,11 @@ source 3.
 
 ## 3. Resolve every item to a handle
 
-Walk the list **in order** and give each item exactly one disposition. An item's handle comes from
-the plate section it was drawn from — look the title up there; the recommendations line itself
-carries no issue number.
+Walk the list **in order** and give each item exactly one disposition. An item's handle is the
+**final ` · ` segment of its line** — `#N`, `pr:#N`, `sentry:<id>`, or `none` — and the
+`<category>` token beside it says which row below applies to a `none`. Only a plate rendered by a
+`survey-work` older than that rule has lines with no handle segment; for those, and only those,
+look the title up in the plate section it was drawn from.
 
 | Where the item came from | Handle | Disposition |
 | --- | --- | --- |
