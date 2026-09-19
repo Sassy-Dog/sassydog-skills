@@ -36,9 +36,17 @@
 #      row. Negative vectors pin that the class is closed (`human-only` was
 #      removed; `issue:398` is not a handle).
 #
-#   3. THE GRAMMAR EXTRACTION IS NOT VACUOUS. Exactly one regex literal is
-#      found in its home; a flattened copy with it deleted reddens property 2
-#      rather than passing on an empty pattern.
+#   3. THE NEGATIVE VECTORS ARE LOAD-BEARING. A flattened copy of the home
+#      with the grammar widened (uppercase admitted in the slug class,
+#      `|human-only` re-added) must accept vectors the real grammar rejects;
+#      if the mutant `sed` no longer applies because the literal moved, the
+#      gate says THAT rather than reporting the vectors dead.
+#
+#   4. THE SELECTION RULE THAT CLOSED A BLOCKING FINDING IS PINNED. The
+#      consumer judges the pinned poster's NEWEST sentinel post and never
+#      pages past it: "first message with a fence" skipped a could-not-run
+#      post and dispatched yesterday's items. Both homes spell "never page
+#      past", and the old shape must not exist.
 #
 # Source-level, no `gh`, no network, no Slack.
 set -uo pipefail
@@ -57,14 +65,30 @@ for f in "$CONSUMER" "$DELEGATE" "$CONTRACT"; do
 done
 
 # --- 1. sentinels in both homes ------------------------------------------------
-for needle in 'fire-watch-v1' 'C0BNNEE59PX' 'U0AAJ2WGMTQ' 'Daily Fire Watch (' 'daily-fire-watch could not run.' 'item|<repo>|<kind>|<id>|<tier>|<labels>|<title>' 'top|<rank>|<repo>|<kind>:<id>'; do
+for needle in 'fire-watch-v1' 'C0BNNEE59PX' 'U0AAJ2WGMTQ' 'Daily Fire Watch (' 'daily-fire-watch could not run.' 'item|<repo>|<kind>|<id>|<tier>|<labels>|<title>' 'top|<rank>|<repo>|<kind>:<id>' 'page past'; do
     for home in "$CONSUMER" "$CONTRACT"; do
-        if grep -qF -- "$needle" "$home"; then
+        flat="$(tr '\n' ' ' <"$home" | sed 's/  */ /g')"
+        if grep -qF -- "$needle" <<<"$flat"; then
             ok "sentinel '$needle' present in ${home#"$ROOT"/}"
         else
             bad "sentinel '$needle' missing from ${home#"$ROOT"/}"
         fi
     done
+done
+# The poster id must sit on the RULE, not only inside the block example.
+if grep -qE -- 'select the.*newest message from that user id|from that user id whose first line' "$CONSUMER" && grep -qF -- '`U0AAJ2WGMTQ`, pinned' "$CONSUMER"; then
+    ok "consumer's selection rule names the pinned poster id"
+else
+    bad "consumer's selection rule no longer names the pinned poster id"
+fi
+if grep -qE -- 'first message from that user id whose text contains' "$CONSUMER"; then
+    bad "consumer still carries the 'first message with a fence' selection shape"
+else
+    ok "the 'first message with a fence' shape is absent"
+fi
+# The final-segment handle rule is spelled in both the consumer and the delegate.
+for home in "$CONSUMER" "$DELEGATE"; do
+    if grep -qF -- 'final ` · ` segment' "$home"; then ok "${home#"$ROOT"/} states the final-segment handle rule"; else bad "${home#"$ROOT"/} lost the final-segment handle rule"; fi
 done
 # The rendered first line has no leading `# ` in either home's sentinel table.
 for home in "$CONSUMER" "$CONTRACT"; do
@@ -106,14 +130,19 @@ if [ -z "$RE" ]; then bad "no handle regex extracted — the vector rows below c
 for kind in issue pr sentry cron ci-red; do
     if grep -qE -- "^\| \`$kind\` \| " "$CONSUMER"; then ok "consumer emits kind '$kind'"; else bad "consumer's handle table lacks kind '$kind'"; fi
 done
-markers="$(grep -oE -- '`[a-z-]+-source:`' "$DELEGATE" | sort -u | tr -d '`' | tr '\n' ' ')"
-if [ "$markers" = "fire-watch-source: plate-source: sentry-source: " ]; then
-    ok "delegate names exactly the three markers: $markers"
+# Markers as WRITTEN (`marker \`x-source: …`) must equal the closed set the
+# Guardrails sentence names (bare `\`x-source:\``); a fourth prefix at a usage
+# site with no Guardrails edit is the drift this catches.
+used="$(grep -oE -- 'marker `[a-z-]+-source:' "$DELEGATE" | sed 's/.*`//' | sort -u | tr '\n' ' ')"
+named="$(grep -oE -- '`[a-z-]+-source:`' "$DELEGATE" | tr -d '`' | sort -u | tr '\n' ' ')"
+if [ "$used" = "fire-watch-source: plate-source: sentry-source: " ] && [ "$used" = "$named" ]; then
+    ok "markers written ($used) equal the closed set named"
 else
-    bad "delegate's marker set is '$markers' (want fire-watch-source: plate-source: sentry-source:)"
+    bad "markers written ('$used') vs named ('$named') — want exactly fire-watch-source: plate-source: sentry-source:"
 fi
 tiers_row="$(grep -E -- '^\| `tier` \|' "$CONSUMER" | cut -d'|' -f3 | grep -oE -- '`[A-Za-z0-9]+`' | tr -d '`' | sort | tr '\n' ' ')"
-tiers_order="$(grep -E -- '^by tier — ' "$CONSUMER" | grep -oE -- '`[A-Za-z0-9]+`' | tr -d '`' | sort | tr '\n' ' ')"
+flat_consumer="$(tr '\n' ' ' <"$CONSUMER")"
+tiers_order="$(grep -oE -- 'by tier — [^.]*' <<<"$flat_consumer" | head -n1 | grep -oE -- '`[A-Za-z0-9]+`' | tr -d '`' | sort | tr '\n' ' ')"
 if [ -n "$tiers_row" ] && [ "$tiers_row" = "$tiers_order" ]; then
     ok "tier value set equals the tier order list: $tiers_row"
 else
@@ -158,11 +187,15 @@ trap 'rm -f "$tmp"' EXIT
 # Mutant: re-admit `human-only` as a handle kind (the divergence a prior review
 # caught) and widen the slug class to accept uppercase.
 sed -e 's/|fire-watch:(ci-red|cron)\/\[a-z0-9._-\]+)\$`/|fire-watch:(ci-red|cron)\/[A-Za-z0-9._-]+|human-only)$`/' "$DELEGATE" >"$tmp"
-MRE="$(extract_regex "$tmp" | head -n1)"
-if [ -n "$MRE" ] && [ "$MRE" != "$RE" ] && [[ 'human-only' =~ $MRE ]] && [[ 'fire-watch:ci-red/CI' =~ $MRE ]]; then
-    ok "mutant grammar accepts 'human-only' and 'ci-red/CI' — the negative vectors are load-bearing"
+if cmp -s "$DELEGATE" "$tmp"; then
+    bad "mutant did not apply — the regex literal moved; update the sed in this gate"
 else
-    bad "mutant grammar did not flip the negative vectors — the vector rows are not pinning the class"
+    MRE="$(extract_regex "$tmp" | head -n1)"
+    if [ -n "$MRE" ] && [[ 'human-only' =~ $MRE ]] && [[ 'fire-watch:ci-red/CI' =~ $MRE ]]; then
+        ok "mutant grammar accepts 'human-only' and 'ci-red/CI' — the negative vectors are load-bearing"
+    else
+        bad "mutant grammar did not flip the negative vectors — the vector rows are not pinning the class"
+    fi
 fi
 
 if [ "$fail" -eq 0 ]; then

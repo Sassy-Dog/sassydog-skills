@@ -56,8 +56,7 @@ Two dispatch front-ends sit on top of the six workflow skills and carry **no con
 batch (filing the issue-less items first, preview-then-confirm), and `work-fire-watch` reads the
 latest `daily-fire-watch` post from Slack, keeps the lines routed to the current repo by exact
 name, and hands them to `work-recommendations` — one implementation of the loop. Both read the
-repo's existing `take-it.md` and stop on `NO_CONFIG`; `work-recommendations` also reads
-`survey-work.md` for `sentry.projects`.
+repo's existing `take-it.md` only, and stop on `NO_CONFIG`.
 
 [Stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs) are supported
 and **opt-in per repo** via a `stacked_prs:` config block, absent by default. Handling an existing
