@@ -429,10 +429,27 @@ _<N> merged-PR branches lingering locally — residue for `clean it`, not plate 
 - **Mobile release lag** — no `mobile:` block. Shipped-vs-main drift was NOT checked.
 
 ## 👉 Today's recommendations (cross-category top 5)
-1. **<title>** — <category> · <one-line why>
+1. **<title>** — <category> · <one-line why> · <handle>
 
 _To ship: `take #<N> #<M>`_   <!-- only issues this checkout can take; see the site rule below -->
 ```
+
+### The handle on every recommendation line
+
+The **final ` · ` segment** of each numbered line is the item's handle, and it is the one thing
+`work-recommendations` reads to act on the line — it never has to find the title in the section
+above, where a paraphrase would lose it. The grammar is that skill's (`work-recommendations` §3),
+so this list is closed:
+
+| Item | Handle |
+| --- | --- |
+| backed by a GitHub issue (Backlog, or Customer pain with `[GH #N]`) | `#N` — with `(not this checkout)` still rendered before it when the site rule says so |
+| already in flight as a PR | `pr:#N` |
+| Customer pain with a Sentry link and no issue | `sentry:<SHORT_ID>` (`PROJ-123`, the same id the `sentry-source:` marker uses) |
+| anything else — a next bet, a tech-debt or dev-experience item, a security finding | `none` — the `<category>` on the line says which, and that is what decides its disposition there |
+
+A title never contains `·`, `**`, `—` or `#` — replace them with spaces when rendering the
+line — so nothing but the last segment can read as a handle.
 
 ### Execution site on backlog lines
 
@@ -458,7 +475,8 @@ whole reason the declaration exists. Four rendering rules, from the value §3B r
   checkout it names can dispatch it today.
 
 `work-recommendations` consumes this block and the `To ship:` line as rendered — the numbered
-order, the `(not this checkout)` marker and the section each title came from are what it keys on.
+order, the inline handle (final ` · ` segment), the `<category>` token and the
+`(not this checkout)` marker are what it keys on.
 
 **Only issues this checkout can take reach the closing `To ship:` line** — an off-site issue named
 there hands the user a `take` that the dispatcher will refuse, and a recommendation the tooling then
