@@ -245,6 +245,15 @@ claude plugin update sassy-dog@sassydog-skills --scope user   # or: project, loc
 
 `--scope` defaults to `user`. If this machine has a *project*-scope install of the plugin, that is the copy your sessions in that project run, and the bare command will not touch it — see step 1 below for how to tell.
 
+**To do all of it for every copy on this machine at once**, run the bundled script from a checkout of this repo — it refreshes the clone, updates the `user` copy and every live `project` copy from inside its own path, prunes registry entries left by torn-down worktrees, and verifies each survivor **by content** rather than version string. Dry run by default:
+
+```bash
+bash scripts/update-plugin-everywhere.sh          # report only
+bash scripts/update-plugin-everywhere.sh --apply  # update, prune, verify; then restart sessions
+```
+
+It also names the one stale state the installer cannot fix: every copy already at the latest *stamped* version while `main` has merged newer content. `claude plugin update` is version-keyed and copies nothing there; the remedy is a release stamp (`docs/VERSIONING.md`), after which the next run installs a fresh version directory.
+
 ### The bare plugin name fails
 
 `claude plugin update sassy-dog` returns "not found" — the error doesn't hint at the fix. The marketplace-qualified name is required: `sassy-dog@sassydog-skills`.
