@@ -253,6 +253,10 @@ this report.
 
 ## 5. Output format
 
+> The routine edition of this skill (in `sassydog-routines`) has one automated consumer,
+> `work-fire-watch`, which reads only the `fire-watch-v1` block that edition appends —
+> `docs/ROUTINES.md` lists the sentinels. This interactive edition appends no block.
+
 Render inline as markdown. Two anti-verbosity rules are non-negotiable: (1) empty surfaces get a
 single token on the consolidated `✓ Clean today:` line, never their own section; (2) within a
 section, skip empty tiers. Recommendations go LAST.
@@ -324,9 +328,7 @@ _To ship: `cd <product> && take #<N>`_
 ```
 
 Keep the footer. This skill's job ends at naming the product; the per-repo `survey-work` and `take-it`
-take it from there, and the footer is what makes that handoff explicit rather than implied. The
-routine edition's post has one automated consumer, `work-fire-watch`, which routes lines by the
-bare repo name and product token exactly as rendered — `docs/ROUTINES.md` lists what it keys on.
+take it from there, and the footer is what makes that handoff explicit rather than implied.
 
 `🕰 Stale CI verdicts` is the ONLY place a stale `success` renders, and it is a real section
 rather than a phrase an agent is left to place. A `default_branch_ci` of `success` whose

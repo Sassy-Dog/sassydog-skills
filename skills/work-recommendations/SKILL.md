@@ -75,35 +75,42 @@ carries no issue number.
 | Backlog line `#NNN`, or a `[GH #N]` on a Customer-pain Sources line | `#N` | **DISPATCH** — after the label check below |
 | Any issue rendered with `(not this checkout)` | `#N`, off-site | **HOLD** — list it with its `site:` tokens; never claim it. `take-it` runs the site filter itself and refuses before claiming, so a refusal it reports is a HOLD outcome here, never a failure |
 | Any issue whose labels include `auto-security-watch` | `#N` | **HUMAN-ONLY** — a `security-watch.yml` finding (secret, code-scanning or Dependabot alert) that a cold sub-agent must never receive |
+| Any other issue whose labels include `security` | `#N` | **CONFIRM-EACH** — rendered under its own heading in the §4 preview and dispatched only if the user names it there; a triager removing the automation label must not turn a finding into a default dispatch |
 | Customer pain with a Sentry link and no `[GH #N]` | `sentry:<id>` | **FILE** with marker `sentry-source: <SHORT_ID>`, then DISPATCH |
 | Next bet, tech debt, or dev-experience item with no issue | none | **FILE** with marker `plate-source: <category>/<slug>` (slug rule in §4), then DISPATCH |
-| Security `Fix: merge PR #N` (a Dependabot PR) | `pr:#N` | **SHEPHERD** |
+| Security `Fix: merge PR #N` (a Dependabot PR) | `pr:#N` | **SHEPHERD** — the §4 preview shows author and whether the head is a fork; a fork-authored PR is CONFIRM-EACH, never merged on the batch approval |
 | Security `rotate and revoke`, any secret-scanning alert | none | **HUMAN-ONLY** — surface first, with the Fix line; never filed, never dispatched |
-| Already in flight `PR #N` | `pr:#N` | **SHEPHERD** |
+| Already in flight `PR #N`, or a stuck PR from the fire watch | `pr:#N` | **SHEPHERD** — same author/fork preview rule |
 | Already in flight bare branch (no PR) | branch | report "a `send it` away" and stop there — `send-it` is operator-facing |
 | Blind spot, inherited debt, `Suspected complete` epic | none | not a work item; one line saying so |
 
 **The label check runs on every `#N` before it is DISPATCH**, whichever source the list came
-from: `gh issue view <N> --json labels`. `auto-security-watch` → HUMAN-ONLY. Nothing else here
-reads labels — `take-it` owns the `site:` filter and the claim, and a hold it reports is
-carried into §6 as HOLD.
+from: `gh issue view <N> --json labels`. `auto-security-watch` → HUMAN-ONLY; `security` →
+CONFIRM-EACH. Nothing else here reads labels — `take-it` owns the `site:` filter and the claim,
+and a hold it reports is carried into §6 as HOLD. Every `pr:#N` gets
+`gh pr view <N> --json author,isCrossRepository` for the preview.
 
-The handle grammar is closed, and this is its one home:
-`^(#[0-9]+|pr:#[0-9]+|sentry:[0-9A-Za-z-]+|fire-watch:(ci-red|cron)/[a-z0-9._-]+|human-only)$`.
-A list that arrived through args (§2 source 1) carries these inline and they map directly:
-`#N` → DISPATCH (label check first), `sentry:<id>` → FILE, `pr:#N` → SHEPHERD,
-`human-only` → HUMAN-ONLY, `fire-watch:ci-red/<workflow>` → FILE with marker
-`fire-watch-source: ci-red/<workflow>` and label `ci-cd`, `fire-watch:cron/<slug>` → FILE with
-marker `fire-watch-source: cron/<slug>` and label `observability`. A `fire-watch:` handle is
-valid for those two kinds only; a Security-derived item can never be FILE. Anything else on a
-line is not a handle and the line is printed as report-only.
+The handle grammar is closed, and this is its one home — `work-fire-watch` cites it and carries
+no copy:
+`^(#[0-9]+|pr:#[0-9]+|sentry:[0-9A-Za-z-]+|fire-watch:(ci-red|cron)/[a-z0-9._-]+)$`.
+The **slug rule** for the `fire-watch:` path segment lives here too: lowercase the source
+string, replace every run of characters outside `[a-z0-9._-]` with one `-`, and trim `-` from
+both ends — so the workflow `CI` becomes `ci` and `Routine Heartbeat` becomes
+`routine-heartbeat`. A list that arrived through args (§2 source 1) carries handles inline and
+they map directly: `#N` → DISPATCH (label check first), `sentry:<id>` → FILE, `pr:#N` →
+SHEPHERD, `fire-watch:ci-red/<slug>` → FILE with marker `fire-watch-source: ci-red/<slug>` and
+label `ci-cd`, `fire-watch:cron/<slug>` → FILE with marker `fire-watch-source: cron/<slug>` and
+label `observability`. A `fire-watch:` handle is valid for those two kinds only; a
+Security-derived item can never be FILE. Anything else on a line is not a handle and the line is
+printed as report-only.
 
 A `sentry:` handle may arrive numeric (a permalink's `issues/<id>/`) or as a short id
-(`PROJ-123`). The marker needs the short id — it is what `survey-work` and `sentry-triage` key
-on — so resolve a numeric id with **one read-only Sentry lookup** (tools by capability, never by
-id); that lookup also returns the project slug `work-fire-watch` routes on. No Sentry tools →
-file as `sentry-source: <numeric id>` and say in the preview that it will not dedupe against
-theirs.
+(`PROJ-123`). Every `sentry:` handle gets **one read-only Sentry lookup** (tools by capability,
+never by id): it resolves a numeric id to the short id the marker needs — what `survey-work` and
+`sentry-triage` key on — and it is where the body's evidence (permalink, counts, last seen)
+comes from, since a caller's list carries titles only. No Sentry tools → file as
+`sentry-source: <numeric id>` with the evidence the list carried, and say in the preview that it
+will not dedupe against theirs.
 
 **Why the secret alert is human-only:** the fix is minutes of a human's time in a vendor console,
 rotation of a shared credential is irreversible and cross-product, and an issue describing an
@@ -134,12 +141,15 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/github-issues/scripts/file-or-link-issue.sh \
   so in the preview; never invent a colour, and never let a missing label turn into an exit-2
   retry loop.
 - **The `plate-source:` slug is a function of a stable input, or the marker dedupes nothing:**
-  tech debt → `tech-debt/<path>:<line>` of the marker the plate cited; dev experience →
-  `dx/<signal>` (`ci-flake`, `ci-p90`, `skipped-tests`); next bet → `next-bet/<title slug>`
-  (lowercase, hyphens, no stop-word trimming). Because `survey-work` synthesizes next-bet titles
-  fresh each run, the preview for a next bet **also lists every open issue whose body carries
-  `plate-source: next-bet/`** (`gh issue list --search '"plate-source: next-bet/" in:body'`) so a
-  near-duplicate is caught by the human before approval rather than by a marker that cannot.
+  tech debt → `tech-debt/<path>/<slug of the marker's own text>` (the path and the `TODO`/`FIXME`
+  sentence, never the line number, which moves on every edit above it); dev experience →
+  `dx/<signal>` (`ci-flake`, `ci-p90`, `skipped-tests`); next bet → `next-bet/<slug of title>`.
+  All three use §3's slug rule. Because `survey-work` synthesizes next-bet titles fresh each run,
+  the preview for a next bet or a tech-debt item **also lists every open issue whose body carries
+  the same `plate-source:` prefix** —
+  `gh issue list --repo <owner/name> --limit 100 --search '"plate-source: next-bet/" in:body'`
+  (or `tech-debt/`), printing the count against the limit — so a near-duplicate is caught by the
+  human before approval rather than by a marker that cannot.
 - When `take-it.md` has a `board:` block, pass `--project-id`, `--status-field-id` and
   `--status-option-id <backlog_option_id>` so the issue lands on the Backlog column.
 
@@ -154,7 +164,9 @@ Then, exactly once per run, **one preview covering everything the run will do**:
 
 1. Dry-run **every** candidate and print the full `would-file` / `already-linked` set together
    with each proposed body — and, below it, the exact `take-it` and `pr-shepherd` calls §5 will
-   make, issue and PR numbers with titles.
+   make, issue and PR numbers with titles, each PR with its author and `fork` where
+   `isCrossRepository` is true. A separate **Confirm each** heading lists every CONFIRM-EACH
+   item; those are dispatched or shepherded only if the user names them in the approval.
 2. More than 5 would-file → stop and show the list; ask whether an umbrella issue fits.
 3. Proceed only after the user approves. **"Don't bother me with questions" is not approval.**
    Approval for one run never carries over to the next. The approval covers filing *and*
@@ -164,11 +176,11 @@ Then, exactly once per run, **one preview covering everything the run will do**:
 
 ## 5. Dispatch, in order
 
-One `take-it` call carrying every DISPATCH handle in plate order. `take-it` caps a dispatch at
-five and has no second round, so the first five are the batch and **items six onward are not
-dispatched this run**: §6 lists them under `_Not dispatched this run:_` with the exact
-`take #…` command that continues in order. Never quietly drop them and never let "queued" read
-as owned by somebody:
+One `take-it` call carrying **at most five** DISPATCH handles in plate order — `take-it` §2
+sets the per-dispatch cap and this skill owns the bound rather than relying on what it does with
+an overflow. **Items six onward are not dispatched this run**: §6 lists them under
+`_Not dispatched this run:_` with the exact `take #…` command that continues in order. Never
+quietly drop them and never let "queued" read as owned by somebody:
 
 ```text
 Skill: sassy-dog:take-it
@@ -180,9 +192,14 @@ Then one `pr-shepherd` call for every SHEPHERD handle, with the repo's merge pol
 
 ```text
 Skill: sassy-dog:pr-shepherd
-Args: "Watch PRs <numbers> in <owner/name>. Merge policy: <from merge_queue>. Report why any
-       stuck PR is stuck; do not close/reopen to retrigger."
+Args: "Watch PRs <numbers> in <owner/name>. Merge policy: <the MERGE QUEUE / DIRECT string
+       exactly as take-it §6 renders it from merge_queue>. <take-it §6's coupled-PR concern
+       lines when migrations or codegen are configured>. Report why any stuck PR is stuck; do
+       not close/reopen to retrigger."
 ```
+
+Render the policy in `take-it` §6's own words so `pr-shepherd` never has to "confirm a guess" —
+a second prompt would break the one-approval rule above.
 
 If `sassy-dog:take-it` is not among your available skills, STOP and tell the user to install the
 plugin (`claude plugin install sassy-dog`) — do not improvise the dispatch from memory.
@@ -200,6 +217,7 @@ After the dispatch returns, render one table in plate order, then the held and h
 | 2 | <title> | #<filed> | FILE → DISPATCH | PR #<P> merged |
 | 3 | <title> | #398 | DISPATCH | PR #<P> held — Blocking review finding |
 | 4 | <title> | #402 | HOLD | `site:mac` — run `take #402` from that checkout |
+| 5 | <title> | #2186 | CONFIRM-EACH | `security` — not named in the approval; untouched |
 
 _Human-only: <one line per item — the Fix line verbatim where the plate has one, else the line's why-text>_
 _Held: <one line per item, with the site it waits for>_
