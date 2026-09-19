@@ -31,6 +31,8 @@ Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin
 | `sassy-dog` | `repo-health` | Scripted signal scans — TODO/FIXME markers, skipped tests, CI duration/flake, mobile release lag, code/secret scanning |
 | `sassy-dog` | `whats-on-fire` | Org-wide portfolio sweep — Sentry issues + crons, stalled PRs, red default branches, Dependabot exposure, code/secret scanning, and blind spots (products with no monitoring/alerting/scanning); ranks across products and routes each to the owning repo's `survey-work` |
 | `sassy-dog` | `whats-behind` | Portfolio currency audit — peer-relative version drift across pinned Actions, toolchains, runner labels, and Dependabot coverage; reports which repos lag and whether the cause is a missing automation config |
+| `sassy-dog` | `work-recommendations` | Work a survey-work plate in order — resolve each recommendation to an issue (filing the issue-less ones behind one preview), then ship them through `take-it` in plate order |
+| `sassy-dog` | `work-fire-watch` | Work this repo's items from the latest `daily-fire-watch` Slack post — exact-name routing, report order preserved, delegates the loop to `work-recommendations` |
 
 ### Workflow skills + capability skills
 
@@ -55,6 +57,13 @@ reports green + `MERGEABLE` + `CLEAN` exactly like an ordinary PR and merging on
 it out of order. Whether a repo is enabled for the preview, whether a PR is a layer, and whether a
 layer is safe to merge now are all derived at runtime by `pr-shepherd`'s `stack-probe.sh` — the
 config carries only the policy.
+
+Two dispatch front-ends sit on top of them and carry **no config template of their own**:
+`work-recommendations` turns a `survey-work` plate's ordered recommendations into one `take-it`
+batch (filing the issue-less items first, preview-then-confirm), and `work-fire-watch` reads the
+latest `daily-fire-watch` post from Slack, keeps the lines routed to the current repo by exact
+name, and hands them to `work-recommendations` — one implementation of the loop. Both read the
+repo's existing `take-it.md` and `survey-work.md`, and both stop on `NO_CONFIG`.
 
 Workflow skills stay thin by delegating shared mechanics to the capability skills
 (`github-issues`, `sentry-triage`, `pr-shepherd`, `repo-cleanup`, `repo-health`, `testflight`).
