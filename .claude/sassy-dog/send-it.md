@@ -27,9 +27,11 @@ composing a body from scratch, and keep the sections in its order:
 agent (`agents/*.md`):
 
 - `README.md`'s plugin/skill table and agent list must be updated in the same PR.
-- `.claude-plugin/plugin.json` `version` must be re-stamped for release-worthy changes: run
-  `bash scripts/stamp-version.sh` (monthly CalVer; **never hand-edit** — one-way ratchet, see
-  `docs/VERSIONING.md`).
+- `.claude-plugin/plugin.json` `version` is **not** stamped in a feature PR. Stamping is
+  release-only, in a dedicated `chore(release)` PR when the daily reminder reports **due**
+  (`docs/VERSIONING.md`; stamp-in-PR was weighed and rejected in #296 because it would put the
+  manifest in every issue's `touches:` line and serialize `dispatch-ready`). Never hand-edit it —
+  `bash scripts/stamp-version.sh` is the only writer, one-way CalVer ratchet.
 
 **Post-merge plugin update reminder** — consumer machines do NOT pick up changes automatically,
 and a `version` bump is NOT the trigger: content lands on `main` on every merge while the manifest
