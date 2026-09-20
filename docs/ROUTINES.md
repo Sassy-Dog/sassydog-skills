@@ -184,7 +184,7 @@ The sentinels the consumer keys on, so that a producer-side edit is a visible tw
 | poster | Slack user id `U0AAJ2WGMTQ` — the user-scoped connector the routine posts through; the trailing `Sent using` line is plain text and never evidence. Only that id's **newest sentinel post** is judged — never page past it to an older one; that id's ordinary chatter and any report-shaped post from another id are skipped and named |
 | report first line | `Daily Fire Watch (YYYY-MM-DD)` — no leading `#` once Slack has rendered it |
 | header lines, copied verbatim | `_Load: repo (sassydog-routines@<sha>) · Sources: …_` and `_Coverage: …_` |
-| machine block | a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item\|<repo>\|<kind>\|<id>\|<tier>\|<labels>\|<title>` and `top\|<rank>\|<repo>\|<kind>:<id>` lines; the producer keeps the block whole under truncation — prose is what gets cut |
+| machine block | a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item\|<repo>\|<kind>\|<id>\|<tier>\|<labels>\|<title>` and `top\|<rank>\|<repo>\|<kind>:<id>` lines; the block is bounded by Slack's 5000-char-per-element cap (a fence is one element), so `truncated=yes` means rows may be missing as well as prose — the producer drops the least urgent tiers first and never a `top`-named row |
 | could-not-run post | first line contains `daily-fire-watch could not run.` (the routine prompt's missing-skill-body path; matched on the substring because Slack strips the Markdown around it) |
 | anything else from the pinned poster | the consumer stops and prints the first line |
 
