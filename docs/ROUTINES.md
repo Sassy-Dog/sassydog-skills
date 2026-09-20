@@ -167,9 +167,10 @@ consumer **never parses the prose**. The contract is a fenced machine block the 
 append** to every report — `fire-watch-v1`, one `item|<repo>|<kind>|<id>|<tier>|<labels>|<title>` line
 per item plus `top|<rank>|<repo>|<kind>:<id>` lines for the cross-product Top 5 — specified in
 full in that skill's §2. The producer resolves the product→repo map, so the consumer's routing
-is one exact `repo` match. The producer-side change is
-[sassydog-routines#68](https://github.com/Sassy-Dog/sassydog-routines/issues/68); until it lands,
-every post is block-less and the consumer stops with "this post predates `fire-watch-v1`".
+is one exact `repo` match. The producer side landed in
+[sassydog-routines#69](https://github.com/Sassy-Dog/sassydog-routines/pull/69) (closing #68);
+posts from before it are block-less, and on one of those the consumer stops with "this post
+predates `fire-watch-v1`".
 
 ```text
 item|<repo>|<kind>|<id>|<tier>|<labels>|<title>
