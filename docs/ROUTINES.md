@@ -164,13 +164,14 @@ ruled-out table. The short version, because it changes how you read every degrad
 `#daily-fire-watch` and works the items routed to the repo it runs in. What Slack delivers is
 mrkdwn whose prose shape changes from day to day (bullets one day, inline runs the next), so the
 consumer **never parses the prose**. The contract is a fenced machine block the routine **must
-append** to every report — `fire-watch-v1`, one `item|<repo>|<kind>|<id>|<tier>|<labels>|<title>` line
-per item plus `top|<rank>|<repo>|<kind>:<id>` lines for the cross-product Top 5 — specified in
-full in that skill's §2. The producer resolves the product→repo map, so the consumer's routing
-is one exact `repo` match. The producer side landed in
-[sassydog-routines#69](https://github.com/Sassy-Dog/sassydog-routines/pull/69) (closing #68);
-posts from before it are block-less, and on one of those the consumer stops with "this post
-predates `fire-watch-v1`".
+post as the first reply in every report's thread** — `fire-watch-v1`, one
+`item|<repo>|<kind>|<id>|<tier>|<labels>|<title>` line per item plus `top|<rank>|<repo>|<kind>:<id>`
+lines for the cross-product Top 5 — specified in full in that skill's §2. The producer resolves
+the product→repo map, so the consumer's routing is one exact `repo` match. The producer side
+landed in [sassydog-routines#69](https://github.com/Sassy-Dog/sassydog-routines/pull/69)
+(closing #68) with the block at the end of the message body, and moved it to the thread reply on
+2026-09-21; the consumer accepts the in-body form only on reports dated before that. A report
+with no block reaches the consumer's stop, whose text is in the skill's §2 table.
 
 ```text
 item|<repo>|<kind>|<id>|<tier>|<labels>|<title>
@@ -182,10 +183,10 @@ The sentinels the consumer keys on, so that a producer-side edit is a visible tw
 | Sentinel | Value the consumer expects |
 | --- | --- |
 | channel | `#daily-fire-watch`, id `C0BNNEE59PX` |
-| poster | Slack user id `U0AAJ2WGMTQ` — the user-scoped connector the routine posts through; the trailing `Sent using` line is plain text and never evidence. Only that id's **newest sentinel post** is judged — never page past it to an older one; that id's ordinary chatter and any report-shaped post from another id are skipped and named |
+| poster | Slack user id `U0AAJ2WGMTQ` — the user-scoped connector the routine posts through; the trailing `Sent using` line is plain text and never evidence. Only that id's **newest sentinel post** is judged — never page past it to an older one; that id's ordinary chatter and any report-shaped post from another id are skipped and named. The same id is the only one whose **thread reply** counts as the block — its first reply, never a later one, never another id's |
 | report first line | `Daily Fire Watch (YYYY-MM-DD)` — no leading `#` once Slack has rendered it |
 | header lines, copied verbatim | `_Load: repo (sassydog-routines@<sha>) · Sources: …_` and `_Coverage: …_` |
-| machine block | a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item\|<repo>\|<kind>\|<id>\|<tier>\|<labels>\|<title>` and `top\|<rank>\|<repo>\|<kind>:<id>` lines; the block is bounded by Slack's 5000-char-per-element cap (a fence is one element), so `truncated=yes` means rows may be missing as well as prose — the producer drops the least urgent tiers first and never a `top`-named row |
+| machine block | **the first reply in the report's thread from the pinned poster** (since 2026-09-21; earlier reports carried it at the end of the message body, and the consumer still accepts that form): a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item\|<repo>\|<kind>\|<id>\|<tier>\|<labels>\|<title>` and `top\|<rank>\|<repo>\|<kind>:<id>` lines; the block is bounded by Slack's 5000-char-per-element cap (a fence is one element), so `truncated=yes` means rows may be missing as well as prose — the producer drops the least urgent tiers first and never a `top`-named row |
 | could-not-run post | first line contains `daily-fire-watch could not run.` (the routine prompt's missing-skill-body path; matched on the substring because Slack strips the Markdown around it) |
 | anything else from the pinned poster | the consumer stops and prints the first line |
 
