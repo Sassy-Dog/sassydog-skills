@@ -75,6 +75,42 @@ for needle in 'fire-watch-v1' 'C0BNNEE59PX' 'U0AAJ2WGMTQ' 'Daily Fire Watch (' '
         fi
     done
 done
+# --- 1b. the block's home is the thread reply (since 2026-09-21) -------------
+# Both homes say the block is the pinned poster's FIRST thread reply; the
+# consumer pairs that with "never another id's", still states the legacy
+# body form for older reports, and no longer says "one message per run".
+for needle in 'first reply' 'first line' ; do
+    for home in "$CONSUMER" "$CONTRACT"; do
+        flat="$(tr '\n' ' ' <"$home" | sed 's/  */ /g')"
+        if grep -qF -- "$needle" <<<"$flat"; then
+            ok "thread sentinel '$needle' present in ${home#"$ROOT"/}"
+        else
+            bad "thread sentinel '$needle' missing from ${home#"$ROOT"/}"
+        fi
+    done
+done
+flat_consumer="$(tr '\n' ' ' <"$CONSUMER" | sed 's/  */ /g')"
+if grep -qF -- 'from the same pinned poster id' <<<"$flat_consumer" && grep -qF -- 'never take a reply from any other id' <<<"$flat_consumer"; then
+    ok "consumer binds the thread reply to the pinned poster id"
+else
+    bad "consumer no longer binds the thread reply to the pinned poster id"
+fi
+if grep -qF -- 'carried the block at the end of the message body' <<<"$flat_consumer"; then
+    ok "consumer still states the pre-cutover in-body form"
+else
+    bad "consumer lost the pre-cutover in-body form"
+fi
+if grep -qF -- 'one message per run' <<<"$flat_consumer"; then
+    bad "consumer still says one message per run; the block is a thread reply"
+else
+    ok "the 'one message per run' shape is absent"
+fi
+flat_contract="$(tr '\n' ' ' <"$CONTRACT" | sed 's/  */ /g')"
+if grep -qF -- 'first reply in every report' <<<"$flat_contract" && grep -qF -- 'never another id' <<<"$flat_contract"; then
+    ok "contract doc names the thread reply and the pinned poster's authority over it"
+else
+    bad "contract doc no longer names the thread reply as the block's home"
+fi
 # The poster id must sit on the RULE, not only inside the block example.
 if grep -qE -- 'select the.*newest message from that user id|from that user id whose first line' "$CONSUMER" && grep -qF -- '`U0AAJ2WGMTQ`, pinned' "$CONSUMER"; then
     ok "consumer's selection rule names the pinned poster id"
