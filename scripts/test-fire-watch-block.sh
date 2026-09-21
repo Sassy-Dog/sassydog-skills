@@ -90,7 +90,7 @@ for needle in 'first reply' 'first line' ; do
     done
 done
 flat_consumer="$(tr '\n' ' ' <"$CONSUMER" | sed 's/  */ /g')"
-if grep -qF -- 'from the same pinned poster id' <<<"$flat_consumer" && grep -qF -- 'never take a reply from any other id' <<<"$flat_consumer"; then
+if grep -qF -- 'from the same pinned poster id' <<<"$flat_consumer" && grep -qF -- 'never take a reply from any other id — a thread' <<<"$flat_consumer"; then
     ok "consumer binds the thread reply to the pinned poster id"
 else
     bad "consumer no longer binds the thread reply to the pinned poster id"
