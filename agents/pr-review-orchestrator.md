@@ -140,7 +140,9 @@ because a mapped agent failed to resolve.
 
 ## Step 3 — conditional parallel fan-out
 
-The default mode is **normal**: for **each touched surface only**, dispatch its reviewer.
+The default mode is **normal**: for **each touched surface only**, dispatch its reviewer at tier
+`terra` (Claude Code: `model: "sonnet"` · omp: `model: "@task"`). Pass the tier on every call:
+a reviewer that inherits your own tier runs nine times at the tier chosen for one judgement pass.
 Issue every call in one message, then run Steps 4 and 5. Do not insert a plan-only round
 when nested dispatch can run. Record actual returns, including failures, using the result
 records below. If nested dispatch is unavailable (from the runtime's capability declaration
@@ -153,6 +155,9 @@ Agent({ subagent_type: "sassy-dog:code-quality-reviewer", prompt: "<diff-scoped 
 Agent({ subagent_type: "sassy-dog:security-reviewer",     prompt: "<diff-scoped brief>" })
 …one call per touched surface, all in the same message
 ```
+
+The calls above are illustrative and omit the tier for brevity. Every real call passes it, as
+stated at the top of this step.
 
 Each brief contains, and contains only — the delivery rule at 6 included, since a list that omits it cannot pass the contract down ([#280](https://github.com/Sassy-Dog/sassydog-skills/issues/280)):
 
@@ -248,7 +253,8 @@ Keep failed/unusable work visibly separate from usable results. Then:
 2. Recheck identity/context. If changed, discard all previous specialist results and ask for
    a fresh `plan-only` classification within the same reserved round, before any specialist
    dispatch. Dispatch only the selected surfaces lacking usable same-changeset results, in
-   one parallel batch, using the supplied briefs unchanged. Never rerun a successful specialist
+   one parallel batch, using the supplied briefs unchanged. Dispatch each at tier `terra`
+   (Claude Code: `model: "sonnet"` · omp: `model: "@task"`), the tier Step 3 dispatches reviewers at. Never rerun a successful specialist
    merely because another surface failed. Capture each actual result and its provenance,
    including failures; do not wait for a notification to substitute for a return.
    Allow at most one fresh planning pass in this reserved round; further input movement

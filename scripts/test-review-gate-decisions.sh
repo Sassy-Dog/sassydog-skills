@@ -1036,6 +1036,36 @@ else
     bad "take-it exposes only $n_takeit_enums RESULT review enum(s) — expected the single-issue one and the stacked variant"
 fi
 
+# `review=deferred` — the coordinator site's worker outcome — is the same
+# two-copy shape as `no-report`, and pinned the same way. Before it existed the
+# coordinator-site prompt merely OMITTED the review step: nothing forbade a
+# worker from running its own reviewer fan-out, and the honest RESULT fit was
+# `skipped`, which the EITHER-site hold above holds. Each pin names what
+# unpinning would let a later edit revert green: the enum dropping `deferred`,
+# the forbidding step decaying back into a bare omission, and the per-site split
+# flipping so that `deferred` releases a PR on the agent site, where nothing
+# will ever review it.
+if [ "$n_takeit_enums" -ge 2 ]; then
+    no_deferred="$(grep -vF 'deferred' <<<"$takeit_enums" | tr '\n' ' ')"
+    if [ -n "$no_deferred" ]; then
+        bad "a take-it RESULT enum omits the deferred value: $no_deferred"
+    else
+        ok "all $n_takeit_enums take-it RESULT review enums carry the deferred value"
+    fi
+fi
+assert_has "$takeit_flat" \
+    '**Do not review.** Dispatch no review agent, reviewer or code-review skill' \
+    "take-it's coordinator-site step 6 FORBIDS reviewing rather than omitting the step"
+assert_has "$takeit_flat" \
+    'on `agent` it deletes this block. A worker must never receive both.' \
+    "take-it's worker never receives both step 6 variants"
+assert_has "$takeit_outside" \
+    '**`review=deferred` is legitimate on exactly one site.**' \
+    "take-it's deferred rule sits OUTSIDE the coordinator-only subsection, so it governs the agent site"
+assert_has "$takeit_outside" \
+    'a `deferred` means a worker skipped the review it was told to run. It is held exactly like `skipped`' \
+    "take-it holds deferred on the agent site exactly like skipped"
+
 # dispatch-ready: the unattended loop, where no human coordinator is reading
 # along to relay anything — the case that turns a lost report into a merged
 # unreviewed PR, and a waiting agent into a stopped loop.
@@ -1099,6 +1129,15 @@ if [ "$n_coord_bullets" -ge 2 ]; then
 else
     bad "dispatch-ready marks only $n_coord_bullets bullets coordinator-only — the complement below is the whole file and measures nothing"
 fi
+# deferred's dispatch-ready half — placed after `dispatch_outside` exists,
+# because under `set -u` an unbound slice aborts this whole gate rather than
+# failing one assertion.
+assert_has "$dispatch_outside" \
+    '**A PR body reading `review: deferred to coordinator` is withheld too, until a review outcome replaces it.**' \
+    "dispatch-ready withholds a deferred PR outside its coordinator-only bullets, so the paths agree"
+assert_has "$dispatch_flat" \
+    "with take-it's **coordinator-site step 6**, which forbids the worker any review" \
+    "dispatch-ready's prompt carries the forbidding step, not a bare omission"
 if [ -z "$dispatch_outside" ]; then
     bad "dispatch-ready's non-coordinator region did not slice — the default-site checks would pass vacuously"
 else

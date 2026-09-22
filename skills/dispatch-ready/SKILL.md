@@ -141,7 +141,12 @@ Never create a PR, redispatch or reset recovery to make this handoff visible.
   review reported `NO REPORT` or `SKIPPED`, or carries a Blocking finding, is withheld from this
   hand-off, on either `review_site` — with one carve-out, `review_agent: skip`, whose every run
   legitimately reports `SKIPPED`, so holding on it would turn the documented opt-out into a blanket
-  merge freeze. `take-it` draws the same line for the same reason. This exception is stated here
+  merge freeze. `take-it` draws the same line for the same reason. **A PR body reading
+  `review: deferred to coordinator` is withheld too, until a review outcome replaces it.** On
+  `review_site: coordinator` that outcome comes from the not-yet-reviewed bullet below. On `agent`
+  nothing will ever review it, so it stays held, exactly as a `SKIPPED` would be — which is
+  also what keeps a PR in flight safe when a repo switches from `coordinator` to `agent`. `take-it`
+  splits `review=deferred` the same way. This exception is stated here
   rather than three bullets down
   because this is the bullet that merges: a corrective a reader reaches only after the merge has
   been ordered is a corrective that never runs. **How a tick learns the outcome: read the PR
@@ -188,7 +193,8 @@ Never create a PR, redispatch or reset recovery to make this handoff visible.
   later dispatch tick. A failed reservation write holds this scheduling attempt; it never
   turns an unrecorded retry into spent legacy history or permits an unaccounted dispatch.
 - **Open PRs not yet reviewed, when `review_site: coordinator`** → review before merging, never
-  after. Dispatch the agent resolved by `send-it`'s order against the PR's diff versus the derived
+  after. Dispatch the agent resolved by `send-it`'s order at tier `sol` (Claude Code:
+  `model: "opus"` · omp: `model: "@default"`) against the PR's diff versus the derived
   default branch with the original scope statement and reconciled `recovery_used`. For the shipped
   `sassy-dog:pr-review-orchestrator` only, load the **Parent recovery protocol** under Step 3 of
   `${CLAUDE_PLUGIN_ROOT}/agents/pr-review-orchestrator.md` and pass its resolved absolute path.
@@ -569,8 +575,11 @@ when appending failure context for a §2 redispatch.
 
 **Honour `review_site:` when you build the prompt.** With `review_site: agent` — the default an
 absent key selects — take-it's step-6 review gate stays in the prompt verbatim and each sub-agent
-reviews its own diff before opening its PR. With `review_site: coordinator`, drop that one step and
-review each PR in §2 of a later tick instead, before it merges. **Never drop it from both**, and
+reviews its own diff before opening its PR. With `review_site: coordinator`, replace that one step
+with take-it's **coordinator-site step 6**, which forbids the worker any review and has it report
+`review=deferred`, and review each PR in §2 of a later tick instead, before it merges. Omitting the
+step is not enough: a worker left no instruction still runs among skills urging review before a
+commit. **Never drop the review from both**, and
 never substitute a different agent for the one `review_agent:`'s order resolves — this key chooses
 the site alone.
 
@@ -606,13 +615,16 @@ clean or another request.
 Those two gates are the ones most easily lost here, because these agents open their own PRs from a
 cold worktree and never see an interactive session's instructions: a gate that lives only in
 `send-it` never runs for them at all. That is why the review gate is a config key read here rather
-than a rule stated once in `send-it`, and why dropping it from the prompt under
+than a rule stated once in `send-it`, and why replacing it in the prompt under
 `review_site: coordinator` obliges §2 to run it — never to skip it.
 
-**Model policy: pass `model: "opus"` on every dispatched Agent call.** Implementation work runs on
-Opus because it is the cheaper tier relative to the coordinator's session model — only this
-coordinator tick stays on the session model. Do not silently change the sub-agent model in either
-direction.
+**Model policy: dispatch every implementation sub-agent at tier `terra` (Claude Code:
+`model: "sonnet"` · omp: `model: "@task"`)** — first dispatch, stack chains and every §2 redispatch
+alike. Only this coordinator tick stays on the session model. This replaced a pin to Opus, justified
+as "the cheaper tier relative to the coordinator's session model". That premise stopped holding once
+the session model itself became Opus, and implementation ran on the most expensive tier. The
+binding's single home is the plugin's `docs/MODEL-TIERS.md`; change the tier there and here together,
+never here alone.
 
 Sub-agents NEVER merge. Single-writer: merges happen in §2 of a tick.
 
@@ -888,7 +900,7 @@ held set:
 | --- | --- | --- |
 | Its issue carries `blocked` | **No** — §2 already routed it to a human | held: joins the held set |
 | `CONFLICTING` | **No** — §2 never auto-rebases; a human resolves the conflict | held: joins the held set |
-| Held by a §2 review outcome — a Blocking finding, a `NO REPORT`, or a held `SKIPPED` — with its ONE §2 redispatch spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set |
+| Held by a §2 review outcome — a Blocking finding, a `NO REPORT`, a held `SKIPPED`, or a `deferred` no review has replaced — with its ONE §2 redispatch spent | **No** — never merged past, and nothing left to redispatch | held: joins the held set |
 | Checks still running, and not `CONFLICTING` | **Yes** — a later tick merges it once it goes green | keeps the loop alive |
 | Checks red, its issue not `blocked`, and its ONE §2 redispatch unspent | **Yes** — that redispatch is still available | keeps the loop alive |
 | Anything else this loop is not permitted to merge this tick | **No** — held is the default | held: joins the held set |

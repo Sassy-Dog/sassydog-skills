@@ -2,7 +2,7 @@
 
 Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI coding tools.
 
-Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin via the marketplace below; any other agent that can read a Markdown instruction file and run a shell script can use the same `skills/` directory directly — there is nothing Claude-specific in the skill bodies.
+Everything here is plain Markdown plus Bash. Claude Code consumes it as a plugin via the marketplace below; any other agent that can read a Markdown instruction file and run a shell script can use the same `skills/` directory directly. Model choice is harness-neutral: every dispatch site names a tier, bound per harness in [`docs/MODEL-TIERS.md`](docs/MODEL-TIERS.md). The dispatch *mechanics* are still Claude-Code-shaped (the Agent tool, `isolation: "worktree"`, `${CLAUDE_PLUGIN_ROOT}`), so another harness has to supply those.
 
 **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Versioning](docs/VERSIONING.md)** · Licensed [Apache-2.0](LICENSE)
 
@@ -200,6 +200,13 @@ dispatched *it*, and the fan-out brief carries that rule down as one of its enum
 than assuming each agent's own file gets read. It does not make the hop reliable and is not meant
 to: a reviewer that errors, times out, or comes back unparseable is still scored `!` and named on
 every run, never rolled into Clean. **Audit mode scores a lost reviewer too, in its own idiom** — the sibling of that rule rather than a copy of it: `assess-it` keeps a per-domain outcome ledger and prints it in the Phase 4 preview *before* the approval prompt, so a domain whose reviewer never came back is named dark rather than filed as clean. The consequence differs because audit mode **writes**: a diff-scoped hole costs a re-run, while a filed Epic missing a domain becomes the durable record and reads complete. It is surfaced, not a veto — filing still proceeds on approval.
+
+Each dispatch site names a **model tier** rather than letting its agent inherit the session's
+model. Implementation workers and the nine reviewers run at `terra` (Sonnet on
+Claude Code), and the orchestrator runs at `sol` (Opus). On the coordinator site a worker is told
+outright not to review, and reports `review=deferred`. Tiers are harness-neutral words so the
+skills port beyond Claude Code. The bindings live in [`docs/MODEL-TIERS.md`](docs/MODEL-TIERS.md),
+and `scripts/test-model-tiers.sh` enumerates the sites and holds each one to that table.
 
 ## Installation
 

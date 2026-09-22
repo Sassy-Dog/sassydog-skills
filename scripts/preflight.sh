@@ -1437,6 +1437,14 @@
 #      plus the handle grammar's single home and the slug rule, run against the
 #      org's real workflow names. Source-level, no network.
 #
+#  47. model-tier tests (scripts/test-model-tiers.sh) — every dispatched agent
+#      runs at a harness-neutral tier (astra/sol/terra/luna) bound inline at its
+#      dispatch site, and every binding agrees with docs/MODEL-TIERS.md. Model
+#      choice used to be implicit — inherited, or pinned to Opus on a premise
+#      that stopped holding — and a removed binding breaks nothing visible, so
+#      presence is asserted too. Mutation-proven with a control copy. Source-
+#      level, no network.
+#
 # All gates run even after a failure (accumulate-and-report, same pattern as
 # check-frontmatter.sh). Exit 0 = all pass, 1 = any fail. Tools that are not
 # installed locally SKIP with a note — CI still enforces them.
@@ -2303,6 +2311,15 @@ if bash scripts/test-fire-watch-block.sh; then
     pass "fire-watch block tests (scripts/test-fire-watch-block.sh)"
 else
     failed "fire-watch block tests (scripts/test-fire-watch-block.sh)"
+fi
+
+# --- 47. model-tier tests -------------------------------------------------------
+# Dispatch sites name a tier, never inherit the session model, and every inline
+# binding matches docs/MODEL-TIERS.md. Source-level, no network.
+if bash scripts/test-model-tiers.sh; then
+    pass "model-tier tests (scripts/test-model-tiers.sh)"
+else
+    failed "model-tier tests (scripts/test-model-tiers.sh)"
 fi
 
 # ------------------------------------------------------------------------------

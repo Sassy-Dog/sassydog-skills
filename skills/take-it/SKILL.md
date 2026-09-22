@@ -225,11 +225,23 @@ git switch "$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)"
 manifest** as results return — `{issue, pr, worktreePath, worktreeBranch}` — somewhere durable such
 as `.git/take-it-batch.json`, so a crashed coordinator's worktrees stay reclaimable.
 
+**Dispatch every implementation sub-agent at tier `terra` (Claude Code: `model: "sonnet"` · omp:
+`model: "@task"`)** — the normal template, the stacked variant, and every §6 redispatch alike. The
+coordinator stays on the session model; only what it dispatches is tiered. Never let a worker
+inherit the session model by omitting the parameter: that is how implementation silently ran on
+the most expensive tier. The binding's single home is the plugin's `docs/MODEL-TIERS.md`.
+
 **Substitute the resolved review agent into step 6 of the template below when `review_site` is
-`agent`.** When it is `coordinator`, drop step 6 from the prompt entirely and review in §6 instead —
-never drop it from both. When the resolution order yields nothing (`review_agent: skip`), drop the
-step and say so once in the §7 report; a review nobody ran and a review nobody mentioned are the
-same thing to the reader.
+`agent`.** When it is `coordinator`, replace the review step 6 with the **coordinator-site step 6**
+below it and review in §6 instead — never drop the review from both. When the resolution order
+yields nothing (`review_agent: skip`), drop the step and say so once in the §7 report; a review
+nobody ran and a review nobody mentioned are the same thing to the reader.
+
+**The coordinator-site step 6 forbids reviewing — omission is not enough.** A worker handed no review
+step still runs in a session whose loaded skills urge it to seek review before committing, so a
+prompt that merely leaves the step out invites the one thing the site exists to stop: every worker
+running its own reviewer fan-out, once per fix round. The forbidding step also gives the worker an
+honest RESULT value, `review=deferred`. Without it the nearest fit is `skipped`, which §6 holds.
 
 **Resolve the recovery handoff before building any prompt.** When the resolved agent is
 `sassy-dog:pr-review-orchestrator`, read the **Parent recovery protocol** under Step 3 of
@@ -352,7 +364,8 @@ behind in coordinator-only context.
 > 4. Follow the repo-specific implementation rules from the config's `## subagent-rules` section.
 > 5. Run the pre-flight locally and fix anything red: {preflight_commands from config}
 > 6. **Run the review gate before you commit** — lint, type and test cannot catch a design
->    regression. Dispatch **{resolved review agent}** against your **changeset** — working tree,
+>    regression. Dispatch **{resolved review agent}** at tier `sol` (Claude Code: `model: "opus"` ·
+>    omp: `model: "@default"`) against your **changeset** — working tree,
 >    staged and untracked included — versus `{default_branch}`, with a one-line scope statement.
 >    Not "the staged diff": you have not committed yet, and an untracked file is invisible to
 >    `git diff` while being the highest-risk class in the change. **Blocking findings → fix them
@@ -406,6 +419,19 @@ behind in coordinator-only context.
 > start the whole orchestrator is SKIPPED. Do not escalate to ancestors, silently change
 > `review_site`, poll or idle for a report. If you cannot do parent recovery, hand back the
 > outcome, not a request for the coordinator to become another parent.
+>
+> **Coordinator-site step 6** — on `review_site: coordinator` the coordinator substitutes this for
+> the step 6 above; on `agent` it deletes this block. A worker must never receive both. Under
+> `review_agent: skip` it sends neither: no review will run on any site, so a worker told to report
+> `deferred` would be promising a review nobody owes.
+>
+> 6. **Do not review.** Dispatch no review agent, reviewer or code-review skill — not
+>    `pr-review-orchestrator`, no `*-reviewer`, no `pr-review-toolkit:*` agent, not
+>    `superpowers:requesting-code-review`, not `/code-review` — even where a loaded skill urges
+>    review before committing. The coordinator reviews this PR after it opens and before anything
+>    merges. Put `review: deferred to coordinator` in the PR body and `review=deferred` on your
+>    RESULT line.
+>
 > 7. **Reconcile the docs against the repo before you commit.** Re-read the docs describing what
 > you touched — `CLAUDE.md`, the relevant `README.md`, anything in `docs/` — and fix every claim
 > your change just made untrue, in this same PR. A stale doc is a defect in your change, not
@@ -422,7 +448,7 @@ behind in coordinator-only context.
 > 9. Push and open a PR — the body MUST contain `Closes #{N}` on its own line, and must cover
 > {pr_template_sections from config}.
 > 10. **Do NOT merge.** Report back: `RESULT: pr=<N> branch=<name>
->     status=<opened|skipped|failed> review=<clean|nits|no-report|skipped> recovery_used=<0|1> note=<one-line>`
+>     status=<opened|skipped|failed> review=<clean|nits|no-report|skipped|deferred> recovery_used=<0|1> note=<one-line>`
 
 ### Stacked variant (ONLY for a chain resolved in §2)
 
@@ -433,7 +459,9 @@ branch and rediscover the dependency as a conflict.
 
 Substitute steps 7–9 of the prompt above with the following; steps 1–6 (worktree confinement, never
 `git stash`, no shared-interpreter installs, read the issue, follow `CLAUDE.md` and
-`## subagent-rules`, run the pre-flight, run the review gate) apply unchanged **per layer** — a
+`## subagent-rules`, run the pre-flight, then step 6 as sited — the review gate on `agent`, the
+coordinator-site step 6 on `coordinator`, neither under `review_agent: skip`) apply unchanged
+**per layer** — a
 stack is reviewed layer by layer, because a layer's diff is what its own PR carries.
 
 > You are shipping a STACK of {depth} GitHub issues, bottom → top: {ordered list, e.g. #101 → #102 → #103}.
@@ -467,7 +495,7 @@ stack is reviewed layer by layer, because a layer's diff is what its own PR carr
 >
 > **Do NOT merge any layer.** Report one RESULT per layer with its PR, issue, review outcome and
 > `recovery_used=0|1`, then the stack line (its value is the maximum across layers):
-> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|no-report|skipped> recovery_used=<0|1> note=<one-line>`
+> `RESULT: stack=<bottom..top issue numbers> prs=<pr numbers bottom to top> linked=<yes|no> status=<opened|partial|failed> review=<clean|nits|no-report|skipped|deferred> recovery_used=<0|1> note=<one-line>`
 
 If a middle layer fails, the layers below it are still valid, independent PRs. Report the partial
 stack rather than discarding the work — the coordinator can land what exists and re-dispatch the rest.
@@ -488,7 +516,7 @@ with its outcome and `recovery_used`; a later dispatch-ready tick must read the 
 **Before handing anything onward, on EITHER site: a sub-agent whose RESULT line reported
 `review=no-report` OR `review=skipped` is held, never merged.** Both, and for one reason — each
 PR lacks a complete reported review — so they are held identically; the sibling rule in
-`dispatch-ready` §2 withholds the same two, and a path that held only one of them would reach the
+`dispatch-ready` §2 withholds the same two (and splits `deferred` by site exactly as below), and a path that held only one of them would reach the
 opposite conclusion about the very same sub-agent's output. This sits ABOVE the coordinator-only
 subsection deliberately: under the default `review_site: agent` that subsection does not run at
 all, so a rule stated inside it would leave the default site merging PRs whose review reached
@@ -507,13 +535,21 @@ holds nothing. **Every OTHER `skipped`** — the agent did not exist, the plugin
 dispatch errored — is a review nobody ran, and is held. `dispatch-ready` §2 draws the same line for
 the same reason.
 
+**`review=deferred` is legitimate on exactly one site.** Under `review_site: coordinator` it is the
+expected outcome: the worker followed the coordinator-site step 6, and the coordinator review gate
+below reviews the PR before it merges. So `deferred` is not held here. It goes to that gate, which
+holds or releases the PR on its own outcome. Under `review_site: agent` a `deferred` means a
+worker skipped the review it was told to run. It is held exactly like `skipped`, with the same one
+redispatch and the same second-failure `blocked` path.
+
 ### Review gate on the coordinator site (ONLY when `review_site: coordinator`)
 
 **With `review_site: agent` — the default, and the value an absent key selects — this section does
 not run**: every sub-agent already reviewed its own diff at step 6, before its PR existed.
 
 When the site is `coordinator`, review each PR as its RESULT line arrives and **before handing it
-to `sassy-dog:pr-shepherd` below**, dispatching the agent resolved in §1 against that PR's diff
+to `sassy-dog:pr-shepherd` below**, dispatching the agent resolved in §1 at tier `sol` (Claude Code:
+`model: "opus"` · omp: `model: "@default"`) against that PR's diff
 versus the derived default branch, with the original scope statement and reconciled `recovery_used`.
 For the shipped orchestrator only, load §5's resolved **Parent recovery protocol** path and pass it
 with context `review_surfaces` null, never forwarded. Before initial `normal` dispatch, capture and
