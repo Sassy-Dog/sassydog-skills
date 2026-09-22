@@ -478,8 +478,8 @@
 #      rather than merged. The return-value rule alone still permits a
 #      dispatcher that waits forever, and the first two together still permit
 #      merging the PR whose review reached nobody — which is the harm itself,
-#      so the hold is pinned in both dispatching paths and on the DEFAULT
-#      `review_site: agent`, not only inside the coordinator-only sections.
+#      so the hold is pinned in both dispatching paths and on the
+#      `review_site: agent` site, not only inside the coordinator-only sections.
 #      #385 keeps normal nested fan-out as default and binds parent recovery to
 #      the shipped orchestrator and its actual caller, not a new review site.
 #      #386 accepts normal and compact-clean reports without recovery, but

@@ -191,7 +191,7 @@ repo's review architecture on the first refresh after a visibility change, with 
 in every run's output. If live visibility no longer matches what the configured value implies,
 **stop and surface both sides** — the same shape a `merge_queue` disagreement gets — and let the
 user decide. If the key is absent because the config predates it, propose the seeded value as an
-addition and say so in the preview; until then the reading skills default it to `agent`.
+addition and say so in the preview; until then the reading skills default it to `coordinator`.
 
 **`execution_site:` is the same kind of fact, for a different reason** — see the guardrail below,
 which owns the rule. The one thing that belongs in *this* phase: a platform differing from the

@@ -42,7 +42,7 @@ Frontmatter supplies `max_in_flight` and `review_site`, plus the optional `board
 
 **`review_site:` decides WHERE this loop's review gate runs** — `agent`, each dispatched sub-agent
 reviewing its own diff before it opens a PR (§5), or `coordinator`, this tick reviewing each open
-PR before it merges (§2). **Absent selects `agent`**, the fail-safe site. It never decides *whether*
+PR before it merges (§2). **Absent selects `coordinator`.** Every PR is still reviewed before it merges, and workers no longer each run the reviewer fan-out once per fix round. It never decides *whether*
 a review runs or *which* agent runs it. That is `review_agent:`'s resolution order, owned by
 `send-it` and unchanged by this key — read it from `sassy-dog:setup-config` →
 `references/config-contract.md` (`review_agent`) rather than re-deriving it here.
@@ -193,7 +193,10 @@ Never create a PR, redispatch or reset recovery to make this handoff visible.
   later dispatch tick. A failed reservation write holds this scheduling attempt; it never
   turns an unrecorded retry into spent legacy history or permits an unaccounted dispatch.
 - **Open PRs not yet reviewed, when `review_site: coordinator`** → review before merging, never
-  after. Dispatch the agent resolved by `send-it`'s order at tier `sol` (Claude Code:
+  after. "Reviewed" means this loop's own recorded outcome for the current head. A worker's
+  pre-PR review line does not count: it comes from a different site, possibly under an older
+  plugin. A PR opened before the site changed is reviewed once more here, which costs a review but
+  never merges on none. Dispatch the agent resolved by `send-it`'s order at tier `sol` (Claude Code:
   `model: "opus"` · omp: `model: "@default"`) against the PR's diff versus the derived
   default branch with the original scope statement and reconciled `recovery_used`. For the shipped
   `sassy-dog:pr-review-orchestrator` only, load the **Parent recovery protocol** under Step 3 of
@@ -248,8 +251,8 @@ Never create a PR, redispatch or reset recovery to make this handoff visible.
   when its PR body carries the `NO REPORT` line: the agent ran but no complete reported review
   reached the caller, so the PR is held and never merged on it. Those are exactly the cases that must not pass silently,
   and on the
-  default `agent` site they are the ONLY way a review outcome reaches this loop — a rule stated
-  only in the `coordinator` bullets above would leave the default site merging unreviewed work.
+  `agent` site they are the ONLY way a review outcome reaches this loop — a rule stated
+  only in the `coordinator` bullets above would leave the agent site merging unreviewed work.
   **Read that outcome from the PR body**, where take-it's step 6 requires the sub-agent to have
   written the verbatim line: this loop does not read RESULT lines, and a later tick is a different
   session from the one that dispatched. The comment template on this path names the outcome rather
@@ -573,9 +576,10 @@ doc-reconciliation step**, which requires the sub-agent to fix any doc its chang
 committing, and **its review gate**, under the site this repo configures. Keep all of them intact
 when appending failure context for a §2 redispatch.
 
-**Honour `review_site:` when you build the prompt.** With `review_site: agent` — the default an
-absent key selects — take-it's step-6 review gate stays in the prompt verbatim and each sub-agent
-reviews its own diff before opening its PR. With `review_site: coordinator`, replace that one step
+**Honour `review_site:` when you build the prompt.** With `review_site: agent`, take-it's step-6
+review gate stays in the prompt verbatim and each sub-agent
+reviews its own diff before opening its PR. With `review_site: coordinator` — the default an
+absent key selects — replace that one step
 with take-it's **coordinator-site step 6**, which forbids the worker any review and has it report
 `review=deferred`, and review each PR in §2 of a later tick instead, before it merges. Omitting the
 step is not enough: a worker left no instruction still runs among skills urging review before a

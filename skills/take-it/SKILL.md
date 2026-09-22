@@ -37,7 +37,7 @@ usually absent) are unrelated despite the shared word.
 
 **`review_site:` decides WHERE this skill's review gate runs** — `agent`, each sub-agent reviewing
 its own diff before it opens a PR (§5 step 6), or `coordinator`, §6 reviewing each PR after it
-opens and before it merges. **Absent selects `agent`**, the fail-safe site. It never decides
+opens and before it merges. **Absent selects `coordinator`.** Every PR is still reviewed before it merges, and workers no longer each run the reviewer fan-out once per fix round. It never decides
 *whether* a review runs or *which* agent runs it. That is `review_agent:`'s resolution order, owned
 by `send-it` and unchanged by this key — read it from `sassy-dog:setup-config` →
 `references/config-contract.md` (`review_agent`) rather than re-deriving it here. Resolve the agent
@@ -518,8 +518,8 @@ with its outcome and `recovery_used`; a later dispatch-ready tick must read the 
 PR lacks a complete reported review — so they are held identically; the sibling rule in
 `dispatch-ready` §2 withholds the same two (and splits `deferred` by site exactly as below), and a path that held only one of them would reach the
 opposite conclusion about the very same sub-agent's output. This sits ABOVE the coordinator-only
-subsection deliberately: under the default `review_site: agent` that subsection does not run at
-all, so a rule stated inside it would leave the default site merging PRs whose review reached
+subsection deliberately: under `review_site: agent` that subsection does not run at
+all, so a rule stated inside it would leave the agent site merging PRs whose review reached
 nobody, which is the whole of #273 one layer out. Either outcome gets the same treatment a
 Blocking finding gets — name it in the §7 report, allow ONE redispatch carrying the outcome as
 context, and keep the PR out of the list you hand to `sassy-dog:pr-shepherd` below. A second
@@ -544,8 +544,7 @@ redispatch and the same second-failure `blocked` path.
 
 ### Review gate on the coordinator site (ONLY when `review_site: coordinator`)
 
-**With `review_site: agent` — the default, and the value an absent key selects — this section does
-not run**: every sub-agent already reviewed its own diff at step 6, before its PR existed.
+**With `review_site: agent` this section does not run**: every sub-agent already reviewed its own diff at step 6, before its PR existed.
 
 When the site is `coordinator`, review each PR as its RESULT line arrives and **before handing it
 to `sassy-dog:pr-shepherd` below**, dispatching the agent resolved in §1 at tier `sol` (Claude Code:

@@ -91,7 +91,7 @@ Four keys are genuine scalars rather than blocks, because they carry no sub-fact
   route inside one
 - `review_site: agent|coordinator` — **where** the review gate runs on the two dispatching paths,
   `take-it` and `dispatch-ready`. Like `review_agent:` it carries a default rather than an off
-  switch (absent selects `agent`), and unlike every other key here it is *seeded from a derived
+  switch (absent selects `coordinator`), and unlike every other key here it is *seeded from a derived
   fact and then frozen* — `review_site` below says why that is deliberate rather than drift
 
 ### The one exception: `sentry: none`
@@ -303,7 +303,7 @@ nothing else, and they never wait on a message or a notification to bring one in
 delivers any other way is classified `review: NO REPORT — <agent> dispatched, no report returned
 (lint/type/test only)` on every run — and in the two dispatching paths that PR is held rather than
 merged. **The discriminator is UNATTENDED MERGING, not whether a PR exists at gate time**, and
-getting that wrong is the trap: under the default `review_site: agent`, `take-it`'s sub-agent runs
+getting that wrong is the trap: under `review_site: agent`, `take-it`'s sub-agent runs
 its gate at step 6 — before its commit and before its PR — exactly like `send-it`, so a reader
 applying "does a PR exist yet?" concludes the agent site has nothing to hold either, which is the
 one conclusion these paths were changed to prevent. What separates them is what happens NEXT:
@@ -341,7 +341,7 @@ has exactly one site, its own run, and always reviews there.
 | --- | --- |
 | `review_site: agent` | each dispatched sub-agent reviews **its own diff before it opens a PR** — `send-it`'s TIMING exactly: Blocking findings are fixed and re-reviewed before the PR body is drafted, so nothing unreviewed reaches GitHub. Its NO REPORT handling differs — the dispatching path still holds the PR, being the one that would otherwise merge it unattended |
 | `review_site: coordinator` | the dispatching loop reviews each PR **after it opens**, before it merges — centralised, single writer, one place to read every outcome |
-| key absent | `agent` — the fail-safe site, for the same reason an absent `review_agent` selects an agent rather than none |
+| key absent | `coordinator`, for cost. On `agent` every worker runs the full reviewer fan-out itself, once per fix round: 30–45 agent invocations to ship one issue, measured on this plugin's own repo. Every PR is still reviewed before it merges. The accepted cost is that a diff is visible on GitHub, and runs CI, before it is reviewed. That matters for a PUBLIC repo, and **the seed rule does not cover every PUBLIC repo**. `setup-config` writes PUBLIC → `agent` only where it writes the key, and a config reaches this default precisely because it never did: it predates the key, or was hand-written. A PUBLIC repo in that state runs `coordinator` until a `setup-config` refresh adds the seeded `agent`. The dispatchers must not read visibility themselves to close the gap, because a derived site is what decision 4 forbids (`SKILL.md`, "never leave the key out so a skill can read visibility at run time"). Like an absent `review_agent`, an absent key still reviews; it only chooses where |
 
 On the `agent` site the gate's TIMING matches `send-it`'s, but its NO REPORT handling does not:
 the dispatching path still holds the PR, because it is the one that would otherwise merge it
