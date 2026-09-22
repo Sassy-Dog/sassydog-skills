@@ -35,7 +35,7 @@ agent (`agents/*.md`):
 
 **Post-merge plugin update reminder** — consumer machines do NOT pick up changes automatically,
 and a `version` bump is NOT the trigger: content lands on `main` on every merge while the manifest
-is stamped only when some PR happens to carry a fresh stamp, so a cached copy and `main` routinely share one `version` over
+is stamped only by a dedicated release PR, so a cached copy and `main` routinely share one `version` over
 different files (issue #296). After ANY merge that changes `skills/`, `agents/` or `scripts/align-labels.sh` (the one
 root-`scripts/` path a skill invokes at runtime through `${CLAUDE_PLUGIN_ROOT}`), remind the
 operator to update on each consumer machine — following README step 4, which carries the
