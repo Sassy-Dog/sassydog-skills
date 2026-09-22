@@ -651,6 +651,42 @@ assert_in "$template_flat" \
 # ---------------------------------------------------------------------------
 echo "-- decision 4: review_site is seeded once from visibility, then frozen"
 
+# The ABSENT default is `coordinator`, and it is pinned in all three places
+# that state it. It was `agent`, called the fail-safe site. It was flipped for
+# cost: under `agent` every worker ran the full reviewer fan-out itself, once
+# per fix round, and review agents outnumbered workers roughly 11:1 in a
+# measured 14-day window, nearly all on Opus. Every PR is still reviewed before
+# it merges; the site only moves the review after the PR opens. The seed rule
+# is untouched and still writes PUBLIC -> `agent` explicitly, so only a
+# config that predates the key, or a hand-written one, reaches this default.
+# Unpinned, a later "restore the fail-safe default" sweep would silently put
+# every such repo's workers back on self-review.
+assert_line "$CONTRACT" \
+    '^\| key absent \| `coordinator`, for cost\.' \
+    "contract table maps an absent review_site to coordinator"
+assert_has "$takeit_flat" \
+    '**Absent selects `coordinator`.**' \
+    "take-it states the absent review_site default is coordinator"
+assert_has "$dispatch_flat" \
+    '**Absent selects `coordinator`.**' \
+    "dispatch-ready states the absent review_site default is coordinator"
+# The other three copies of the default, pinned too. A "restore the fail-safe
+# default" sweep that edited only these would otherwise pass while the tree
+# states two contradictory defaults.
+readme_flat="$(flatten "$READMEMD")"
+assert_has "$contract_flat" \
+    'switch (absent selects `coordinator`)' \
+    "contract's scalar-key bullet states the coordinator default"
+assert_has "$setup_flat" \
+    'until then the reading skills default it to `coordinator`.' \
+    "setup-config's Phase 4 states the coordinator default"
+assert_has "$readme_flat" \
+    'An absent key selects `coordinator`.' \
+    "README states the coordinator default"
+assert_not_in "$takeit_flat $dispatch_flat $contract_flat $setup_flat $readme_flat" \
+    'Absent selects `agent`|absent selects `agent`|absent key selects `agent`|default it to `agent`|key absent \| `agent`' \
+    "no copy of the absent default still states agent"
+
 assert_line "$CONTRACT" \
     '^#### Why this key is CONFIGURED and not DERIVED$' \
     "contract keeps the CONFIGURED-and-not-DERIVED section"
@@ -970,14 +1006,14 @@ else
         "take-it's COORDINATOR SITE still names TWO producers of the SKIPPED line"
 fi
 
-# The DEFAULT site is `agent`, where the coordinator section never runs at all,
-# so a hold stated only inside it leaves the default merging PRs whose review
+# The `agent` site, where the coordinator section never runs at all,
+# so a hold stated only inside it leaves the agent site merging PRs whose review
 # reached nobody. That rule has to live outside the coordinator-only section.
 # Asserted against the COMPLEMENT of the coordinator-only subsection, never the
 # whole file: the first edition stated this rule "outside the coordinator-only
 # section" while sitting INSIDE it, and a whole-file assertion under a label
 # naming the placement could not tell the difference. The complement is what
-# an agent reads under the DEFAULT review_site, where that subsection is
+# an agent reads under `review_site: agent`, where that subsection is
 # explicitly skipped.
 takeit_outside="$(awk '
     /^### Review gate on the coordinator site/ { skip = 1; next }
@@ -995,12 +1031,12 @@ else
     # The SCOPE CLAUSE is part of the rule, not preamble. Measured: rewriting
     # `on EITHER site` to `when review_site: coordinator` leaves the paragraph
     # physically outside the coordinator subsection — so a placement-only check
-    # still passes — while scoping the rule away from the default site, which
+    # still passes — while scoping the rule away from the agent site, which
     # is the entire reason the placement check exists. Decision 5's assertion
     # already carries its scope clause for the same reason.
     assert_in "$takeit_outside" \
         'on EITHER site: a sub-agent whose RESULT line reported' \
-        "take-it's default-site hold keeps its EITHER-site scope clause"
+        "take-it's agent-site hold keeps its EITHER-site scope clause"
     assert_in "$takeit_outside" \
         '`review=no-report` OR `review=skipped` is held, never merged' \
         "take-it holds BOTH unreviewed outcomes OUTSIDE the coordinator-only subsection"
@@ -1088,7 +1124,7 @@ else
         "dispatch-ready keeps the third outcome out of the SKIPPED line"
 fi
 # ORDERING. §2's first bullet is the one that merges, and it is reached ~18
-# lines before the lost-report bullet and ~33 before the default-site hold. A
+# lines before the lost-report bullet and ~33 before the agent-site hold. A
 # corrective a reader meets only after the merge has been ordered is one that
 # never runs, so the exception has to live in the merging bullet itself.
 disp_merge="$(bullet_slice "$DISPATCH" '- **Open PRs from those branches**')"
@@ -1110,11 +1146,11 @@ fi
 # verbatim into a `when review_site: coordinator` bullet — the natural
 # "consolidate the NO REPORT handling" tidy — kept both literals present and
 # left this gate at exit 0 with zero FAILs; combined with narrowing the merging
-# bullet, dispatch-ready lost EVERY default-site hold and `preflight.sh` still
+# bullet, dispatch-ready lost EVERY agent-site hold and `preflight.sh` still
 # exited 0. That is decision 6's third part deleted from the unattended loop on
-# the fail-safe default site, with CI green — the identical defect this file
+# the agent site, with CI green — the identical defect this file
 # already records catching in take-it's first edition. A whole-file assertion
-# cannot tell prose that governs the default site from prose that excludes it.
+# cannot tell prose that governs the agent site from prose that excludes it.
 #
 # The bullets to exclude are found by their own `when review_site: coordinator`
 # marker rather than by a transcribed list, so a new coordinator-scoped bullet
@@ -1139,26 +1175,26 @@ assert_has "$dispatch_flat" \
     "with take-it's **coordinator-site step 6**, which forbids the worker any review" \
     "dispatch-ready's prompt carries the forbidding step, not a bare omission"
 if [ -z "$dispatch_outside" ]; then
-    bad "dispatch-ready's non-coordinator region did not slice — the default-site checks would pass vacuously"
+    bad "dispatch-ready's non-coordinator region did not slice — the agent-site checks would pass vacuously"
 else
     ok "located dispatch-ready's region OUTSIDE its coordinator-only bullets"
 fi
 
-# The DEFAULT site again: on `agent` this loop never dispatches a review of its
+# The `agent` site again: there this loop never dispatches a review of its
 # own, so the only way an outcome reaches it is a sub-agent's RESULT line.
 assert_in "$dispatch_outside" \
     'equally when its PR body carries the `NO REPORT` line' \
-    "dispatch-ready holds a no-report PR on the DEFAULT agent site too"
+    "dispatch-ready holds a no-report PR on the agent site too"
 # The TRIGGER above is not the rule; the CONSEQUENCE is. Measured: rewriting the
 # clause that follows it to `the agent ran, which is what the gate asks, so the
 # PR is merged as usual once its checks are green` left this gate exit 0 and
-# ALL GREEN — the unattended loop, on the default site, ordered to merge a PR
+# ALL GREEN — the unattended loop, on the agent site, ordered to merge a PR
 # whose review reached nobody, which is the entire harm of #273 surviving in
 # the path carrying the most PR volume. Both sibling sites were already pinned
 # on their consequence; this one was pinned on its trigger alone.
 assert_in "$dispatch_outside" \
     'held and never merged on it' \
-    "dispatch-ready's DEFAULT-site rule states the CONSEQUENCE, not only its trigger"
+    "dispatch-ready's agent-site rule states the CONSEQUENCE, not only its trigger"
 # EVERY copy of the contract line, tree-wide, must be byte-identical. README
 # and the config contract carry it too and neither is in the read set for it, so
 # a drift in one of those copies is invisible to a per-file lookup — the same
@@ -1211,7 +1247,7 @@ assert_in "$contract_flat" \
     'never wait on a message or a notification to bring one in' \
     "the config contract states the shipping paths do not wait for a report"
 # The DISCRIMINATOR for the send-it carve-out. Stating it as "a PR already
-# exists" is false on the default site — take-it's sub-agent gates at step 6,
+# exists" is false on the agent site — take-it's sub-agent gates at step 6,
 # before its commit and before its PR, exactly like send-it — so a reader
 # applying that test concludes the agent site has nothing to hold either, which
 # is the one conclusion these paths were changed to prevent.
