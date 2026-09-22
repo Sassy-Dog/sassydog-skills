@@ -4,6 +4,7 @@ exclude_pathspecs: ""
 ci_workflow: ci.yml
 priority_labels: [bug, enhancement, documentation]
 write_policy: read-only
+sentry: none
 testflight: none
 posthog: none
 mobile: none
@@ -25,16 +26,32 @@ Backlog priority: this repo has no P0–P3 taxonomy — treat the default GitHub
 
 ## extra-guardrails
 
-**The three `none` keys are answered, not stale — and `sentry:` is deliberately not one of them.** This repo is a Markdown plugin marketplace with
+**The three product-fact `none` keys are answered, not stale.** This repo is a Markdown plugin marketplace with
 no shipped application: no beta channel, no product analytics, no mobile target. `testflight: none`,
 `posthog: none` and `mobile: none` record that, so the plate carries `(n/a)` tokens for them instead
 of three blind-spot rows nothing could ever clear (issue #261).
 
-**`sentry:` is deliberately absent, not `none`.** Nobody has culprit-verified a Sentry project for
-this repo, so "nobody has checked" is the honest state and the blind-spot row is correct. Do not
-write `sentry: none` to quiet it — that value is written by a *failed* culprit check, not by a
-decision, and it keeps its row anyway. Note `detect-capabilities.sh` returns `sentry=true` here for
-the same reason it returns `posthog=true`: the word appears in this repo's own skills and fixtures.
+**`sentry: none` is recorded, not absent.** `setup-config` writes it as the outcome of the culprit
+check in `references/detection.md`, and that check has been run here: no candidate project in the
+`sassy-dog` org has culprits resolving to a path in this repo — the nearest-named candidate,
+`platform`, reports culprits such as `root-disk-usage` that belong to `Sassy-Dog/platform`. That is
+the whole of what the key records — **no project is verified for this repo** — and never the wider
+claim that this repo has no error monitoring, which `config-contract.md` and `survey-work` §6 both
+forbid in as many words. The key is re-derived on every refresh, and it is also what a check that
+merely *could not run* writes, so read this paragraph as why the value was written once, not as a
+standing certificate that a sweep completed.
+
+**The blind-spot row still renders, and that is correct.** `sentry: none` keeps its row while the
+three siblings lose theirs (`config-contract.md`, "The one exception"). Do not delete the key to
+quiet the row: an absent key means *nobody checked*, a different and now-inaccurate claim. Nothing
+enforces that — no gate reads this file's keys — so it holds only as far as it is read.
+
+Note `detect-capabilities.sh` returns `sentry=true` here, but **not** for the reason it returns
+`posthog=true`. The posthog probe is a bare-word grep; the sentry probe greps SDK literals
+(`@sentry/`, `sentry.init`, and siblings), which this repo's own detector, that detector's gate and
+a Dependabot fixture happen to carry. Both are artefacts of a repo that *documents* these tools,
+and neither is evidence against the recorded key — run the greps for the current hits rather than
+trusting a list written here.
 
 **Expect `posthog` detection to contradict the config, and dismiss it.**
 `setup-config/scripts/detect-capabilities.sh` decides `posthog` with a bare tracked-tree grep for the
