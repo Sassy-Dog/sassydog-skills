@@ -244,7 +244,7 @@ claude plugin marketplace add Sassy-Dog/sassydog-skills
 claude plugin install sassy-dog
 ```
 
-Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only when some PR happens to carry a fresh stamp (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
+Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only by a dedicated release PR (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
 
 ```bash
 claude plugin update sassy-dog@sassydog-skills --scope user   # or: project, local, managed
@@ -269,7 +269,7 @@ It also names the one stale state the installer cannot fix: every copy already a
 
 `claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale.
 
-**Do not diagnose this by comparing version strings.** The manifest is stamped only when some PR happens to carry a fresh stamp, while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
+**Do not diagnose this by comparing version strings.** The manifest is stamped only by a dedicated release PR, while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
 
 **1. Find which cached copy is live.** The cache keeps every version ever installed (ten directories on the machine measured above) and installs are per scope, so `ls` cannot answer this. Run this from the project *root* (the match is an exact path comparison — a subdirectory returns only the `user` row):
 
