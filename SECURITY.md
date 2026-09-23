@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-**Use GitHub's private vulnerability reporting**: [open a draft advisory](https://github.com/Sassy-Dog/sassydog-skills/security/advisories/new). It is enabled on this repository and is the only channel that stays private while we work.
+**Use GitHub's private vulnerability reporting**: [open a draft advisory](https://github.com/Sassy-Dog/skills/security/advisories/new). It is enabled on this repository and is the only channel that stays private while we work.
 
 Please do **not** open a public issue for a security problem. Everything else in this repo is fine to file publicly.
 
@@ -32,7 +32,7 @@ The plugin is versioned as monthly-rolling CalVer (`YYYY.M.<commits-this-month>`
 Consumers do not auto-update. If a fix ships, updating is:
 
 ```bash
-claude plugin update sassy-dog@sassydog-skills --scope user   # or: project, local, managed
+claude plugin update sassy-dog@skills --scope user   # or: project, local, managed
 ```
 
 `--scope` defaults to `user`; a project-scope install is a separate copy and is not updated by the

@@ -5,8 +5,8 @@ Thanks for looking. This repo has a few conventions that are enforced by CI and 
 ## The short version
 
 ```bash
-git clone https://github.com/Sassy-Dog/sassydog-skills
-cd sassydog-skills
+git clone https://github.com/Sassy-Dog/skills
+cd skills
 bash scripts/preflight.sh
 ```
 
@@ -22,7 +22,7 @@ Two ways it can pass locally and still fail in CI, both worth knowing:
 Preflight is necessary but **not sufficient**. It cannot tell you whether a skill's trigger phrases match the things people actually say, or whether its instructions work when an agent follows them. Load the plugin from your working tree and invoke it:
 
 ```bash
-claude --plugin-dir /path/to/sassydog-skills
+claude --plugin-dir /path/to/skills
 ```
 
 Then use the skill the way a user would. A skill that parses cleanly and never triggers is broken.

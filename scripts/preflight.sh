@@ -1428,7 +1428,7 @@
 #      between the daily-fire-watch routine's Slack post and `work-fire-watch`.
 #      The consumer was first written against THIS repo's whats-on-fire template
 #      and would have matched zero real posts: the routine runs the flattened
-#      copy in sassydog-routines, and what Slack delivers is mrkdwn that changes
+#      copy in routines, and what Slack delivers is mrkdwn that changes
 #      prose shape day to day. So the consumer reads only a fenced
 #      `fire-watch-v1` block, and this gate pins the sentinels both homes must
 #      spell identically (block name, channel id, the poster's Slack user id —
@@ -1562,8 +1562,8 @@ fi
 
 # --- 4. no legacy skill-name residue -----------------------------------------
 # The whole generator family was renamed to setup-* in issue #120:
-#   create-dev-workflows -> refresh-sassydog-skills (0.9.0)
-#   refresh-sassydog-skills -> refresh-skills (2026.7.22)
+#   create-dev-workflows -> refresh-skills (0.9.0)
+#   refresh-skills -> refresh-skills (2026.7.22)
 #   refresh-skills -> setup-config (issue #121)
 #   refresh-hooks -> setup-hooks (issue #122)
 #   refresh-deps  -> setup-deps  (issue #123)
@@ -1631,8 +1631,8 @@ for legacy in 'create-dev-workflows' 'refresh-sassydog-' 'refresh-skills' 'refre
 done
 
 # The plugin itself renamed too: ai-agent-skills -> sassy-dog, the marketplace
-# sassy-dog-skills -> sassydog-skills (issue #71), and the GitHub repo
-# ai-agent-skills -> sassydog-skills (issue #72). The old plugin name may
+# sassy-dog-skills -> skills (issue #71), and the GitHub repo
+# ai-agent-skills -> skills (issue #72). The old plugin name may
 # appear ONLY where it is still load-bearing:
 #   - README.md — the one historical line recording the #71 rename
 #   - CLAUDE.md — the marker-recognition rule: recognizers must accept
@@ -1665,7 +1665,7 @@ fi
 if git grep -l 'sassy-dog-skills' -- \
     ':!README.md' \
     ':!scripts/preflight.sh'; then
-    failed "legacy-name guard — 'sassy-dog-skills' outside the sanctioned files (marketplace renamed to sassydog-skills, issue #71)"
+    failed "legacy-name guard — 'sassy-dog-skills' outside the sanctioned files (marketplace renamed to skills, issue #71)"
     legacy_residue=1
 fi
 
@@ -1800,7 +1800,7 @@ else
 fi
 
 # --- 12. visibility preconditions -------------------------------------------
-# sassydog-skills went public on 2026-08-12 and its auto-merge workflow was
+# skills went public on 2026-08-12 and its auto-merge workflow was
 # deleted rather than re-credentialed (#177). Without this gate the next
 # setup-deps run would put it straight back: a merge gate is present, and the
 # gate was the only precondition the skill checked. The failure it reintroduces

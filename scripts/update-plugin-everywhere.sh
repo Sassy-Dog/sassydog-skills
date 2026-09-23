@@ -49,8 +49,8 @@
 # script says so at the end, every time, because that is the silent half.
 set -uo pipefail
 
-PLUGIN="sassy-dog@sassydog-skills"
-MARKET="sassydog-skills"
+PLUGIN="sassy-dog@skills"
+MARKET="skills"
 APPLY=0
 REGISTRY="$HOME/.claude/plugins/installed_plugins.json"
 CLONE="$HOME/.claude/plugins/marketplaces/$MARKET"

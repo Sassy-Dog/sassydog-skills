@@ -23,7 +23,7 @@ on — and cwd resets between Bash calls, so you cannot influence it. If it name
 the one you are working in, **discard the block above**, read that repo's own
 `.claude/sassy-dog/send-it.md` by absolute path, and use that instead. Config is meant to be applied
 exactly as written, so the wrong one silently applies another repo's rules: on 2026-08-18 two agents
-shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
+shipping in `routines` and `skills` were each handed `platform`'s Terraform gates,
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `preflight_commands`, `pr_template_path`, `pr_template_sections`,
@@ -270,7 +270,7 @@ not one reached the session that dispatched it — three landed in a coordinator
 one round lost 2 of 5 dispatches that never came back at all, and one was addressed to an agent
 *type* rather than an address. An implementing agent then deadlocked on a report that had already
 been delivered elsewhere, and lost the whole review cycle
-([#273](https://github.com/Sassy-Dog/sassydog-skills/issues/273)). Treat the dispatch as
+([#273](https://github.com/Sassy-Dog/skills/issues/273)). Treat the dispatch as
 fire-and-report: either it comes back with a report you can read, or it does not come back — and
 both are outcomes you write down, never states you sit out.
 

@@ -93,7 +93,7 @@
 # walk past — without it a single in-flight run re-creates the very null this
 # recovery exists to remove. `push` alone and never `merge_group`, whose head
 # branch `gh-readonly-queue/<branch>/pr-<N>` can never satisfy `--branch`.
-# sassydog-routines#46 shipped this with branch and status only and recovered
+# routines#46 shipped this with branch and status only and recovered
 # one repo of the two sampled; #47 added the event filter (issue #367).
 #
 # THE RECOVERED VERDICT IS NOT BOUNDED BY RUN_LIMIT, so it ships its own age.

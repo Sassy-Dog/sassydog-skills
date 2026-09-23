@@ -177,13 +177,13 @@ internal) **exclude public repos** — in the Actions store *and* the Dependabot
 anyway, `secrets.*` resolves to the empty string and `create-github-app-token` fails, but not until
 that repo's next Dependabot PR — days or weeks later, as an auth error that looks unrelated to the
 render that caused it. Scoping this rule to auto-merge alone is what shipped the identical failure
-through two other doors ([#186](https://github.com/Sassy-Dog/sassydog-skills/issues/186)).
+through two other doors ([#186](https://github.com/Sassy-Dog/skills/issues/186)).
 
 The two lockfile templates are the **worse** case, and the ordering is worth noticing:
 `dependabot-auto-merge` deliberately never checks out ("no checkout. PR code never executes here"),
 while both lockfile templates `actions/checkout` the **PR head ref** inside a job that mints the
 credential. They are hard-gated to `dependabot[bot]`, bun runs `--ignore-scripts`, and since
-[#232](https://github.com/Sassy-Dog/sassydog-skills/issues/232) the token is no longer handed to
+[#232](https://github.com/Sassy-Dog/skills/issues/232) the token is no longer handed to
 `checkout` at all — `persist-credentials: false`, no `token:`, and the push authenticated from its
 own step `env:` — so the posture is sound as it stands, but the two templates carrying more surface
 were the two without the precondition.
@@ -200,7 +200,7 @@ sixty and was simply dropped — losing lockfile sync breaks the very thing the 
 
 ### The manual path IS the answer for a public repo — deliberate non-automation
 
-Decided in [#190](https://github.com/Sassy-Dog/sassydog-skills/issues/190). **A public repo
+Decided in [#190](https://github.com/Sassy-Dog/skills/issues/190). **A public repo
 regenerates its lockfile by hand on the PR branch. Do not automate it, and do not invent a
 substitute credential to fill the gap.**
 
@@ -271,7 +271,7 @@ render normalises a pre-rename file's marker for free — keep the template's ma
 rather than preserving whatever the existing file carried. Leave each template's
 `template-version` alone unless the template's *content* changed: the producer rename is an
 identity change, and the stamp should not move for it. **A bump does not trigger anything** —
-measured while shipping [#316](https://github.com/Sassy-Dog/sassydog-skills/issues/316): no script
+measured while shipping [#316](https://github.com/Sassy-Dog/skills/issues/316): no script
 reads `template-version`, and re-render is decided *solely* by the `generated-by:` ownership
 matcher, so a marker-owned file is reconciled on any run regardless of its stamp and a marker-less
 one is skipped regardless of its stamp. The stamp is provenance that rides along on a re-render,
@@ -342,10 +342,10 @@ the lock is the prerequisite change — the template becomes renderable the mome
   repo** — `private` visibility excludes public repos in both the Actions and Dependabot stores, so
   the render must not emit this workflow into one (the credentials resolve to empty strings and the
   failure surfaces weeks later on that repo's next Dependabot PR). See
-  [#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178); a merge gate is a necessary but
+  [#178](https://github.com/Sassy-Dog/skills/issues/178); a merge gate is a necessary but
   not sufficient precondition, repo visibility is the other one.
   **The CLIENT ID, not the numeric App ID** — `actions/create-github-app-token` v3.2.0 deprecated the
-  `app-id:` input in favour of `client-id:` ([#316](https://github.com/Sassy-Dog/sassydog-skills/issues/316)),
+  `app-id:` input in favour of `client-id:` ([#316](https://github.com/Sassy-Dog/skills/issues/316)),
   and every template here mints with `client-id:`. `PLATFORM_WRITER_APP_ID` still exists in both org
   stores and is a DIFFERENT value; do not substitute it to avoid provisioning. GitHub's JWT `iss`
   claim happens to accept either, so the shortcut works and is still wrong: it puts an App ID in an
@@ -388,7 +388,7 @@ silently leaving security PRs ungrouped, and the mistake is invisible until the 
   drop their `persist-credentials: false`. `checkout` defaults that to true, which writes the
   credential into `.git/config` for the rest of a job whose workspace holds PR-authored content —
   for no benefit, since only the push needs write and it authenticates from its own step `env:`
-  ([#232](https://github.com/Sassy-Dog/sassydog-skills/issues/232)).
+  ([#232](https://github.com/Sassy-Dog/skills/issues/232)).
 - Never overwrite a `dependabot.yml` lacking this generator's marker; report it and stop.
 - Never write a `dependabot.yml` that `validate-dependabot.sh` rejected, and never default a lane
   to `directory: "/"` because the location is unclear. A lane pointing at a directory with no

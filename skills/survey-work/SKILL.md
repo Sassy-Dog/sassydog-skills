@@ -29,7 +29,7 @@ on — and cwd resets between Bash calls, so you cannot influence it. If it name
 the one you are working in, **discard the block above**, read that repo's own
 `.claude/sassy-dog/survey-work.md` by absolute path, and use that instead. Config is meant to be applied
 exactly as written, so the wrong one silently applies another repo's rules: on 2026-08-18 two agents
-shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
+shipping in `routines` and `skills` were each handed `platform`'s Terraform gates,
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `scan_paths`, `exclude_pathspecs`, `ci_workflow`, `priority_labels`,
@@ -168,9 +168,9 @@ plus `sassy-dog:github-issues` stale-issue detection.
 
 **Either way, resolve each issue's execution site from the labels the pull already returned.** A
 `site:<name>` label declares a workstation the issue can be worked from
-([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)); no such label means any site.
+([#340](https://github.com/Sassy-Dog/skills/issues/340)); no such label means any site.
 **Run the resolver rather than re-deriving its rules** — a paraphrase forks them, which is the
-failure [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) measured when one dropped
+failure [#341](https://github.com/Sassy-Dog/skills/issues/341) measured when one dropped
 the `strip()`. This backlog read is not a `queue-snapshot.sh` bucket (those are label-scoped to
 `ready`/`in-progress`/`blocked`), so it takes the same emitter `take-it` and `dispatch-ready`'s
 `board:` path do, which runs no `gh` and touches no network. **Feed it the labels this step's own
@@ -470,7 +470,7 @@ whole reason the declaration exists. Four rendering rules, from the value §3B r
 - **Several `site:` labels list every one of them and mark nothing special.** They **narrow**: each
   named machine may take the issue, membership decides which of the two rules above applies, and
   the reading to refuse is "any site" — the direction
-  [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug ran. There is no
+  [#322](https://github.com/Sassy-Dog/skills/issues/322)'s originating bug ran. There is no
   third rendering for a multi-member declaration, and it is never reported as undispatchable: a
   checkout it names can dispatch it today.
 
@@ -500,7 +500,7 @@ plate skipped. Five rules:
   the `(n/a)` marker above. `sentry: none` produces a row, worded as confirmed rather than
   unchecked. That asymmetry is deliberate, is pinned in CI, and is not an inconsistency to tidy
   away — see `references/config-contract.md`, "The one exception"
-  ([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)). An unclearable row is worse
+  ([#261](https://github.com/Sassy-Dog/skills/issues/261)). An unclearable row is worse
   than no row: on an infra repo with no app, those three rendered on **every** plate with no config
   that could clear them, two of them in the loudest position this section has. A reader who meets
   the same unactionable rows every time stops reading the heading — and then the row that should

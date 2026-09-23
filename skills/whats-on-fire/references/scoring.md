@@ -150,12 +150,12 @@ not recently", which is the distinction a reader is using it to draw.
 Only `success` lands here. A stale or undated `failure`, `cancelled` or `timed_out` already ranks
 P1 above and reports there — this section keeps stale or undated `success` verdicts from being
 omitted. Omission is the failure mode the age bound was at risk of trading the false green for
-([#375](https://github.com/Sassy-Dog/sassydog-skills/issues/375)).
+([#375](https://github.com/Sassy-Dog/skills/issues/375)).
 
 This section renders the existing `ci-verdict-age-bound` rule above, whose marker was added in
-[#379](https://github.com/Sassy-Dog/sassydog-skills/pull/379); it needs no separate marker.
+[#379](https://github.com/Sassy-Dog/skills/pull/379); it needs no separate marker.
 The marker's counterpart was reconciled in
-[sassydog-routines#60](https://github.com/Sassy-Dog/sassydog-routines/issues/60).
+[routines#60](https://github.com/Sassy-Dog/routines/issues/60).
 That marker-only change does not establish parity of these rendering instructions.
 
 <!-- rule: default-branch-ci-unknown -->
@@ -180,7 +180,7 @@ A null from the FIRST, unfiltered sample is the common case, not the rare one. T
 a busy repo are dominated by `pull_request` and bot events, so a repo with thousands of runs on
 file can easily have no `push` to its default branch in the sample — velovate, brewslate,
 tailoredtip, what2wear and td3000 on 2026-09-06, all five with a verdict available, tabulated in
-[#367](https://github.com/Sassy-Dog/sassydog-skills/issues/367). That is what the recovery is for,
+[#367](https://github.com/Sassy-Dog/skills/issues/367). That is what the recovery is for,
 and it is why an unnamed `null` must never quietly read as green. A null that SURVIVES the recovery
 is the rare one, and it is the one this section is about.
 
@@ -257,7 +257,7 @@ regression: `sev:medium` is what the maintainer said, and both are listed either
 
 **Why this rule carries more weight than its size suggests.** The cloud edition cannot read code-
 scanning or secret-scanning alerts at all — settled by probe, recorded as a §0 Container fact
-(`Sassy-Dog/sassydog-routines#11`). A CodeQL finding therefore reaches the report **only** if a
+(`Sassy-Dog/routines#11`). A CodeQL finding therefore reaches the report **only** if a
 human files it as a GitHub issue. This listing rule is the whole of that escape hatch; a label
 technicality closing it takes an entire surface offline silently.
 

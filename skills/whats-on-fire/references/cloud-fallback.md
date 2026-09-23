@@ -34,7 +34,7 @@ session resolve them. The capabilities this recipe needs:
 
 - **List repositories for an owner** — the roster.
 - **Widen repo scope** — `add_repo` in current sessions. GitHub MCP tools typically start scoped to
-  the repo the session opened in (the verification run started scoped to `sassydog-skills` alone);
+  the repo the session opened in (the verification run started scoped to `skills` alone);
   every other repo must be attached before its PRs, issues, or runs can be read.
 - **List or search pull requests** and **issues** — org-wide where the server offers it, per repo
   only as the fallback. Prefer the org-wide form; "Bounding the fan-out" explains why.
@@ -246,7 +246,7 @@ answer.
 
 The session's GitHub MCP surface exposes **neither** capability. Settled on 2026-08-19 by
 enumerating the 55-tool roster: no tool lists or gets either alert type, so no call is refused
-because no call exists ([sassydog-routines#11](https://github.com/Sassy-Dog/sassydog-routines/issues/11#issuecomment-5335967737)).
+because no call exists ([routines#11](https://github.com/Sassy-Dog/routines/issues/11#issuecomment-5335967737)).
 Render both as named skips beside Dependabot's — the blind-spot rows these feed are specifically
 about distinguishing "no alerts" from "never scanned", and an approximation destroys exactly that
 distinction. Record it as a Container fact, not a per-run probe.
@@ -297,7 +297,7 @@ Then apply the rules in `cron-recovery.md` unchanged.
 
 The reason is measured, not theoretical. On 2026-08-18 the daily sweep ranked `cron-doppler-audit`
 as a live P0 for a control that had been verified green the previous evening. That sweep ran from
-`Sassy-Dog/sassydog-routines`, whose port of this contract had pulled a **repo-wide** page and
+`Sassy-Dog/routines`, whose port of this contract had pulled a **repo-wide** page and
 filtered by workflow afterwards — and a repo-wide page is **30 runs deep, not N hours deep**. How
 much wall-clock that buys is a function of repo activity alone: on `Sassy-Dog/platform` it has been
 measured at under an hour. That morning its horizon stopped at 22:53Z, three hours *after* the

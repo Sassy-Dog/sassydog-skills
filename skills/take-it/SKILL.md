@@ -25,7 +25,7 @@ on — and cwd resets between Bash calls, so you cannot influence it. If it name
 the one you are working in, **discard the block above**, read that repo's own
 `.claude/sassy-dog/take-it.md` by absolute path, and use that instead. Config is meant to be applied
 exactly as written, so the wrong one silently applies another repo's rules: on 2026-08-18 two agents
-shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
+shipping in `routines` and `skills` were each handed `platform`'s Terraform gates,
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `stack_summary`, `preflight_commands`, `pr_template_sections`, `merge_queue`,

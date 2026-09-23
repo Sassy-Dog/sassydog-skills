@@ -74,7 +74,7 @@ same `ios/` / `app.json` test, plus `pubspec.yaml` and `android/`. **Run the scr
 the grep**, and do not infer from a missing field that there was nothing to look for. A bare
 `git grep -i posthog` is not the same query — it lacks the pathspec described below, so in any repo
 that has answered §2c it matches that repo's own recorded answer and manufactures the exact
-contradiction [#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317) removed.
+contradiction [#317](https://github.com/Sassy-Dog/skills/issues/317) removed.
 
 **Positive evidence against a `none` is a stop and surface, never a rewrite.** If the tree now
 carries the surface the config says is absent — an iOS target under a `mobile: none`, a PostHog SDK
@@ -84,7 +84,7 @@ the tree contradicts. Note `posthog`'s derivation is a bare substring grep, so a
 *documents* PostHog trips it; say which file matched, so the user can dismiss it. The grep excludes
 `.claude/**`, so a hit is always somewhere else in the tree and the repo's own recorded answer is
 never the evidence against itself — before
-[#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317) it was, and this stop fired on every
+[#317](https://github.com/Sassy-Dog/skills/issues/317) it was, and this stop fired on every
 refresh in every repo that had answered.
 
 **An ABSENT one of these keys is the rollout path, and it is the half a refresh must not skip.**
@@ -127,7 +127,7 @@ raises the key themselves: this mode runs again and again, so a proposal offered
 re-offered forever. An absent key surviving a refresh untouched is how a decline stays declined.
 
 **Absent does not yet mean declined anywhere, and will not for most repos.** Every config written
-before [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) is missing this key because
+before [#343](https://github.com/Sassy-Dog/skills/issues/343) is missing this key because
 nobody was ever asked, not because anybody said no — and since only create, migrate and adopt ask,
 a repo already on config reaches the question only if it passes through one of those again. The two
 cases are indistinguishable in the file and both read as absent, which is safe: absent is fail-open,
@@ -139,7 +139,7 @@ the configured name is not a disagreement — it is why the name is configured; 
 disputing their own value is, and that is a stop and surface as everywhere else. Getting this wrong
 is silent in the dangerous direction: a missing or overwritten `execution_site` turns a site filter
 OFF rather than on, which is
-[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug.
+[#322](https://github.com/Sassy-Dog/skills/issues/322)'s originating bug.
 
 **This paragraph sits below the migrate-mode handoff deliberately, and migrate mode's own rule is
 in `migrate-mode.md`.** Beside its `stacked_prs` sibling, where it reads as though it belongs, it
@@ -165,7 +165,7 @@ For repos carrying legacy prefixed skills such as `<prefix>-plate-it`, `<prefix>
    it unconditional. Every adopted config therefore arrives with `testflight:`, `posthog:` and
    `mobile:` absent, meaning "nobody has checked", which renders a permanent `survey-work`
    blind-spot row for each with no config that clears it
-   ([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)). So put **interview §2c** to
+   ([#261](https://github.com/Sassy-Dog/skills/issues/261)). So put **interview §2c** to
    the user for all three, here, as part of this mode — the same step migrate mode carries for the
    same reason (`references/migrate-mode.md`, "Step 2b"). A quiet tree is **not** an answer, and
    `sentry:` is **not** part of this question: its `none` is written by the culprit check in
@@ -193,7 +193,7 @@ When identifying a generated skill for migration, match the `generated-by:` mark
 the file** and accept **every** producer name:
 
 - `refresh-skills` — plugin 2026.7.22 until this skill was renamed `setup-config`
-- `refresh-sassydog-skills` — plugin 0.9.0 through 2026.7.21
+- `refresh-skills` — plugin 0.9.0 through 2026.7.21
 - `create-dev-workflows` — plugin ≤ 0.8.1
 
 This list is frozen history and takes no new entries. `setup-config` writes only

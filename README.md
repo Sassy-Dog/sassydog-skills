@@ -1,4 +1,4 @@
-# sassydog-skills
+# skills
 
 Sassy Dog AI agent skills marketplace for Claude Code, Gemini CLI, and other AI coding tools.
 
@@ -214,7 +214,7 @@ and `scripts/test-model-tiers.sh` enumerates the sites and holds each one to tha
 
 ```bash
 # Add as a marketplace
-claude plugin marketplace add Sassy-Dog/sassydog-skills
+claude plugin marketplace add Sassy-Dog/skills
 
 # Install the plugin
 claude plugin install sassy-dog
@@ -223,7 +223,7 @@ claude plugin install sassy-dog
 ### Local Development
 
 ```bash
-claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills
+claude --plugin-dir ~/Repos/sassy-dog/skills
 ```
 
 ## Updating / Troubleshooting
@@ -234,20 +234,20 @@ claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills
 > install from the [Installation](#installation) section above is unaffected.
 
 The plugin was renamed `ai-agent-skills` → `sassy-dog` and the marketplace `sassy-dog-skills` →
-`sassydog-skills` in the same release (issue #71). A machine that added the marketplace under the
+`skills` in the same release (issue #71). A machine that added the marketplace under the
 old name cannot update across the rename — plugin name, marketplace name, and cache path all moved
 at once. Treat it as uninstall-and-reinstall, exactly once per machine:
 
 ```bash
 claude plugin marketplace remove sassy-dog-skills
-claude plugin marketplace add Sassy-Dog/sassydog-skills
+claude plugin marketplace add Sassy-Dog/skills
 claude plugin install sassy-dog
 ```
 
 Plugin updates are **manual** — the cache does not follow the repo. Content lands on `main` on every merge, while `.claude-plugin/plugin.json` is stamped only by a dedicated release PR (`scripts/stamp-version.sh` — see `docs/VERSIONING.md`), so "has there been a release?" is the wrong question to ask. Run the update whenever you want `main`'s current skills, and use the content check below to find out whether you are behind:
 
 ```bash
-claude plugin update sassy-dog@sassydog-skills --scope user   # or: project, local, managed
+claude plugin update sassy-dog@skills --scope user   # or: project, local, managed
 ```
 
 `--scope` defaults to `user`. If this machine has a *project*-scope install of the plugin, that is the copy your sessions in that project run, and the bare command will not touch it — see step 1 below for how to tell.
@@ -263,19 +263,19 @@ It also names the one stale state the installer cannot fix: every copy already a
 
 ### The bare plugin name fails
 
-`claude plugin update sassy-dog` returns "not found" — the error doesn't hint at the fix. The marketplace-qualified name is required: `sassy-dog@sassydog-skills`.
+`claude plugin update sassy-dog` returns "not found" — the error doesn't hint at the fix. The marketplace-qualified name is required: `sassy-dog@skills`.
 
 ### `claude plugin marketplace update` is not a plugin update
 
 `claude plugin marketplace update` only `git pull`s the marketplace clone. It succeeds even when the *plugin cache* — the code your skills actually run from — is still stale.
 
-**Do not diagnose this by comparing version strings.** The manifest is stamped only by a dedicated release PR, while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/sassydog-skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
+**Do not diagnose this by comparing version strings.** The manifest is stamped only by a dedicated release PR, while content lands on every merge, so a cached copy and `main` routinely carry the *same* `version` over different files. Measured 2026-08-28: the marketplace clone, the live cache and `main` all read `2026.8.100`, and 18 skill files differed along with every file in `agents/` — all nine reviewers and the orchestrator ([#296](https://github.com/Sassy-Dog/skills/issues/296)). Matching version strings are not evidence that the cache is current — only comparing content is.
 
 **1. Find which cached copy is live.** The cache keeps every version ever installed (ten directories on the machine measured above) and installs are per scope, so `ls` cannot answer this. Run this from the project *root* (the match is an exact path comparison — a subdirectory returns only the `user` row):
 
 ```bash
 jq -r --arg p "$PWD" '
-  .plugins["sassy-dog@sassydog-skills"][]
+  .plugins["sassy-dog@skills"][]
   | select(.scope != "project" or .projectPath == $p)
   | "\(.scope)\t\(.installPath)"
 ' ~/.claude/plugins/installed_plugins.json
@@ -286,14 +286,14 @@ A `project` row wins for sessions in that project; the `user` row is the answer 
 **2. Refresh the marketplace clone**, so that what you compare against is current:
 
 ```bash
-claude plugin marketplace update sassydog-skills
+claude plugin marketplace update skills
 ```
 
 **3. Compare content** — the clone against that install path, over all three directories that load or execute:
 
 ```bash
 INSTALL_PATH='<paste the installPath from step 1>'
-CLONE="$HOME/.claude/plugins/marketplaces/sassydog-skills"
+CLONE="$HOME/.claude/plugins/marketplaces/skills"
 for d in skills agents scripts; do
   [ -d "$INSTALL_PATH/$d" ] || { echo "NOT COMPARED: $d — check INSTALL_PATH"; continue; }
   diff -rq "$CLONE/$d" "$INSTALL_PATH/$d" 2>&1
@@ -320,7 +320,7 @@ An error naming a path that does not exist is **not** a clean result: the compar
 **4. Update the scope you actually found**, because the default is not always yours:
 
 ```bash
-claude plugin update sassy-dog@sassydog-skills --scope project   # or: user, local, managed
+claude plugin update sassy-dog@skills --scope project   # or: user, local, managed
 ```
 
 `--scope` defaults to `user`. A reader who correctly identifies a `project` copy in step 1 and then runs the bare command updates the *user* copy, sees no error, and finds step 3 unchanged — the same wrong-copy trap as step 1, on the write side. The update also says "restart required to apply": until you restart, the session keeps running the old skills and agents. Then re-run step 1 and step 3 — an update that crosses a release installs into a *new* version directory, so the `INSTALL_PATH` you just used now points at an abandoned copy that will differ forever.
@@ -340,7 +340,7 @@ This repo is **public**, so install and update clone it over anonymous HTTPS —
 This repo is a single plugin: skills, agents, and the manifest live at the root.
 
 ```
-sassydog-skills/
+skills/
 ├── .claude-plugin/plugin.json   # Plugin manifest
 ├── agents/                      # Subagents (auto-discovered, namespaced sassy-dog:<name>)
 │   ├── *-reviewer.md            # Nine domain reviewers — audit mode or diff-scoped mode

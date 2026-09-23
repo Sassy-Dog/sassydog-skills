@@ -153,7 +153,7 @@ absence — and the sources-line token beside it reads `recorded at setup`. Prec
 tactful; "this repo has no Sentry" is the one thing neither may say.
 
 **The failure this closes is a trained reader, not an untidy plate**
-([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)). `survey-work` §6 orders
+([#261](https://github.com/Sassy-Dog/skills/issues/261)). `survey-work` §6 orders
 blind-spot rows by what the darkness costs, customer pain first, so an infra repo with no app —
 `Sassy-Dog/platform`, observed 2026-08-24 — rendered `testflight`, `posthog` and `mobile` rows on
 **every** plate, two of them in the loudest position the section has, with no config that could
@@ -164,7 +164,7 @@ then sitting in a list they have been trained to ignore.
 **Do not "align the `none` forms."** A four-key form where one key behaves differently reads as a
 plain inconsistency, which is exactly why the asymmetry is pinned in CI
 (`scripts/test-sentry-verification.sh`) and not merely written here. Collapsing `sentry: none` onto
-the clean line re-creates the silent gap [#213](https://github.com/Sassy-Dog/sassydog-skills/issues/213)
+the clean line re-creates the silent gap [#213](https://github.com/Sassy-Dog/skills/issues/213)
 opened this form to close; promoting the other three back into rows re-creates #261.
 
 **Where each `none` comes from differs too.** `setup-config` writes `sentry: none` itself, as the
@@ -205,13 +205,13 @@ the form is scoped to keys whose absence is *loud*:
 The heading names one key while the body scopes the form to four. That is deliberate. One CI gate
 anchors the heading line verbatim — `scripts/test-review-gate-decisions.sh` asserts it, anchored, as
 a link target for the `review_agent: skip`-not-`none` decision (#237, tracked as
-[#247](https://github.com/Sassy-Dog/sassydog-skills/issues/247)) — while
+[#247](https://github.com/Sassy-Dog/skills/issues/247)) — while
 `scripts/test-sentry-verification.sh` extracts this section by a prefix of it, and five prose
 cross-references point at it by name (`references/update-mode.md`, `references/migrate-mode.md`,
 `references/interview.md`, and `survey-work`'s §6 twice).
 Renaming it to cover the four would redden a gate whose failure message points a reader at the
 review-gate decisions (#237, tracked as
-[#247](https://github.com/Sassy-Dog/sassydog-skills/issues/247)) instead of at this section.
+[#247](https://github.com/Sassy-Dog/skills/issues/247)) instead of at this section.
 `sentry: none` is also still the *first* documented exception and the one whose justification the
 others inherit, so the name is accurate as a citation even where it is incomplete as a summary.
 Leave it.
@@ -376,7 +376,7 @@ reading of the principle deletes this key and reads visibility live. Do not. **D
 means a visibility change silently rewrites the repo's review architecture.** Taking a repo private
 would downgrade it from pre-PR review to after-the-fact review with nothing announcing the change:
 no config diff, no prompt, no line in any run's output. That is the failure class
-[#187](https://github.com/Sassy-Dog/sassydog-skills/issues/187) documents — a visibility transition
+[#187](https://github.com/Sassy-Dog/skills/issues/187) documents — a visibility transition
 silently disabling the protections a repo was relying on — and a review architecture that changes
 when nobody chose to change it is the same defect with a different subject.
 
@@ -418,7 +418,7 @@ review_surfaces:
 the namespaced agent. Nothing else is legal. An agent living in someone's own `~/.claude/agents/`
 resolves on the machine that wrote the map and nowhere else, so a map naming one would steer for its
 author and steer nothing for everybody else — the same class of failure as fanning out to an agent a
-consumer repo lacks ([#236](https://github.com/Sassy-Dog/sassydog-skills/issues/236)).
+consumer repo lacks ([#236](https://github.com/Sassy-Dog/skills/issues/236)).
 
 **An unresolvable value is a loud error, never a skipped surface.** The orchestrator validates the
 map before it dispatches anything; on any bad value it discards the **whole** map, classifies by its
@@ -477,13 +477,13 @@ Written into the `.claude/sassy-dog/*.md` file of each skill that reads it — `
 any other file is carried across verbatim by every refresh and read by nobody.
 
 A free-form lowercase token naming the workstation this checkout runs on. It is the config half of
-the **execution-site contract** ([#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)):
+the **execution-site contract** ([#322](https://github.com/Sassy-Dog/skills/issues/322)):
 some work is executable only from one machine — the host holding a vendor's multi-GB images, the
 sibling checkout, the network reach — and nothing in the workflow skills could express that.
 
 The issue half is a **label**, `site:<name>`, which `github-issues`' `queue-snapshot.sh` reads off
 the labels it already fetches and emits as a per-issue `sites`
-([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)). An issue with no such label runs
+([#340](https://github.com/Sassy-Dog/skills/issues/340)). An issue with no such label runs
 anywhere.
 
 **It is a label and not a body line on purpose.** The three body contracts beside it — `touches:`,
@@ -502,7 +502,7 @@ of them matter to whoever writes a config:
   A scalar would be null for *both* "nothing declared" and "several
   declared", so its obvious reading — `site is None or site == execution_site` — turns a conflict
   into "any site", which re-creates
-  [#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug with two labels
+  [#322](https://github.com/Sassy-Dog/skills/issues/322)'s originating bug with two labels
   instead of none. The list's obvious reading, `not sites or execution_site.lower() in sites`,
   cannot.
   **Read `sites`; a reader that wants a scalar has to decide what a conflict means first.**
@@ -511,7 +511,7 @@ of them matter to whoever writes a config:
   `not sites or execution_site.lower() in sites` — write `execution_site` lowercase by convention,
   but never implement the match as plain equality against
   the raw config value, since `execution_site: VDI` would then hold the VDI loop's own work
-  ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)). No character
+  ([#341](https://github.com/Sassy-Dog/skills/issues/341)). No character
   grammar is applied to a label value: labels are created through the UI or API by somebody with
   triage and are visible on the issue. A consumer still treats the value as data — quote it, never
   build a command or a URL by concatenation.
@@ -546,20 +546,20 @@ in five places once and the copy that drifted was found by a reviewer rather tha
 fails. `update-mode.md` and `migrate-mode.md` carry the operational side for their own modes, since
 a mode reads its own file and inherits nothing; `interview.md` §3d carries the question's own half —
 which modes ask it, and why a refresh is not one of them
-([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). **Do not read that as a closed
+([#343](https://github.com/Sassy-Dog/skills/issues/343)). **Do not read that as a closed
 set.** It was asserted as one, and was wrong on landing: `interview.md` states §3d's refresh
 semantics from *outside* §3d as well. A count with nothing re-deriving it is what this repo's own
 convention warns about, and a "nothing else restates it" clause is that shape at its worst — it
 reads as verified and is checked by nothing.
 
 **Who reads it, by the change that adds the reader.** The label read and this contract landed first
-and alone ([#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340)), so that each consumer
+and alone ([#340](https://github.com/Sassy-Dog/skills/issues/340)), so that each consumer
 stayed small enough to review:
 
 | Change | Adds |
 | --- | --- |
-| [#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341) | `dispatch-ready` skips a Ready issue whose `sites` excludes this value; `take-it` refuses one before claiming it |
-| [#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343) | `groom-backlog` requires the declaration before Ready; `survey-work` shows the site on backlog lines; `setup-config` asks for this key |
+| [#341](https://github.com/Sassy-Dog/skills/issues/341) | `dispatch-ready` skips a Ready issue whose `sites` excludes this value; `take-it` refuses one before claiming it |
+| [#343](https://github.com/Sassy-Dog/skills/issues/343) | `groom-backlog` requires the declaration before Ready; `survey-work` shows the site on backlog lines; `setup-config` asks for this key |
 
 **Read the skill, not this table, for what a given release does.** The table says which change
 introduces each reader, not which of them have landed — deliberately, because the alternative is a
@@ -634,7 +634,7 @@ write_policy: read-only            # or `gated` to allow the Sentry->GitHub file
 `exclude_pathspecs` values are **bare paths**. `repo-health`'s `pull-tech-debt.sh` supplies the
 `:(exclude)` magic itself, so a prefixed value used to reach git as `:(exclude):(exclude)<path>` — a
 valid pathspec matching nothing, which excludes nothing and exits `0`, silently disabling the
-exclusion ([#365](https://github.com/Sassy-Dog/sassydog-skills/issues/365)). The script now strips
+exclusion ([#365](https://github.com/Sassy-Dog/skills/issues/365)). The script now strips
 one leading `:(exclude)`, so a config already carrying the old spelling needs **no edit** — write
 new ones bare. That is not the same as nothing to do: the strip lives in the plugin, so a consumer
 repo keeps scanning with the exclusion disabled until the plugin is updated **for that checkout**.
@@ -835,7 +835,7 @@ The failure is silent in exactly one quadrant, which is why it survived so long:
 
 `NO_CONFIG` already fails honestly. The third row did not, because a populated config from the wrong
 repo is indistinguishable from the right one — the same class as a truncated API page reading as an
-empty one. On 2026-08-18 two sub-agents shipping in `sassydog-routines` and `sassydog-skills` were
+empty one. On 2026-08-18 two sub-agents shipping in `routines` and `skills` were
 each handed `platform`'s Terraform gates (`terraform fmt`, `tflint`,
 `infrastructure/environments/core`) while their real gates were `bats`/`ruff`/`actionlint` and
 `scripts/preflight.sh`. Both caught it only by noticing the mismatch themselves — and since every
@@ -883,8 +883,8 @@ Skills that write or dispatch unattended (`take-it`, `dispatch-ready`) do not de
 ## Cloud sessions and routines
 
 A repo carrying these config files must also declare, in its own `.claude/settings.json`, both the
-marketplace (`extraKnownMarketplaces` → `sassydog-skills` from `Sassy-Dog/sassydog-skills`) and the
-plugin (`enabledPlugins` → `sassy-dog@sassydog-skills`). Plugin skills enabled only in user settings
+marketplace (`extraKnownMarketplaces` → `skills` from `Sassy-Dog/skills`) and the
+plugin (`enabledPlugins` → `sassy-dog@skills`). Plugin skills enabled only in user settings
 do not transfer to cloud sessions or scheduled routines — only repo-declared plugins install at
 session start, and they install *from the marketplace the repo declares*. `enabledPlugins` alone
 references the marketplace by name only; the name resolves locally through user-level registration

@@ -161,7 +161,7 @@ optional and not a "when in doubt" measure.
 A generated skill has no way to express a `none`, so **extraction can never produce one**. Every
 migrated config therefore arrives with `testflight:`, `posthog:` and `mobile:` absent — which means
 "nobody has checked" and renders a `survey-work` blind-spot row for each, permanently, with no config
-that clears it (issue [#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)).
+that clears it (issue [#261](https://github.com/Sassy-Dog/skills/issues/261)).
 
 So put **interview §2c** to the user for all three, here, as part of this mode. This is the one
 question migrate mode must ask rather than infer: Step 1's "ask only about what the render cannot
@@ -211,15 +211,15 @@ Merge, never overwrite. `setup-hooks` may already own a hooks entry in the same 
 ```json
 {
   "extraKnownMarketplaces": {
-    "sassydog-skills": {
+    "skills": {
       "source": {
         "source": "github",
-        "repo": "Sassy-Dog/sassydog-skills"
+        "repo": "Sassy-Dog/skills"
       }
     }
   },
   "enabledPlugins": {
-    "sassy-dog@sassydog-skills": true
+    "sassy-dog@skills": true
   }
 }
 ```
@@ -232,7 +232,7 @@ pre-#97 state — add the missing `extraKnownMarketplaces` entry.
 enabled only in *user* settings do not transfer to cloud sessions or scheduled routines. And
 `enabledPlugins` alone is not enough: it names the marketplace, but marketplace registration
 otherwise lives in user-level state (`~/.claude/plugins/known_marketplaces.json`) that never reaches
-a cloud VM — `extraKnownMarketplaces` is what lets the session resolve `@sassydog-skills` and
+a cloud VM — `extraKnownMarketplaces` is what lets the session resolve `@skills` and
 install the plugin at session start. Omit either and a scheduled `dispatch-ready` silently finds no
 skill while every local session works — a failure mode local testing cannot reproduce.
 

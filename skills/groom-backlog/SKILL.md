@@ -32,7 +32,7 @@ on — and cwd resets between Bash calls, so you cannot influence it. If it name
 the one you are working in, **discard the block above**, read that repo's own
 `.claude/sassy-dog/groom-backlog.md` by absolute path, and use that instead. Config is meant to be applied
 exactly as written, so the wrong one silently applies another repo's rules: on 2026-08-18 two agents
-shipping in `sassydog-routines` and `sassydog-skills` were each handed `platform`'s Terraform gates,
+shipping in `routines` and `skills` were each handed `platform`'s Terraform gates,
 and caught it only by noticing the mismatch themselves.
 
 Frontmatter supplies `gotcha_summary`, the optional `board` and `stacked_prs` blocks, and the
@@ -190,12 +190,12 @@ A dependency being open does NOT block Ready — dispatch-ready sequences at dis
 body contracts beside it — `touches:`, `Depends on #N`, `stack:` — are raw-line parses, and a raw
 line can be *quoted*: an issue documenting this contract, or a template carrying an unfilled
 placeholder, would declare a site by accident. A label cannot be quoted in prose, which is why
-[#340](https://github.com/Sassy-Dog/sassydog-skills/issues/340) put the site on one.
+[#340](https://github.com/Sassy-Dog/skills/issues/340) put the site on one.
 
 **Resolve a candidate's declaration by RUNNING the resolver, never by paraphrasing its rules.**
 `sassy-dog:github-issues`' `queue-snapshot.sh` owns them, and a paraphrase forks them — one written
 into a skill dropped the `strip()` and answered `" vdi"` where the script answers `"vdi"`, for a
-label its own header calls legal ([#341](https://github.com/Sassy-Dog/sassydog-skills/issues/341)).
+label its own header calls legal ([#341](https://github.com/Sassy-Dog/skills/issues/341)).
 §2's candidate pull already returned each issue's labels, so feed **those** through the emitter,
 which runs no `gh` and touches no network. Re-fetching would cost one API call per candidate and
 read a tree that has moved since the pull:
@@ -278,7 +278,7 @@ answer and passes rubric #9 like any other. **Never remove one to "resolve a con
 strips the issue from a checkout the declaration explicitly named, which is a narrowing nobody
 asked for and nothing reports. The one reading to refuse is the opposite one — several labels are
 not "any site", which is the direction
-[#322](https://github.com/Sassy-Dog/sassydog-skills/issues/322)'s originating bug ran.
+[#322](https://github.com/Sassy-Dog/skills/issues/322)'s originating bug ran.
 
 Widen or narrow the set only where the *work* changed, with the user, and say which direction you
 moved it.
