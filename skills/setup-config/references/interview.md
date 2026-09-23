@@ -96,7 +96,7 @@ Detection may *propose* the answer, as everywhere else in this interview, but ch
 gives you: `scripts/detect-capabilities.sh` derives `posthog` (a tracked-tree grep with `.claude/**`
 excluded — so a repo that merely *documents* PostHog in its README or its source still trips it, say
 which file matched, but the `posthog: none` this question writes is never itself the evidence on the
-next refresh, [#317](https://github.com/Sassy-Dog/sassydog-skills/issues/317)) and
+next refresh, [#317](https://github.com/Sassy-Dog/skills/issues/317)) and
 `testflight_bundle_id` (only when an `ios/` path or an `app.json` is tracked). **There is no "has a mobile target" field**, so a `mobile`
 proposal comes from checking the tree yourself — `ios/`, `android/`, `app.json`, `pubspec.yaml`. The
 user's answer is what writes the key; a quiet tree never is.
@@ -110,7 +110,7 @@ user's answer is what writes the key; a quiet tree never is.
 State the stakes plainly, because "not sure" is the safe answer and it should stay available: an
 omitted key costs a recurring row, a wrong `none` costs the row *forever* on a surface that later
 exists. An infra repo with no app carried three unclearable rows on every plate before this
-question existed ([#261](https://github.com/Sassy-Dog/sassydog-skills/issues/261)).
+question existed ([#261](https://github.com/Sassy-Dog/skills/issues/261)).
 
 **Do not offer the same question for `sentry:`.** Its `none` is not an interview answer at all — it
 is what `setup-config` writes when culprit verification fails (§2b, `references/detection.md`), and

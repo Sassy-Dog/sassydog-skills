@@ -67,7 +67,7 @@ Cluster surviving findings so each cluster is one coherent PR (e.g. "harden GitH
    `not dispatched` domain is never one of it and is carried in its own tally.
    ```
 
-   Print this block on **every** run, the all-clear included. A coverage line that shows up only when something went wrong teaches the reader that its absence means nothing, which is the habit that made a dark domain invisible in the first place (issue [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284)).
+   Print this block on **every** run, the all-clear included. A coverage line that shows up only when something went wrong teaches the reader that its absence means nothing, which is the habit that made a dark domain invisible in the first place (issue [#284](https://github.com/Sassy-Dog/skills/issues/284)).
 3. Now ask the user to approve, edit, or cancel. **File nothing yet.** A dark domain is surfaced, not a veto: it does not stop the run and does not block filing, and on approval everything that did come back is filed as normal.
 4. On approval, **align the target repo's labels first** — the engineering-dimension + severity taxonomy is owned by one script in this plugin, and this skill invokes it rather than carrying a copy (issue #167). The path below is resolved when this skill loads; pass it on as `ALIGN=<that path>` to anything that needs it, because `references/*.md` are read raw and never get the substitution:
 
@@ -80,7 +80,7 @@ Cluster surviving findings so each cluster is one coherent PR (e.g. "harden GitH
 
 ### Phase 5 — Report
 
-Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed. **The Epic body now carries that coverage block too** ([#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294)) — see `references/github-issue-ops.md` §4 — so the durable artefact records what was and was not audited, and a later reader of a backlog missing a whole domain is told so instead of finding a set that reads complete. This reprint is for the operator who just approved the filing; the Epic's copy is for everyone after them, and the two are not interchangeable: session output reaches one person once.
+Print the Epic URL, the child issue list, the executive summary, and the same coverage block Phase 4 previewed. **The Epic body now carries that coverage block too** ([#294](https://github.com/Sassy-Dog/skills/issues/294)) — see `references/github-issue-ops.md` §4 — so the durable artefact records what was and was not audited, and a later reader of a backlog missing a whole domain is told so instead of finding a set that reads complete. This reprint is for the operator who just approved the filing; the Epic's copy is for everyone after them, and the two are not interchangeable: session output reaches one person once.
 
 ## Reference Files
 

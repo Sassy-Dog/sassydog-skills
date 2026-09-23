@@ -96,7 +96,7 @@ jobs:
           [ -n "$APP_CLIENT_ID" ] || missing="$missing PLATFORM_WRITER_APP_CLIENT_ID"
           [ -n "$APP_KEY" ]       || missing="$missing PLATFORM_WRITER_APP_PRIVATE_KEY"
           if [ -n "$missing" ]; then
-            echo "::error::Missing Dependabot secret(s):$missing — org secrets are private-visibility and do not reach public repositories (Sassy-Dog/sassydog-skills#178)."
+            echo "::error::Missing Dependabot secret(s):$missing — org secrets are private-visibility and do not reach public repositories (Sassy-Dog/skills#178)."
             exit 1
           fi
           echo "App credentials present."

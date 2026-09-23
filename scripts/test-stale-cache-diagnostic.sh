@@ -88,7 +88,7 @@ has "$README_FLAT" "Any output at all means the cache is stale" \
 
 # THE DELETED IDIOM. #12 shipped it, it survived until #296 measured it wrong,
 # and it is exactly what a reader reaching for the simplest check re-invents.
-absent "$README_FLAT" "$README_EMPH" 'ls ~/\.claude/plugins/cache/sassydog-skills/sassy-dog/' \
+absent "$README_FLAT" "$README_EMPH" 'ls ~/\.claude/plugins/cache/skills/sassy-dog/' \
     "the ls-the-cache-directory idiom has not come back"
 absent "$README_FLAT" "$README_EMPH" 'Compare against .?version.? in .?\.claude-plugin/plugin\.json.? on .?main' \
     "and nothing tells a reader to compare against the manifest version again"

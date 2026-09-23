@@ -22,7 +22,7 @@ This is the part that is easy to get wrong.
 |---|---|---|
 | Is this **repo** enabled for stacks? | `GET /repos/{owner}/{name}/stacks` | `200` available · `404` not enabled (or no access) |
 
-> **`Sassy-Dog` IS enabled for the preview, as of 2026-08-13** (verified: `200` on `sassydog-skills`
+> **`Sassy-Dog` IS enabled for the preview, as of 2026-08-13** (verified: `200` on `skills`
 > and `velovate`; it was `404` for every org repo when this support was written). The consequence is
 > not cosmetic: `merge-shepherd.sh`'s `stack_gate()` used to short-circuit on exit `11` (repo not
 > enabled) for every merge in every repo, so the GraphQL membership probe was effectively dead code
@@ -52,7 +52,7 @@ all derived. That path had never executed before — it was unreachable while ev
 `404`.
 
 **The ordering gate is verified too, against a purpose-built live stack** (2026-08-13,
-`sassydog-skills` stack 195: two empty-commit PRs, both closed afterwards). This corrects an earlier
+`skills` stack 195: two empty-commit PRs, both closed afterwards). This corrects an earlier
 claim in this file that exit 23 could not be exercised because every `Sassy-Dog` repo runs a merge
 queue. **That was wrong, and the reason is worth keeping**, because it is the same mistake a future
 reader is likely to make:

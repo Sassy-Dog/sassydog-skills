@@ -90,7 +90,7 @@ channel's recent messages, one that reads a message's thread replies. Never hard
   broadcast), so a host with channel read and no thread read cannot reach the block. There is no
   paste fallback and no re-run of the sweep.
 
-The producer is the **flattened copy** of `whats-on-fire` in `Sassy-Dog/sassydog-routines`,
+The producer is the **flattened copy** of `whats-on-fire` in `Sassy-Dog/routines`,
 which `docs/ROUTINES.md` records as deliberately divergent from this repo's copy. What Slack
 delivers is mrkdwn whose prose shape changes from day to day; the block is the only part with a
 fixed grammar, and it is the only part this skill reads apart from copying two header lines.
@@ -99,7 +99,7 @@ fixed grammar, and it is the only part this skill reads apart from copying two h
 | --- | --- |
 | first line contains `daily-fire-watch could not run.` | STOP. No sweep happened; today's silence is not a clean bill of health. Do not fall back to running `whats-on-fire` locally — that is a different, un-gated sweep. |
 | begins `Daily Fire Watch (` and the thread cannot be read | STOP: "the report's thread is unreadable — the block lives there; check the thread-read tool" — never fall back to the body or to an older post |
-| begins `Daily Fire Watch (` but no `fire-watch-v1` fence is found — the pinned poster's first reply does not open with one (print that reply's first line), or, on a pre-2026-09-21 report, the body has none — or the fence never closes | STOP: "this post carries no `fire-watch-v1` block; the routine's thread reply is missing or the producer predates it — see `sassydog-routines`' `whats-on-fire` §5" — never parse the prose instead, never select an older post instead |
+| begins `Daily Fire Watch (` but no `fire-watch-v1` fence is found — the pinned poster's first reply does not open with one (print that reply's first line), or, on a pre-2026-09-21 report, the body has none — or the fence never closes | STOP: "this post carries no `fire-watch-v1` block; the routine's thread reply is missing or the producer predates it — see `routines`' `whats-on-fire` §5" — never parse the prose instead, never select an older post instead |
 | begins `Daily Fire Watch (YYYY-MM-DD)` and a closed fence was found (the poster's first thread reply; the body only on a pre-2026-09-21 report) | the report; continue to the two rows below |
 | its `YYYY-MM-DD` (first line; the block's `date=` must agree) is more than one day before today | say the age in one line and **ask** before continuing; a two-day-old fire may be out, or worse |
 | block header says `truncated=yes` | continue, and carry "truncated — items may be missing" into the header |
@@ -122,7 +122,7 @@ three backticks followed by `fire-watch-v1` and closes with three backticks:
 
 ```text
 fire-watch-v1
-date=YYYY-MM-DD run=sassydog-routines@<sha> poster=U0AAJ2WGMTQ truncated=no
+date=YYYY-MM-DD run=routines@<sha> poster=U0AAJ2WGMTQ truncated=no
 item|<repo>|<kind>|<id>|<tier>|<labels>|<title>
 top|<rank>|<repo>|<kind>:<id>
 ```
@@ -180,7 +180,7 @@ dispatch, dispatch order, and the final report:
 
 ```text
 Skill: sassy-dog:work-recommendations
-Args: "From daily-fire-watch (YYYY-MM-DD; run <sassydog-routines@sha>; Load: <verbatim>;
+Args: "From daily-fire-watch (YYYY-MM-DD; run <routines@sha>; Load: <verbatim>;
        truncated — only when it was) for <owner/name>, in this order:
        <the numbered list from §4, handles inline>
        Report-only: <rows, or 'none'>"
@@ -198,7 +198,7 @@ to install the plugin (`claude plugin install sassy-dog`) — do not improvise t
 Before the delegate's output, print:
 
 ```markdown
-# Fire watch → <owner/name> (report YYYY-MM-DD, run <sassydog-routines@sha>)
+# Fire watch → <owner/name> (report YYYY-MM-DD, run <routines@sha>)
 
 _Load: <verbatim> · Coverage: <verbatim>_
 _Routed here: N · Report-only: J · Other repos: K (dropped)_

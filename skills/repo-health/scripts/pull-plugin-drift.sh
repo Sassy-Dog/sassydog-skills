@@ -3,7 +3,7 @@
 # Read-only. No network, no `gh`. Emits a single JSON object on stdout.
 #
 # Env:
-#   PLUGIN    plugin key (default: sassy-dog@sassydog-skills)
+#   PLUGIN    plugin key (default: sassy-dog@skills)
 #   STATE     installed_plugins.json (default: ~/.claude/plugins/installed_plugins.json)
 #   REFERENCE version to compare against; default is the marketplace clone's own
 #             manifest, which is what `claude plugin update` would resolve to
@@ -38,7 +38,7 @@
 #      stalest and hide the real ones.
 #   2. ABSENT IS NOT CURRENT. A checkout with no project entry inherits user
 #      scope — which usually means it is missing the `.claude/settings.json`
-#      declaration that Sassy-Dog/sassydog-skills#97 requires, so it would load
+#      declaration that Sassy-Dog/skills#97 requires, so it would load
 #      NO skill in a cloud session or scheduled routine. It is reported under
 #      `no_entry`, never folded into the clean set: "current by accident" and
 #      "current" are different facts, and only one of them survives being fixed.
@@ -55,7 +55,7 @@
 
 set -uo pipefail
 
-PLUGIN="${PLUGIN:-sassy-dog@sassydog-skills}"
+PLUGIN="${PLUGIN:-sassy-dog@skills}"
 STATE="${STATE:-$HOME/.claude/plugins/installed_plugins.json}"
 REFERENCE="${REFERENCE:-}"
 

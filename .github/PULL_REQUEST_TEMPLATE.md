@@ -16,7 +16,7 @@ it cannot tell you whether a skill's trigger phrases match real utterances, or w
 its instructions work when an agent follows them. For a skill or agent change, load the
 plugin from the working tree and actually invoke it:
 
-    claude --plugin-dir /path/to/sassydog-skills
+    claude --plugin-dir /path/to/skills
 
 If something could not be exercised, say which and why. "N/A" with a reason beats a
 checkbox that means nothing.

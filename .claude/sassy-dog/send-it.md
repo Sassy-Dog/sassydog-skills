@@ -20,7 +20,7 @@ composing a body from scratch, and keep the sections in its order:
 
 - **Summary** — what and why, one short paragraph
 - **Changes** — bullet list of skills/agents/scripts touched
-- **Verification** — how it was exercised (e.g. `claude --plugin-dir ~/Repos/sassy-dog/sassydog-skills`
+- **Verification** — how it was exercised (e.g. `claude --plugin-dir ~/Repos/sassy-dog/skills`
   plus invoking the skill), or why not applicable
 
 **README/version sync gate** — if the diff adds or removes a skill (`skills/*/SKILL.md`) or reviewer

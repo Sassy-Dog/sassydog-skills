@@ -134,7 +134,7 @@ treating any per-repo plugin behaviour as evidence.
 
 **Restarting does not move a project pin, and neither does the bare update command.** Both were
 measured on 2026-09-06: after a full restart this repo's pin was still `2026.8.94`, and
-`claude plugin update sassy-dog@sassydog-skills` answered *"Checking for updates … **at user
+`claude plugin update sassy-dog@skills` answered *"Checking for updates … **at user
 scope** … already at the latest version (2026.9.4)"* — a success message that changed nothing for
 the checkout it was run in. The scope flag is what moves it, from inside the target repo:
 

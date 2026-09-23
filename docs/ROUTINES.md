@@ -1,22 +1,22 @@
 # Scheduled routines — checking load state out of band
 
 > **Moved, 2026-08-13.** The two sweep routines no longer clone this repo. They now source
-> [`Sassy-Dog/sassydog-routines`](https://github.com/Sassy-Dog/sassydog-routines), where their
+> [`Sassy-Dog/routines`](https://github.com/Sassy-Dog/routines), where their
 > prompts and cloud-adapted skill bodies are version-controlled. **Start debugging a sweep there,
 > not here.**
 >
 > The reasoning below still stands and is why the move happened: since a plugin skill can never
 > load in a routine (#175), the fallback path was the *only* path, and the bodies it read were
 > written for an interactive laptop session — `gh` authenticated, whole portfolio checked out —
-> neither of which exists in a routine container. `sassydog-routines` carries versions written for
+> neither of which exists in a routine container. `routines` carries versions written for
 > that container, plus tested reducers replacing the ad-hoc parsing that repeatedly blew the
 > tool-result token ceiling.
 >
 > The skills in this repo are unchanged and remain correct for interactive use. They and the copies
-> in `sassydog-routines` are now deliberately divergent — do not "resync" them.
+> in `routines` are now deliberately divergent — do not "resync" them.
 >
 > One consequence for this doc: the `Load:` field there reads
-> `repo (sassydog-routines@<short-sha>)`, not `plugin` / `fallback (degraded)`. The precedence rule
+> `repo (routines@<short-sha>)`, not `plugin` / `fallback (degraded)`. The precedence rule
 > below is unchanged and still applies.
 
 Historical context follows, for the two routines as they ran until 2026-08-13. Each carried the
@@ -39,7 +39,7 @@ programmatically needs a human to finish the cleanup — disable it and rename i
 unmistakable in the meantime.
 
 The routine prompts were untracked config living behind the routines API, outside any repo — which
-is precisely what the move fixed. They are now `routines/*.md` in `sassydog-routines`, and what
+is precisely what the move fixed. They are now `routines/*.md` in `routines`, and what
 remains behind the API is a thin pointer at those files. This doc covers the one thing that was
 durable about a run even then: its log.
 
@@ -128,19 +128,19 @@ each tree exported by `git archive` into a throwaway
 | `2026.8.33` (pre-rename) | `15d60ee` | exit 0 | exit 0 | 20 skills, 9 agents |
 | `2026.8.41` (post-rename) | `b5e0681` | exit 0 | exit 0 | 21 skills, 9 agents |
 
-A clean `claude plugin marketplace add Sassy-Dog/sassydog-skills` + `claude plugin install` against
+A clean `claude plugin marketplace add Sassy-Dog/skills` + `claude plugin install` against
 the real GitHub marketplace at `main` also succeeds, and resolves the full inventory — including both
 skills the routines invoke. The 20→21 delta is exactly epic #120 (`refresh-*` → `setup-*`, plus
 `setup-repo`), not a loss.
 
 **The local cache stalling at `2026.8.33` is a coincidence, not a signal.** There is no marketplace
 auto-refresh — `lastUpdated` across registered marketplaces is scattered over months, each stamp a
-manual action. `sassydog-skills` last refreshed 2026-08-09, a day *before* the rename commits landed,
+manual action. `skills` last refreshed 2026-08-09, a day *before* the rename commits landed,
 so it never saw a post-rename version to reject. It is stale because nobody ran
 `claude plugin update`.
 
 So a degraded run pointed at **cloud-side resolution**, not at the artifact. That line of inquiry is
-now **closed** — see [#175](https://github.com/Sassy-Dog/sassydog-skills/issues/175) for the full
+now **closed** — see [#175](https://github.com/Sassy-Dog/skills/issues/175) for the full
 ruled-out table. The short version, because it changes how you read every degraded run below:
 
 - **There is no supported way to load a plugin skill in a routine session.** The routine-scoped
@@ -168,7 +168,7 @@ post as the first reply in every report's thread** — `fire-watch-v1`, one
 `item|<repo>|<kind>|<id>|<tier>|<labels>|<title>` line per item plus `top|<rank>|<repo>|<kind>:<id>`
 lines for the cross-product Top 5 — specified in full in that skill's §2. The producer resolves
 the product→repo map, so the consumer's routing is one exact `repo` match. The producer side
-landed in [sassydog-routines#69](https://github.com/Sassy-Dog/sassydog-routines/pull/69)
+landed in [routines#69](https://github.com/Sassy-Dog/routines/pull/69)
 (closing #68) with the block at the end of the message body, and moved it to the thread reply on
 2026-09-21; the consumer accepts the in-body form only on reports dated before that. A report
 with no block reaches the consumer's stop, whose text is in the skill's §2 table.
@@ -185,17 +185,17 @@ The sentinels the consumer keys on, so that a producer-side edit is a visible tw
 | channel | `#daily-fire-watch`, id `C0BNNEE59PX` |
 | poster | Slack user id `U0AAJ2WGMTQ` — the user-scoped connector the routine posts through; the trailing `Sent using` line is plain text and never evidence. Only that id's **newest sentinel post** is judged — never page past it to an older one; that id's ordinary chatter and any report-shaped post from another id are skipped and named. The same id is the only one whose **thread reply** counts as the block — its first reply, never a later one, never another id's |
 | report first line | `Daily Fire Watch (YYYY-MM-DD)` — no leading `#` once Slack has rendered it |
-| header lines, copied verbatim | `_Load: repo (sassydog-routines@<sha>) · Sources: …_` and `_Coverage: …_` |
+| header lines, copied verbatim | `_Load: repo (routines@<sha>) · Sources: …_` and `_Coverage: …_` |
 | machine block | **the first reply in the report's thread from the pinned poster** (since 2026-09-21; earlier reports carried it at the end of the message body, and the consumer still accepts that form): a fence opening with three backticks and `fire-watch-v1`, header `date=… run=… poster=… truncated=no\|yes`, then `item\|<repo>\|<kind>\|<id>\|<tier>\|<labels>\|<title>` and `top\|<rank>\|<repo>\|<kind>:<id>` lines; the block is bounded by Slack's 5000-char-per-element cap (a fence is one element), so `truncated=yes` means rows may be missing as well as prose — the producer drops the least urgent tiers first and never a `top`-named row |
 | could-not-run post | first line contains `daily-fire-watch could not run.` (the routine prompt's missing-skill-body path; matched on the substring because Slack strips the Markdown around it) |
 | anything else from the pinned poster | the consumer stops and prints the first line |
 
 The routines repo's CI is the right home for a gate over this table — it can clone this repo
-anonymously, while this repo's CI cannot authenticate to it ([#178](https://github.com/Sassy-Dog/sassydog-skills/issues/178)). Here, `scripts/test-fire-watch-block.sh` pins, in both this file and
+anonymously, while this repo's CI cannot authenticate to it ([#178](https://github.com/Sassy-Dog/skills/issues/178)). Here, `scripts/test-fire-watch-block.sh` pins, in both this file and
 the consumer, the block name, channel id, poster id, the rendered first line, the could-not-run
 line and the two block line shapes — not the header-line rows — plus the handle grammar the
 block feeds. A change to any row
-above lands **here first**, then in `sassydog-routines`.
+above lands **here first**, then in `routines`.
 
 ## What the in-report field is for
 

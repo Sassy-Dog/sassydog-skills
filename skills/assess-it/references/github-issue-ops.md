@@ -103,7 +103,7 @@ Body = the executive report from `assessment-rubric.md` (scores, strengths, bigg
 
 ### The coverage block is REQUIRED, and it is the durable half
 
-Phase 4's preview and Phase 5's report are **session output**: they tell the person who approved the filing which domains went dark, and they tell nobody else, ever. The Epic is the artefact that becomes the record. Without this block a backlog missing an entire domain **reads complete** to every later reader — which is the harm [#294](https://github.com/Sassy-Dog/sassydog-skills/issues/294) is about, and the half [#284](https://github.com/Sassy-Dog/sassydog-skills/issues/284) deliberately left open.
+Phase 4's preview and Phase 5's report are **session output**: they tell the person who approved the filing which domains went dark, and they tell nobody else, ever. The Epic is the artefact that becomes the record. Without this block a backlog missing an entire domain **reads complete** to every later reader — which is the harm [#294](https://github.com/Sassy-Dog/skills/issues/294) is about, and the half [#284](https://github.com/Sassy-Dog/skills/issues/284) deliberately left open.
 
 Render Phase 1's per-domain ledger verbatim, every domain, including the ones that returned:
 

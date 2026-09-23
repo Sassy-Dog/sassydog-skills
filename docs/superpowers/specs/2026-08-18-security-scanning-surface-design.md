@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-18
 **Status:** approved for planning
-**Repos touched:** `Sassy-Dog/sassydog-skills`, `Sassy-Dog/sassydog-routines`
+**Repos touched:** `Sassy-Dog/skills`, `Sassy-Dog/routines`
 
 ## Problem
 
@@ -26,7 +26,7 @@ on its first run.
 | `tailoredtip` | 9 | 0 |
 | `qr-ninja` | 7 | 0 |
 | `sassydog-web` | 2 | 0 |
-| `sassydog-skills` | 0 | 0 |
+| `skills` | 0 | 0 |
 
 `validity: active` means GitHub validated the credential against the provider. Those two Google
 API keys are live.
@@ -121,7 +121,7 @@ exact failure `pull-dependency-exposure.sh` was written to prevent. `velovate`'s
 rendered as 74 rows is a wall nobody triages; rendered as "11 rules, oldest 214d, inherited debt"
 it is one honest line, and the 3 alerts shipped this week get the attention.
 
-## Part 2 — Consumers in `sassydog-skills`
+## Part 2 — Consumers in `skills`
 
 ### `survey-work`
 
@@ -152,9 +152,9 @@ it is one honest line, and the 3 alerts shipped this week get the attention.
   will not both fit; existing wording must be trimmed. This is an edit to a live trigger surface,
   not free space.
 
-## Part 3 — `sassydog-routines`
+## Part 3 — `routines`
 
-`sassydog-routines/skills/whats-on-fire/SKILL.md` is **not** a copy of the plugin skill. It is a
+`routines/skills/whats-on-fire/SKILL.md` is **not** a copy of the plugin skill. It is a
 second implementation for the unattended cloud environment, with its own CI
 (`scripts/validate-routines.sh`), its own bats tests, and Python reducers in `scripts/routines/`
 instead of `jq`. Its §0 Container facts record **no `gh` CLI, and it cannot be provisioned**.
@@ -219,7 +219,7 @@ vacuous:
 ## Risks
 
 **Two copies of the tier table, no gate between them.** The ranking tables will exist in both
-`sassydog-skills` and `sassydog-routines`. A cross-repo assertion is not buildable: separate CI,
+`skills` and `routines`. A cross-repo assertion is not buildable: separate CI,
 and the routines CI has no network by design. If they drift, the daily Slack report and the
 interactive report rank the same live credential differently. This is the shape of the `#167`
 third-copy problem minus any mechanism to catch it.
@@ -238,10 +238,10 @@ until touched. Rolls out as an issue filed per affected repo — never a direct 
 
 ## Sequencing
 
-1. **PR 1 — `sassydog-skills`**: engine, consumers, gate 19. Fully verifiable locally via
+1. **PR 1 — `skills`**: engine, consumers, gate 19. Fully verifiable locally via
    `bash scripts/preflight.sh`.
 2. **Probe** — cloud environment, `velovate` as positive control. Settles Part 3's branch.
-3. **PR 2 — `sassydog-routines`**: Branch A or B. Not verifiable locally; verification is a manual
+3. **PR 2 — `routines`**: Branch A or B. Not verifiable locally; verification is a manual
    routine run or the 12:00 UTC firing.
 4. **Rollout issues** — one per consumer repo carrying `## scoring-overrides`.
 

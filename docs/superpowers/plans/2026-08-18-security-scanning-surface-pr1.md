@@ -1,4 +1,4 @@
-# Security Scanning Surface (PR 1 — sassydog-skills) Implementation Plan
+# Security Scanning Surface (PR 1 — skills) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1210,7 +1210,7 @@ another since 2026-01-04.
 
 ## Not in this PR
 
-Part 3 of the spec (`sassydog-routines`) is deliberately excluded. That repo
+Part 3 of the spec (`routines`) is deliberately excluded. That repo
 carries a separate cloud implementation with no `gh` CLI, and its work is
 blocked on a GitHub MCP capability probe that cannot run locally. It lands as
 its own plan.
@@ -1227,13 +1227,13 @@ BODY
 ## Follow-on work, not in this plan
 
 1. **The MCP capability probe** — cloud environment, `Sassy-Dog/velovate` as positive control.
-   Settles Branch A vs B for `sassydog-routines`.
-2. **PR 2 (`sassydog-routines`)** — its own plan, written once the probe resolves. Different
+   Settles Branch A vs B for `routines`.
+2. **PR 2 (`routines`)** — its own plan, written once the probe resolves. Different
    toolchain (Python reducers, bats), different CI, not verifiable locally.
 3. **Rollout issues** — one per consumer repo carrying a `## scoring-overrides` section that
    references the old Dev-experience placement of dependency exposure. Filed per repo, never swept.
 4. **The reciprocal pointer comments** the spec's risk section commits to — each tier table naming
-   its counterpart in the other repo. The `sassydog-skills` half cannot be written until PR 2
+   its counterpart in the other repo. The `skills` half cannot be written until PR 2
    settles what the routines-side table looks like, so both halves land with PR 2. Until then the
    duplication is undocumented in-file, which the spec's risk section records.
 5. **The live findings** — `velovate`'s two active Google API keys and `platform`'s seven

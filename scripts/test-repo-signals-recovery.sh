@@ -35,7 +35,7 @@
 #      nothing. `merge-group-cannot-satisfy-branch` proves that premise against
 #      the derivation rather than restating it.
 #
-#   sassydog-routines#46 shipped this with branch and status only and recovered
+#   routines#46 shipped this with branch and status only and recovered
 #   one repo of the two sampled; #47 added the event filter.
 #
 # THE OTHER TWO FLAGS ARE NOT DECORATION, and this gate pins all five because
@@ -278,7 +278,7 @@ if [ -z "$repo" ]; then
     exit 0
 fi
 
-# Without a push event filter this is the sassydog-routines#46 shape, and what
+# Without a push event filter this is the routines#46 shape, and what
 # it gets back is what a default branch is actually crowded with.
 case "$event" in
     *push*) : ;;

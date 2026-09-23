@@ -6,7 +6,7 @@
 # `self-hosted`, `linux`, `macos`, `x64` and `arm64` are built in; only the
 # org-specific labels need listing.
 #
-# NOTE: no workflow in THIS repo may use any of them. sassydog-skills is public,
+# NOTE: no workflow in THIS repo may use any of them. skills is public,
 # `on: pull_request` fires for fork PRs, and an unguarded job on a self-hosted
 # runner would let anyone execute code on the Sassy Dog fleet — see the standing
 # comment on ci.yml's `runs-on`. These labels are declared only so this file

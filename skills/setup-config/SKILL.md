@@ -93,7 +93,7 @@ With local and remote in agreement, pick exactly one mode:
 
 **Marker recognition accepts every producer name.** Match on the `generated-by:` prefix and accept
 `refresh-skills` (plugin 2026.7.22 until this skill became `setup-config`),
-`refresh-sassydog-skills` (plugin 0.9.0–2026.7.21), and `create-dev-workflows` (≤ 0.8.1). Match it
+`refresh-skills` (plugin 0.9.0–2026.7.21), and `create-dev-workflows` (≤ 0.8.1). Match it
 **anywhere in the file** — older renders put it on line 1, where the loader could not parse the
 frontmatter, and hand-fixes moved it. A repo whose marker is not recognised falls through to adopt
 or create mode and its config is silently lost, so this matcher is load-bearing.
@@ -252,7 +252,7 @@ silent.
    (`extraKnownMarketplaces`) and the plugin (`enabledPlugins`). **This is the step most likely to
    be skipped**, because everything works locally without it — plugin skills enabled only in *user*
    settings do not transfer to cloud sessions or scheduled routines, and `enabledPlugins` without
-   the marketplace declaration leaves cloud sessions unable to resolve `@sassydog-skills` at all,
+   the marketplace declaration leaves cloud sessions unable to resolve `@skills` at all,
    so a scheduled `dispatch-ready` silently finds no skill while every local session passes.
 3. In migrate mode: `.claude/skills/` contains no marker-carrying directory, and every unmarked one
    still exists.
@@ -271,7 +271,7 @@ silent.
   the three confirmed-absent `none` forms
   (`testflight:`, `posthog:`, `mobile:`), which record a check that already happened.
   **An `execution_site:` is proposed in exactly one place — interview §3d, in create, migrate and
-  adopt modes only** ([#343](https://github.com/Sassy-Dog/sassydog-skills/issues/343)). A refresh
+  adopt modes only** ([#343](https://github.com/Sassy-Dog/skills/issues/343)). A refresh
   never offers it, and that is what records a "declined": those three modes run once per repo, so a
   user who said no is not asked again. Move the question into the refresh path and the proposal is
   re-offered forever.

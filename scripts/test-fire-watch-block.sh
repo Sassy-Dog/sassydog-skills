@@ -4,7 +4,7 @@
 #
 # Why this exists: the consumer was first written against THIS repo's
 # `whats-on-fire` template and would have matched zero real posts — the routine
-# runs the flattened copy in `sassydog-routines`, whose delivered post is Slack
+# runs the flattened copy in `routines`, whose delivered post is Slack
 # mrkdwn that changes prose shape from day to day (bullets one morning, inline
 # runs the next). Two reviews found it, one by fetching the producer and one by
 # reading the channel. The fix was to stop parsing prose: the routine appends a

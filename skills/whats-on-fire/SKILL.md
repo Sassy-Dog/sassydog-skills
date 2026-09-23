@@ -108,7 +108,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/whats-on-fire/scripts/pull-repo-signals.sh
   per-package fix-PR state. Slower: 1 + 4N calls, plus one more per repo that actually has
   high/critical alerts (free for a healthy org) and one more per repo whose sample yields no
   default-branch CI verdict — which is **not** free for a healthy org, since a quiet repo triggers
-  it (5 of 15 in [#367](https://github.com/Sassy-Dog/sassydog-skills/issues/367)). Run it
+  it (5 of 15 in [#367](https://github.com/Sassy-Dog/skills/issues/367)). Run it
   concurrently with the Sentry pulls, not after them.
 
 `default_branch_ci` and `scheduled_failing` are separate fields and must stay separate in the
@@ -253,7 +253,7 @@ this report.
 
 ## 5. Output format
 
-> The routine edition of this skill (in `sassydog-routines`) has one automated consumer,
+> The routine edition of this skill (in `routines`) has one automated consumer,
 > `work-fire-watch`, which reads only the `fire-watch-v1` block that edition appends —
 > `docs/ROUTINES.md` lists the sentinels. This interactive edition appends no block.
 
