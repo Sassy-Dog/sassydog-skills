@@ -8,6 +8,7 @@
   "plugins": [
     {
       "name": "sassy-dog",
+      "displayName": "Sassy Dog",
       "description": "Reusable AI agent skills — GitHub secrets management, CI/CD patterns, and more",
       "source": {
         "source": "github",
